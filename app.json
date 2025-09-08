@@ -31,7 +31,7 @@
     ],
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.erp.claudioncheckin",
+      "bundleIdentifier": "com.bazim.claudioncheckin",
       "infoPlist": {
         "NSCameraUsageDescription": "Allow $(PRODUCT_NAME) to access your camera to enable essential functionality, such as scanning QR codes and capturing photos for employee activity tracking and verification.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Allow $(PRODUCT_NAME) to use your location for tracking check-ins, check-outs, and real-time location updates for drivers during trips, enhancing user experiences.",
@@ -47,7 +47,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.erp.claudioncheckin",
+      "package": "com.bazim.claudioncheckin",
       "versionCode": 1,
       "permissions": [
         "android.permission.CAMERA",
