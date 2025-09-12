@@ -77,10 +77,10 @@ function SelectQuickAccess() {
     // },
     {
       id: 8,
-      iconName: 'trail-sign-outline',
-      text1: 'Trip',
-      text2: 'details',
-      url: 'Trip details',
+      iconName: "wallet-outline",
+      text1: 'Expense',
+      text2: 'Claim',
+      url: 'Expense claim',
     },
   ];
   const handleClick = item => {

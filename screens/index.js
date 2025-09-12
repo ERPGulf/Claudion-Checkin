@@ -5,7 +5,7 @@ import Login from './Login';
 import WelcomeScreen from './WelcomeScreen';
 import AttendanceHistory from './AttendanceHistory';
 import SelectQuickAccess from './SelectQuickAccess';
-import TripDetails from './TripDetails';
+import ExpenseClaim from './ExpenseClaim';
 import AttendanceCamera from './AttendanceCamera';
 import Profile from './Profile';
 import Chat from './Chat';
@@ -19,7 +19,7 @@ export {
   WelcomeScreen,
   AttendanceHistory,
   SelectQuickAccess,
-  TripDetails,
+  ExpenseClaim,
   AttendanceCamera,
   Profile,
   Chat,

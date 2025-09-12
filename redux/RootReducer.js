@@ -5,14 +5,14 @@ import UserSlice from './Slices/UserSlice';
 import AuthSlice from './Slices/AuthSlice';
 import AttendanceSlice from './Slices/AttendanceSlice';
 import QuickAccessSlice from './Slices/QuickAccessSlice';
-import TripDetailsSlice from './Slices/TripDetailsSlice';
+// import TripDetailsSlice from './Slices/TripDetailsSlice';
 
 const RootReducer = combineReducers({
   user: UserSlice,
   userAuth: AuthSlice,
   attendance: AttendanceSlice,
   quickAccess: QuickAccessSlice,
-  tripDetails: TripDetailsSlice,
+  // tripDetails: TripDetailsSlice,
   // Other individual reducers
 });
 
