@@ -26,7 +26,7 @@ function LavaMenu() {
           </Text>
           <TouchableOpacity className="justify-center items-center rounded-lg">
             <AntDesign
-              name="arrowright"
+              name="right"
               size={SIZES.xxLarge + 4}
               color={COLORS.white}
             />
@@ -155,7 +155,7 @@ function LavaMenu() {
           </Text>
           <TouchableOpacity className="justify-center items-center rounded-lg">
             <AntDesign
-              name="arrowright"
+              name="right"
               size={SIZES.xxLarge + 4}
               color={COLORS.white}
             />

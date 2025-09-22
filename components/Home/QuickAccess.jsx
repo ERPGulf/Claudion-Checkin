@@ -52,7 +52,7 @@ function QuickAccess() {
             className="items-center justify-center mx-auto my-10"
           >
             <AntDesign
-              name="addfile"
+              name="file-add"
               size={SIZES.xxxLarge - 4}
               color={COLORS.red}
             />
