@@ -360,4 +360,56 @@ export const getUserAttendance = async (employee_code, limit_start) => {
   }
 };
 
+// Get Expense Types (dummy)
+export const getExpenseTypes = async () => {
+  try {
+    // right now: mock response
+    await new Promise((resolve) => setTimeout(resolve, 800)); // simulate network delay
+
+    return [
+      { id: 1, name: "Travel" },
+      { id: 2, name: "Food" },
+      { id: 3, name: "Accommodation" },
+      { id: 4, name: "Supplies" },
+    ];
+
+    // later when backend is ready:
+    // const { data } = await userApi.get("method/employee_app.expense_api.expense_types");
+    // return data.message;
+  } catch (error) {
+    console.error("❌ getExpenseTypes error:", error);
+    throw new Error("Failed to fetch expense types");
+  }
+};
+
+// Create Expense Claim (dummy)
+export const createExpenseClaim = async (employeeCode, claimData) => {
+  try {
+    // mock behavior
+    await new Promise((resolve) => setTimeout(resolve, 600)); // simulate network delay
+
+    return {
+      id: Math.floor(Math.random() * 10000), // fake ID
+      employee: employeeCode,
+      expense_type: claimData.expense_type,
+      amount: claimData.amount,
+      date: new Date().toISOString().split("T")[0],
+      status: "Pending",
+    };
+
+    // later when backend is ready:
+    // const formData = new FormData();
+    // formData.append("employee", employeeCode);
+    // formData.append("expense_type", claimData.expense_type);
+    // formData.append("amount", claimData.amount);
+    //
+    // const { data } = await userApi.post("method/employee_app.expense_api.create_expense_claim", formData, {
+    //   headers: setCommonHeaders(),
+    // });
+    // return data.message;
+  } catch (error) {
+    console.error("❌ createExpenseClaim error:", error);
+    throw new Error("Failed to create expense claim");
+  }
+};
 export default userApi;
