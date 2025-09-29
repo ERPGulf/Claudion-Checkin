@@ -1,8 +1,11 @@
 import Axios from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
+// Create Axios instance without a static baseURL
 const userApi = Axios.create({
-  baseURL: 'https://castle.erpgulf.com:1813/api/',
   timeout: 35000,
 });
+
+
 
 export default userApi;

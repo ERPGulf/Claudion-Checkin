@@ -6,25 +6,25 @@ import {
   Alert,
   ScrollView,
   RefreshControl,
-} from 'react-native';
-import React, { useEffect, useLayoutEffect, useState } from 'react';
-import { getPreciseDistance } from 'geolib';
-import { MaterialCommunityIcons, Entypo } from '@expo/vector-icons';
-import { useDispatch, useSelector } from 'react-redux';
-import Toast from 'react-native-toast-message';
-import { useNavigation } from '@react-navigation/native';
-import { useQuery } from '@tanstack/react-query';
-import { selectCheckin, setOnlyCheckIn } from '../redux/Slices/AttendanceSlice';
-import { getOfficeLocation, getUserCustomIn } from '../api/userApi';
-import { setIsWfh } from '../redux/Slices/UserSlice';
-import { COLORS, SIZES } from '../constants';
-import { Retry, WelcomeCard } from '../components/AttendanceAction';
+} from "react-native";
+import React, { useEffect, useLayoutEffect, useState } from "react";
+import { getPreciseDistance } from "geolib";
+import { MaterialCommunityIcons, Entypo } from "@expo/vector-icons";
+import { useDispatch, useSelector } from "react-redux";
+import Toast from "react-native-toast-message";
+import { useNavigation } from "@react-navigation/native";
+import { useQuery } from "@tanstack/react-query";
+import { selectCheckin, setOnlyCheckIn } from "../redux/Slices/AttendanceSlice";
+import { getOfficeLocation, getUserCustomIn } from "../api/userApi";
+import { setIsWfh } from "../redux/Slices/UserSlice";
+import { COLORS, SIZES } from "../constants";
+import { Retry, WelcomeCard } from "../components/AttendanceAction";
 import {
   getPreciseCoordinates,
   useLocationForegroundAccess,
-} from '../utils/LocationServices';
-import { updateDateTime } from '../utils/TimeServices';
-import { hapticsMessage } from '../utils/HapticsMessage';
+} from "../utils/LocationServices";
+import { updateDateTime } from "../utils/TimeServices";
+import { hapticsMessage } from "../utils/HapticsMessage";
 
 function AttendanceAction() {
   const navigation = useNavigation();
@@ -32,8 +32,8 @@ function AttendanceAction() {
     navigation.setOptions({
       headerShadowVisible: false,
       headerShown: true,
-      headerTitle: 'Attendance action',
-      headerTitleAlign: 'center',
+      headerTitle: "Attendance action",
+      headerTitleAlign: "center",
       headerLeft: () => (
         <TouchableOpacity className="" onPress={() => navigation.goBack()}>
           <Entypo
@@ -51,7 +51,11 @@ function AttendanceAction() {
   const [dateTime, setDateTime] = useState(null);
   const [inTarget, setInTarget] = useState(false);
   const [isWFH, setIsWFH] = useState(false);
-  const { employeeCode } = useSelector(state => state.user.userDetails);
+  // const { employeeCode } = useSelector(state => state.user.userDetails);
+
+  const userDetails = useSelector((state) => state.user.userDetails);
+  const employeeCode = userDetails?.employeeCode;
+
   // circle radius for loaction bound
   const radiusInMeters = 250;
   const {
@@ -61,15 +65,15 @@ function AttendanceAction() {
     isError: customIsError,
     refetch,
   } = useQuery({
-    queryKey: ['custom_in', employeeCode],
+    queryKey: ["custom_in", employeeCode],
     queryFn: () => getUserCustomIn(employeeCode),
   });
   useEffect(() => {
     if (customIsError) {
-      hapticsMessage('error');
+      hapticsMessage("error");
       Toast.show({
-        type: 'error',
-        text1: `${'⚠️'} Status fetching failed`,
+        type: "error",
+        text1: `${"⚠️"} Status fetching failed`,
         autoHide: true,
         visibilityTime: 3000,
       });
@@ -82,7 +86,7 @@ function AttendanceAction() {
         const checkUserDistanceToOffice = async (
           employeeCode,
           custom_radius,
-          radiusInMeters,
+          radiusInMeters
         ) => {
           try {
             await useLocationForegroundAccess();
@@ -100,8 +104,8 @@ function AttendanceAction() {
             setInTarget(distance <= parseFloat(custom_radius));
           } catch (error) {
             Toast.show({
-              type: 'error',
-              text1: `${'⚠️'} Something went wrong`,
+              type: "error",
+              text1: `${"⚠️"} Something went wrong`,
             });
           }
         };
@@ -110,7 +114,7 @@ function AttendanceAction() {
         checkUserDistanceToOffice(
           employeeCode,
           custom.custom_reporting_radius,
-          radiusInMeters,
+          radiusInMeters
         );
       }
     }
@@ -135,8 +139,8 @@ function AttendanceAction() {
       showsVerticalScrollIndicator={false}
       contentContainerStyle={{
         flex: 1,
-        alignItems: 'center',
-        backgroundColor: 'white',
+        alignItems: "center",
+        backgroundColor: "white",
         paddingVertical: 16,
       }}
       refreshControl={
@@ -156,7 +160,7 @@ function AttendanceAction() {
           <ActivityIndicator size="large" color="white" />
         </View>
       )}
-      <View style={{ width: '100%' }} className=" flex-1 px-3">
+      <View style={{ width: "100%" }} className=" flex-1 px-3">
         <WelcomeCard />
         <View className="h-72 mt-4">
           <View className="p-3">
@@ -183,11 +187,11 @@ function AttendanceAction() {
                     <ActivityIndicator size="small" />
                   </View>
                 ) : inTarget ? (
-                  'Head Office'
+                  "Head Office"
                 ) : isWFH ? (
-                  'in bound'
+                  "in bound"
                 ) : (
-                  'Out of bound'
+                  "Out of bound"
                 )}
               </Text>
               <MaterialCommunityIcons
@@ -203,7 +207,7 @@ function AttendanceAction() {
                 } items-center h-16 mt-4 rounded-2xl bg-red-600`}
                 disabled={!inTarget && !isWFH}
                 onPress={() => {
-                  navigation.navigate('Attendance camera');
+                  navigation.navigate("Attendance camera");
                 }}
               >
                 <Text className="text-xl font-bold text-white">CHECK-OUT</Text>
@@ -215,7 +219,7 @@ function AttendanceAction() {
                 } items-center h-16 mt-4 rounded-2xl bg-green-600`}
                 disabled={!inTarget && !isWFH}
                 // onPress={() => handleChecking("IN", 1)}
-                onPress={() => navigation.navigate('Attendance camera')}
+                onPress={() => navigation.navigate("Attendance camera")}
               >
                 <Text className="text-xl font-bold text-white">CHECK-IN</Text>
               </TouchableOpacity>

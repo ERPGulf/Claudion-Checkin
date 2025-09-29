@@ -1,183 +1,190 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import userApi from './apiManger';
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import userApi from "./apiManger";
+import axios from "axios";
 
-// seting common headers
 const setCommonHeaders = (headers = {}) => {
-  headers['Content-Type'] = 'multipart/form-data';
+  headers["Content-Type"] = "multipart/form-data";
   return headers;
 };
 
-// refresh accessToken
 const refreshAccessToken = async () => {
   try {
-    const refresh_token = await AsyncStorage.getItem('refresh_token');
+    const refresh_token = await AsyncStorage.getItem("refresh_token");
     const formdata = new FormData();
-    formdata.append('grant_type', 'refresh_token');
-    formdata.append('refresh_token', refresh_token);
+    formdata.append("grant_type", "refresh_token");
+    formdata.append("refresh_token", refresh_token);
+
+    const baseUrl = await AsyncStorage.getItem("baseUrl");
+
     const { data } = await userApi.post(
-      'method/frappe.integrations.oauth2.get_token',
+      "/method/employee_app.gauth.create_refresh_token",
       formdata,
       {
+        baseURL: `${baseUrl}/api`, // append /api here
         headers: setCommonHeaders(),
-      },
+      }
     );
-    AsyncStorage.multiSet([
-      ['access_token', data.access_token],
-      ['refresh_token', data.refresh_token],
+
+    await AsyncStorage.multiSet([
+      ["access_token", data.access_token],
+      ["refresh_token", data.refresh_token],
     ]);
-    return Promise.resolve(data.access_token);
+
+    return data.access_token;
   } catch (error) {
-    console.error('Token refresh error:', error);
-    return Promise.reject(new Error('Token refresh failed'));
+    console.error("Token refresh error:", error);
+    throw new Error("Token refresh failed");
   }
 };
 
-// ... refresh middleware ...
-
+// ✅ Handle token refresh in responses
 let refreshPromise = null;
 const clearPromise = () => (refreshPromise = null);
 
 userApi.interceptors.response.use(
-  response => response,
-  async error => {
+  (response) => response,
+  async (error) => {
     const originalRequest = error.config;
 
     if (
       error.response &&
-      [400, 403, 401].includes(error.response.status) &&
+      [401, 403].includes(error.response.status) &&
       !originalRequest._retry
     ) {
       originalRequest._retry = true;
-
       try {
         if (!refreshPromise) {
           refreshPromise = refreshAccessToken().finally(clearPromise);
         }
-
         const token = await refreshPromise;
         originalRequest.headers.Authorization = `Bearer ${token}`;
-
-        // Retry the original request with the new token
         return userApi(originalRequest);
       } catch (refreshError) {
-        console.error('Error refreshing token:', refreshError);
-        // Handle refresh error appropriately, e.g., log out user or redirect to login
+        console.error("Error refreshing token:", refreshError);
         return Promise.reject(refreshError);
       }
     }
 
-    // If the error is not related to token expiration, reject the promise
     return Promise.reject(error);
-  },
-);
-// baseUrl and accessToken preset middleware
-userApi.interceptors.request.use(
-  async config => {
-    if (config.url === 'method/frappe.integrations.oauth2.get_token') {
-      config.baseURL = await AsyncStorage.getItem('baseUrl');
-      return config;
-    }
-    const access_token = await AsyncStorage.getItem('access_token');
-    config.baseURL = await AsyncStorage.getItem('baseUrl');
-    if (access_token) {
-      config.headers.Authorization = `Bearer ${access_token}`;
-    }
-    return config;
-  },
-  error => Promise.reject(error),
+  }
 );
 
-// generate user tokens
-export const generateToken = async password => {
-  const formData = new FormData();
-  formData.append('password', password);
+// ✅ Dynamic baseURL + token on every request
+userApi.interceptors.request.use(async (config) => {
+  const baseUrl = await AsyncStorage.getItem("baseUrl");
+  if (baseUrl)
+    config.baseURL = `${baseUrl}/api`; // append /api here
+  else console.warn("⚠️ No baseUrl found in AsyncStorage");
+
+  const access_token = await AsyncStorage.getItem("access_token");
+  if (access_token) config.headers.Authorization = `Bearer ${access_token}`;
+  console.log("Axios Request:", config.baseURL + config.url);
+  return config;
+});
+
+export const generateToken = async ({ api_key, app_key, api_secret }) => {
   try {
-    const { data, status } = await userApi.post(
-      `method/employee_app.gauth.generate_custom_token_for_employee`,
-      formData,
+    // Step 1: Get baseUrl from AsyncStorage
+    let baseUrl = await AsyncStorage.getItem("baseUrl");
+
+    if (!baseUrl)
+      throw new Error("Base URL not found. Please scan QR code first.");
+
+    // Step 2: Sanitize baseUrl
+    baseUrl = baseUrl.trim().replace(/[\u0000-\u001F]+/g, ""); // remove control chars
+    if (baseUrl.endsWith("/")) baseUrl = baseUrl.slice(0, -1);
+
+    console.log("Sanitized baseUrl:", baseUrl);
+
+    // Step 3: Prepare request body
+    const body = new URLSearchParams();
+    body.append("api_key", api_key);
+    body.append("app_key", app_key);
+    body.append("api_secret", api_secret);
+
+    // Step 4: Make Axios request
+    const response = await axios.post(
+      `${baseUrl}/api/method/employee_app.gauth.generate_token_secure`,
+      body.toString(),
       {
-        headers: setCommonHeaders(),
-      },
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        timeout: 10000, // optional: 10 seconds timeout
+      }
     );
-    if (data.message.message === 'Invalid login credentials') {
-      return Promise.reject(new Error('Invalid login credentials'));
-    }
-    if (status === 200) return Promise.resolve(data.message);
+
+    console.log("Token response:", response.data);
+    return response.data;
   } catch (error) {
-    console.error(error);
-    return Promise.reject(new Error('Login went wrong'));
+    console.error("❌ Generate token error:", error.message || error);
+    throw error;
   }
 };
-// get user location
-export const getOfficeLocation = async employeeCode => {
+
+// Get office location
+export const getOfficeLocation = async (employeeCode) => {
   try {
-    const filters = [['name', '=', employeeCode]];
-    const fields = ['name', 'first_name', 'custom_reporting_location'];
+    const filters = [["name", "=", employeeCode]];
+    const fields = ["name", "first_name", "custom_reporting_location"];
     const params = {
       filters: JSON.stringify(filters),
       fields: JSON.stringify(fields),
     };
 
     const url = `resource/Employee?${new URLSearchParams(params).toString()}`;
-
     const { data } = await userApi.get(url);
 
-    // Parse custom_reporting_location assuming it's a JSON string
     const jsonData = JSON.parse(data.data[0].custom_reporting_location);
     const latitude = jsonData.features[0].geometry.coordinates[1];
     const longitude = jsonData.features[0].geometry.coordinates[0];
 
-    return Promise.resolve({ latitude, longitude }); // Return the parsed data
+    return { latitude, longitude };
   } catch (error) {
-    console.error(error, 'location');
-    return Promise.reject(new Error('location went wrong'));
+    console.error(error, "location");
+    throw new Error("location went wrong");
   }
 };
 
-// user checkin/checkout
-export const userCheckIn = async fielddata => {
+// User check-in/out
+export const userCheckIn = async (fielddata) => {
   try {
     const formData = new FormData();
-    formData.append('employee_field_value', fielddata.employeeCode);
-    formData.append('timestamp', fielddata.timestamp);
-    formData.append('device_id', 'MobileAPP');
-    formData.append('log_type', fielddata.type);
+    formData.append("employee_field_value", fielddata.employeeCode);
+    formData.append("timestamp", fielddata.timestamp);
+    formData.append("device_id", "MobileAPP");
+    formData.append("log_type", fielddata.type);
+
     const { data } = await userApi.post(
-      'method/hrms.hr.doctype.employee_checkin.employee_checkin.add_log_based_on_employee_field',
+      "method/hrms.hr.doctype.employee_checkin.employee_checkin.add_log_based_on_employee_field",
       formData,
-      {
-        headers: setCommonHeaders(),
-      },
+      { headers: setCommonHeaders() }
     );
-    if (!data) return Promise.reject(new Error('Employee not found'));
-    return Promise.resolve(data?.message);
+
+    if (!data) throw new Error("Employee not found");
+    return data.message;
   } catch (error) {
-    console.error(error, 'checkin');
-    return Promise.reject(new Error('something went wrong'));
+    console.error(error, "checkin");
+    throw new Error("something went wrong");
   }
 };
-// user file upload
-export const userFileUpload = async formdata => {
+
+// User file upload
+export const userFileUpload = async (formdata) => {
   try {
-    const { data } = await userApi.post('method/upload_file', formdata, {
-      headers: {
-        ...setCommonHeaders(), 
-      },
+    const { data } = await userApi.post("method/upload_file", formdata, {
+      headers: setCommonHeaders(),
     });
 
-    if (!data || !data.message?.file_url) {
-      throw new Error('Upload failed - file URL not returned');
-    }
-
-    return data.message; // contains { file_url, is_private, ... }
+    if (!data || !data.message?.file_url) throw new Error("Upload failed");
+    return data.message;
   } catch (error) {
-    console.error('Upload API Error:', error.response?.data || error.message);
-    return Promise.reject(new Error('Photo upload failed'));
+    console.error("Upload API Error:", error.response?.data || error.message);
+    throw new Error("Photo upload failed");
   }
 };
 
-
-// putting user file
+// PUT user file
 export const putUserFile = async (formData, fileId) => {
   try {
     const { data } = await userApi.put(
@@ -185,175 +192,172 @@ export const putUserFile = async (formData, fileId) => {
       formData,
       {
         headers: setCommonHeaders(),
-      },
+      }
     );
-    return Promise.resolve(data);
+    return data;
   } catch (error) {
-    console.error(error, 'image');
-    return Promise.reject(error);
+    console.error(error, "image");
+    throw error;
   }
 };
 
+// User status PUT
 export const userStatusPut = async (employeeCode, custom_in) => {
   try {
     const formData = new FormData();
-    formData.append('custom_in', custom_in);
+    formData.append("custom_in", custom_in);
+
     const { data } = await userApi.put(
       `resource/Employee/${employeeCode}`,
       formData,
       {
         headers: setCommonHeaders(),
-      },
+      }
     );
-    return Promise.resolve(data);
+
+    return data;
   } catch (error) {
-    console.error(error, 'status put');
-    return Promise.reject(new Error('something went wrong'));
+    console.error(error, "status put");
+    throw new Error("something went wrong");
   }
 };
-// geting user status
-export const getUserCustomIn = async employeeCode => {
-  try {
-    const filters = [['name', '=', employeeCode]];
-    const fields = [
-      'name',
-      'first_name',
-      'custom_in',
-      'custom_restrict_location',
-      'custom_reporting_radius',
-    ];
 
+// Get user status
+export const getUserCustomIn = async (employeeCode) => {
+  try {
+    const filters = [["name", "=", employeeCode]];
+    const fields = [
+      "name",
+      "first_name",
+      "custom_in",
+      "custom_restrict_location",
+      "custom_reporting_radius",
+    ];
     const params = {
       filters: JSON.stringify(filters),
       fields: JSON.stringify(fields),
     };
 
     const url = `resource/Employee?${new URLSearchParams(params).toString()}`;
-
     const { data } = await userApi.get(url);
-    return Promise.resolve(data.data[0]);
+    return data.data[0];
   } catch (error) {
-    console.error(error, 'status');
-    return Promise.reject(new Error('something went wrong'));
+    console.error(error, "status");
+    throw new Error("something went wrong");
   }
 };
 
-export const tripTrack = async formData => {
+// Trip APIs
+export const tripTrack = async (formData) => {
   try {
     const { data } = await userApi.post(
-      'method/employee_app.attendance_api.insert_new_trip',
+      "method/employee_app.attendance_api.insert_new_trip",
       formData,
-      {
-        headers: setCommonHeaders(),
-      },
+      { headers: setCommonHeaders() }
     );
-    if (!data.message) return Promise.reject(new Error('Trip not started'));
-    return Promise.resolve(data.message);
+
+    if (!data.message) throw new Error("Trip not started");
+    return data.message;
   } catch (error) {
-    console.error(error, 'trip');
-    return Promise.reject(new Error('something went wrong'));
+    console.error(error, "trip");
+    throw new Error("something went wrong");
   }
 };
 
-export const userTripStatus = async employeeCode => {
+export const userTripStatus = async (employeeCode) => {
   try {
     const { data } = await userApi.get(
-      'method/employee_app.attendance_api.get_latest_open_trip',
+      "method/employee_app.attendance_api.get_latest_open_trip",
       {
-        params: {
-          employee_id: employeeCode,
-        },
-      },
+        params: { employee_id: employeeCode },
+      }
     );
-    return Promise.resolve(data.message);
+    return data.message;
   } catch (error) {
-    console.error(error, 'trip status');
-    return Promise.reject(new Error('Something went wrong)'));
+    console.error(error, "trip status");
+    throw new Error("Something went wrong");
   }
 };
 
-export const endTripTrack = async formData => {
+export const endTripTrack = async (formData) => {
   try {
     const { data } = await userApi.post(
-      'method/employee_app.attendance_api.close_the_trip',
+      "method/employee_app.attendance_api.close_the_trip",
       formData,
-      {
-        headers: setCommonHeaders(),
-      },
+      { headers: setCommonHeaders() }
     );
-    if (!data.message) return Promise.reject(new Error('Trip not ended'));
-    return Promise.resolve();
+
+    if (!data.message) throw new Error("Trip not ended");
+    return;
   } catch (error) {
-    console.error(error, 'trip end');
-    return Promise.reject(new Error('something went wrong'));
+    console.error(error, "trip end");
+    throw new Error("something went wrong");
   }
 };
 
-export const getContracts = async (searchTerms = '') => {
-  const formData = new FormData();
-  formData.append('enter_name', searchTerms);
+// Contracts & Vehicles
+export const getContracts = async (searchTerms = "") => {
   try {
+    const formData = new FormData();
+    formData.append("enter_name", searchTerms);
     const { data } = await userApi.post(
-      'method/employee_app.attendance_api.contract_list',
+      "method/employee_app.attendance_api.contract_list",
       formData,
       {
         headers: setCommonHeaders(),
-      },
+      }
     );
+
     const filteredData = data?.message?.flat(1);
-    if (filteredData.length === 0) {
-      return Promise.resolve({ filteredData, error: 'no contracts available' });
-    }
-    return Promise.resolve({ filteredData, error: null });
+    if (!filteredData?.length)
+      return { filteredData, error: "no contracts available" };
+    return { filteredData, error: null };
   } catch (error) {
-    console.error(error, 'contract');
-    return Promise.reject(new Error('Something went wrong)'));
+    console.error(error, "contract");
+    throw new Error("Something went wrong");
   }
 };
 
-export const getVehicle = async (searchTerms = '') => {
-  const formData = new FormData();
-  formData.append('vehicle_no', searchTerms);
-  formData.append('odometer', '');
-  formData.append('vehicle_model', '');
-
+export const getVehicle = async (searchTerms = "") => {
   try {
+    const formData = new FormData();
+    formData.append("vehicle_no", searchTerms);
+    formData.append("odometer", "");
+    formData.append("vehicle_model", "");
     const { data } = await userApi.post(
-      'method/employee_app.attendance_api.vehicle_list',
+      "method/employee_app.attendance_api.vehicle_list",
       formData,
       {
         headers: setCommonHeaders(),
-      },
+      }
     );
+
     const filteredData = data?.message?.flat(1);
-    if (filteredData.length === 0) {
-      return Promise.resolve({ filteredData, error: 'no vehicle available' });
-    }
-    return Promise.resolve({ filteredData, error: null });
+    if (!filteredData?.length)
+      return { filteredData, error: "no vehicle available" };
+    return { filteredData, error: null };
   } catch (error) {
-    console.error(error, 'contract');
-    return Promise.reject(new Error('Something went wrong)'));
+    console.error(error, "vehicle");
+    throw new Error("Something went wrong");
   }
 };
 
+// User attendance
 export const getUserAttendance = async (employee_code, limit_start) => {
   try {
     const { data } = await userApi.get(
-      `method/employee_app.attendance_api.employee_checkin`,
+      "method/employee_app.attendance_api.employee_checkin",
       {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        params: {
-          employee_code,
-          limit_start,
-          limit_page_length: 15,
-        },
-      },
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        params: { employee_code, limit_start, limit_page_length: 15 },
+      }
     );
-    return Promise.resolve(data.message);
+
+    return data.message;
   } catch (error) {
-    console.error(error, 'attendance');
-    return Promise.reject(new Error('Something went wrong'));
+    console.error(error, "attendance");
+    throw new Error("Something went wrong");
   }
 };
+
+export default userApi;

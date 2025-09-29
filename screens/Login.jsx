@@ -1,158 +1,227 @@
+
+import React, { useState } from "react";
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
-  Platform,
   ActivityIndicator,
-} from 'react-native';
-import React, { useState } from 'react';
-import Constants from 'expo-constants';
-import { Ionicons } from '@expo/vector-icons';
-import { useDispatch } from 'react-redux';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Toast } from 'react-native-toast-message/lib/src/Toast';
-import { Formik } from 'formik';
-import * as Yup from 'yup';
-import { useNavigation } from '@react-navigation/native';
-import { setSignIn } from '../redux/Slices/AuthSlice';
-import { generateToken } from '../api/userApi';
-import { COLORS, SIZES } from '../constants';
-import { WelcomeCard } from '../components/Login';
+  Platform,
+  KeyboardAvoidingView,
+} from "react-native";
+import Constants from "expo-constants";
+import { Ionicons } from "@expo/vector-icons";
+import { useDispatch } from "react-redux";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Toast } from "react-native-toast-message/lib/src/Toast";
+import { Formik } from "formik";
+import * as Yup from "yup";
+import { useNavigation } from "@react-navigation/native";
+import { setSignIn } from "../redux/Slices/AuthSlice";
+import { generateToken } from "../api/userApi";
+import { COLORS, SIZES } from "../constants";
+import { WelcomeCard } from "../components/Login";
 
 function Login() {
   const navigation = useNavigation();
   const dispatch = useDispatch();
-  const [show, setShow] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Form validation schema
   const loginSchema = Yup.object().shape({
     password: Yup.string()
-      .min(5, 'Too short!')
-      .max(24, 'Too Long!')
-      .required('Please enter your password.'),
+      .min(5, "Too short!")
+      .max(24, "Too long!")
+      .required("Please enter your password."),
   });
 
+  // Handle login
+  const handleLogin = async (password) => {
+    setIsLoading(true);
+    try {
+      // Get QR values from AsyncStorage
+      const api_key = await AsyncStorage.getItem("api_key");
+      const app_key = await AsyncStorage.getItem("app_key");
+      const baseUrl = await AsyncStorage.getItem("baseUrl");
+
+      if (!api_key || !app_key || !baseUrl) {
+        Toast.show({
+          type: "error",
+          text1: "QR code not scanned",
+          text2: "Please scan QR code first",
+          autoHide: true,
+          visibilityTime: 3000,
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      // Generate token with password as api_secret
+      const data = await generateToken({
+        api_key,
+        app_key,
+        api_secret: password,
+      });
+
+      // Update Redux state
+      dispatch(setSignIn({ isLoggedIn: true, token: data.access_token }));
+
+      // Success message
+      Toast.show({
+        type: "success",
+        text1: "Login successful",
+        autoHide: true,
+        visibilityTime: 3000,
+      });
+      navigation.replace("homeTab"); 
+    } catch (error) {
+      console.log("Login error:", error);
+      Toast.show({
+        type: "error",
+        text1: "Login failed",
+        text2:
+          error.response?.data?.message ||
+          error.message ||
+          "Something went wrong",
+        autoHide: true,
+        visibilityTime: 3000,
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
-    <View
+    <KeyboardAvoidingView
       style={{
         flex: 1,
-        alignItems: 'center',
         paddingTop: Constants.statusBarHeight,
+        backgroundColor: COLORS.grayBackground,
+        paddingHorizontal: 12,
       }}
-      className="bg-gray-100 px-3 justify-between relative"
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <WelcomeCard />
+
       <Formik
-        initialValues={{
-          password: '',
-        }}
+        initialValues={{ password: "" }}
         validationSchema={loginSchema}
-        onSubmit={({ password }) => {
-          setIsLoading(true);
-          generateToken(password)
-            .then(async data => {
-              await AsyncStorage.setItem('access_token', data.access_token);
-              await AsyncStorage.setItem('refresh_token', data.refresh_token);
-              Toast.show({
-                type: 'success',
-                text1: 'login success',
-                autoHide: true,
-                visibilityTime: 3000,
-              });
-              dispatch(
-                setSignIn({ isLoggedIn: true, token: data.access_token }),
-              );
-              setIsLoading(false);
-            })
-            .catch(() => {
-              Toast.show({
-                type: 'error',
-                text1: `login failed`,
-                autoHide: true,
-                visibilityTime: 3000,
-              });
-              setIsLoading(false);
-            });
-        }}
+        onSubmit={({ password }) => handleLogin(password)}
       >
         {({
           values,
           errors,
           touched,
-          handleSubmit,
           handleChange,
-          isValid,
+          handleSubmit,
           setFieldTouched,
+          isValid,
         }) => (
-          <>
-            <View style={{ width: '100%', marginTop: 5 }}>
-              <Text className="text-lg my-1 text-gray-600">password</Text>
-              <View className="bg-white h-14 px-3 rounded-xl items-center justify-between border-gray-200 border flex-row">
-                <TextInput
-                  secureTextEntry={!show}
-                  value={values.password}
-                  onChangeText={handleChange('password')}
-                  placeholder="enter password"
-                  textContentType="password"
-                  onBlur={() => setFieldTouched('password')}
-                  style={{ marginTop: Platform.OS === 'ios' ? -10 : 0 }}
-                  className="flex-1 h-12 text-lg"
+          <View
+            style={{ flex: 1, justifyContent: "flex-end", marginBottom: 20 }}
+          >
+            {/* Password Input */}
+            <Text
+              style={{ color: COLORS.grayText, fontSize: 16, marginBottom: 5 }}
+            >
+              Password
+            </Text>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                backgroundColor: COLORS.white,
+                borderWidth: 1,
+                borderColor: COLORS.borderGray,
+                borderRadius: 12,
+                paddingHorizontal: 12,
+                height: 56,
+                marginBottom: 5,
+              }}
+            >
+              <TextInput
+                secureTextEntry={!showPassword}
+                value={values.password}
+                onChangeText={handleChange("password")}
+                placeholder="Enter password"
+                onBlur={() => setFieldTouched("password")}
+                style={{ flex: 1, fontSize: 16, height: "100%" }}
+              />
+              <TouchableOpacity
+                onPress={() => setShowPassword((prev) => !prev)}
+              >
+                <Ionicons
+                  name={showPassword ? "eye" : "eye-off"}
+                  size={SIZES.xLarge}
+                  color={COLORS.gray2}
                 />
-                <TouchableOpacity
-                  onPress={() => {
-                    setShow(prev => !prev);
-                  }}
-                >
-                  <Ionicons
-                    name={show ? 'eye' : 'eye-off'}
-                    size={SIZES.xLarge}
-                    color={COLORS.gray2}
-                  />
-                </TouchableOpacity>
-              </View>
+              </TouchableOpacity>
             </View>
             {touched.password && errors.password && (
-              <View style={{ width: '100%' }} className="left-1 mt-1">
-                <Text className="text-red-600 text-base">
-                  {errors.password}
-                </Text>
-              </View>
+              <Text
+                style={{ color: COLORS.red, fontSize: 14, marginBottom: 10 }}
+              >
+                {errors.password}
+              </Text>
             )}
 
-            <View
-              style={{ width: '100%', flex: 1, justifyContent: 'flex-end' }}
+            {/* Login Button */}
+            <TouchableOpacity
+              disabled={!isValid || isLoading}
+              onPress={handleSubmit}
+              style={{
+                backgroundColor: COLORS.primary,
+                height: 56,
+                borderRadius: 12,
+                justifyContent: "center",
+                alignItems: "center",
+                opacity: !isValid ? 0.7 : 1,
+                marginBottom: 12,
+              }}
             >
-              <TouchableOpacity
-                disabled={!isValid || isLoading}
-                onPress={handleSubmit}
-                className={`h-16 rounded-xl justify-center items-center ${
-                  !isValid && 'opacity-70'
-                }`}
-                style={{ width: '100%', backgroundColor: COLORS.primary }}
-              >
-                {isLoading ? (
-                  <ActivityIndicator color="white" size="large" />
-                ) : (
-                  <Text className="text-xl font-bold text-white">Login</Text>
-                )}
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => navigation.navigate('Qrscan')}
-                className="border h-16 rounded-xl my-4 justify-center items-center bg-white"
-                style={{ width: '100%', borderColor: COLORS.primary }}
-              >
+              {isLoading ? (
+                <ActivityIndicator size="large" color={COLORS.white} />
+              ) : (
                 <Text
-                  className="text-xl font-semibold "
-                  style={{ color: COLORS.primary }}
+                  style={{
+                    color: COLORS.white,
+                    fontSize: 18,
+                    fontWeight: "bold",
+                  }}
                 >
-                  Rescan code
+                  Login
                 </Text>
-              </TouchableOpacity>
-            </View>
-          </>
+              )}
+            </TouchableOpacity>
+
+            {/* Rescan QR */}
+            <TouchableOpacity
+              onPress={() => navigation.navigate("Qrscan")}
+              style={{
+                borderColor: COLORS.primary,
+                borderWidth: 1,
+                backgroundColor: COLORS.white,
+                height: 56,
+                borderRadius: 12,
+                justifyContent: "center",
+                alignItems: "center",
+              }}
+            >
+              <Text
+                style={{
+                  color: COLORS.primary,
+                  fontSize: 18,
+                  fontWeight: "600",
+                }}
+              >
+                Rescan QR Code
+              </Text>
+            </TouchableOpacity>
+          </View>
         )}
       </Formik>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
