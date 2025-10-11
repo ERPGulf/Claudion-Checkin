@@ -1,31 +1,29 @@
-import {
-  View,
-  TouchableOpacity,
-  FlatList,
-  Text,
-  ActivityIndicator,
-} from 'react-native';
-import React, { useEffect, useLayoutEffect, useState } from 'react';
-import Entypo from '@expo/vector-icons/Entypo';
-import { useNavigation } from '@react-navigation/native';
-import { useSelector } from 'react-redux';
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
-import { FlashList } from '@shopify/flash-list';
-import { getUserAttendance } from '../api/userApi';
-import { selectEmployeeCode } from '../redux/Slices/UserSlice';
-import { LogCard, RenderLoader } from '../components/AttendanceHistory';
-import { COLORS, SIZES } from '../constants';
+
+import React, { useLayoutEffect } from "react";
+import { View, TouchableOpacity, Text, ActivityIndicator } from "react-native";
+import Entypo from "@expo/vector-icons/Entypo";
+import { useNavigation } from "@react-navigation/native";
+import { useSelector } from "react-redux";
+import { useInfiniteQuery } from "@tanstack/react-query";
+import { FlashList } from "@shopify/flash-list";
+
+import { getUserAttendance } from "../api/userApi";
+import { selectEmployeeCode } from "../redux/Slices/UserSlice";
+import { LogCard, RenderLoader } from "../components/AttendanceHistory";
+import { COLORS, SIZES } from "../constants";
 
 function AttendanceHistory() {
   const navigation = useNavigation();
+  const employeeCode = useSelector(selectEmployeeCode);
+
   useLayoutEffect(() => {
     navigation.setOptions({
       headerShadowVisible: false,
       headerShown: true,
-      headerTitle: 'Attendance history',
-      headerTitleAlign: 'center',
+      headerTitle: "Attendance History",
+      headerTitleAlign: "center",
       headerLeft: () => (
-        <TouchableOpacity className="" onPress={() => navigation.goBack()}>
+        <TouchableOpacity onPress={() => navigation.goBack()}>
           <Entypo
             name="chevron-left"
             size={SIZES.xxxLarge - 5}
@@ -34,48 +32,78 @@ function AttendanceHistory() {
         </TouchableOpacity>
       ),
     });
-  }, []);
-  // const [data, setData] = useState(null);
-  const employeeCode = useSelector(selectEmployeeCode);
+  }, [navigation]);
 
-  const { isLoading, isError, data, fetchNextPage, hasNextPage } =
-    useInfiniteQuery({
-      queryKey: ['attendance', employeeCode],
-      queryFn: ({ pageParam = 0 }) =>
-        getUserAttendance(employeeCode, pageParam),
-      getNextPageParam: (lastPage, allPages) => {
-        if (lastPage.length === 0) return undefined;
-        return allPages.length; //
-      },
-    });
-  const loadMoreItem = () => {
-    fetchNextPage();
+  const {
+    isLoading,
+    isError,
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
+    
+    queryKey: ["attendanceHistory", employeeCode],
+    queryFn: async ({ pageParam = 0 }) => {
+      const result = await getUserAttendance(employeeCode, pageParam, 20);
+      if (result.error) throw new Error(result.error);
+      return result;
+      
+    },
+    getNextPageParam: (lastPage, allPages) =>
+      lastPage.length < 20 ? undefined : allPages.length * 20,
+  });
+console.log('📡 Fetching attendance for:', employeeCode);
+  const loadMore = () => {
+    if (hasNextPage && !isFetchingNextPage) {
+      fetchNextPage();
+    }
   };
-  if (isError) {
+
+  if (isLoading) {
     return (
       <View className="flex-1 justify-center items-center">
-        <Text className="text-base text-gray-600">No data found</Text>
+        <ActivityIndicator size="large" color={COLORS.primary} />
       </View>
     );
   }
+
+  if (isError || !data?.pages?.flat().length) {
+    return (
+      <View className="flex-1 justify-center items-center">
+        <Text className="text-base text-gray-600">
+          No attendance records found
+        </Text>
+      </View>
+    );
+  }
+
   return (
     <View className="flex-1 bg-white">
       <FlashList
-        data={data?.pages?.flatMap(page => page)}
+        data={data.pages.flatMap((page) => page)}
+        keyExtractor={(item, index) => `${item.name}-${index}`}
         contentContainerStyle={{
           paddingVertical: 15,
           paddingHorizontal: 15,
-          backgroundColor: COLORS.white,
         }}
         renderItem={({ item }) => (
-          <LogCard type={item.log_type} time={item.time} />
+          <LogCard
+            type={item.status}
+            time={item.attendance_date}
+            employeeName={item.employee_name}
+            shift={item.working_shift} // corrected from item.shift
+          />
         )}
         ListFooterComponent={
-          <RenderLoader isLoading={isLoading} hasNextPage={hasNextPage} />
+          <RenderLoader
+            isLoading={isFetchingNextPage}
+            hasNextPage={hasNextPage}
+          />
         }
-        onEndReached={loadMoreItem}
-        onEndReachedThreshold={0}
-        estimatedItemSize={50}
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.2}
+        estimatedItemSize={60}
       />
     </View>
   );

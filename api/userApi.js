@@ -1,6 +1,8 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import userApi from "./apiManger";
 import axios from "axios";
+import { format } from "date-fns";
+import { CommonActions } from "@react-navigation/native";
 
 const setCommonHeaders = (headers = {}) => {
   headers["Content-Type"] = "multipart/form-data";
@@ -72,6 +74,7 @@ userApi.interceptors.response.use(
 // ✅ Dynamic baseURL + token on every request
 userApi.interceptors.request.use(async (config) => {
   const baseUrl = await AsyncStorage.getItem("baseUrl");
+
   if (baseUrl)
     config.baseURL = `${baseUrl}/api`; // append /api here
   else console.warn("⚠️ No baseUrl found in AsyncStorage");
@@ -82,194 +85,380 @@ userApi.interceptors.request.use(async (config) => {
   return config;
 });
 
+// ✅ Generate and store tokens
 export const generateToken = async ({ api_key, app_key, api_secret }) => {
   try {
-    // Step 1: Get baseUrl from AsyncStorage
     let baseUrl = await AsyncStorage.getItem("baseUrl");
-
     if (!baseUrl)
       throw new Error("Base URL not found. Please scan QR code first.");
 
-    // Step 2: Sanitize baseUrl
-    baseUrl = baseUrl.trim().replace(/[\u0000-\u001F]+/g, ""); // remove control chars
+    // Clean base URL
+    baseUrl = baseUrl.trim().replace(/[\u0000-\u001F]+/g, "");
     if (baseUrl.endsWith("/")) baseUrl = baseUrl.slice(0, -1);
 
-    console.log("Sanitized baseUrl:", baseUrl);
+    console.log("🔑 generateToken → baseUrl:", baseUrl);
 
-    // Step 3: Prepare request body
+    // Prepare form data
     const body = new URLSearchParams();
     body.append("api_key", api_key);
     body.append("app_key", app_key);
     body.append("api_secret", api_secret);
 
-    // Step 4: Make Axios request
+    // Make API call
     const response = await axios.post(
       `${baseUrl}/api/method/employee_app.gauth.generate_token_secure`,
       body.toString(),
       {
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        timeout: 10000, // optional: 10 seconds timeout
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
       }
     );
 
-    console.log("Token response:", response.data);
-    return response.data;
+    console.log("✅ Token response:", response.data);
+
+    // Extract token from nested data
+    const tokenData = response?.data?.data;
+    const accessToken = tokenData?.access_token;
+    const refreshToken = tokenData?.refresh_token;
+
+    if (accessToken) {
+      await AsyncStorage.multiSet([
+        ["access_token", accessToken],
+        ["refresh_token", refreshToken || ""],
+      ]);
+      console.log("💾 Tokens saved:", { accessToken, refreshToken });
+    } else {
+      console.warn("⚠️ No access_token found in token response", response.data);
+      throw new Error("Token not returned from server"); // keep it only here
+    }
+
+    return {
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    };
   } catch (error) {
-    console.error("❌ Generate token error:", error.message || error);
+    console.error(
+      "❌ generateToken error:",
+      error.response?.data || error.message
+    );
     throw error;
   }
 };
 
-// Get office location
-export const getOfficeLocation = async (employeeCode) => {
+// ✅ Common fetcher for employee data
+export const fetchEmployeeData = async (employeeCode) => {
   try {
-    const filters = [["name", "=", employeeCode]];
-    const fields = ["name", "first_name", "custom_reporting_location"];
-    const params = {
-      filters: JSON.stringify(filters),
-      fields: JSON.stringify(fields),
-    };
+    const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
+    const baseUrl = rawBaseUrl
+      ?.trim()
+      .replace(/[\u0000-\u001F]+/g, "")
+      .replace(/\/+$/, "");
+    if (!baseUrl) throw new Error("Base URL missing");
 
-    const url = `resource/Employee?${new URLSearchParams(params).toString()}`;
-    const { data } = await userApi.get(url);
+    const token = await AsyncStorage.getItem("access_token");
+    if (!token) throw new Error("Access token missing");
 
-    const jsonData = JSON.parse(data.data[0].custom_reporting_location);
-    const latitude = jsonData.features[0].geometry.coordinates[1];
-    const longitude = jsonData.features[0].geometry.coordinates[0];
+    const url = `${baseUrl}/api/method/employee_app.attendance_api.get_employee_data`;
 
-    return { latitude, longitude };
+    const { data } = await axios.get(url, {
+      params: { employee_id: employeeCode }, // ✅ correct param key
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Authorization: `Bearer ${token}`,
+      },
+      timeout: 10000,
+    });
+
+    console.log("✅ Employee data response:", data);
+    return data.message;
   } catch (error) {
-    console.error(error, "location");
-    throw new Error("location went wrong");
+    console.error(
+      "❌ Get employee data error:",
+      error.response?.data || error.message
+    );
+    throw error;
+  }
+};
+
+// ✅ Get Custom Employee Fields
+export const getUserCustomIn = async (employeeCode) => {
+  if (!employeeCode) throw new Error("Employee ID is required");
+
+  const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
+  const baseUrl = rawBaseUrl
+    ?.trim()
+    .replace(/[\u0000-\u001F]+/g, "")
+    .replace(/\/+$/, "");
+  if (!baseUrl) throw new Error("Base URL missing");
+
+  const token = await AsyncStorage.getItem("access_token");
+  if (!token) throw new Error("Access token missing");
+
+  const url = `${baseUrl}/api/method/employee_app.attendance_api.get_employee_data`;
+
+  const { data } = await axios.get(url, {
+    params: { employee_id: employeeCode }, // ✅ correct param
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      Authorization: `Bearer ${token}`,
+    },
+    timeout: 10000,
+  });
+
+  console.log("✅ Custom Employee Info:", data);
+  return data.message;
+};
+//getofficelocation
+export const getOfficeLocation = async (employeeCode) => {
+  if (!employeeCode) throw new Error("Employee ID is required");
+
+  try {
+    const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
+    const baseUrl = rawBaseUrl
+      ?.trim()
+      .replace(/[\u0000-\u001F]+/g, "")
+      .replace(/\/+$/, "");
+    if (!baseUrl) throw new Error("Base URL missing");
+
+    const token = await AsyncStorage.getItem("access_token");
+    if (!token) throw new Error("Access token missing");
+
+    const url = `${baseUrl}/api/method/employee_app.attendance_api.get_employee_data`;
+
+    const { data } = await axios.get(url, {
+      params: { employee_id: employeeCode },
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Authorization: `Bearer ${token}`,
+      },
+      timeout: 10000,
+    });
+
+    const employee = data.message;
+
+    if (!employee?.custom_reporting_location) {
+      console.warn("⚠️ No reporting location found");
+      return { latitude: null, longitude: null, radius: 0 };
+    }
+
+    let locationJson;
+    try {
+      locationJson = JSON.parse(employee.custom_reporting_location);
+    } catch (err) {
+      console.error("❌ Invalid location JSON format:", err);
+      return { latitude: null, longitude: null, radius: 0 };
+    }
+
+    const coords = locationJson?.features?.[0]?.geometry?.coordinates || [
+      null,
+      null,
+    ];
+
+    if (
+      !Array.isArray(coords) ||
+      coords.length !== 2 ||
+      typeof coords[0] !== "number" ||
+      typeof coords[1] !== "number"
+    ) {
+      console.warn("⚠️ Coordinates are missing or invalid");
+      return { latitude: null, longitude: null, radius: 0 };
+    }
+
+    const longitude = coords[0];
+    const latitude = coords[1];
+    const radius = Number(employee.custom_reporting_radius) || 0;
+
+    console.log("✅ Parsed coordinates:", { latitude, longitude, radius });
+    return { latitude, longitude, radius };
+  } catch (error) {
+    console.error(
+      "❌ Error getting office location:",
+      error.response?.data || error.message
+    );
+    throw error;
   }
 };
 
 // User check-in/out
+
+
 export const userCheckIn = async (fielddata) => {
   try {
-    const formData = new FormData();
-    formData.append("employee_field_value", fielddata.employeeCode);
-    formData.append("timestamp", fielddata.timestamp);
-    formData.append("device_id", "MobileAPP");
-    formData.append("log_type", fielddata.type);
+    const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
+    const baseUrl = rawBaseUrl
+      ?.trim()
+      .replace(/[\u0000-\u001F]+/g, "")
+      .replace(/\/+$/, "");
+    if (!baseUrl) throw new Error("Base URL missing");
 
-    const { data } = await userApi.post(
-      "method/hrms.hr.doctype.employee_checkin.employee_checkin.add_log_based_on_employee_field",
-      formData,
-      { headers: setCommonHeaders() }
+    const token = await AsyncStorage.getItem("access_token");
+    if (!token) throw new Error("Token missing");
+
+    // ✅ Use date-fns to format timestamp properly
+    const formattedTime = format(new Date(), "yyyy-MM-dd HH:mm:ss");
+
+    const payload = {
+      device_id: "MobileAPP",
+      employee_field_value: fielddata.employeeCode,
+      log_type: fielddata.type,
+      timestamp: formattedTime,
+    };
+
+    console.log("📤 Sending check-in:", payload);
+
+    const response = await axios.post(
+      `${baseUrl}/api/method/employee_app.attendance_api.add_log_based_on_employee_field`,
+      payload,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
     );
 
-    if (!data) throw new Error("Employee not found");
-    return data.message;
+    console.log("✅ Check-in API response:", response.data);
+
+    const checkinId = response.data?.message?.name;
+    if (!checkinId) throw new Error("Missing check-in ID");
+
+    return { name: checkinId };
   } catch (error) {
-    console.error(error, "checkin");
-    throw new Error("something went wrong");
+    console.error("❌ Check-in failed:", error);
+    throw new Error("Something went wrong during check-in");
   }
 };
-
 // User file upload
-export const userFileUpload = async (formdata) => {
+
+export const userFileUpload = async (file, docname) => {
   try {
-    const { data } = await userApi.post("method/upload_file", formdata, {
-      headers: setCommonHeaders(),
+    if (!file || !file.uri) throw new Error("Invalid file data");
+    if (!docname) throw new Error("Missing docname (check-in ID)");
+
+    const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
+    const baseUrl = rawBaseUrl
+      ?.trim()
+      .replace(/[\u0000-\u001F]+/g, "")
+      .replace(/\/+$/, "");
+    if (!baseUrl) throw new Error("Base URL missing");
+
+    const token = await AsyncStorage.getItem("access_token");
+    if (!token) throw new Error("Missing access token");
+
+    const formData = new FormData();
+    formData.append("file", {
+      uri: file.uri,
+      name: file.name || "userfile.png",
+      type: file.type || "image/png",
+    });
+    formData.append("file_name", "qr");
+    formData.append("doctype", "Employee Checkin");
+    formData.append("docname", docname);
+
+    console.log("📤 Uploading file with data:", {
+      docname,
+      fileName: file.name,
+      uri: file.uri,
     });
 
-    if (!data || !data.message?.file_url) throw new Error("Upload failed");
-    return data.message;
+    const response = await axios.post(
+      `${baseUrl}/api/method/employee_app.attendance_api.upload_file`,
+      formData,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "multipart/form-data",
+        },
+      }
+    );
+
+    console.log("✅ Upload API response:", response.data);
+    return response.data;
   } catch (error) {
-    console.error("Upload API Error:", error.response?.data || error.message);
+    console.error("❌ Upload API Error:", error.message || error);
     throw new Error("Photo upload failed");
   }
 };
 
-// PUT user file
-export const putUserFile = async (formData, fileId) => {
+//put user file id
+export const putUserFile = async (employeeCode) => {
   try {
-    const { data } = await userApi.put(
-      `resource/Employee Checkin/${fileId}`,
-      formData,
-      {
-        headers: setCommonHeaders(),
-      }
-    );
+    const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
+    const baseUrl = (rawBaseUrl || "")
+      .trim()
+      .replace(/[\u0000-\u001F\u200B]+/g, "")
+      .replace(/\/+$/, "");
+    const token = await AsyncStorage.getItem("access_token");
+    if (!token) throw new Error("Missing access token");
+
+    const url = `${baseUrl}/api/method/employee_app.attendance_api.employee`;
+
+    const formData = new URLSearchParams();
+    formData.append("employee_code", employeeCode);
+
+    const { data } = await axios.put(url, formData, {
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
     return data;
   } catch (error) {
-    console.error(error, "image");
+    console.error(
+      "Error updating employee:",
+      error.response?.data || error.message
+    );
     throw error;
   }
 };
 
-// User status PUT
+//user status put
+
 export const userStatusPut = async (employeeCode, custom_in) => {
   try {
-    const formData = new FormData();
-    formData.append("custom_in", custom_in);
+    const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
+    const baseUrl = rawBaseUrl
+      ?.trim()
+      .replace(/[\u0000-\u001F]+/g, "")
+      .replace(/\/+$/, "");
+    if (!baseUrl) throw new Error("Base URL missing");
 
-    const { data } = await userApi.put(
-      `resource/Employee/${employeeCode}`,
-      formData,
-      {
-        headers: setCommonHeaders(),
-      }
-    );
+    const token = await AsyncStorage.getItem("access_token");
+    if (!token) throw new Error("Access token missing");
+    if (!employeeCode) throw new Error("Employee code is required");
 
+    const url = `${baseUrl}/api/method/employee_app.attendance_api.employee`;
+    console.log("🔗 PUT URL:", url);
+
+    const formData = new URLSearchParams();
+    formData.append("employee_code", employeeCode);
+    formData.append("custom_in", String(custom_in));
+
+    const { data } = await axios.put(url, formData.toString(), {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+    });
+
+    console.log("✅ Response:", data);
     return data;
   } catch (error) {
-    console.error(error, "status put");
-    throw new Error("something went wrong");
-  }
-};
-
-// Get user status
-export const getUserCustomIn = async (employeeCode) => {
-  try {
-    const filters = [["name", "=", employeeCode]];
-    const fields = [
-      "name",
-      "first_name",
-      "custom_in",
-      "custom_restrict_location",
-      "custom_reporting_radius",
-    ];
-    const params = {
-      filters: JSON.stringify(filters),
-      fields: JSON.stringify(fields),
-    };
-
-    const url = `resource/Employee?${new URLSearchParams(params).toString()}`;
-    const { data } = await userApi.get(url);
-    return data.data[0];
-  } catch (error) {
-    console.error(error, "status");
-    throw new Error("something went wrong");
-  }
-};
-
-// Trip APIs
-export const tripTrack = async (formData) => {
-  try {
-    const { data } = await userApi.post(
-      "method/employee_app.attendance_api.insert_new_trip",
-      formData,
-      { headers: setCommonHeaders() }
+    console.error(
+      "❌ userStatusPut error:",
+      error.response?.data || error.message
     );
-
-    if (!data.message) throw new Error("Trip not started");
-    return data.message;
-  } catch (error) {
-    console.error(error, "trip");
-    throw new Error("something went wrong");
+    throw new Error("Something went wrong while updating employee status");
   }
 };
+
+//trip status
 
 export const userTripStatus = async (employeeCode) => {
   try {
     const { data } = await userApi.get(
       "method/employee_app.attendance_api.get_latest_open_trip",
       {
-        params: { employee_id: employeeCode },
+        params: { employee_Code: employeeCode },
       }
     );
     return data.message;
@@ -342,21 +531,55 @@ export const getVehicle = async (searchTerms = "") => {
   }
 };
 
-// User attendance
-export const getUserAttendance = async (employee_code, limit_start) => {
-  try {
-    const { data } = await userApi.get(
-      "method/employee_app.attendance_api.employee_checkin",
-      {
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        params: { employee_code, limit_start, limit_page_length: 15 },
-      }
-    );
+//User attendance
 
-    return data.message;
+export const getUserAttendance = async (
+  employee_id,
+  limit_start = 0,
+  limit_page_length = 20
+) => {
+  try {
+    const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
+    const token = await AsyncStorage.getItem("access_token");
+
+    if (!rawBaseUrl || !token) {
+      return {
+        error: !rawBaseUrl
+          ? "Base URL not found. Please scan QR code first."
+          : "Access token missing. Please log in again.",
+      };
+    }
+
+    const baseUrl = rawBaseUrl
+      .trim()
+      .replace(/[\u0000-\u001F\u200B]+/g, "")
+      .replace(/\/+$/, "");
+    const url = `${baseUrl}/api/method/employee_app.attendance_api.get_attendance_details`;
+
+    const response = await axios.get(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      params: {
+        employee_id,
+        limit_start,
+        limit_page_length,
+      },
+      timeout: 10000,
+    });
+
+    return response.data?.message || [];
   } catch (error) {
-    console.error(error, "attendance");
-    throw new Error("Something went wrong");
+    console.error(
+      "Attendance fetch error:",
+      error.response?.data || error.message
+    );
+    return {
+      error:
+        error.response?.data?.message ||
+        "Something went wrong while fetching attendance history.",
+    };
   }
 };
 
@@ -372,10 +595,6 @@ export const getExpenseTypes = async () => {
       { id: 3, name: "Accommodation" },
       { id: 4, name: "Supplies" },
     ];
-
-    // later when backend is ready:
-    // const { data } = await userApi.get("method/employee_app.expense_api.expense_types");
-    // return data.message;
   } catch (error) {
     console.error("❌ getExpenseTypes error:", error);
     throw new Error("Failed to fetch expense types");
@@ -385,8 +604,7 @@ export const getExpenseTypes = async () => {
 // Create Expense Claim (dummy)
 export const createExpenseClaim = async (employeeCode, claimData) => {
   try {
-    // mock behavior
-    await new Promise((resolve) => setTimeout(resolve, 600)); // simulate network delay
+    await new Promise((resolve) => setTimeout(resolve, 600));
 
     return {
       id: Math.floor(Math.random() * 10000), // fake ID
@@ -396,17 +614,6 @@ export const createExpenseClaim = async (employeeCode, claimData) => {
       date: new Date().toISOString().split("T")[0],
       status: "Pending",
     };
-
-    // later when backend is ready:
-    // const formData = new FormData();
-    // formData.append("employee", employeeCode);
-    // formData.append("expense_type", claimData.expense_type);
-    // formData.append("amount", claimData.amount);
-    //
-    // const { data } = await userApi.post("method/employee_app.expense_api.create_expense_claim", formData, {
-    //   headers: setCommonHeaders(),
-    // });
-    // return data.message;
   } catch (error) {
     console.error("❌ createExpenseClaim error:", error);
     throw new Error("Failed to create expense claim");

@@ -54,7 +54,7 @@ function StartForm({ setIsLoading, location, tripType }) {
     const { latitude, longitude } = location;
     const formData = new FormData();
     dispatch(setVehicleId(values.vehicle_no));
-    formData.append('employee_id', employeeCode);
+    formData.append('employee_Code', employeeCode);
     formData.append('trip_start_time', formattedDateTime);
     formData.append('trip_type', tripType);
     formData.append('trip_start_km', values.starting_km);

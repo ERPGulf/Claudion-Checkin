@@ -14,6 +14,7 @@ import {
   setFullname,
 } from "../redux/Slices/UserSlice";
 import { COLORS, SIZES } from "../constants";
+import { setEmployeeCode} from "../redux/Slices/UserSlice";
 
 function QrScan() {
   const navigation = useNavigation();
@@ -43,37 +44,70 @@ function QrScan() {
     });
   }, []);
 
+ 
   const handleQRCodeData = async (data) => {
     try {
+      // Decode base64
       let value = base64.decode(data);
       console.log("📥 Raw Decoded QR:", value);
 
+      // Add newlines for safer parsing
       value = value
+        .replace(/Company:/g, "\nCompany:")
+        .replace(/Employee_Code:/g, "\nEmployee_Code:")
+        .replace(/Full_Name:/g, "\nFull_Name:")
         .replace(/User_id:/g, "\nUser_id:")
         .replace(/API:/g, "\nAPI:")
         .replace(/App_key:/g, "\nApp_key:");
 
+      // Helper to clean strings
+      const cleanString = (str) => str.replace(/[\u0000-\u001F]+/g, "").trim();
+
+      // Extract values
+      const employeeMatch = value.match(/Employee_Code:\s*([^\n\r]+)/i);
+      const fullNameMatch = value.match(/Full_Name:\s*([^\n\r]+)/i);
       const userIdMatch = value.match(/User_id:\s*([^\n\r]+)/i);
       const apiMatch = value.match(/API:\s*(https?:\/\/[^\s]+)/i);
       const appKeyMatch = value.match(/App_key:\s*([^\n\r]+)/i);
 
-      if (userIdMatch && apiMatch && appKeyMatch) {
-        const api_key = userIdMatch[1].trim();
-        const app_key = appKeyMatch[1].trim();
-        let baseUrl = apiMatch[1].trim().replace(/\/$/, "");
+      if (
+        employeeMatch &&
+        fullNameMatch &&
+        userIdMatch &&
+        apiMatch &&
+        appKeyMatch
+      ) {
+        const employee_code = cleanString(employeeMatch[1]);
+        const full_name = cleanString(fullNameMatch[1]);
+        const api_key = cleanString(userIdMatch[1]);
+        const app_key = cleanString(appKeyMatch[1]);
+        const baseUrl = cleanString(apiMatch[1]).replace(/\/$/, "");
 
-        console.log("✅ Parsed QR Data:", { api_key, app_key, baseUrl });
+        console.log("✅ Cleaned QR Data:", {
+          employee_code,
+          full_name,
+          api_key,
+          app_key,
+          baseUrl,
+        });
 
+        // Save all to AsyncStorage
         await AsyncStorage.multiSet([
+          ["employee_code", employee_code],
+          ["full_name", full_name],
           ["api_key", api_key],
           ["app_key", app_key],
           ["baseUrl", baseUrl],
         ]);
 
+        // Update Redux
         dispatch(setUsername(api_key));
+        dispatch(setFullname(full_name));
         dispatch(setBaseUrl(baseUrl));
+        dispatch(setEmployeeCode(employee_code)); // ✅ Make sure this exists in your slice
 
-        navigation.navigate("login", { api_key, app_key, baseUrl });
+        // Navigate to login
+        navigation.navigate("login");
       } else {
         alert("Invalid QR code. Please try again.");
       }

@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import Constants from "expo-constants";
 import { Ionicons } from "@expo/vector-icons";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Toast } from "react-native-toast-message/lib/src/Toast";
 import { Formik } from "formik";
@@ -21,12 +21,18 @@ import { setSignIn } from "../redux/Slices/AuthSlice";
 import { generateToken } from "../api/userApi";
 import { COLORS, SIZES } from "../constants";
 import { WelcomeCard } from "../components/Login";
+import { selectEmployeeCode, selectName } from "../redux/Slices/UserSlice";
 
 function Login() {
   const navigation = useNavigation();
   const dispatch = useDispatch();
+
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+
+  // ✅ Get employee info from Redux
+  const employeeCode = useSelector(selectEmployeeCode);
+  const fullName = useSelector(selectName);
 
   // Form validation schema
   const loginSchema = Yup.object().shape({
@@ -40,7 +46,6 @@ function Login() {
   const handleLogin = async (password) => {
     setIsLoading(true);
     try {
-      // Get QR values from AsyncStorage
       const api_key = await AsyncStorage.getItem("api_key");
       const app_key = await AsyncStorage.getItem("app_key");
       const baseUrl = await AsyncStorage.getItem("baseUrl");
@@ -57,24 +62,29 @@ function Login() {
         return;
       }
 
-      // Generate token with password as api_secret
-      const data = await generateToken({
+      const { access_token, refresh_token } = await generateToken({
         api_key,
         app_key,
         api_secret: password,
       });
 
-      // Update Redux state
-      dispatch(setSignIn({ isLoggedIn: true, token: data.access_token }));
+      if (!access_token) throw new Error("Token not returned from server");
 
-      // Success message
+      await AsyncStorage.setItem("access_token", access_token);
+      if (refresh_token) {
+        await AsyncStorage.setItem("refresh_token", refresh_token);
+      }
+
+      dispatch(setSignIn({ isLoggedIn: true, access_token }));
+
       Toast.show({
         type: "success",
         text1: "Login successful",
         autoHide: true,
         visibilityTime: 3000,
       });
-      navigation.replace("homeTab"); 
+
+      navigation.navigate("homeTab");
     } catch (error) {
       console.log("Login error:", error);
       Toast.show({
@@ -121,6 +131,18 @@ function Login() {
           <View
             style={{ flex: 1, justifyContent: "flex-end", marginBottom: 20 }}
           >
+            {/* Employee Info */}
+            {employeeCode && fullName && (
+              <View style={{ marginBottom: 16 }}>
+                <Text style={{ fontSize: 16, color: COLORS.grayText }}>
+                  Welcome, {fullName}
+                </Text>
+                <Text style={{ fontSize: 14, color: COLORS.grayText }}>
+                  Employee Code: {employeeCode}
+                </Text>
+              </View>
+            )}
+
             {/* Password Input */}
             <Text
               style={{ color: COLORS.grayText, fontSize: 16, marginBottom: 5 }}
