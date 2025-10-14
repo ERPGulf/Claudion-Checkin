@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import {
   View,
@@ -128,118 +127,113 @@ function Login() {
           setFieldTouched,
           isValid,
         }) => (
-          <View
-            style={{ flex: 1, justifyContent: "flex-end", marginBottom: 20 }}
-          >
-            {/* Employee Info */}
-            {employeeCode && fullName && (
-              <View style={{ marginBottom: 16 }}>
-                <Text style={{ fontSize: 16, color: COLORS.grayText }}>
-                  Welcome, {fullName}
-                </Text>
-                <Text style={{ fontSize: 14, color: COLORS.grayText }}>
-                  Employee Code: {employeeCode}
-                </Text>
-              </View>
-            )}
-
-            {/* Password Input */}
-            <Text
-              style={{ color: COLORS.grayText, fontSize: 16, marginBottom: 5 }}
-            >
-              Password
-            </Text>
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                backgroundColor: COLORS.white,
-                borderWidth: 1,
-                borderColor: COLORS.borderGray,
-                borderRadius: 12,
-                paddingHorizontal: 12,
-                height: 56,
-                marginBottom: 5,
-              }}
-            >
-              <TextInput
-                secureTextEntry={!showPassword}
-                value={values.password}
-                onChangeText={handleChange("password")}
-                placeholder="Enter password"
-                onBlur={() => setFieldTouched("password")}
-                style={{ flex: 1, fontSize: 16, height: "100%" }}
-              />
-              <TouchableOpacity
-                onPress={() => setShowPassword((prev) => !prev)}
-              >
-                <Ionicons
-                  name={showPassword ? "eye" : "eye-off"}
-                  size={SIZES.xLarge}
-                  color={COLORS.gray2}
-                />
-              </TouchableOpacity>
-            </View>
-            {touched.password && errors.password && (
-              <Text
-                style={{ color: COLORS.red, fontSize: 14, marginBottom: 10 }}
-              >
-                {errors.password}
-              </Text>
-            )}
-
-            {/* Login Button */}
-            <TouchableOpacity
-              disabled={!isValid || isLoading}
-              onPress={handleSubmit}
-              style={{
-                backgroundColor: COLORS.primary,
-                height: 56,
-                borderRadius: 12,
-                justifyContent: "center",
-                alignItems: "center",
-                opacity: !isValid ? 0.7 : 1,
-                marginBottom: 12,
-              }}
-            >
-              {isLoading ? (
-                <ActivityIndicator size="large" color={COLORS.white} />
-              ) : (
-                <Text
-                  style={{
-                    color: COLORS.white,
-                    fontSize: 18,
-                    fontWeight: "bold",
-                  }}
-                >
-                  Login
-                </Text>
-              )}
-            </TouchableOpacity>
-
-            {/* Rescan QR */}
-            <TouchableOpacity
-              onPress={() => navigation.navigate("Qrscan")}
-              style={{
-                borderColor: COLORS.primary,
-                borderWidth: 1,
-                backgroundColor: COLORS.white,
-                height: 56,
-                borderRadius: 12,
-                justifyContent: "center",
-                alignItems: "center",
-              }}
-            >
+          <View style={{ flex: 1, justifyContent: "space-between" }}>
+            {/* Top Section */}
+            <View style={{ marginTop: 20 }}>
               <Text
                 style={{
-                  color: COLORS.primary,
-                  fontSize: 18,
-                  fontWeight: "600",
+                  color: COLORS.grayText,
+                  fontSize: 16,
+                  marginBottom: 5,
                 }}
               >
-                Rescan QR Code
+                Password
               </Text>
-            </TouchableOpacity>
+
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  backgroundColor: COLORS.white,
+                  borderWidth: 1,
+                  borderColor: COLORS.borderGray,
+                  borderRadius: 12,
+                  paddingHorizontal: 12,
+                  height: 56,
+                  marginBottom: 10,
+                }}
+              >
+                <TextInput
+                  secureTextEntry={!showPassword}
+                  value={values.password}
+                  onChangeText={handleChange("password")}
+                  placeholder="Enter password"
+                  onBlur={() => setFieldTouched("password")}
+                  style={{ flex: 1, fontSize: 16, height: "100%" }}
+                />
+                <TouchableOpacity
+                  onPress={() => setShowPassword((prev) => !prev)}
+                >
+                  <Ionicons
+                    name={showPassword ? "eye" : "eye-off"}
+                    size={SIZES.xLarge}
+                    color={COLORS.gray2}
+                  />
+                </TouchableOpacity>
+              </View>
+
+              {touched.password && errors.password && (
+                <Text
+                  style={{ color: COLORS.red, fontSize: 14, marginBottom: 10 }}
+                >
+                  {errors.password}
+                </Text>
+              )}
+            </View>
+
+            {/* Bottom Section */}
+            <View style={{ marginBottom: 20 }}>
+              <TouchableOpacity
+                disabled={!isValid || isLoading}
+                onPress={handleSubmit}
+                style={{
+                  backgroundColor: COLORS.primary,
+                  height: 56,
+                  borderRadius: 12,
+                  justifyContent: "center",
+                  alignItems: "center",
+                  opacity: !isValid ? 0.7 : 1,
+                  marginBottom: 12,
+                }}
+              >
+                {isLoading ? (
+                  <ActivityIndicator size="large" color={COLORS.white} />
+                ) : (
+                  <Text
+                    style={{
+                      color: COLORS.white,
+                      fontSize: 18,
+                      fontWeight: "bold",
+                    }}
+                  >
+                    Login
+                  </Text>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => navigation.navigate("Qrscan")}
+                style={{
+                  borderColor: COLORS.primary,
+                  borderWidth: 1,
+                  backgroundColor: COLORS.white,
+                  height: 56,
+                  borderRadius: 12,
+                  justifyContent: "center",
+                  alignItems: "center",
+                }}
+              >
+                <Text
+                  style={{
+                    color: COLORS.primary,
+                    fontSize: 18,
+                    fontWeight: "600",
+                  }}
+                >
+                  Rescan QR Code
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
       </Formik>

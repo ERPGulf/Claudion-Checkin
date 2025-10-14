@@ -280,7 +280,6 @@ export const getOfficeLocation = async (employeeCode) => {
 
 // User check-in/out
 
-
 export const userCheckIn = async (fielddata) => {
   try {
     const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
@@ -569,6 +568,7 @@ export const getUserAttendance = async (
       timeout: 10000,
     });
 
+    // Return the attendance list
     return response.data?.message || [];
   } catch (error) {
     console.error(
@@ -582,7 +582,6 @@ export const getUserAttendance = async (
     };
   }
 };
-
 // Get Expense Types (dummy)
 export const getExpenseTypes = async () => {
   try {

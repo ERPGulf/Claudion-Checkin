@@ -42,18 +42,16 @@ function AttendanceHistory() {
     hasNextPage,
     isFetchingNextPage,
   } = useInfiniteQuery({
-    
     queryKey: ["attendanceHistory", employeeCode],
     queryFn: async ({ pageParam = 0 }) => {
       const result = await getUserAttendance(employeeCode, pageParam, 20);
       if (result.error) throw new Error(result.error);
       return result;
-      
     },
     getNextPageParam: (lastPage, allPages) =>
       lastPage.length < 20 ? undefined : allPages.length * 20,
   });
-console.log('📡 Fetching attendance for:', employeeCode);
+
   const loadMore = () => {
     if (hasNextPage && !isFetchingNextPage) {
       fetchNextPage();
@@ -89,10 +87,10 @@ console.log('📡 Fetching attendance for:', employeeCode);
         }}
         renderItem={({ item }) => (
           <LogCard
-            type={item.status}
-            time={item.attendance_date}
+            type={item.log_type} // IN / OUT
+            time={item.time}
             employeeName={item.employee_name}
-            shift={item.working_shift} // corrected from item.shift
+            deviceId={item.device_id}
           />
         )}
         ListFooterComponent={
