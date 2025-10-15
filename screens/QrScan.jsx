@@ -14,7 +14,7 @@ import {
   setFullname,
 } from "../redux/Slices/UserSlice";
 import { COLORS, SIZES } from "../constants";
-import { setEmployeeCode} from "../redux/Slices/UserSlice";
+import { setEmployeeCode } from "../redux/Slices/UserSlice";
 
 function QrScan() {
   const navigation = useNavigation();
@@ -43,72 +43,69 @@ function QrScan() {
       ),
     });
   }, []);
-
- 
   const handleQRCodeData = async (data) => {
     try {
-      // Decode base64
+      // Decode base64 safely
       let value = base64.decode(data);
       console.log("📥 Raw Decoded QR:", value);
 
-      // Add newlines for safer parsing
-      value = value
-        .replace(/Company:/g, "\nCompany:")
-        .replace(/Employee_Code:/g, "\nEmployee_Code:")
-        .replace(/Full_Name:/g, "\nFull_Name:")
-        .replace(/User_id:/g, "\nUser_id:")
-        .replace(/API:/g, "\nAPI:")
-        .replace(/App_key:/g, "\nApp_key:");
+      // Normalize the data
+      value = value.replace(/&/g, " ").replace(/\s+/g, " ").trim();
 
-      // Helper to clean strings
-      const cleanString = (str) => str.replace(/[\u0000-\u001F]+/g, "").trim();
+      // Function to extract between markers
+      const extractValue = (text, startKey, endKey) => {
+        const startIndex = text.indexOf(startKey);
+        if (startIndex === -1) return null;
+        const endIndex =
+          endKey && text.indexOf(endKey, startIndex + startKey.length);
+        const raw =
+          !endKey || endIndex === -1
+            ? text.substring(startIndex + startKey.length)
+            : text.substring(startIndex + startKey.length, endIndex);
 
-      // Extract values
-      const employeeMatch = value.match(/Employee_Code:\s*([^\n\r]+)/i);
-      const fullNameMatch = value.match(/Full_Name:\s*([^\n\r]+)/i);
-      const userIdMatch = value.match(/User_id:\s*([^\n\r]+)/i);
-      const apiMatch = value.match(/API:\s*(https?:\/\/[^\s]+)/i);
-      const appKeyMatch = value.match(/App_key:\s*([^\n\r]+)/i);
+        // Remove extra spaces, non-breaking, and control characters
+        return raw.replace(/[\u0000-\u001F\u00A0]+/g, "").trim();
+      };
 
-      if (
-        employeeMatch &&
-        fullNameMatch &&
-        userIdMatch &&
-        apiMatch &&
-        appKeyMatch
-      ) {
-        const employee_code = cleanString(employeeMatch[1]);
-        const full_name = cleanString(fullNameMatch[1]);
-        const api_key = cleanString(userIdMatch[1]);
-        const app_key = cleanString(appKeyMatch[1]);
-        const baseUrl = cleanString(apiMatch[1]).replace(/\/$/, "");
+      // Extract each field
+      const company = extractValue(value, "Company:", "Employee_Code:");
+      const employee_code = extractValue(value, "Employee_Code:", "Full_Name:");
+      const full_name = extractValue(value, "Full_Name:", "User_id:");
+      const api_key = extractValue(value, "User_id:", "API:");
+      const baseUrl = extractValue(value, "API:", "App_key:");
+      const app_key = extractValue(value, "App_key:");
 
+      // Validate required fields
+      if (employee_code && full_name && api_key && baseUrl && app_key) {
         console.log("✅ Cleaned QR Data:", {
+          company,
           employee_code,
           full_name,
           api_key,
-          app_key,
           baseUrl,
+          app_key,
         });
 
         // Save all to AsyncStorage
         await AsyncStorage.multiSet([
+          ["company", company],
           ["employee_code", employee_code],
           ["full_name", full_name],
           ["api_key", api_key],
           ["app_key", app_key],
-          ["baseUrl", baseUrl],
+          ["baseUrl", baseUrl.replace(/\/$/, "")],
         ]);
 
-        // Update Redux
+        // Dispatch Redux updates
         dispatch(setUsername(api_key));
         dispatch(setFullname(full_name));
         dispatch(setBaseUrl(baseUrl));
-        dispatch(setEmployeeCode(employee_code)); // ✅ Make sure this exists in your slice
+        dispatch(setEmployeeCode(employee_code));
 
         // Navigate to login
         navigation.navigate("login");
       } else {
+        console.log("❌ Parsing failed:", value);
         alert("Invalid QR code. Please try again.");
       }
     } catch (error) {
