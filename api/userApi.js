@@ -582,40 +582,273 @@ export const getUserAttendance = async (
     };
   }
 };
-// Get Expense Types (dummy)
-export const getExpenseTypes = async () => {
+//get expense claims
+export const getExpenseClaims = async () => {
   try {
-    // right now: mock response
-    await new Promise((resolve) => setTimeout(resolve, 800)); // simulate network delay
+    const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
+    const token = await AsyncStorage.getItem("access_token");
 
-    return [
-      { id: 1, name: "Travel" },
-      { id: 2, name: "Food" },
-      { id: 3, name: "Accommodation" },
-      { id: 4, name: "Supplies" },
-    ];
+    if (!rawBaseUrl || !token) {
+      throw new Error("Missing baseUrl or token in storage");
+    }
+
+    // ✅ Keep the double slash before "api"
+    const baseUrl = rawBaseUrl.trim().replace(/\/+$/, "");
+    const url = `${baseUrl}//api/method/employee_app.attendance_api.get_expense_claims`;
+
+    console.log("📡 Fetching expense claims from:", url);
+
+    const response = await axios.get(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    const data = response.data?.message || response.data;
+    console.log("✅ Expense claims fetched:", data);
+
+    return Array.isArray(data) ? data : [];
   } catch (error) {
-    console.error("❌ getExpenseTypes error:", error);
-    throw new Error("Failed to fetch expense types");
+    console.error("❌ Error fetching expense claims:", error);
+    throw error;
   }
 };
 
-// Create Expense Claim (dummy)
-export const createExpenseClaim = async (employeeCode, claimData) => {
-  try {
-    await new Promise((resolve) => setTimeout(resolve, 600));
+//create expense claim
+// export const createExpenseClaim = async (expenseData) => {
+//   try {
+//     const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
+//     const token = await AsyncStorage.getItem("access_token");
+//     const employeeCode = await AsyncStorage.getItem("employee_code");
 
-    return {
-      id: Math.floor(Math.random() * 10000), // fake ID
-      employee: employeeCode,
-      expense_type: claimData.expense_type,
-      amount: claimData.amount,
-      date: new Date().toISOString().split("T")[0],
-      status: "Pending",
+//     if (!rawBaseUrl || !token || !employeeCode) {
+//       throw new Error("Missing base URL, token, or employee code");
+//     }
+
+//     const baseUrl = rawBaseUrl
+//       ?.trim()
+//       .replace(/[\u0000-\u001F]+/g, "")
+//       .replace(/\/+$/, "");
+
+//     const url = `${baseUrl}/api/method/employee_app.attendance_api.create_expense_claim`;
+
+//     // Prepare URL-encoded data
+//     const formData = new URLSearchParams();
+//     formData.append("employee", employeeCode);
+//     formData.append("expense_date", expenseData.expense_date);
+//     formData.append("expense_type", expenseData.expense_type);
+//     formData.append("amount", expenseData.amount);
+//     formData.append("description", expenseData.description || "");
+
+//     console.log("📤 Sending expense claim:", Object.fromEntries(formData));
+
+//     const response = await axios.post(url, formData.toString(), {
+//       headers: {
+//         "Content-Type": "application/x-www-form-urlencoded",
+//         Authorization: `Bearer ${token}`,
+//       },
+//     });
+
+//     // ✅ Return inner message object (actual claim)
+//     const data = response.data?.message || response.data;
+//     console.log("✅ Expense claim created:", data);
+
+//     return data;
+//   } catch (error) {
+//     console.error(
+//       "❌ Error creating expense claim:",
+//       error.response?.data || error.message
+//     );
+//     throw error;
+//   }
+// };
+export const createExpenseClaim = async (claimData) => {
+  try {
+    const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
+    const baseUrl = rawBaseUrl?.trim()?.replace(/\/+$/, "");
+    const token = await AsyncStorage.getItem("access_token");
+    const employee = await AsyncStorage.getItem("employee_code");
+
+    if (!baseUrl || !token || !employee)
+      throw new Error("Missing base URL, token, or employee code");
+
+    const url = `${baseUrl}/api/method/employee_app.attendance_api.create_expense_claim`;
+    console.log("🔗 POST URL:", url);
+    // ✅ Build multipart form data
+    const formData = new FormData();
+    formData.append("employee", employee);
+    formData.append("expense_date", claimData.expense_date);
+    formData.append("expense_type", claimData.expense_type);
+    formData.append("amount", claimData.amount);
+    formData.append("description", claimData.description || "");
+
+    // ✅ Handle single file upload
+    if (
+      claimData.file_url &&
+      Array.isArray(claimData.file_url) &&
+      claimData.file_url.length > 0 &&
+      claimData.file_url[0].uri
+    ) {
+      const file = claimData.file_url[0];
+      const fileName = file.name || "upload.jpg";
+      const fileType =
+        file.mimeType ||
+        (fileName.endsWith(".png")
+          ? "image/png"
+          : fileName.endsWith(".jpg") || fileName.endsWith(".jpeg")
+            ? "image/jpeg"
+            : "application/octet-stream");
+
+      formData.append("file_name", {
+        uri: file.uri,
+        name: fileName,
+        type: fileType,
+      });
+    }
+    console.log("📤 Form Data Entries:");
+    console.log("📤 Sending expense claim (with file if any):", url);
+
+    const response = await axios.post(url, formData, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "multipart/form-data",
+      },
+      transformRequest: (data) => data, // 👈 Required to prevent axios from messing with FormData
+    });
+
+    console.log("✅ Expense claim created:", response.data);
+    return response.data;
+  } catch (error) {
+    console.error(
+      "❌ Error creating expense claim:",
+      error.response?.data || error.message
+    );
+    throw error;
+  }
+};
+//user expense file upload
+export const userExpenseFileUpload = async (file, docname) => {
+  try {
+    if (!file || !file.uri) throw new Error("Invalid file data");
+    if (!docname) throw new Error("Missing docname (claim ID)");
+
+    const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
+    const baseUrl = rawBaseUrl?.trim().replace(/\/+$/, "");
+
+    const formData = new FormData();
+    formData.append("file", {
+      uri: file.uri,
+      name: file.name,
+      type: file.type || "application/octet-stream",
+    });
+    formData.append("is_private", 0);
+    formData.append("doctype", "Expense Claim");
+    formData.append("docname", docname);
+    formData.append("fieldname", "file_url");
+
+    const response = await axios.post(
+      `${baseUrl}/api/method/upload_file`,
+      formData,
+      {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      }
+    );
+
+    console.log("✅ File uploaded:", response.data);
+    return response.data;
+  } catch (err) {
+    console.error("❌ File upload failed:", err);
+    throw err;
+  }
+};
+// ✅ Create Leave Application
+export const createLeaveApplication = async (leaveData) => {
+  try {
+    const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
+    const token = await AsyncStorage.getItem("access_token");
+    const employeeCode = await AsyncStorage.getItem("employee_code");
+
+    if (!rawBaseUrl || !token || !employeeCode) {
+      const missing = !rawBaseUrl
+        ? "Base URL not found. Please scan QR code first."
+        : !token
+          ? "Access token missing. Please log in again."
+          : "Employee code missing. Please scan QR code again.";
+      return { error: missing };
+    }
+
+    const baseUrl = rawBaseUrl
+      .trim()
+      .replace(/[\u0000-\u001F\u200B]+/g, "")
+      .replace(/\/+$/, "");
+    const url = `${baseUrl}/api/method/employee_app.attendance_api.create_leave_application`;
+
+    const formatDate = (date) => {
+      if (!date) return "";
+      const d = new Date(date);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
     };
+
+    const remoteAgreementText = `I acknowledge and agree to the proposed remote work arrangement.
+I will fulfill all my job responsibilities while working remotely and maintain regular communication with my team and supervisors.
+I confirm that I possess the necessary equipment and technology required to perform my job remotely.
+I agree to maintain the confidentiality of all company information.
+I understand the employer may require me to return to the office if needed.
+The employer reserves the right to approve or deny the leave request based on business needs.`;
+
+    const formData = new URLSearchParams();
+    formData.append("employee", employeeCode);
+    formData.append("posting_date", formatDate(leaveData.posting_date));
+    formData.append("leave_type", leaveData.leave_type);
+    formData.append("from_date", formatDate(leaveData.from_date));
+    formData.append("to_date", formatDate(leaveData.to_date));
+    formData.append("reason", leaveData.reason || "N/A");
+
+    if (
+      leaveData.leave_type === "Remote" &&
+      leaveData.acknowledgement_policy === 1
+    ) {
+      formData.append("acknowledgement_policy", "1");
+      formData.append("agreement", remoteAgreementText);
+    }
+
+    const response = await axios.post(url, formData.toString(), {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+    });
+
+    // ✅ Clean success message
+    const rawMessage = response.data?.message;
+    let message;
+    if (typeof rawMessage === "string") {
+      // Take first sentence or short string
+      message =
+        rawMessage.split(/[\r\n.]+/)[0] ||
+        "Leave request submitted successfully!";
+    } else {
+      message = "Leave request submitted successfully!";
+    }
+
+    return { message };
   } catch (error) {
-    console.error("❌ createExpenseClaim error:", error);
-    throw new Error("Failed to create expense claim");
+    console.error("❌ createLeaveApplication error:", error);
+
+    const serverMessage =
+      error.response?.data?._server_messages ||
+      error.response?.data?.message ||
+      error.message;
+
+    const cleanMessage =
+      typeof serverMessage === "string"
+        ? serverMessage
+        : JSON.stringify(serverMessage);
+
+    return { error: cleanMessage };
   }
 };
+
 export default userApi;
