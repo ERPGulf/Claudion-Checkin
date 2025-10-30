@@ -43,73 +43,106 @@ function QrScan() {
       ),
     });
   }, []);
+
   const handleQRCodeData = async (data) => {
     try {
-      // Decode base64 safely
-      let value = base64.decode(data);
-      console.log("📥 Raw Decoded QR:", value);
+      const KEYS = [
+        "Company",
+        "Employee_Code",
+        "Full_Name",
+        "User_id",
+        "API",
+        "App_key",
+      ];
 
-      // Normalize the data
-      value = value.replace(/&/g, " ").replace(/\s+/g, " ").trim();
-
-      // Function to extract between markers
-      const extractValue = (text, startKey, endKey) => {
-        const startIndex = text.indexOf(startKey);
-        if (startIndex === -1) return null;
-        const endIndex =
-          endKey && text.indexOf(endKey, startIndex + startKey.length);
-        const raw =
-          !endKey || endIndex === -1
-            ? text.substring(startIndex + startKey.length)
-            : text.substring(startIndex + startKey.length, endIndex);
-
-        // Remove extra spaces, non-breaking, and control characters
-        return raw.replace(/[\u0000-\u001F\u00A0]+/g, "").trim();
+      const safeDecodeURIComponent = (s) => {
+        try {
+          return decodeURIComponent(s);
+        } catch {
+          const cleaned = s.replace(/%(?![0-9A-Fa-f]{2})/g, "");
+          try {
+            return decodeURIComponent(cleaned);
+          } catch {
+            return cleaned;
+          }
+        }
       };
 
-      // Extract each field
-      const company = extractValue(value, "Company:", "Employee_Code:");
-      const employee_code = extractValue(value, "Employee_Code:", "Full_Name:");
-      const full_name = extractValue(value, "Full_Name:", "User_id:");
-      const api_key = extractValue(value, "User_id:", "API:");
-      const baseUrl = extractValue(value, "API:", "App_key:");
-      const app_key = extractValue(value, "App_key:");
+      // ✅ Step 1: Decode base64 input
+      let decoded = base64.decode(data);
 
-      // Validate required fields
-      if (employee_code && full_name && api_key && baseUrl && app_key) {
-        console.log("✅ Cleaned QR Data:", {
-          company,
-          employee_code,
-          full_name,
-          api_key,
-          baseUrl,
-          app_key,
-        });
+      // ✅ Step 2: Normalize and clean the decoded string
+      decoded = decoded
+        .replace(/[\u0000-\u001F\u00A0]+/g, " ") // remove control + NBSP
+        .replace(/%(?![0-9A-Fa-f]{2})/g, " ") // bad % → space
+        .replace(/[&]+/g, " ") // & noise → space
+        .replace(/[=\-–—]+/g, ":") // inconsistent separators → colon
+        .replace(/[^\S\r\n]+/g, " ") // collapse spaces
+        .trim();
 
-        // Save all to AsyncStorage
+      // ✅ Step 3: Force consistent key:value pairs
+      const keyAlt = KEYS.join("|");
+      decoded = decoded.replace(
+        new RegExp(`\\b(${keyAlt})\\b\\s*(?!:)`, "gi"),
+        (_m, k) => `${k}: `
+      );
+
+      // ✅ Step 4: Extract cleaned key:value pairs
+      const qrData = {};
+      const pairRE = new RegExp(
+        `\\b(${keyAlt})\\s*:\\s*([\\s\\S]*?)(?=\\s*(?:${keyAlt})\\s*:|$)`,
+        "gi"
+      );
+
+      let m;
+      while ((m = pairRE.exec(decoded))) {
+        const k = m[1].trim();
+        let v = m[2].trim();
+        v = v.replace(/%(?![0-9A-Fa-f]{2})/g, ""); // remove lone %
+        v = v.replace(/\s+/g, " "); // collapse spaces
+        qrData[k] = safeDecodeURIComponent(v);
+      }
+
+      // ✅ Step 5: Map to your final cleaned structure
+      const cleaned = {
+        company: qrData["Company"] || "",
+        employee_code: qrData["Employee_Code"] || "",
+        full_name: qrData["Full_Name"] || "",
+        api_key: qrData["User_id"] || "",
+        baseUrl: (qrData["API"] || "").replace(/%+$/, "").replace(/\/$/, ""),
+        app_key: qrData["App_key"] || "",
+      };
+
+      // ✅ Step 6: Validate and store only cleaned values
+      if (Object.values(cleaned).every(Boolean)) {
+        console.log("✅ Cleaned QR Data:", cleaned);
+
         await AsyncStorage.multiSet([
-          ["company", company],
-          ["employee_code", employee_code],
-          ["full_name", full_name],
-          ["api_key", api_key],
-          ["app_key", app_key],
-          ["baseUrl", baseUrl.replace(/\/$/, "")],
+          ["company", cleaned.company],
+          ["employee_code", cleaned.employee_code],
+          ["full_name", cleaned.full_name],
+          ["api_key", cleaned.api_key],
+          ["app_key", cleaned.app_key],
+          ["baseUrl", cleaned.baseUrl],
         ]);
 
-        // Dispatch Redux updates
-        dispatch(setUsername(api_key));
-        dispatch(setFullname(full_name));
-        dispatch(setBaseUrl(baseUrl));
-        dispatch(setEmployeeCode(employee_code));
+        // Redux updates
+        dispatch(setUsername(cleaned.api_key));
+        dispatch(setFullname(cleaned.full_name));
+        dispatch(setBaseUrl(cleaned.baseUrl));
+        dispatch(setEmployeeCode(cleaned.employee_code));
+
+        // ✅ Final safe log (cleaned values only)
+        console.log("📦 Stored Values:", cleaned);
 
         // Navigate to login
         navigation.navigate("login");
       } else {
-        console.log("❌ Parsing failed:", value);
+        console.log("❌ Missing required QR fields:", cleaned);
         alert("Invalid QR code. Please try again.");
       }
-    } catch (error) {
-      console.log("❌ QR parse error:", error);
+    } catch (err) {
+      console.log("❌ QR parse error:", err);
       alert("Invalid QR code");
     }
   };
