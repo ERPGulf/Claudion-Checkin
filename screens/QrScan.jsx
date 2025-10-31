@@ -44,6 +44,79 @@ function QrScan() {
     });
   }, []);
 
+  // const handleQRCodeData = async (data) => {
+  //   try {
+  //     const KEYS = [
+  //       "Company",
+  //       "Employee_Code",
+  //       "Full_Name",
+  //       "User_id",
+  //       "API",
+  //       "App_key",
+  //     ];
+
+  //     let value = base64.decode(data);
+  //     console.log("📥 Raw Decoded QR:", value);
+
+  //     // ✅ Light cleanup — keep Base64 & dashes intact
+  //     value = value
+  //       .replace(/[\u0000-\u001F\u00A0]+/g, " ")
+  //       .replace(/[^\S\r\n]+/g, " ")
+  //       .trim();
+
+  //     // --- Extract key/value pairs (order-agnostic) ---
+  //     const qrData = {};
+  //     const keyAlt = KEYS.join("|");
+
+  //     // improved pattern to handle normal key-value safely
+  //     const pairRE = new RegExp(
+  //       `\\b(${keyAlt})\\s*[:=]\\s*([\\s\\S]*?)(?=\\s*(?:${keyAlt})\\s*[:=]|$)`,
+  //       "gi"
+  //     );
+
+  //     let m;
+  //     while ((m = pairRE.exec(value))) {
+  //       const k = m[1].trim();
+  //       const v = m[2].trim();
+  //       qrData[k] = v;
+  //     }
+
+  //     // ✅ Map extracted data
+  //     const cleaned = {
+  //       company: qrData["Company"] || "",
+  //       employee_code: qrData["Employee_Code"] || "",
+  //       full_name: qrData["Full_Name"] || "",
+  //       api_key: qrData["User_id"] || "",
+  //       baseUrl: (qrData["API"] || "").replace(/\/$/, ""),
+  //       app_key: qrData["App_key"] || "",
+  //     };
+
+  //     console.log("✅ Cleaned QR Data:", cleaned);
+
+  //     if (Object.values(cleaned).every(Boolean)) {
+  //       await AsyncStorage.multiSet([
+  //         ["company", cleaned.company],
+  //         ["employee_code", cleaned.employee_code],
+  //         ["full_name", cleaned.full_name],
+  //         ["api_key", cleaned.api_key],
+  //         ["app_key", cleaned.app_key],
+  //         ["baseUrl", cleaned.baseUrl],
+  //       ]);
+
+  //       dispatch(setUsername(cleaned.api_key));
+  //       dispatch(setFullname(cleaned.full_name));
+  //       dispatch(setBaseUrl(cleaned.baseUrl));
+  //       dispatch(setEmployeeCode(cleaned.employee_code));
+  //       navigation.navigate("login");
+  //     } else {
+  //       console.log("❌ Parsing failed:", value);
+  //       alert("Invalid QR code. Please try again.");
+  //     }
+  //   } catch (err) {
+  //     console.log("❌ QR parse error:", err);
+  //     alert("Invalid QR code");
+  //   }
+  // };
 
   const handleQRCodeData = async (data) => {
     try {
@@ -56,20 +129,24 @@ function QrScan() {
         "App_key",
       ];
 
+      // 1️⃣ Decode base64
       let value = base64.decode(data);
       console.log("📥 Raw Decoded QR:", value);
 
-      // ✅ Light cleanup — keep Base64 & dashes intact
+      // 2️⃣ Clean unwanted control characters or delimiters
       value = value
         .replace(/[\u0000-\u001F\u00A0]+/g, " ")
+        .replace(
+          /[%#;]+(?=\s*(Company|Employee_Code|Full_Name|User_id|API|App_key)\s*[:=])/g,
+          " "
+        )
         .replace(/[^\S\r\n]+/g, " ")
         .trim();
 
-      // --- Extract key/value pairs (order-agnostic) ---
+      // 3️⃣ Extract key/value pairs dynamically
       const qrData = {};
       const keyAlt = KEYS.join("|");
 
-      // improved pattern to handle normal key-value safely
       const pairRE = new RegExp(
         `\\b(${keyAlt})\\s*[:=]\\s*([\\s\\S]*?)(?=\\s*(?:${keyAlt})\\s*[:=]|$)`,
         "gi"
@@ -82,32 +159,56 @@ function QrScan() {
         qrData[k] = v;
       }
 
-      // ✅ Map extracted data
-      const cleaned = {
-        company: qrData["Company"] || "",
-        employee_code: qrData["Employee_Code"] || "",
-        full_name: qrData["Full_Name"] || "",
-        api_key: qrData["User_id"] || "",
-        baseUrl: (qrData["API"] || "").replace(/\/$/, ""),
-        app_key: qrData["App_key"] || "",
+      // 4️⃣ Clean trailing symbols in values
+      Object.keys(qrData).forEach((k) => {
+        qrData[k] = qrData[k].replace(/[%#;]+$/, "").trim();
+      });
+
+      // 5️⃣ Handle App_key carefully
+      let appKey = qrData["App_key"]?.trim() || "";
+      const missingPadding = appKey.length % 4;
+      if (missingPadding) {
+        appKey = appKey.padEnd(appKey.length + (4 - missingPadding), "=");
+      }
+
+      // Ensure ends with exactly '=='
+      if (!appKey.endsWith("==")) {
+        if (appKey.endsWith("=")) appKey = appKey.slice(0, -1) + "==";
+        else appKey += "==";
+      }
+
+      console.log("🧩 Final App_key:", appKey);
+      console.log("🧩 App_key length:", appKey.length);
+      console.log("🧩 App_key ends with '=':", appKey.endsWith("="));
+
+      // 6️⃣ Build final cleaned data
+      const cleanedData = {
+        company: qrData["Company"],
+        employee_code: qrData["Employee_Code"],
+        full_name: qrData["Full_Name"]?.trim(),
+        api_key: qrData["User_id"]?.trim(),
+        baseUrl: qrData["API"]?.trim(),
+        app_key: appKey,
       };
 
-      console.log("✅ Cleaned QR Data:", cleaned);
+      console.log("✅ Cleaned QR Data:", cleanedData);
 
-      if (Object.values(cleaned).every(Boolean)) {
+      // 7️⃣ Validation and storage
+      if (Object.values(cleanedData).every(Boolean)) {
         await AsyncStorage.multiSet([
-          ["company", cleaned.company],
-          ["employee_code", cleaned.employee_code],
-          ["full_name", cleaned.full_name],
-          ["api_key", cleaned.api_key],
-          ["app_key", cleaned.app_key],
-          ["baseUrl", cleaned.baseUrl],
+          ["company", cleanedData.company],
+          ["employee_code", cleanedData.employee_code],
+          ["full_name", cleanedData.full_name],
+          ["api_key", cleanedData.api_key],
+          ["app_key", cleanedData.app_key],
+          ["baseUrl", cleanedData.baseUrl],
         ]);
 
-        dispatch(setUsername(cleaned.api_key));
-        dispatch(setFullname(cleaned.full_name));
-        dispatch(setBaseUrl(cleaned.baseUrl));
-        dispatch(setEmployeeCode(cleaned.employee_code));
+        dispatch(setUsername(cleanedData.api_key));
+        dispatch(setFullname(cleanedData.full_name));
+        dispatch(setBaseUrl(cleanedData.baseUrl));
+        dispatch(setEmployeeCode(cleanedData.employee_code));
+
         navigation.navigate("login");
       } else {
         console.log("❌ Parsing failed:", value);
