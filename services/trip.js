@@ -17,7 +17,7 @@ export const userTripStatus = async employeeCode => {
   try {
     const { data } = await userApi.get(
       'method/employee_app.attendance_api.get_latest_open_trip',
-      { params: { employee_id: employeeCode } },
+      { params: { employee_Code: employeeCode } },
     );
     return data.message;
   } catch (error) {
