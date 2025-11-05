@@ -1,7 +1,7 @@
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
-import React from 'react';
-import { Login, QrScan, WelcomeScreen } from '../screens';
+import React from "react";
+import { Login, QrScan, WelcomeScreen } from "../screens";
 
 const Stack = createNativeStackNavigator();
 

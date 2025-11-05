@@ -1,8 +1,19 @@
 import { View, Text, Image, TouchableOpacity, Linking } from "react-native";
-import React from "react";
+import React, { useEffect, useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
 
 function ExpenseCard({ claim }) {
+  const [baseUrl, setBaseUrl] = useState("");
+
+  useEffect(() => {
+    const fetchBaseUrl = async () => {
+      const storedBaseUrl = await AsyncStorage.getItem("baseUrl");
+      setBaseUrl(storedBaseUrl || "");
+    };
+    fetchBaseUrl();
+  }, []);
+
   const getStatusStyle = (status) => {
     switch (status?.toLowerCase()) {
       case "approved":
@@ -16,7 +27,6 @@ function ExpenseCard({ claim }) {
     }
   };
 
-  // ✅ Only use file_url now (backend consistent)
   const filePaths = Array.isArray(claim.file_url)
     ? claim.file_url
     : claim.file_url
@@ -52,12 +62,12 @@ function ExpenseCard({ claim }) {
         </Text>
       )}
 
-      {/* ✅ Attachments Section */}
+      {/* ✅ Dynamic Attachments */}
       {filePaths.length > 0 ? (
         filePaths.map((file, idx) => {
           const fileUrl =
             typeof file === "string"
-              ? `https://aysha.erpgulf.com${file}`
+              ? `${baseUrl}${file}` // ✅ use dynamic baseUrl
               : file?.url;
 
           const fileName = file?.name || fileUrl?.split("/").pop();
@@ -65,9 +75,11 @@ function ExpenseCard({ claim }) {
             file?.type?.startsWith("image") ||
             fileUrl?.match(/\.(png|jpg|jpeg|gif)$/i);
 
+          const key = fileUrl || `${fileName || "file"}-${idx}`;
+
           return (
             <TouchableOpacity
-              key={idx}
+              key={key}
               onPress={() => fileUrl && Linking.openURL(fileUrl)}
               className="mb-2 p-2 bg-gray-200 rounded flex-row items-center"
             >

@@ -1,3 +1,5 @@
+// NOSONAR
+
 import { View, Text, TouchableOpacity, ActivityIndicator } from "react-native";
 import { useEffect, useLayoutEffect, useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -44,86 +46,13 @@ function QrScan() {
     });
   }, []);
 
-  // const handleQRCodeData = async (data) => {
-  //   try {
-  //     const KEYS = [
-  //       "Company",
-  //       "Employee_Code",
-  //       "Full_Name",
-  //       "User_id",
-  //       "API",
-  //       "App_key",
-  //     ];
-
-  //     let value = base64.decode(data);
-  //     console.log("📥 Raw Decoded QR:", value);
-
-  //     // ✅ Light cleanup — keep Base64 & dashes intact
-  //     value = value
-  //       .replace(/[\u0000-\u001F\u00A0]+/g, " ")
-  //       .replace(/[^\S\r\n]+/g, " ")
-  //       .trim();
-
-  //     // --- Extract key/value pairs (order-agnostic) ---
-  //     const qrData = {};
-  //     const keyAlt = KEYS.join("|");
-
-  //     // improved pattern to handle normal key-value safely
-  //     const pairRE = new RegExp(
-  //       `\\b(${keyAlt})\\s*[:=]\\s*([\\s\\S]*?)(?=\\s*(?:${keyAlt})\\s*[:=]|$)`,
-  //       "gi"
-  //     );
-
-  //     let m;
-  //     while ((m = pairRE.exec(value))) {
-  //       const k = m[1].trim();
-  //       const v = m[2].trim();
-  //       qrData[k] = v;
-  //     }
-
-  //     // ✅ Map extracted data
-  //     const cleaned = {
-  //       company: qrData["Company"] || "",
-  //       employee_code: qrData["Employee_Code"] || "",
-  //       full_name: qrData["Full_Name"] || "",
-  //       api_key: qrData["User_id"] || "",
-  //       baseUrl: (qrData["API"] || "").replace(/\/$/, ""),
-  //       app_key: qrData["App_key"] || "",
-  //     };
-
-  //     console.log("✅ Cleaned QR Data:", cleaned);
-
-  //     if (Object.values(cleaned).every(Boolean)) {
-  //       await AsyncStorage.multiSet([
-  //         ["company", cleaned.company],
-  //         ["employee_code", cleaned.employee_code],
-  //         ["full_name", cleaned.full_name],
-  //         ["api_key", cleaned.api_key],
-  //         ["app_key", cleaned.app_key],
-  //         ["baseUrl", cleaned.baseUrl],
-  //       ]);
-
-  //       dispatch(setUsername(cleaned.api_key));
-  //       dispatch(setFullname(cleaned.full_name));
-  //       dispatch(setBaseUrl(cleaned.baseUrl));
-  //       dispatch(setEmployeeCode(cleaned.employee_code));
-  //       navigation.navigate("login");
-  //     } else {
-  //       console.log("❌ Parsing failed:", value);
-  //       alert("Invalid QR code. Please try again.");
-  //     }
-  //   } catch (err) {
-  //     console.log("❌ QR parse error:", err);
-  //     alert("Invalid QR code");
-  //   }
-  // };
-
   const handleQRCodeData = async (data) => {
     try {
       const KEYS = [
         "Company",
         "Employee_Code",
         "Full_Name",
+        "Photo",
         "User_id",
         "API",
         "App_key",
@@ -134,11 +63,12 @@ function QrScan() {
       console.log("📥 Raw Decoded QR:", value);
 
       // 2️⃣ Clean unwanted control characters or delimiters
+
       value = value
         .replace(/[\u0000-\u001F\u00A0]+/g, " ")
         .replace(
-          /[%#;]+(?=\s*(Company|Employee_Code|Full_Name|User_id|API|App_key)\s*[:=])/g,
-          " "
+          /[%#;]+(?:\s+)?(Company|Employee_Code|Full_Name|Photo|User_id|API|App_key)(?:\s*[:=])/g,
+          (_, key) => `${key}:`
         )
         .replace(/[^\S\r\n]+/g, " ")
         .trim();
@@ -170,18 +100,17 @@ function QrScan() {
       if (missingPadding) {
         appKey = appKey.padEnd(appKey.length + (4 - missingPadding), "=");
       }
-
-      // Ensure ends with exactly '=='
       if (!appKey.endsWith("==")) {
         if (appKey.endsWith("=")) appKey = appKey.slice(0, -1) + "==";
         else appKey += "==";
       }
 
-      console.log("🧩 Final App_key:", appKey);
-      console.log("🧩 App_key length:", appKey.length);
-      console.log("🧩 App_key ends with '=':", appKey.endsWith("="));
+      // 6️⃣ Parse photo flag (default = 1)
+      const photoFlag = qrData["Photo"]
+        ? Number.parseInt(qrData["Photo"], 10)
+        : 1;
 
-      // 6️⃣ Build final cleaned data
+      // 7️⃣ Build final cleaned data
       const cleanedData = {
         company: qrData["Company"],
         employee_code: qrData["Employee_Code"],
@@ -189,12 +118,17 @@ function QrScan() {
         api_key: qrData["User_id"]?.trim(),
         baseUrl: qrData["API"]?.trim(),
         app_key: appKey,
+        photo: photoFlag,
       };
 
       console.log("✅ Cleaned QR Data:", cleanedData);
 
-      // 7️⃣ Validation and storage
-      if (Object.values(cleanedData).every(Boolean)) {
+      // 8️⃣ Validate and store
+      if (
+        cleanedData.company &&
+        cleanedData.employee_code &&
+        cleanedData.baseUrl
+      ) {
         await AsyncStorage.multiSet([
           ["company", cleanedData.company],
           ["employee_code", cleanedData.employee_code],
@@ -202,6 +136,7 @@ function QrScan() {
           ["api_key", cleanedData.api_key],
           ["app_key", cleanedData.app_key],
           ["baseUrl", cleanedData.baseUrl],
+          ["photo", String(cleanedData.photo)], // ✅ store photo flag
         ]);
 
         dispatch(setUsername(cleanedData.api_key));

@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import {
   View,
@@ -96,7 +95,7 @@ export default function LeaveRequestScreen() {
       setLoading(false);
     }
   };
-
+  console.log("result");
   return (
     <ScrollView className="p-4 bg-white">
       <Text className="text-xl font-semibold mb-4 text-gray-800">
@@ -214,7 +213,8 @@ export default function LeaveRequestScreen() {
               the office for important meetings, collaborative work, training
               sessions, or as directed by the Company.{"\n\n"}
               The employer reserves the right to approve or deny the leave
-              request based on business needs and operational requirements.{"\n\n"}
+              request based on business needs and operational requirements.
+              {"\n\n"}
             </Text>
           </ScrollView>
 

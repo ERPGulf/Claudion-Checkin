@@ -14,6 +14,7 @@ import {
 import * as DocumentPicker from "expo-document-picker";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Picker } from "@react-native-picker/picker";
+import PropTypes from "prop-types"; // ✅ Add this import
 import { COLORS } from "../../constants";
 
 function ClaimForm({ onSubmit }) {
@@ -21,9 +22,9 @@ function ClaimForm({ onSubmit }) {
   const [expenseType, setExpenseType] = useState("");
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
-  const [file_url, setFileUrl] = useState(null);
+  const [fileUrl, setFileUrl] = useState(null);
   const [showPicker, setShowPicker] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false); // ✅ internal loading state
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const expenseTypes = ["Calls", "Food", "Medical", "Travel", "Others"];
 
@@ -83,22 +84,22 @@ function ClaimForm({ onSubmit }) {
   const handleSubmit = async () => {
     if (!expenseDate.trim()) return showToast("Please select an expense date.");
     if (!expenseType) return showToast("Please select an expense type.");
-    if (!amount.trim() || isNaN(amount))
+    if (!amount.trim() || Number.isNaN(Number(amount))) {
       return showToast("Please enter a valid amount.");
+    }
 
     const payload = {
       expense_date: expenseDate.trim(),
       expense_type: expenseType,
       description: description.trim(),
-      amount: parseFloat(amount),
-      file_url,
+      amount: Number.parseFloat(amount),
+      file_url: fileUrl,
     };
 
     try {
-      setIsSubmitting(true); // ✅ start loading
+      setIsSubmitting(true);
       await onSubmit?.(payload);
 
-      // ✅ Reset all fields after successful submit
       setExpenseDate("");
       setExpenseType("");
       setDescription("");
@@ -110,7 +111,7 @@ function ClaimForm({ onSubmit }) {
       console.error("❌ Error during submission:", error);
       showToast("Failed to submit claim. Please try again.");
     } finally {
-      setIsSubmitting(false); // ✅ stop loading
+      setIsSubmitting(false);
     }
   };
 
@@ -179,33 +180,33 @@ function ClaimForm({ onSubmit }) {
       <TouchableOpacity
         onPress={pickFile}
         className={`border p-3 mb-3 rounded items-center ${
-          file_url
+          fileUrl
             ? "bg-green-100 border-green-500"
             : "bg-gray-50 border-gray-300"
         }`}
       >
         <Text
           className={`${
-            file_url ? "text-green-700 font-semibold" : "text-gray-700"
+            fileUrl ? "text-green-700 font-semibold" : "text-gray-700"
           }`}
         >
-          {file_url
-            ? `Attached: ${file_url?.name || "File"} ✅`
+          {fileUrl
+            ? `Attached: ${fileUrl?.name || "File"} ✅`
             : "Attach Receipt / File"}
         </Text>
       </TouchableOpacity>
 
-      {file_url && (
+      {fileUrl && (
         <View className="mb-2 relative">
-          {file_url.type?.startsWith("image") ? (
+          {fileUrl.type?.startsWith("image") ? (
             <Image
-              source={{ uri: file_url.uri }}
+              source={{ uri: fileUrl.uri }}
               className="w-full h-40 rounded"
               resizeMode="cover"
             />
           ) : (
             <View className="border p-3 bg-gray-200 rounded mb-1">
-              <Text>{file_url.name}</Text>
+              <Text>{fileUrl.name}</Text>
             </View>
           )}
           <TouchableOpacity
@@ -221,7 +222,9 @@ function ClaimForm({ onSubmit }) {
       <TouchableOpacity
         onPress={handleSubmit}
         disabled={isSubmitting}
-        className={`p-3 rounded ${isSubmitting ? "bg-gray-400" : "bg-green-600"} mt-2`}
+        className={`p-3 rounded ${
+          isSubmitting ? "bg-gray-400" : "bg-green-600"
+        } mt-2`}
       >
         {isSubmitting ? (
           <ActivityIndicator size="small" color={COLORS.white} />
@@ -235,6 +238,11 @@ function ClaimForm({ onSubmit }) {
   );
 }
 
+export default ClaimForm;
+
+//
+// ✅ Label Component Added Below
+//
 const Label = ({ text, required, optional }) => (
   <Text className="text-gray-700 mb-1">
     {text} {required && <Text className="text-red-500">*</Text>}
@@ -242,4 +250,8 @@ const Label = ({ text, required, optional }) => (
   </Text>
 );
 
-export default ClaimForm;
+Label.propTypes = {
+  text: PropTypes.string.isRequired,
+  required: PropTypes.bool,
+  optional: PropTypes.bool,
+};

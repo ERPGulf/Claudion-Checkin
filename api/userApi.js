@@ -613,55 +613,7 @@ export const getExpenseClaims = async () => {
     throw error;
   }
 };
-
 //create expense claim
-// export const createExpenseClaim = async (expenseData) => {
-//   try {
-//     const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
-//     const token = await AsyncStorage.getItem("access_token");
-//     const employeeCode = await AsyncStorage.getItem("employee_code");
-
-//     if (!rawBaseUrl || !token || !employeeCode) {
-//       throw new Error("Missing base URL, token, or employee code");
-//     }
-
-//     const baseUrl = rawBaseUrl
-//       ?.trim()
-//       .replace(/[\u0000-\u001F]+/g, "")
-//       .replace(/\/+$/, "");
-
-//     const url = `${baseUrl}/api/method/employee_app.attendance_api.create_expense_claim`;
-
-//     // Prepare URL-encoded data
-//     const formData = new URLSearchParams();
-//     formData.append("employee", employeeCode);
-//     formData.append("expense_date", expenseData.expense_date);
-//     formData.append("expense_type", expenseData.expense_type);
-//     formData.append("amount", expenseData.amount);
-//     formData.append("description", expenseData.description || "");
-
-//     console.log("📤 Sending expense claim:", Object.fromEntries(formData));
-
-//     const response = await axios.post(url, formData.toString(), {
-//       headers: {
-//         "Content-Type": "application/x-www-form-urlencoded",
-//         Authorization: `Bearer ${token}`,
-//       },
-//     });
-
-//     // ✅ Return inner message object (actual claim)
-//     const data = response.data?.message || response.data;
-//     console.log("✅ Expense claim created:", data);
-
-//     return data;
-//   } catch (error) {
-//     console.error(
-//       "❌ Error creating expense claim:",
-//       error.response?.data || error.message
-//     );
-//     throw error;
-//   }
-// };
 export const createExpenseClaim = async (claimData) => {
   try {
     const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
@@ -681,7 +633,6 @@ export const createExpenseClaim = async (claimData) => {
     formData.append("expense_type", claimData.expense_type);
     formData.append("amount", claimData.amount);
     formData.append("description", claimData.description || "");
-
     // ✅ Handle single file upload
     if (
       claimData.file_url &&
@@ -691,13 +642,18 @@ export const createExpenseClaim = async (claimData) => {
     ) {
       const file = claimData.file_url[0];
       const fileName = file.name || "upload.jpg";
-      const fileType =
-        file.mimeType ||
-        (fileName.endsWith(".png")
-          ? "image/png"
-          : fileName.endsWith(".jpg") || fileName.endsWith(".jpeg")
-            ? "image/jpeg"
-            : "application/octet-stream");
+
+      // 🔹 Extracted nested ternary into clear independent logic
+      let fileType;
+      if (file.mimeType) {
+        fileType = file.mimeType;
+      } else if (fileName.endsWith(".png")) {
+        fileType = "image/png";
+      } else if (fileName.endsWith(".jpg") || fileName.endsWith(".jpeg")) {
+        fileType = "image/jpeg";
+      } else {
+        fileType = "application/octet-stream";
+      }
 
       formData.append("file_name", {
         uri: file.uri,
@@ -705,6 +661,7 @@ export const createExpenseClaim = async (claimData) => {
         type: fileType,
       });
     }
+
     console.log("📤 Form Data Entries:");
     console.log("📤 Sending expense claim (with file if any):", url);
 
@@ -729,7 +686,8 @@ export const createExpenseClaim = async (claimData) => {
 //user expense file upload
 export const userExpenseFileUpload = async (file, docname) => {
   try {
-    if (!file || !file.uri) throw new Error("Invalid file data");
+    if (!file?.uri) throw new Error("Invalid file data");
+
     if (!docname) throw new Error("Missing docname (claim ID)");
 
     const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
@@ -763,32 +721,43 @@ export const userExpenseFileUpload = async (file, docname) => {
     throw err;
   }
 };
-// ✅ Create Leave Application
+//create leave application
 export const createLeaveApplication = async (leaveData) => {
   try {
-    const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
-    const token = await AsyncStorage.getItem("access_token");
-    const employeeCode = await AsyncStorage.getItem("employee_code");
+    const [rawBaseUrl, token, employeeCode] = await Promise.all([
+      AsyncStorage.getItem("baseUrl"),
+      AsyncStorage.getItem("access_token"),
+      AsyncStorage.getItem("employee_code"),
+    ]);
 
     if (!rawBaseUrl || !token || !employeeCode) {
-      const missing = !rawBaseUrl
-        ? "Base URL not found. Please scan QR code first."
-        : !token
-          ? "Access token missing. Please log in again."
-          : "Employee code missing. Please scan QR code again.";
-      return { error: missing };
+      let missingMessage;
+
+      if (!rawBaseUrl) {
+        missingMessage = "Base URL not found. Please scan QR code first.";
+        // eslint-disable-next-line no-negated-condition
+      } else if (!token) {
+        missingMessage = "Access token missing. Please log in again.";
+      } else {
+        missingMessage = "Employee code missing. Please scan QR code again.";
+      }
+
+      return { error: missingMessage };
     }
 
     const baseUrl = rawBaseUrl
       .trim()
       .replace(/[\u0000-\u001F\u200B]+/g, "")
       .replace(/\/+$/, "");
+
     const url = `${baseUrl}/api/method/employee_app.attendance_api.create_leave_application`;
 
     const formatDate = (date) => {
       if (!date) return "";
       const d = new Date(date);
-      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+        d.getDate()
+      ).padStart(2, "0")}`;
     };
 
     const remoteAgreementText = `I acknowledge and agree to the proposed remote work arrangement.
@@ -821,33 +790,10 @@ The employer reserves the right to approve or deny the leave request based on bu
       },
     });
 
-    // ✅ Clean success message
-    const rawMessage = response.data?.message;
-    let message;
-    if (typeof rawMessage === "string") {
-      // Take first sentence or short string
-      message =
-        rawMessage.split(/[\r\n.]+/)[0] ||
-        "Leave request submitted successfully!";
-    } else {
-      message = "Leave request submitted successfully!";
-    }
-
-    return { message };
+    return response.data;
   } catch (error) {
-    console.error("❌ createLeaveApplication error:", error);
-
-    const serverMessage =
-      error.response?.data?._server_messages ||
-      error.response?.data?.message ||
-      error.message;
-
-    const cleanMessage =
-      typeof serverMessage === "string"
-        ? serverMessage
-        : JSON.stringify(serverMessage);
-
-    return { error: cleanMessage };
+    console.error("❌ Error creating leave application:", error);
+    return { error: error.message || "Something went wrong" };
   }
 };
 
