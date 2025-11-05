@@ -686,7 +686,6 @@ export const createExpenseClaim = async (claimData) => {
 //user expense file upload
 export const userExpenseFileUpload = async (file, docname) => {
   try {
-    // if (!file || !file.uri) throw new Error("Invalid file data");
     if (!file?.uri) throw new Error("Invalid file data");
 
     if (!docname) throw new Error("Missing docname (claim ID)");
@@ -736,6 +735,7 @@ export const createLeaveApplication = async (leaveData) => {
 
       if (!rawBaseUrl) {
         missingMessage = "Base URL not found. Please scan QR code first.";
+        // eslint-disable-next-line no-negated-condition
       } else if (!token) {
         missingMessage = "Access token missing. Please log in again.";
       } else {

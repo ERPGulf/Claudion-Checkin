@@ -248,7 +248,7 @@ function AttendanceAction() {
 
                   // Determine action type
                   const actionType = checkin ? "OUT" : "IN";
-
+                  // eslint-disable-next-line no-negated-condition
                   if (!photoRequired) {
                     console.log(`🟢 Direct ${actionType} (no photo required)`);
                     await handleDirectCheckInOut(actionType);

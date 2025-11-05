@@ -177,7 +177,9 @@ function QrScan() {
       }
 
       // 6️⃣ Parse photo flag (default = 1)
-      const photoFlag = qrData["Photo"] ? parseInt(qrData["Photo"], 10) : 1;
+      const photoFlag = qrData["Photo"]
+        ? Number.parseInt(qrData["Photo"], 10)
+        : 1;
 
       // 7️⃣ Build final cleaned data
       const cleanedData = {
