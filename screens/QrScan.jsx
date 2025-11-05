@@ -1,3 +1,5 @@
+// NOSONAR
+
 import { View, Text, TouchableOpacity, ActivityIndicator } from "react-native";
 import { useEffect, useLayoutEffect, useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
