@@ -124,6 +124,7 @@ function QrScan() {
         "Company",
         "Employee_Code",
         "Full_Name",
+        "Photo",
         "User_id",
         "API",
         "App_key",
@@ -137,7 +138,7 @@ function QrScan() {
       value = value
         .replace(/[\u0000-\u001F\u00A0]+/g, " ")
         .replace(
-          /[%#;]+(?=\s*(Company|Employee_Code|Full_Name|User_id|API|App_key)\s*[:=])/g,
+          /[%#;]+(?=\s*(Company|Employee_Code|Full_Name|Photo|User_id|API|App_key)\s*[:=])/g,
           " "
         )
         .replace(/[^\S\r\n]+/g, " ")
@@ -170,18 +171,15 @@ function QrScan() {
       if (missingPadding) {
         appKey = appKey.padEnd(appKey.length + (4 - missingPadding), "=");
       }
-
-      // Ensure ends with exactly '=='
       if (!appKey.endsWith("==")) {
         if (appKey.endsWith("=")) appKey = appKey.slice(0, -1) + "==";
         else appKey += "==";
       }
 
-      console.log("🧩 Final App_key:", appKey);
-      console.log("🧩 App_key length:", appKey.length);
-      console.log("🧩 App_key ends with '=':", appKey.endsWith("="));
+      // 6️⃣ Parse photo flag (default = 1)
+      const photoFlag = qrData["Photo"] ? parseInt(qrData["Photo"], 10) : 1;
 
-      // 6️⃣ Build final cleaned data
+      // 7️⃣ Build final cleaned data
       const cleanedData = {
         company: qrData["Company"],
         employee_code: qrData["Employee_Code"],
@@ -189,12 +187,17 @@ function QrScan() {
         api_key: qrData["User_id"]?.trim(),
         baseUrl: qrData["API"]?.trim(),
         app_key: appKey,
+        photo: photoFlag,
       };
 
       console.log("✅ Cleaned QR Data:", cleanedData);
 
-      // 7️⃣ Validation and storage
-      if (Object.values(cleanedData).every(Boolean)) {
+      // 8️⃣ Validate and store
+      if (
+        cleanedData.company &&
+        cleanedData.employee_code &&
+        cleanedData.baseUrl
+      ) {
         await AsyncStorage.multiSet([
           ["company", cleanedData.company],
           ["employee_code", cleanedData.employee_code],
@@ -202,6 +205,7 @@ function QrScan() {
           ["api_key", cleanedData.api_key],
           ["app_key", cleanedData.app_key],
           ["baseUrl", cleanedData.baseUrl],
+          ["photo", String(cleanedData.photo)], // ✅ store photo flag
         ]);
 
         dispatch(setUsername(cleanedData.api_key));

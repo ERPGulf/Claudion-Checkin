@@ -13,9 +13,14 @@ import { MaterialCommunityIcons, Entypo } from "@expo/vector-icons";
 import { useDispatch, useSelector } from "react-redux";
 import Toast from "react-native-toast-message";
 import { useNavigation } from "@react-navigation/native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useQuery } from "@tanstack/react-query";
 import { selectCheckin, setOnlyCheckIn } from "../redux/Slices/AttendanceSlice";
-import { getOfficeLocation, getUserCustomIn } from "../api/userApi";
+import {
+  getOfficeLocation,
+  getUserCustomIn,
+  userCheckIn,
+} from "../api/userApi";
 import { setIsWfh } from "../redux/Slices/UserSlice";
 import { COLORS, SIZES } from "../constants";
 import { Retry, WelcomeCard } from "../components/AttendanceAction";
@@ -37,6 +42,41 @@ function AttendanceAction() {
   const [dateTime, setDateTime] = useState(null);
   const [inTarget, setInTarget] = useState(false);
   const [isWFH, setIsWFH] = useState(false);
+
+  // ✅ Unified Direct Check-In/Check-Out Handler
+  const handleDirectCheckInOut = async (type) => {
+    try {
+      const fielddata = {
+        employeeCode,
+        type, // "IN" or "OUT"
+      };
+
+      const response = await userCheckIn(fielddata);
+      console.log(`✅ Direct ${type} response:`, response);
+
+      if (response?.name) {
+        // update Redux state
+        dispatch(setOnlyCheckIn(type === "IN"));
+
+        Toast.show({
+          type: "success",
+          text1:
+            type === "IN"
+              ? "✅ Checked in successfully!"
+              : "✅ Checked out successfully!",
+        });
+      } else {
+        throw new Error(`Failed to register ${type}`);
+      }
+    } catch (error) {
+      console.error(`❌ Direct ${type} failed:`, error);
+      Toast.show({
+        type: "error",
+        text1: `⚠️ ${type} failed`,
+        text2: error.message || "Please try again",
+      });
+    }
+  };
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -201,7 +241,32 @@ function AttendanceAction() {
                 checkin ? "bg-red-600" : "bg-green-600"
               } ${!inTarget && !isWFH ? "opacity-50" : ""}`}
               disabled={!inTarget && !isWFH}
-              onPress={() => navigation.navigate("Attendance camera")}
+              onPress={async () => {
+                try {
+                  const photoValue = await AsyncStorage.getItem("photo");
+                  const photoRequired = photoValue === "1";
+
+                  // Determine action type
+                  const actionType = checkin ? "OUT" : "IN";
+
+                  if (!photoRequired) {
+                    console.log(`🟢 Direct ${actionType} (no photo required)`);
+                    await handleDirectCheckInOut(actionType);
+                  } else {
+                    console.log(`📸 Navigating to camera for ${actionType}`);
+                    navigation.navigate("Attendance camera", {
+                      type: actionType,
+                    });
+                  }
+                } catch (error) {
+                  console.error("⚠️ Error handling attendance button:", error);
+                  Toast.show({
+                    type: "error",
+                    text1: "⚠️ Action failed",
+                    text2: error.message || "Please try again",
+                  });
+                }
+              }}
             >
               <Text className="text-xl font-bold text-white">
                 {checkin ? "CHECK-OUT" : "CHECK-IN"}
@@ -221,4 +286,3 @@ function AttendanceAction() {
 }
 
 export default AttendanceAction;
-

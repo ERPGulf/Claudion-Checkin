@@ -74,7 +74,7 @@ export default function ExpenseClaim() {
 
       const url = `${baseUrl}/api/method/employee_app.attendance_api.create_expense_claim`;
 
-      // ✅ Build FormData correctly for backend (curl/Postman verified)
+      // ✅ Build FormData correctly for backend 
       const formData = new FormData();
       formData.append("employee", employee);
       formData.append("expense_date", claimData.expense_date);

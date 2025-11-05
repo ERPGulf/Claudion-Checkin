@@ -4,7 +4,7 @@ const { createSlice } = require("@reduxjs/toolkit");
 const initialState = {
   username: null,
   fullname: null,
-  userDetails: null, // we'll store employeeCode here
+  userDetails: null, 
   baseUrl: null,
   fileId: null,
   isWfh: false,
