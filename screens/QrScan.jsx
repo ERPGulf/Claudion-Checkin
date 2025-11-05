@@ -61,16 +61,16 @@ function QrScan() {
       console.log("📥 Raw Decoded QR:", value);
 
       // 2️⃣ Clean unwanted control characters or delimiters
-     
+
       value = value
         // Replace control and NBSP chars with a space
         .replace(/[\u0000-\u001F\u00A0]+/g, " ")
-        // Replace prefixes (%/#/;) before known keys safely
+        // Match the full sequence and remove only the leading symbols safely
         .replace(
           /[%#;]+\s*(?:Company|Employee_Code|Full_Name|Photo|User_id|API|App_key)\s*[:=]/g,
           (match) => match.replace(/^[%#;]+/, "")
         )
-        // Normalize spaces but preserve newlines
+        // Collapse whitespace but preserve newlines
         .replace(/[^\S\r\n]+/g, " ")
         .trim();
 
