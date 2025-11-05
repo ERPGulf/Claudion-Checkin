@@ -63,14 +63,11 @@ function QrScan() {
       // 2️⃣ Clean unwanted control characters or delimiters
 
       value = value
-        // Replace control and NBSP chars with a space
         .replace(/[\u0000-\u001F\u00A0]+/g, " ")
-        // Match the full sequence and remove only the leading symbols safely
         .replace(
-          /[%#;]+\s*(?:Company|Employee_Code|Full_Name|Photo|User_id|API|App_key)\s*[:=]/g,
-          (match) => match.replace(/^[%#;]+/, "")
+          /[%#;]+(?:\s+)?(Company|Employee_Code|Full_Name|Photo|User_id|API|App_key)(?:\s*[:=])/g,
+          (_, key) => `${key}:`
         )
-        // Collapse whitespace but preserve newlines
         .replace(/[^\S\r\n]+/g, " ")
         .trim();
 
