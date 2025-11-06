@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useLayoutEffect } from "react";
+import { useNavigation } from "@react-navigation/native";
 import {
   View,
   Text,
@@ -9,12 +10,14 @@ import {
   ActivityIndicator,
   Platform,
 } from "react-native";
+
+import Entypo from "@expo/vector-icons/Entypo";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import Checkbox from "expo-checkbox";
 import { useSelector } from "react-redux";
 import { selectEmployeeCode } from "../redux/Slices/UserSlice";
 import { createLeaveApplication } from "../api/userApi";
-import { COLORS } from "../constants";
+import { COLORS, SIZES } from "../constants";
 
 export default function LeaveRequestScreen() {
   const employeeCode = useSelector(selectEmployeeCode);
@@ -28,6 +31,25 @@ export default function LeaveRequestScreen() {
   const [showFromPicker, setShowFromPicker] = useState(false);
   const [showToPicker, setShowToPicker] = useState(false);
   const [loading, setLoading] = useState(false);
+  const navigation = useNavigation();
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerShown: true,
+      headerShadowVisible: false,
+      headerTitle: "Leave Application",
+      headerTitleAlign: "center",
+      headerLeft: () => (
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <Entypo
+            name="chevron-left"
+            size={SIZES.xxxLarge - 5}
+            color={COLORS.primary}
+          />
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation]);
 
   // ✅ Helper: format date as YYYY-MM-DD
   const formatDate = (date) => {
