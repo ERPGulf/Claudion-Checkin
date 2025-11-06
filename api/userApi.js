@@ -605,7 +605,6 @@ export const getExpenseClaims = async () => {
     });
 
     const data = response.data?.message || response.data;
-    console.log("✅ Expense claims fetched:", data);
 
     return Array.isArray(data) ? data : [];
   } catch (error) {
