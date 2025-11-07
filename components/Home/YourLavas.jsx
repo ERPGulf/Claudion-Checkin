@@ -81,24 +81,6 @@ function LavaMenu() {
                 history
               </Text>
             </TouchableOpacity>
-            {/* <TouchableOpacity
-              className="mr-4"
-              onPress={() => navigation.navigate('Trip details')}
-            >
-              <View className="bg-gray-100 p-2 justify-center items-center rounded-lg w-16">
-                <Ionicons
-                  name="trail-sign-outline"
-                  size={SIZES.xxxLarge - 3}
-                  color={COLORS.primary}
-                />
-              </View>
-              <Text className="text-xs text-center font-medium text-gray-500 mt-1">
-                Trip
-              </Text>
-              <Text className="text-xs text-center font-medium text-gray-500">
-                Details
-              </Text>
-            </TouchableOpacity> */}
 
             <TouchableOpacity
               className="mr-4"
@@ -118,27 +100,28 @@ function LavaMenu() {
                 claim
               </Text>
             </TouchableOpacity>
-            
+
             <TouchableOpacity
               className="mr-4"
               onPress={() => {
-                navigation.navigate("comingsoon");
+                navigation.navigate("Leave request"); 
               }}
             >
-              <View className="bg-gray-100 p-2 justify-center items-center rounded-lg w-16">
+              <View className="bg-gray-100 p-2 justify-center items-center rounded-lg w-16 shadow-sm">
                 <Ionicons
-                  name="airplane-outline"
+                  name="document-text-outline" // A more professional icon for leave request
                   size={SIZES.xxxLarge - 3}
                   color={COLORS.primary}
                 />
               </View>
-              <Text className="text-xs text-center font-medium text-gray-500 mt-1">
-                Vacation
+              <Text className="text-xs text-center font-semibold text-gray-700 mt-1">
+                Leave
               </Text>
-              <Text className="text-xs text-center font-medium text-gray-500">
-                request
+              <Text className="text-xs text-center font-semibold text-gray-700">
+                Request
               </Text>
             </TouchableOpacity>
+
             <TouchableOpacity
               onPress={() => {
                 navigation.navigate("comingsoon");
