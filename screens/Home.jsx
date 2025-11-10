@@ -2,6 +2,7 @@ import { ScrollView, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import Constants from 'expo-constants';
 import { LavaMenu, QuickAccess, WelcomeCard } from '../components/Home';
+import { COLORS, SIZES } from "../constants";
 
 function Home() {
   const navigation = useNavigation();
