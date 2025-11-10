@@ -3,7 +3,8 @@
 import { View, Text, TouchableOpacity, ActivityIndicator } from "react-native";
 import { useEffect, useLayoutEffect, useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
-import base64 from "react-native-base64";
+import base64 from "base-64";
+import utf8 from "utf8";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useDispatch } from "react-redux";
 import { Ionicons, Entypo } from "@expo/vector-icons";
@@ -59,7 +60,7 @@ function QrScan() {
       ];
 
       // 1️⃣ Decode base64
-      let value = base64.decode(data);
+      let value = utf8.decode(base64.decode(data));
       console.log("📥 Raw Decoded QR:", value);
 
       // 2️⃣ Clean unwanted control characters or delimiters
