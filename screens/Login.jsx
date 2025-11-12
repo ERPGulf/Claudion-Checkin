@@ -42,6 +42,64 @@ function Login() {
   });
 
   // Handle login
+  // const handleLogin = async (password) => {
+  //   setIsLoading(true);
+  //   try {
+  //     const api_key = await AsyncStorage.getItem("api_key");
+  //     const app_key = await AsyncStorage.getItem("app_key");
+  //     const baseUrl = await AsyncStorage.getItem("baseUrl");
+
+  //     if (!api_key || !app_key || !baseUrl) {
+  //       Toast.show({
+  //         type: "error",
+  //         text1: "QR code not scanned",
+  //         text2: "Please scan QR code first",
+  //         autoHide: true,
+  //         visibilityTime: 3000,
+  //       });
+  //       setIsLoading(false);
+  //       return;
+  //     }
+
+  //     const { access_token, refresh_token } = await generateToken({
+  //       api_key,
+  //       app_key,
+  //       api_secret: password,
+  //     });
+
+  //     if (!access_token) throw new Error("Token not returned from server");
+
+  //     await AsyncStorage.setItem("access_token", access_token);
+  //     if (refresh_token) {
+  //       await AsyncStorage.setItem("refresh_token", refresh_token);
+  //     }
+
+  //     dispatch(setSignIn({ isLoggedIn: true, access_token }));
+
+  //     Toast.show({
+  //       type: "success",
+  //       text1: "Login successful",
+  //       autoHide: true,
+  //       visibilityTime: 3000,
+  //     });
+
+  //     navigation.navigate("homeTab");
+  //   } catch (error) {
+  //     console.log("Login error:", error);
+  //     Toast.show({
+  //       type: "error",
+  //       text1: "Login failed",
+  //       text2:
+  //         error.response?.data?.message ||
+  //         error.message ||
+  //         "Something went wrong",
+  //       autoHide: true,
+  //       visibilityTime: 3000,
+  //     });
+  //   } finally {
+  //     setIsLoading(false);
+  //   }
+  // };
   const handleLogin = async (password) => {
     setIsLoading(true);
     try {
@@ -74,6 +132,7 @@ function Login() {
         await AsyncStorage.setItem("refresh_token", refresh_token);
       }
 
+      // ✅ Update Redux state only — this triggers the navigator switch automatically
       dispatch(setSignIn({ isLoggedIn: true, access_token }));
 
       Toast.show({
@@ -82,8 +141,6 @@ function Login() {
         autoHide: true,
         visibilityTime: 3000,
       });
-
-      navigation.navigate("homeTab");
     } catch (error) {
       console.log("Login error:", error);
       Toast.show({
