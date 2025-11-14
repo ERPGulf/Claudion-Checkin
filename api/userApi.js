@@ -4,44 +4,84 @@ import axios from "axios";
 import { format } from "date-fns";
 import { CommonActions } from "@react-navigation/native";
 
+// Common headers
+
 const setCommonHeaders = (headers = {}) => {
-  headers["Content-Type"] = "multipart/form-data";
+  headers["Content-Type"] = "application/x-www-form-urlencoded";
   return headers;
 };
+// Refresh access token
+let refreshPromise = null;
+const clearRefreshPromise = () => (refreshPromise = null);
 
 const refreshAccessToken = async () => {
   try {
     const refresh_token = await AsyncStorage.getItem("refresh_token");
-    const formdata = new FormData();
-    formdata.append("grant_type", "refresh_token");
-    formdata.append("refresh_token", refresh_token);
+    if (!refresh_token) throw new Error("No refresh token available");
 
-    const baseUrl = await AsyncStorage.getItem("baseUrl");
+    let baseUrl = await AsyncStorage.getItem("baseUrl");
+    if (!baseUrl) throw new Error("Base URL missing");
 
-    const { data } = await userApi.post(
-      "/method/employee_app.gauth.create_refresh_token",
-      formdata,
+    baseUrl = baseUrl
+      .trim()
+      .replace(/[\u0000-\u001F]+/g, "")
+      .replace(/\/+$/, "");
+
+    // Call refresh token API (matches your curl)
+    const params = new URLSearchParams();
+    params.append("refresh_token", refresh_token);
+
+    const { data } = await axios.get(
+      `${baseUrl}/api/method/employee_app.gauth.create_refresh_token`,
       {
-        baseURL: `${baseUrl}/api`, // append /api here
-        headers: setCommonHeaders(),
+        headers: setCommonHeaders({
+          Cookie:
+            "full_name=aysha%20p; sid=Guest; system_user=no; user_id=Guest; user_image=",
+        }),
+        params,
       }
     );
 
+    const accessToken = data?.data?.access_token;
+    const newRefreshToken = data?.data?.refresh_token || refresh_token;
+
+    if (!accessToken)
+      throw new Error("Refresh token did not return access_token");
+
     await AsyncStorage.multiSet([
-      ["access_token", data.access_token],
-      ["refresh_token", data.refresh_token],
+      ["access_token", accessToken],
+      ["refresh_token", newRefreshToken],
     ]);
 
-    return data.access_token;
+    return accessToken;
   } catch (error) {
-    console.error("Token refresh error:", error);
-    throw new Error("Token refresh failed");
+    console.error(
+      "❌ Token refresh error:",
+      error.response?.data || error.message
+    );
+    throw error;
   }
 };
 
-// ✅ Handle token refresh in responses
-let refreshPromise = null;
-const clearPromise = () => (refreshPromise = null);
+// Request interceptor
+
+userApi.interceptors.request.use(async (config) => {
+  let baseUrl = await AsyncStorage.getItem("baseUrl");
+  if (baseUrl) {
+    baseUrl = baseUrl
+      .trim()
+      .replace(/[\u0000-\u001F]+/g, "")
+      .replace(/\/+$/, "");
+    config.baseURL = `${baseUrl}/api`;
+  }
+
+  const access_token = await AsyncStorage.getItem("access_token");
+  if (access_token) config.headers.Authorization = `Bearer ${access_token}`;
+
+  return config;
+});
+
+// Response interceptor
 
 userApi.interceptors.response.use(
   (response) => response,
@@ -54,15 +94,17 @@ userApi.interceptors.response.use(
       !originalRequest._retry
     ) {
       originalRequest._retry = true;
+
       try {
         if (!refreshPromise) {
-          refreshPromise = refreshAccessToken().finally(clearPromise);
+          refreshPromise = refreshAccessToken().finally(clearRefreshPromise);
         }
-        const token = await refreshPromise;
-        originalRequest.headers.Authorization = `Bearer ${token}`;
+
+        const newToken = await refreshPromise;
+        originalRequest.headers.Authorization = `Bearer ${newToken}`;
         return userApi(originalRequest);
       } catch (refreshError) {
-        console.error("Error refreshing token:", refreshError);
+        console.error("❌ Error refreshing token:", refreshError);
         return Promise.reject(refreshError);
       }
     }
@@ -71,40 +113,24 @@ userApi.interceptors.response.use(
   }
 );
 
-// ✅ Dynamic baseURL + token on every request
-userApi.interceptors.request.use(async (config) => {
-  const baseUrl = await AsyncStorage.getItem("baseUrl");
+// Generate initial token
 
-  if (baseUrl)
-    config.baseURL = `${baseUrl}/api`; // append /api here
-  else console.warn("⚠️ No baseUrl found in AsyncStorage");
-
-  const access_token = await AsyncStorage.getItem("access_token");
-  if (access_token) config.headers.Authorization = `Bearer ${access_token}`;
-  console.log("Axios Request:", config.baseURL + config.url);
-  return config;
-});
-
-// ✅ Generate and store tokens
 export const generateToken = async ({ api_key, app_key, api_secret }) => {
   try {
     let baseUrl = await AsyncStorage.getItem("baseUrl");
     if (!baseUrl)
       throw new Error("Base URL not found. Please scan QR code first.");
 
-    // Clean base URL
-    baseUrl = baseUrl.trim().replace(/[\u0000-\u001F]+/g, "");
-    if (baseUrl.endsWith("/")) baseUrl = baseUrl.slice(0, -1);
+    baseUrl = baseUrl
+      .trim()
+      .replace(/[\u0000-\u001F]+/g, "")
+      .replace(/\/+$/, "");
 
-    console.log("🔑 generateToken → baseUrl:", baseUrl);
-
-    // Prepare form data
     const body = new URLSearchParams();
     body.append("api_key", api_key);
     body.append("app_key", app_key);
     body.append("api_secret", api_secret);
 
-    // Make API call
     const response = await axios.post(
       `${baseUrl}/api/method/employee_app.gauth.generate_token_secure`,
       body.toString(),
@@ -113,28 +139,18 @@ export const generateToken = async ({ api_key, app_key, api_secret }) => {
       }
     );
 
-    console.log("✅ Token response:", response.data);
-
-    // Extract token from nested data
     const tokenData = response?.data?.data;
     const accessToken = tokenData?.access_token;
     const refreshToken = tokenData?.refresh_token;
 
-    if (accessToken) {
-      await AsyncStorage.multiSet([
-        ["access_token", accessToken],
-        ["refresh_token", refreshToken || ""],
-      ]);
-      console.log("💾 Tokens saved:", { accessToken, refreshToken });
-    } else {
-      console.warn("⚠️ No access_token found in token response", response.data);
-      throw new Error("Token not returned from server"); // keep it only here
-    }
+    if (!accessToken) throw new Error("Token not returned from server");
 
-    return {
-      access_token: accessToken,
-      refresh_token: refreshToken,
-    };
+    await AsyncStorage.multiSet([
+      ["access_token", accessToken],
+      ["refresh_token", refreshToken || ""],
+    ]);
+
+    return { access_token: accessToken, refresh_token: refreshToken };
   } catch (error) {
     console.error(
       "❌ generateToken error:",
@@ -143,6 +159,7 @@ export const generateToken = async ({ api_key, app_key, api_secret }) => {
     throw error;
   }
 };
+
 
 // ✅ Common fetcher for employee data
 export const fetchEmployeeData = async (employeeCode) => {

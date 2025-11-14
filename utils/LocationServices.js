@@ -1,68 +1,42 @@
 import * as Location from "expo-location";
 import { Toast } from "react-native-toast-message/lib/src/Toast";
-import { hapticsMessage } from "./HapticsMessage";
-export const useLocationForegroundAccess = async () => {
-  try {
-    Toast.show({
-      type: "info",
-      text1: "Requesting location access",
-      autoHide: true,
-      visibilityTime: 2000,
-    });
 
+export const requestLocationAccess = async () => {
+  try {
     const { status } = await Location.requestForegroundPermissionsAsync();
 
     if (status !== "granted") {
-      hapticsMessage("error");
       Toast.show({
         type: "error",
-        text1: "Location access not granted",
-        text2: "Please enable location access to continue",
-        autoHide: true,
-        visibilityTime: 3000,
+        text1: "Location Permission Denied",
+        text2: "Enable location to continue.",
       });
-      return false; // explicitly return false
+      return false;
     }
 
-    // Permission granted
-    hapticsMessage("success");
-    Toast.show({
-      type: "success",
-      text1: "Location access granted",
-      autoHide: true,
-      visibilityTime: 3000,
-    });
-    return true; // explicitly return true
-  } catch (error) {
-    console.error("Location permission error:", error);
-    hapticsMessage("error");
-    Toast.show({
-      type: "error",
-      text1: "Location access failed",
-      autoHide: true,
-      visibilityTime: 3000,
-    });
+    return true;
+  } catch (err) {
+    console.error("Location permission error:", err);
     return false;
   }
 };
 
-
 export const getPreciseCoordinates = async () => {
   try {
-    const location = await Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.BestForNavigation, // more precise for check-in
+    const result = await Location.getCurrentPositionAsync({
+      accuracy: Location.Accuracy.Highest,
     });
 
-    const { latitude, longitude } = location.coords;
-    return { latitude, longitude };
-  } catch (error) {
-    console.error("Precise coordinates error:", error);
+    return {
+      latitude: result.coords.latitude,
+      longitude: result.coords.longitude,
+    };
+  } catch (err) {
+    console.error("Error getting GPS position:", err);
     Toast.show({
       type: "error",
-      text1: "Unable to retrieve location",
-      autoHide: true,
-      visibilityTime: 3000,
+      text1: "Unable to fetch location",
     });
-    return null; // explicit null return if location fails
+    return null;
   }
 };
