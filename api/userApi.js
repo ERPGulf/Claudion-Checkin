@@ -31,7 +31,7 @@ const refreshAccessToken = async () => {
     const params = new URLSearchParams();
     params.append("refresh_token", refresh_token);
 
-    const { data } = await axios.get(
+    const { data } = await  userApi.get(
       `${baseUrl}/api/method/employee_app.gauth.create_refresh_token`,
       {
         headers: setCommonHeaders({
@@ -131,7 +131,7 @@ export const generateToken = async ({ api_key, app_key, api_secret }) => {
     body.append("app_key", app_key);
     body.append("api_secret", api_secret);
 
-    const response = await axios.post(
+    const response = await userApi.post(
       `${baseUrl}/api/method/employee_app.gauth.generate_token_secure`,
       body.toString(),
       {
@@ -176,7 +176,7 @@ export const fetchEmployeeData = async (employeeCode) => {
 
     const url = `${baseUrl}/api/method/employee_app.attendance_api.get_employee_data`;
 
-    const { data } = await axios.get(url, {
+    const { data } = await userApi.get(url, {
       params: { employee_id: employeeCode }, // ✅ correct param key
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
@@ -212,7 +212,7 @@ export const getUserCustomIn = async (employeeCode) => {
 
   const url = `${baseUrl}/api/method/employee_app.attendance_api.get_employee_data`;
 
-  const { data } = await axios.get(url, {
+  const { data } = await userApi.get(url, {
     params: { employee_id: employeeCode }, // ✅ correct param
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
@@ -241,7 +241,7 @@ export const getOfficeLocation = async (employeeCode) => {
 
     const url = `${baseUrl}/api/method/employee_app.attendance_api.get_employee_data`;
 
-    const { data } = await axios.get(url, {
+    const { data } = await userApi.get(url, {
       params: { employee_id: employeeCode },
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
@@ -321,7 +321,7 @@ export const userCheckIn = async (fielddata) => {
 
     console.log("📤 Sending check-in:", payload);
 
-    const response = await axios.post(
+    const response = await userApi.post(
       `${baseUrl}/api/method/employee_app.attendance_api.add_log_based_on_employee_field`,
       payload,
       {
@@ -375,7 +375,7 @@ export const userFileUpload = async (file, docname) => {
       uri: file.uri,
     });
 
-    const response = await axios.post(
+    const response = await userApi.post(
       `${baseUrl}/api/method/employee_app.attendance_api.upload_file`,
       formData,
       {
@@ -410,7 +410,7 @@ export const putUserFile = async (employeeCode) => {
     const formData = new URLSearchParams();
     formData.append("employee_code", employeeCode);
 
-    const { data } = await axios.put(url, formData, {
+    const { data } = await userApi.put(url, formData, {
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
         Authorization: `Bearer ${token}`,
@@ -449,7 +449,7 @@ export const userStatusPut = async (employeeCode, custom_in) => {
     formData.append("employee_code", employeeCode);
     formData.append("custom_in", String(custom_in));
 
-    const { data } = await axios.put(url, formData.toString(), {
+    const { data } = await userApi.put(url, formData.toString(), {
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/x-www-form-urlencoded",
@@ -467,85 +467,85 @@ export const userStatusPut = async (employeeCode, custom_in) => {
   }
 };
 
-//trip status
+// //trip status
 
-export const userTripStatus = async (employeeCode) => {
-  try {
-    const { data } = await userApi.get(
-      "method/employee_app.attendance_api.get_latest_open_trip",
-      {
-        params: { employee_Code: employeeCode },
-      }
-    );
-    return data.message;
-  } catch (error) {
-    console.error(error, "trip status");
-    throw new Error("Something went wrong");
-  }
-};
+// export const userTripStatus = async (employeeCode) => {
+//   try {
+//     const { data } = await userApi.get(
+//       "method/employee_app.attendance_api.get_latest_open_trip",
+//       {
+//         params: { employee_Code: employeeCode },
+//       }
+//     );
+//     return data.message;
+//   } catch (error) {
+//     console.error(error, "trip status");
+//     throw new Error("Something went wrong");
+//   }
+// };
 
-export const endTripTrack = async (formData) => {
-  try {
-    const { data } = await userApi.post(
-      "method/employee_app.attendance_api.close_the_trip",
-      formData,
-      { headers: setCommonHeaders() }
-    );
+// export const endTripTrack = async (formData) => {
+//   try {
+//     const { data } = await userApi.post(
+//       "method/employee_app.attendance_api.close_the_trip",
+//       formData,
+//       { headers: setCommonHeaders() }
+//     );
 
-    if (!data.message) throw new Error("Trip not ended");
-    return;
-  } catch (error) {
-    console.error(error, "trip end");
-    throw new Error("something went wrong");
-  }
-};
+//     if (!data.message) throw new Error("Trip not ended");
+//     return;
+//   } catch (error) {
+//     console.error(error, "trip end");
+//     throw new Error("something went wrong");
+//   }
+// };
 
-// Contracts & Vehicles
-export const getContracts = async (searchTerms = "") => {
-  try {
-    const formData = new FormData();
-    formData.append("enter_name", searchTerms);
-    const { data } = await userApi.post(
-      "method/employee_app.attendance_api.contract_list",
-      formData,
-      {
-        headers: setCommonHeaders(),
-      }
-    );
+// // Contracts & Vehicles
+// export const getContracts = async (searchTerms = "") => {
+//   try {
+//     const formData = new FormData();
+//     formData.append("enter_name", searchTerms);
+//     const { data } = await userApi.post(
+//       "method/employee_app.attendance_api.contract_list",
+//       formData,
+//       {
+//         headers: setCommonHeaders(),
+//       }
+//     );
 
-    const filteredData = data?.message?.flat(1);
-    if (!filteredData?.length)
-      return { filteredData, error: "no contracts available" };
-    return { filteredData, error: null };
-  } catch (error) {
-    console.error(error, "contract");
-    throw new Error("Something went wrong");
-  }
-};
+//     const filteredData = data?.message?.flat(1);
+//     if (!filteredData?.length)
+//       return { filteredData, error: "no contracts available" };
+//     return { filteredData, error: null };
+//   } catch (error) {
+//     console.error(error, "contract");
+//     throw new Error("Something went wrong");
+//   }
+// };
 
-export const getVehicle = async (searchTerms = "") => {
-  try {
-    const formData = new FormData();
-    formData.append("vehicle_no", searchTerms);
-    formData.append("odometer", "");
-    formData.append("vehicle_model", "");
-    const { data } = await userApi.post(
-      "method/employee_app.attendance_api.vehicle_list",
-      formData,
-      {
-        headers: setCommonHeaders(),
-      }
-    );
+// export const getVehicle = async (searchTerms = "") => {
+//   try {
+//     const formData = new FormData();
+//     formData.append("vehicle_no", searchTerms);
+//     formData.append("odometer", "");
+//     formData.append("vehicle_model", "");
+//     const { data } = await userApi.post(
+//       "method/employee_app.attendance_api.vehicle_list",
+//       formData,
+//       {
+//         headers: setCommonHeaders(),
+//       }
+//     );
 
-    const filteredData = data?.message?.flat(1);
-    if (!filteredData?.length)
-      return { filteredData, error: "no vehicle available" };
-    return { filteredData, error: null };
-  } catch (error) {
-    console.error(error, "vehicle");
-    throw new Error("Something went wrong");
-  }
-};
+//     const filteredData = data?.message?.flat(1);
+//     if (!filteredData?.length)
+//       return { filteredData, error: "no vehicle available" };
+//     return { filteredData, error: null };
+//   } catch (error) {
+//     console.error(error, "vehicle");
+//     throw new Error("Something went wrong");
+//   }
+// };
 
 //User attendance
 
@@ -572,7 +572,7 @@ export const getUserAttendance = async (
       .replace(/\/+$/, "");
     const url = `${baseUrl}/api/method/employee_app.attendance_api.get_attendance_details`;
 
-    const response = await axios.get(url, {
+    const response = await userApi.get(url, {
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/x-www-form-urlencoded",
@@ -615,7 +615,7 @@ export const getExpenseClaims = async () => {
 
     console.log("📡 Fetching expense claims from:", url);
 
-    const response = await axios.get(url, {
+    const response = await userApi.get(url, {
       headers: {
         Authorization: `Bearer ${token}`,
       },
@@ -681,12 +681,12 @@ export const createExpenseClaim = async (claimData) => {
     console.log("📤 Form Data Entries:");
     console.log("📤 Sending expense claim (with file if any):", url);
 
-    const response = await axios.post(url, formData, {
+    const response = await userApi.post(url, formData, {
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "multipart/form-data",
       },
-      transformRequest: (data) => data, // 👈 Required to prevent axios from messing with FormData
+      transformRequest: (data) => data, 
     });
 
     console.log("✅ Expense claim created:", response.data);
@@ -720,7 +720,7 @@ export const userExpenseFileUpload = async (file, docname) => {
     formData.append("docname", docname);
     formData.append("fieldname", "file_url");
 
-    const response = await axios.post(
+    const response = await userApi.post(
       `${baseUrl}/api/method/upload_file`,
       formData,
       {
@@ -799,7 +799,7 @@ The employer reserves the right to approve or deny the leave request based on bu
       formData.append("agreement", remoteAgreementText);
     }
 
-    const response = await axios.post(url, formData.toString(), {
+    const response = await userApi.post(url, formData.toString(), {
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/x-www-form-urlencoded",
