@@ -5,7 +5,4 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const userApi = Axios.create({
   timeout: 60000,
 });
-
-
-
 export default userApi;
