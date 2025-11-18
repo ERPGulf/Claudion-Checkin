@@ -31,11 +31,15 @@ function AttendanceAction() {
   const [refresh, setRefresh] = useState(false);
   const [dateTime, setDateTime] = useState(null);
   const [inTarget, setInTarget] = useState(false);
-  const [ready, setReady] = useState(false); // enable button when data ready
-  const [distanceInfo, setDistanceInfo] = useState(null); // optional show distance
+  const [ready, setReady] = useState(false);
+  const [distanceInfo, setDistanceInfo] = useState(null);
+  const [actionLoading, setActionLoading] = useState(false); // NEW
 
+  // HANDLE CHECK-IN / OUT
   const handleDirectCheckInOut = async (type) => {
     try {
+      setActionLoading(true);
+
       const response = await userCheckIn({ employeeCode, type });
 
       if (!response) {
@@ -43,43 +47,42 @@ function AttendanceAction() {
       }
 
       if (!response.allowed) {
-        // Out of bound or permission/API issue
         Toast.show({
           type: "error",
           text1: "⚠️ Check-in blocked",
           text2: response.message || "You are outside the allowed area",
         });
+
         setInTarget(false);
         setDistanceInfo({
           distance: response.distance,
           radius: response.radius,
         });
+
         return;
       }
 
-      // success
       dispatch(setOnlyCheckIn(type === "IN"));
+
       Toast.show({
         type: "success",
-        text1:
-          type === "IN"
-            ? "✅ Checked in successfully!"
-            : "✅ Checked out successfully!",
+        text1: type === "IN" ? "Checked in!" : "Checked out!",
       });
 
-      // update local UI state
       setInTarget(true);
       setDistanceInfo({ distance: response.distance, radius: response.radius });
     } catch (error) {
-      console.error(`❌ Direct ${type} failed:`, error);
       Toast.show({
         type: "error",
         text1: `⚠️ ${type} failed`,
         text2: error.message || "Please try again",
       });
+    } finally {
+      setActionLoading(false);
     }
   };
 
+  // HEADER CONFIG
   useLayoutEffect(() => {
     navigation.setOptions({
       headerShadowVisible: false,
@@ -98,23 +101,22 @@ function AttendanceAction() {
     });
   }, []);
 
+  // FETCH LOCATION + STATUS
   const fetchStatusAndLocation = async () => {
     try {
       setReady(false);
-      // 1) get allowed office location
+
       const office = await getOfficeLocation(employeeCode);
 
       if (!office || !office.latitude || !office.longitude || !office.radius) {
         throw new Error("Reporting location not configured");
       }
 
-      // 2) request permission
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
         throw new Error("Location permission denied");
       }
 
-      // 3) get live device location
       const liveLoc = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.Highest,
       });
@@ -129,7 +131,6 @@ function AttendanceAction() {
         longitude: office.longitude,
       };
 
-      // 4) calc distance and set state
       const distance = getPreciseDistance(userCords, targetLocation);
       const inside = distance <= office.radius;
 
@@ -139,13 +140,13 @@ function AttendanceAction() {
     } catch (error) {
       console.error("❌ Status/location fetch failed:", error);
       hapticsMessage("error");
+
       Toast.show({
         type: "error",
         text1: "⚠️ Status fetching failed",
         text2: error.message || "Please try again",
-        autoHide: true,
-        visibilityTime: 3000,
       });
+
       setReady(false);
       setInTarget(false);
       setDistanceInfo(null);
@@ -164,125 +165,136 @@ function AttendanceAction() {
   }, []);
 
   return (
-    <ScrollView
-      showsVerticalScrollIndicator={false}
-      contentContainerStyle={{
-        flex: 1,
-        alignItems: "center",
-        backgroundColor: "white",
-        paddingVertical: 16,
-      }}
-      refreshControl={
-        <RefreshControl
-          refreshing={refresh}
-          onRefresh={() => {
-            setRefresh(true);
-            fetchStatusAndLocation().finally(() => setRefresh(false));
-          }}
-        />
-      }
-    >
-      {!ready && (
-        <View className="h-screen absolute bottom-0 w-screen items-center bg-black/50 justify-center z-50">
+    <>
+      {/* FULL PAGE LOADING WHEN CHECK-IN/OUT */}
+      {actionLoading && (
+        <View className="absolute top-0 left-0 h-screen w-screen bg-black/50 z-50 items-center justify-center">
           <ActivityIndicator size="large" color="white" />
+          <Text className="text-white mt-2 text-base">Processing...</Text>
         </View>
       )}
 
-      <View style={{ width: "100%" }} className="flex-1 px-3">
-        <WelcomeCard />
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{
+          flex: 1,
+          alignItems: "center",
+          backgroundColor: "white",
+          paddingVertical: 16,
+        }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refresh}
+            onRefresh={() => {
+              setRefresh(true);
+              fetchStatusAndLocation().finally(() => setRefresh(false));
+            }}
+          />
+        }
+      >
+        {!ready && (
+          <View className="h-screen absolute bottom-0 w-screen items-center bg-black/50 justify-center z-40">
+            <ActivityIndicator size="large" color="white" />
+          </View>
+        )}
 
-        <View className="h-72 mt-4">
-          <View className="p-3">
-            <Text className="text-base text-gray-500 font-semibold">
-              DATE AND TIME *
-            </Text>
-            <View className="flex-row items-end border-b border-gray-400 pb-2 mb-6 justify-between">
-              <Text className="text-sm font-medium text-gray-500">
-                {dateTime}
+        <View style={{ width: "100%" }} className="flex-1 px-3">
+          <WelcomeCard />
+
+          <View className="h-72 mt-4">
+            <View className="p-3">
+              <Text className="text-base text-gray-500 font-semibold">
+                DATE AND TIME *
               </Text>
-              <MaterialCommunityIcons
-                name="calendar-month"
-                size={28}
-                color={COLORS.gray}
-              />
-            </View>
 
-            <Text className="text-base text-gray-500 font-semibold">
-              LOCATION *
-            </Text>
-            <View className="flex-row items-end border-b border-gray-400 pb-2 mb-4 justify-between">
-              <Text className="text-sm font-medium text-gray-500">
-                {!ready ? (
-                  <ActivityIndicator size="small" />
-                ) : inTarget ? (
-                  "In bound"
-                ) : (
-                  "Out of bound"
-                )}
-              </Text>
-              <MaterialCommunityIcons
-                name="map-marker-radius-outline"
-                size={28}
-                color={COLORS.gray}
-              />
-            </View>
-
-            {/* Optional: show distance details */}
-            {distanceInfo && (
-              <View className="mb-3">
-                <Text className="text-xs text-gray-400">
-                  Distance:{" "}
-                  {typeof distanceInfo.distance === "number"
-                    ? distanceInfo.distance + " m"
-                    : "—"}{" "}
-                  | Allowed: {distanceInfo.radius} m
+              <View className="flex-row items-end border-b border-gray-400 pb-2 mb-6 justify-between">
+                <Text className="text-sm font-medium text-gray-500">
+                  {dateTime}
                 </Text>
+                <MaterialCommunityIcons
+                  name="calendar-month"
+                  size={28}
+                  color={COLORS.gray}
+                />
               </View>
-            )}
 
-            <TouchableOpacity
-              className={`justify-center items-center h-16 mt-4 rounded-2xl ${
-                checkin ? "bg-red-600" : "bg-green-600"
-              } ${!inTarget ? "opacity-50" : ""}`}
-              disabled={!ready || !inTarget}
-              onPress={async () => {
-                try {
-                  const photoValue = await AsyncStorage.getItem("photo");
-                  const photoRequired = photoValue === "1";
+              <Text className="text-base text-gray-500 font-semibold">
+                LOCATION *
+              </Text>
 
-                  const actionType = checkin ? "OUT" : "IN";
+              <View className="flex-row items-end border-b border-gray-400 pb-2 mb-4 justify-between">
+                <Text className="text-sm font-medium text-gray-500">
+                  {!ready ? (
+                    <ActivityIndicator size="small" />
+                  ) : inTarget ? (
+                    "In bound"
+                  ) : (
+                    "Out of bound"
+                  )}
+                </Text>
+                <MaterialCommunityIcons
+                  name="map-marker-radius-outline"
+                  size={28}
+                  color={COLORS.gray}
+                />
+              </View>
 
-                  if (!photoRequired) {
-                    await handleDirectCheckInOut(actionType);
-                  } else {
-                    navigation.navigate("Attendance camera", {
-                      type: actionType,
+              {distanceInfo && (
+                <View className="mb-3">
+                  <Text className="text-xs text-gray-400">
+                    Distance: {distanceInfo.distance} m | Allowed:{" "}
+                    {distanceInfo.radius} m
+                  </Text>
+                </View>
+              )}
+
+              <TouchableOpacity
+                className={`justify-center items-center h-16 mt-4 rounded-2xl ${
+                  checkin ? "bg-red-600" : "bg-green-600"
+                } ${!inTarget || actionLoading ? "opacity-50" : ""}`}
+                disabled={!ready || !inTarget || actionLoading}
+                onPress={async () => {
+                  try {
+                    const photoValue = await AsyncStorage.getItem("photo");
+                    const actionType = checkin ? "OUT" : "IN";
+
+                    if (photoValue !== "1") {
+                      await handleDirectCheckInOut(actionType);
+                    } else {
+                      navigation.navigate("Attendance camera", {
+                        type: actionType,
+                      });
+                    }
+                  } catch (error) {
+                    Toast.show({
+                      type: "error",
+                      text1: "⚠️ Action failed",
+                      text2: error.message || "Please try again",
                     });
                   }
-                } catch (error) {
-                  console.error("⚠️ Error handling attendance button:", error);
-                  Toast.show({
-                    type: "error",
-                    text1: "⚠️ Action failed",
-                    text2: error.message || "Please try again",
-                  });
-                }
-              }}
-            >
-              <Text className="text-xl font-bold text-white">
-                {checkin ? "CHECK-OUT" : "CHECK-IN"}
-              </Text>
-            </TouchableOpacity>
+                }}
+              >
+                {actionLoading ? (
+                  <ActivityIndicator size="small" color="white" />
+                ) : (
+                  <Text className="text-xl font-bold text-white">
+                    {checkin ? "CHECK-OUT" : "CHECK-IN"}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
-      </View>
 
-      {!inTarget && (
-        <View className="items-center mt-auto mb-4">
-          <Text className="text-xs text-gray-400">Swipe Down to Refresh*</Text>
-        </View>
-      )}
-    </ScrollView>
+        {!inTarget && (
+          <View className="items-center mt-auto mb-4">
+            <Text className="text-xs text-gray-400">
+              Swipe Down to Refresh*
+            </Text>
+          </View>
+        )}
+      </ScrollView>
+    </>
   );
 }
 
