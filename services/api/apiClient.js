@@ -3,76 +3,183 @@ import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { cleanBaseUrl, setCommonHeaders } from "./utils";
 
-let refreshPromise = null;
+// ----------------------
+// MEMORY TOKEN CACHE
+// ----------------------
+let memoryAccessToken = null;
+let memoryRefreshToken = null;
 
-const apiClient = axios.create({
-  timeout: 30000,
-});
+async function loadTokens() {
+  if (!memoryAccessToken) {
+    memoryAccessToken = await AsyncStorage.getItem("access_token");
+  }
+  if (!memoryRefreshToken) {
+    memoryRefreshToken = await AsyncStorage.getItem("refresh_token");
+  }
+  return { access: memoryAccessToken, refresh: memoryRefreshToken };
+}
 
-// --- REFRESH TOKEN LOGIC ---
-const plainAxios = axios.create({ timeout: 60000 });
-
-export const refreshAccessToken = async () => {
-  const refresh_token = await AsyncStorage.getItem("refresh_token");
-  const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
-
-  if (!refresh_token || !rawBaseUrl) throw new Error("Missing refresh token");
-
-  const baseUrl = cleanBaseUrl(rawBaseUrl);
-  const url = `${baseUrl}/api/method/employee_app.gauth.create_refresh_token`;
-
-  const body = new URLSearchParams();
-  body.append("refresh_token", refresh_token);
-
-  const { data } = await plainAxios.post(url, body.toString(), {
-    headers: setCommonHeaders(),
-  });
-
-  const accessToken = data?.data?.access_token;
-  const newRefresh = data?.data?.refresh_token;
+export async function saveTokens(access, refresh) {
+  memoryAccessToken = access;
+  memoryRefreshToken = refresh;
 
   await AsyncStorage.multiSet([
-    ["access_token", accessToken],
-    ["refresh_token", newRefresh],
+    ["access_token", access],
+    ["refresh_token", refresh],
   ]);
+}
 
-  return accessToken;
+export async function clearTokens() {
+  memoryAccessToken = null;
+  memoryRefreshToken = null;
+  await AsyncStorage.multiRemove(["access_token", "refresh_token"]);
+}
+
+// ----------------------
+// AXIOS CLIENTS
+// ----------------------
+const apiClient = axios.create({ timeout: 30000 });
+const plainAxios = axios.create({ timeout: 30000 });
+
+// ----------------------
+// REFRESH TOKEN QUEUE LOGIC
+// ----------------------
+let isRefreshing = false;
+let refreshPromise = null;
+let failedQueue = [];
+
+const processQueue = (error, token = null) => {
+  failedQueue.forEach((req) => {
+    if (error) req.reject(error);
+    else req.resolve(token);
+  });
+  failedQueue = [];
 };
 
-// --- REQUEST INTERCEPTOR ---
+// ----------------------
+// REFRESH ACCESS TOKEN
+// ----------------------
+export const refreshAccessToken = async () => {
+  const { refresh } = await loadTokens();
+  const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
+
+  if (!refresh || !rawBaseUrl) {
+    throw new Error("Missing refresh token or base URL");
+  }
+
+  const url = `${cleanBaseUrl(rawBaseUrl)}/api/method/employee_app.gauth.create_refresh_token`;
+
+  const form = new URLSearchParams();
+  form.append("refresh_token", refresh);
+
+  try {
+    const { data } = await plainAxios.post(url, form.toString(), {
+      headers: setCommonHeaders(),
+    });
+
+    const newAccess = data?.data?.access_token;
+    const newRefresh = data?.data?.refresh_token;
+
+    if (!newAccess) throw new Error("Refresh returned empty token");
+
+    await saveTokens(newAccess, newRefresh);
+    return newAccess;
+  } catch (err) {
+    console.log("❌ Refresh token failed:", err?.response?.data || err);
+    throw err;
+  }
+};
+
+// ----------------------
+// REQUEST INTERCEPTOR
+// ----------------------
 apiClient.interceptors.request.use(async (config) => {
-  let baseUrl = await AsyncStorage.getItem("baseUrl");
-  const token = await AsyncStorage.getItem("access_token");
+  const baseUrl = await AsyncStorage.getItem("baseUrl");
+  const { access } = await loadTokens();
 
   if (baseUrl && !config.url.startsWith("http")) {
     config.baseURL = `${cleanBaseUrl(baseUrl)}/api`;
   }
 
-  if (token) config.headers.Authorization = `Bearer ${token}`;
+  if (access) {
+    config.headers.Authorization = `Bearer ${access}`;
+  }
+
   return config;
 });
 
-// --- RESPONSE INTERCEPTOR ---
+// ----------------------
+// RESPONSE INTERCEPTOR
+// ----------------------
 apiClient.interceptors.response.use(
-  (res) => res,
+  (response) => response,
   async (error) => {
     const original = error.config;
 
-    if (
-      error.response &&
-      [401, 403].includes(error.response.status) &&
-      !original._retry
-    ) {
+    // If request already retried once, reject it
+    if (original._retry) {
+      return Promise.reject(error);
+    }
+
+    const status = error?.response?.status;
+
+    const isAuthError = status === 401 || status === 403;
+
+    // Detect refresh token failure so we don't loop forever
+    const isRefreshCall = original.url?.includes("create_refresh_token");
+    if (isAuthError && isRefreshCall) {
+      await clearTokens();
+      return Promise.reject("Session expired. Please login again.");
+    }
+
+    if (isAuthError) {
       original._retry = true;
 
-      if (!refreshPromise) {
-        refreshPromise = refreshAccessToken().finally(() => {
-          refreshPromise = null;
+      // -------------------
+      // If refresh already happening → push request into queue
+      // -------------------
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          failedQueue.push({
+            resolve: (token) => {
+              original.headers = {
+                ...original.headers,
+                Authorization: `Bearer ${token}`,
+              };
+              resolve(apiClient(original));
+            },
+            reject,
+          });
         });
       }
 
+      // -------------------
+      // Start refresh
+      // -------------------
+      isRefreshing = true;
+
+      refreshPromise = new Promise(async (resolve, reject) => {
+        try {
+          const newToken = await refreshAccessToken();
+          processQueue(null, newToken);
+          resolve(newToken);
+        } catch (err) {
+          processQueue(err, null);
+          reject(err);
+        } finally {
+          isRefreshing = false;
+          refreshPromise = null;
+        }
+      });
+
       const newToken = await refreshPromise;
-      original.headers.Authorization = `Bearer ${newToken}`;
+
+      // Retry original request with new token
+      original.headers = {
+        ...original.headers,
+        Authorization: `Bearer ${newToken}`,
+      };
+
       return apiClient(original);
     }
 
