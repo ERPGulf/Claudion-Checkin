@@ -41,7 +41,6 @@ export async function clearTokens() {
 const apiClient = axios.create({ timeout: 30000 });
 const plainAxios = axios.create({ timeout: 30000 });
 
-
 let isRefreshing = false;
 let refreshPromise = null;
 let failedQueue = [];
@@ -98,7 +97,9 @@ apiClient.interceptors.request.use(async (config) => {
   if (baseUrl && !config.url.startsWith("http")) {
     config.baseURL = `${cleanBaseUrl(baseUrl)}/api`;
   }
-
+  if (config.headers?.["x-skip-auth"] === "true") {
+    return config;
+  }
   if (access) {
     config.headers.Authorization = `Bearer ${access}`;
   }
@@ -113,6 +114,10 @@ apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
     const original = error.config;
+
+    if (original.headers?.["x-skip-auth"] === "true") {
+      return Promise.reject(error);
+    }
 
     if (original._retry) {
       return Promise.reject(error);
@@ -132,7 +137,6 @@ apiClient.interceptors.response.use(
     if (isAuthError) {
       original._retry = true;
 
-
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           failedQueue.push({
@@ -147,7 +151,6 @@ apiClient.interceptors.response.use(
           });
         });
       }
-
 
       isRefreshing = true;
 
