@@ -3,17 +3,24 @@ import userApi from "./apiManger";
 import { format } from "date-fns";
 import { getPreciseDistance } from "geolib";
 import * as Location from "expo-location";
+import axios from "axios";
 
-// Common headers
+// COMMON HEADER
 
 const setCommonHeaders = (headers = {}) => {
   headers["Content-Type"] = "application/x-www-form-urlencoded";
   return headers;
 };
-// Refresh access token
+// REFRESH TOKEN LOGIC
 let refreshPromise = null;
 const clearRefreshPromise = () => (refreshPromise = null);
 
+// Plain axios WITHOUT interceptors
+const plainAxios = axios.create({
+  timeout: 60000,
+});
+
+// Refresh access token
 const refreshAccessToken = async () => {
   try {
     const refresh_token = await AsyncStorage.getItem("refresh_token");
@@ -27,20 +34,15 @@ const refreshAccessToken = async () => {
       .replace(/[\u0000-\u001F]+/g, "")
       .replace(/\/+$/, "");
 
-    // Call refresh token API (matches your curl)
-    const params = new URLSearchParams();
-    params.append("refresh_token", refresh_token);
+    const refreshUrl = `${baseUrl}/api/method/employee_app.gauth.create_refresh_token`;
 
-    const { data } = await userApi.get(
-      `${baseUrl}/api/method/employee_app.gauth.create_refresh_token`,
-      {
-        headers: setCommonHeaders({
-          Cookie:
-            "full_name=aysha%20p; sid=Guest; system_user=no; user_id=Guest; user_image=",
-        }),
-        params,
-      }
-    );
+    // Make POST request with form-encoded body
+    const body = new URLSearchParams();
+    body.append("refresh_token", refresh_token);
+
+    const { data } = await plainAxios.post(refreshUrl, body.toString(), {
+      headers: setCommonHeaders(),
+    });
 
     const accessToken = data?.data?.access_token;
     const newRefreshToken = data?.data?.refresh_token || refresh_token;
@@ -48,6 +50,7 @@ const refreshAccessToken = async () => {
     if (!accessToken)
       throw new Error("Refresh token did not return access_token");
 
+    // Save new tokens
     await AsyncStorage.multiSet([
       ["access_token", accessToken],
       ["refresh_token", newRefreshToken],
@@ -55,39 +58,44 @@ const refreshAccessToken = async () => {
 
     return accessToken;
   } catch (error) {
-    console.error(
-      "❌ Token refresh error:",
-      error.response?.data || error.message
-    );
+    console.error("❌ Refresh token error:", error.response?.data || error);
     throw error;
   }
 };
 
-// Request interceptor
-
+// REQUEST INTERCEPTOR
 userApi.interceptors.request.use(async (config) => {
   let baseUrl = await AsyncStorage.getItem("baseUrl");
-  if (baseUrl) {
-    baseUrl = baseUrl
-      .trim()
-      .replace(/[\u0000-\u001F]+/g, "")
-      .replace(/\/+$/, "");
-    config.baseURL = `${baseUrl}/api`;
+
+  // Only apply baseURL if URL is NOT full (http...)
+  if (!config.url.startsWith("http")) {
+    if (baseUrl) {
+      baseUrl = baseUrl
+        .trim()
+        .replace(/[\u0000-\u001F]+/g, "")
+        .replace(/\/+$/, "");
+
+      config.baseURL = `${baseUrl}/api`;
+    }
   }
 
+  // Attach access token
   const access_token = await AsyncStorage.getItem("access_token");
-  if (access_token) config.headers.Authorization = `Bearer ${access_token}`;
+  if (access_token) {
+    config.headers.Authorization = `Bearer ${access_token}`;
+  }
 
   return config;
 });
 
-// Response interceptor
+// RESPONSE INTERCEPTOR
 
 userApi.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
 
+    // If unauthorized → try refresh
     if (
       error.response &&
       [401, 403].includes(error.response.status) &&
@@ -101,8 +109,10 @@ userApi.interceptors.response.use(
         }
 
         const newToken = await refreshPromise;
+
         originalRequest.headers.Authorization = `Bearer ${newToken}`;
-        return userApi(originalRequest);
+
+        return userApi(originalRequest); // retry original request
       } catch (refreshError) {
         console.error("❌ Error refreshing token:", refreshError);
         return Promise.reject(refreshError);
@@ -113,8 +123,7 @@ userApi.interceptors.response.use(
   }
 );
 
-// Generate initial token
-
+// GENERATE INITIAL TOKEN
 export const generateToken = async ({ api_key, app_key, api_secret }) => {
   try {
     let baseUrl = await AsyncStorage.getItem("baseUrl");
@@ -126,18 +135,16 @@ export const generateToken = async ({ api_key, app_key, api_secret }) => {
       .replace(/[\u0000-\u001F]+/g, "")
       .replace(/\/+$/, "");
 
+    const url = `${baseUrl}/api/method/employee_app.gauth.generate_token_secure`;
+
     const body = new URLSearchParams();
     body.append("api_key", api_key);
     body.append("app_key", app_key);
     body.append("api_secret", api_secret);
 
-    const response = await userApi.post(
-      `${baseUrl}/api/method/employee_app.gauth.generate_token_secure`,
-      body.toString(),
-      {
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      }
-    );
+    const response = await userApi.post(url, body.toString(), {
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    });
 
     const tokenData = response?.data?.data;
     const accessToken = tokenData?.access_token;
@@ -145,12 +152,16 @@ export const generateToken = async ({ api_key, app_key, api_secret }) => {
 
     if (!accessToken) throw new Error("Token not returned from server");
 
+    // Save both tokens
     await AsyncStorage.multiSet([
       ["access_token", accessToken],
       ["refresh_token", refreshToken || ""],
     ]);
 
-    return { access_token: accessToken, refresh_token: refreshToken };
+    return {
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    };
   } catch (error) {
     console.error(
       "❌ generateToken error:",
@@ -285,6 +296,8 @@ export const getOfficeLocation = async (employeeCode) => {
   console.log("✅ Parsed coordinates:", { latitude, longitude, radius });
   return { latitude, longitude, radius };
 };
+
+
 
 // User check-in
 export const userCheckIn = async ({ employeeCode, type }) => {
