@@ -4,9 +4,9 @@ import { useSelector } from 'react-redux';
 import { Toast } from 'react-native-toast-message/lib/src/Toast';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { putUserFile, userFileUpload } from '../../api/userApi';
 import { selectFileid } from '../../redux/Slices/UserSlice';
 import { SIZES } from '../../constants';
+import { putUserFile, userFileUpload } from '../../services/api';
 
 function FileUpload({ inTarget, isWFH }) {
   const name = useSelector(selectFileid);

@@ -17,8 +17,8 @@ import {
   tripIdSelect,
   vehicleIdSelect,
 } from '../../redux/Slices/TripDetailsSlice';
-import { endTripTrack } from '../../api/userApi';
 import { COLORS, SIZES } from '../../constants';
+import { endTripTrack } from '../../services/api';
 
 function EndForm({ location, setIsLoading, setTripType }) {
   const dispatch = useDispatch();

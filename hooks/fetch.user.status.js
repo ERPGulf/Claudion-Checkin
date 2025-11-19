@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getUserCustomIn } from '../api/userApi';
+import { getUserCustomIn } from '../services/api';
 
 export const useUserStatus = employeeCode => {
   const [data, setData] = useState({

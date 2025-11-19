@@ -7,10 +7,11 @@ import { useSelector } from "react-redux";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { FlashList } from "@shopify/flash-list";
 
-import { getUserAttendance } from "../api/userApi";
+// import { getUserAttendance } from "../api/userApi";
 import { selectEmployeeCode } from "../redux/Slices/UserSlice";
 import { LogCard, RenderLoader } from "../components/AttendanceHistory";
 import { COLORS, SIZES } from "../constants";
+import { getUserAttendance } from "../services/api";
 
 function AttendanceHistory() {
   const navigation = useNavigation();

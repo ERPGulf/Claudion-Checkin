@@ -19,15 +19,16 @@ import {
   setCheckin,
   setCheckout,
 } from "../redux/Slices/AttendanceSlice";
-import {
-  putUserFile,
-  userCheckIn,
-  userFileUpload,
-  userStatusPut,
-} from "../api/userApi";
+// import {
+//   putUserFile,
+//   userCheckIn,
+//   userFileUpload,
+//   userStatusPut,
+// } from "../api/userApi";
 import { selectIsWfh, setFileid } from "../redux/Slices/UserSlice";
 import { SIZES } from "../constants";
 import { hapticsMessage } from "../utils/HapticsMessage";
+import { putUserFile, userCheckIn, userFileUpload, userStatusPut } from "../services/api";
 
 function AttendanceCamera() {
   const navigation = useNavigation();
