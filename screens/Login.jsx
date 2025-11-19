@@ -84,7 +84,7 @@ function Login() {
         visibilityTime: 3000,
       });
 
-      navigation.navigate("homeTab");
+      // navigation.navigate("homeTab");
     } catch (error) {
       console.log("Login error:", error);
       Toast.show({

@@ -6,7 +6,7 @@ import { cleanBaseUrl, setCommonHeaders } from "./utils";
 let refreshPromise = null;
 
 const apiClient = axios.create({
-  timeout: 60000,
+  timeout: 30000,
 });
 
 // --- REFRESH TOKEN LOGIC ---
@@ -29,7 +29,7 @@ export const refreshAccessToken = async () => {
   });
 
   const accessToken = data?.data?.access_token;
-  const newRefresh = data?.data?.refresh_token || refresh_token;
+  const newRefresh = data?.data?.refresh_token;
 
   await AsyncStorage.multiSet([
     ["access_token", accessToken],

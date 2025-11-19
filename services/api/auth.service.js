@@ -21,7 +21,7 @@ export const generateToken = async ({ api_key, app_key, api_secret }) => {
     const response = await apiClient.post(url, body.toString(), {
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
     });
-
+    console.log(response.data);
     const tokenData = response?.data?.data;
     const accessToken = tokenData?.access_token;
     const refreshToken = tokenData?.refresh_token;
