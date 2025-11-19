@@ -1,10 +1,10 @@
 // src/services/api/expense.service.js
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import apiClient from "./apiClient";
-import { cleanBaseUrl } from "./utils";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 /**
  * getExpenseClaims()
+ * Already implemented earlier
  */
 export const getExpenseClaims = async () => {
   try {
@@ -15,11 +15,8 @@ export const getExpenseClaims = async () => {
       throw new Error("Missing baseUrl or token in storage");
     }
 
-    // Keep the double slash before "api" as original code did
     const baseUrl = rawBaseUrl.trim().replace(/\/+$/, "");
     const url = `${baseUrl}//api/method/employee_app.attendance_api.get_expense_claims`;
-
-    console.log("📡 Fetching expense claims from:", url);
 
     const response = await apiClient.get(url, {
       headers: {
@@ -28,7 +25,6 @@ export const getExpenseClaims = async () => {
     });
 
     const data = response.data?.message || response.data;
-
     return Array.isArray(data) ? data : [];
   } catch (error) {
     console.error("❌ Error fetching expense claims:", error);
@@ -37,12 +33,13 @@ export const getExpenseClaims = async () => {
 };
 
 /**
- * createExpenseClaim(claimData)
+ * createExpenseClaim()
+ * NEW: Added from your screen file
  */
 export const createExpenseClaim = async (claimData) => {
   try {
     const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
-    const baseUrl = cleanBaseUrl(rawBaseUrl);
+    const baseUrl = rawBaseUrl?.trim()?.replace(/\/+$/, "");
     const token = await AsyncStorage.getItem("access_token");
     const employee = await AsyncStorage.getItem("employee_code");
 
@@ -50,7 +47,6 @@ export const createExpenseClaim = async (claimData) => {
       throw new Error("Missing base URL, token, or employee code");
 
     const url = `${baseUrl}/api/method/employee_app.attendance_api.create_expense_claim`;
-    console.log("🔗 POST URL:", url);
 
     const formData = new FormData();
     formData.append("employee", employee);
@@ -59,35 +55,20 @@ export const createExpenseClaim = async (claimData) => {
     formData.append("amount", claimData.amount);
     formData.append("description", claimData.description || "");
 
-    // single file handling
-    if (
-      claimData.file_url &&
-      Array.isArray(claimData.file_url) &&
-      claimData.file_url.length > 0 &&
-      claimData.file_url[0].uri
-    ) {
-      const file = claimData.file_url[0];
-      const fileName = file.name || "upload.jpg";
+    if (claimData.file_url && claimData.file_url.uri) {
+      const file = claimData.file_url;
+      const fileName = file.name || "receipt.jpg";
+      const fileType =
+        file.mimeType ||
+        file.type ||
+        `image/${fileName.split(".").pop()}`;
 
-      let fileType;
-      if (file.mimeType) {
-        fileType = file.mimeType;
-      } else if (fileName.endsWith(".png")) {
-        fileType = "image/png";
-      } else if (fileName.endsWith(".jpg") || fileName.endsWith(".jpeg")) {
-        fileType = "image/jpeg";
-      } else {
-        fileType = "application/octet-stream";
-      }
-
-      formData.append("file_name", {
+      formData.append("file", {
         uri: file.uri,
         name: fileName,
         type: fileType,
       });
     }
-
-    console.log("📤 Sending expense claim (with file if any):", url);
 
     const response = await apiClient.post(url, formData, {
       headers: {
@@ -97,7 +78,6 @@ export const createExpenseClaim = async (claimData) => {
       transformRequest: (data) => data,
     });
 
-    console.log("✅ Expense claim created:", response.data);
     return response.data;
   } catch (error) {
     console.error(
@@ -109,7 +89,8 @@ export const createExpenseClaim = async (claimData) => {
 };
 
 /**
- * userExpenseFileUpload(file, docname)
+ * userExpenseFileUpload()
+ * (Already in the original split)
  */
 export const userExpenseFileUpload = async (file, docname) => {
   try {
@@ -117,7 +98,7 @@ export const userExpenseFileUpload = async (file, docname) => {
     if (!docname) throw new Error("Missing docname (claim ID)");
 
     const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
-    const baseUrl = cleanBaseUrl(rawBaseUrl);
+    const baseUrl = rawBaseUrl?.trim().replace(/\/+$/, "");
 
     const formData = new FormData();
     formData.append("file", {
@@ -140,11 +121,10 @@ export const userExpenseFileUpload = async (file, docname) => {
       }
     );
 
-    console.log("✅ File uploaded:", response.data);
     return response.data;
-  } catch (err) {
-    console.error("❌ File upload failed:", err);
-    throw err;
+  } catch (error) {
+    console.error("❌ File upload failed:", error);
+    throw error;
   }
 };
 

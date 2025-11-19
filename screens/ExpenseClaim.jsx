@@ -7,8 +7,6 @@ import {
   ScrollView,
   Alert,
 } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import axios from "axios";
 import Entypo from "@expo/vector-icons/Entypo";
 import { useNavigation } from "@react-navigation/native";
 import { useSelector } from "react-redux";
@@ -18,7 +16,7 @@ import ClaimForm from "../components/ExpenseClaim/ClaimForm";
 import ExpenseCard from "../components/ExpenseClaim/ExpenseCard";
 // import { getExpenseClaims } from "../api/userApi";
 import { COLORS, SIZES } from "../constants";
-import { getExpenseClaims } from "../services/api";
+import { createExpenseClaim, getExpenseClaims } from "../services/api";
 
 const PAGE_SIZE = 5;
 
@@ -62,61 +60,7 @@ export default function ExpenseClaim() {
     enabled: !!employeeCode,
   });
 
-  // ✅ Correct single API call
-  const createExpenseClaim = async (claimData) => {
-    try {
-      const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
-      const baseUrl = rawBaseUrl?.trim()?.replace(/\/+$/, "");
-      const token = await AsyncStorage.getItem("access_token");
-      const employee = await AsyncStorage.getItem("employee_code");
 
-      if (!baseUrl || !token || !employee)
-        throw new Error("Missing base URL, token, or employee code");
-
-      const url = `${baseUrl}/api/method/employee_app.attendance_api.create_expense_claim`;
-
-      // ✅ Build FormData correctly for backend 
-      const formData = new FormData();
-      formData.append("employee", employee);
-      formData.append("expense_date", claimData.expense_date);
-      formData.append("expense_type", claimData.expense_type);
-      formData.append("amount", claimData.amount);
-      formData.append("description", claimData.description || "");
-
-      // ✅ Correct field name for file upload
-      if (claimData.file_url && claimData.file_url.uri) {
-        const file = claimData.file_url;
-        const fileName = file.name || "receipt.jpg";
-        const fileType =
-          file.mimeType || file.type || `image/${fileName.split(".").pop()}`;
-
-        formData.append("file", {
-          uri: file.uri,
-          name: fileName,
-          type: fileType,
-        });
-      }
-
-      console.log("📤 Sending expense claim to:", url);
-      console.log("📦 Form data:", formData);
-
-      const response = await axios.post(url, formData, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "multipart/form-data",
-        },
-      });
-
-      console.log("✅ Expense claim created:", response.data);
-      return response.data;
-    } catch (error) {
-      console.error(
-        "❌ Error creating expense claim:",
-        error.response?.data || error.message
-      );
-      throw error;
-    }
-  };
 
   // ✅ React Query mutation
   const { mutate: addClaim, isPending: isCreating } = useMutation({
