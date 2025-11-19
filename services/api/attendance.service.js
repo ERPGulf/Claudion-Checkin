@@ -3,87 +3,89 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getPreciseDistance } from "geolib";
 import * as Location from "expo-location";
 import { format } from "date-fns";
-import apiClient, { refreshAccessToken } from "./apiClient"; // apiClient handles interceptors
-import { cleanBaseUrl, setCommonHeaders } from "./utils";
+import apiClient from "./apiClient";
+import { cleanBaseUrl } from "./utils";
 
 /**
- * Parse reporting location from employee.custom_reporting_location field.
- * Returns { latitude, longitude, radius } or { latitude: null, longitude: null, radius: 0 }
+ * getOfficeLocation(employeeCode) — fetches employee and parses reporting location
+ * keeps same name/signature as original.
  */
-export const getOfficeLocation = (employee) => {
-  if (!employee?.custom_reporting_location) {
-    return { latitude: null, longitude: null, radius: 0 };
-  }
+export const getOfficeLocation = async (employeeCode) => {
+  if (!employeeCode) throw new Error("Employee ID is required");
 
-  try {
-    const locationJson = JSON.parse(employee.custom_reporting_location);
-    const coords = locationJson?.features?.[0]?.geometry?.coordinates || [null, null];
-
-    if (
-      !Array.isArray(coords) ||
-      coords.length !== 2 ||
-      typeof coords[0] !== "number" ||
-      typeof coords[1] !== "number"
-    ) {
-      return { latitude: null, longitude: null, radius: 0 };
-    }
-
-    const longitude = coords[0];
-    const latitude = coords[1];
-    const radius = Number(employee.custom_reporting_radius) || 0;
-
-    return { latitude, longitude, radius };
-  } catch (err) {
-    console.warn("Invalid location JSON:", err);
-    return { latitude: null, longitude: null, radius: 0 };
-  }
-};
-
-/**
- * Fetch employee object (raw) using attendance API get_employee_data
- */
-export const fetchEmployeeRaw = async (employeeCode) => {
-  if (!employeeCode) throw new Error("Employee code required");
   const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
+  const baseUrl = cleanBaseUrl(rawBaseUrl);
+  if (!baseUrl) throw new Error("Base URL missing");
+
   const token = await AsyncStorage.getItem("access_token");
-  if (!rawBaseUrl) throw new Error("Base URL missing");
   if (!token) throw new Error("Access token missing");
 
-  const baseUrl = cleanBaseUrl(rawBaseUrl);
   const url = `${baseUrl}/api/method/employee_app.attendance_api.get_employee_data`;
 
   const { data } = await apiClient.get(url, {
     params: { employee_id: employeeCode },
-    headers: { "Content-Type": "application/x-www-form-urlencoded", Authorization: `Bearer ${token}` },
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      Authorization: `Bearer ${token}`,
+    },
+    timeout: 10000,
   });
 
-  return data?.message;
+  const employee = data.message;
+
+  if (!employee?.custom_reporting_location) {
+    console.warn("⚠️ No reporting location found");
+    return { latitude: null, longitude: null, radius: 0 };
+  }
+
+  let locationJson;
+  try {
+    locationJson = JSON.parse(employee.custom_reporting_location);
+  } catch (err) {
+    console.error("❌ Invalid location JSON format:", err);
+    return { latitude: null, longitude: null, radius: 0 };
+  }
+
+  const coords = locationJson?.features?.[0]?.geometry?.coordinates || [
+    null,
+    null,
+  ];
+
+  if (
+    !Array.isArray(coords) ||
+    coords.length !== 2 ||
+    typeof coords[0] !== "number" ||
+    typeof coords[1] !== "number"
+  ) {
+    console.warn("⚠️ Coordinates are missing or invalid");
+    return { latitude: null, longitude: null, radius: 0 };
+  }
+
+  const longitude = coords[0];
+  const latitude = coords[1];
+  const radius = Number(employee.custom_reporting_radius) || 0;
+
+  console.log("✅ Parsed coordinates:", { latitude, longitude, radius });
+  return { latitude, longitude, radius };
 };
 
 /**
- * Check-in / Check-out flow:
- * - Reads configured reporting location for employee
- * - Requests location permission and gets device location
- * - Calculates distance and validates radius
- * - Calls add_log_based_on_employee_field API to register
- *
- * Returns structured result:
- * { allowed: boolean, distance: number|null, radius: number|null, message: string, name?: string }
+ * userCheckIn({ employeeCode, type })
+ * keeps original behavior and return shape
  */
 export const userCheckIn = async ({ employeeCode, type }) => {
   try {
     if (!employeeCode) throw new Error("Employee ID is required");
 
     const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
-    if (!rawBaseUrl) throw new Error("Base URL missing");
     const baseUrl = cleanBaseUrl(rawBaseUrl);
+    if (!baseUrl) throw new Error("Base URL missing");
 
     const token = await AsyncStorage.getItem("access_token");
     if (!token) throw new Error("Token missing");
 
-    // 1) Get employee and reporting location
-    const employee = await fetchEmployeeRaw(employeeCode);
-    const { latitude, longitude, radius } = getOfficeLocation(employee);
+    // 1) Get allowed office location
+    const { latitude, longitude, radius } = await getOfficeLocation(employeeCode);
 
     if (!latitude || !longitude || !radius) {
       return {
@@ -94,7 +96,7 @@ export const userCheckIn = async ({ employeeCode, type }) => {
       };
     }
 
-    // 2) Request device permission and location
+    // 2) Request permission & get device GPS
     const { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== "granted") {
       return {
@@ -108,27 +110,30 @@ export const userCheckIn = async ({ employeeCode, type }) => {
     const userLocation = await Location.getCurrentPositionAsync({
       accuracy: Location.Accuracy.Highest,
     });
-
     const userLat = userLocation.coords.latitude;
     const userLng = userLocation.coords.longitude;
 
-    // 3) Distance (meters)
+    // 3) Calculate distance (meters)
     const distance = getPreciseDistance(
       { latitude: userLat, longitude: userLng },
       { latitude, longitude }
     );
 
-    // 4) If outside radius -> return not allowed
+    console.log("📍Distance:", distance, "Allowed:", radius);
+
+    // 4) If outside allowed radius -> return allowed:false
     if (distance > radius) {
       return {
         allowed: false,
         distance,
         radius,
-        message: `You must be within ${radius} meters to ${type === "IN" ? "check in" : "check out"}.`,
+        message: `You must be within ${radius} meters to ${
+          type === "IN" ? "check in" : "check out"
+        }.`,
       };
     }
 
-    // 5) Inside radius -> call API to register check-in
+    // 5) Inside radius -> call check-in API
     const formattedTime = format(new Date(), "yyyy-MM-dd HH:mm:ss");
     const payload = {
       device_id: "MobileAPP",
@@ -157,7 +162,8 @@ export const userCheckIn = async ({ employeeCode, type }) => {
 
     return { allowed: true, name: checkinId, distance, radius };
   } catch (error) {
-    console.error("Check-in failed:", error);
+    console.error("❌ Check-in failed:", error);
+    // Return structured message instead of throwing so UI can react
     return {
       allowed: false,
       distance: null,
@@ -168,10 +174,13 @@ export const userCheckIn = async ({ employeeCode, type }) => {
 };
 
 /**
- * Get attendance history for an employee (paginated)
- * Returns array or { error: string }
+ * getUserAttendance(employee_id, limit_start, limit_page_length)
  */
-export const getUserAttendance = async (employee_id, limit_start = 0, limit_page_length = 20) => {
+export const getUserAttendance = async (
+  employee_id,
+  limit_start = 0,
+  limit_page_length = 20
+) => {
   try {
     const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
     const token = await AsyncStorage.getItem("access_token");
@@ -200,9 +209,13 @@ export const getUserAttendance = async (employee_id, limit_start = 0, limit_page
       timeout: 10000,
     });
 
+    // Return the attendance list
     return response.data?.message || [];
   } catch (error) {
-    console.error("Attendance fetch error:", error.response?.data || error.message);
+    console.error(
+      "Attendance fetch error:",
+      error.response?.data || error.message
+    );
     return {
       error:
         error.response?.data?.message ||
@@ -212,21 +225,38 @@ export const getUserAttendance = async (employee_id, limit_start = 0, limit_page
 };
 
 /**
- * Returns { custom_in: 0 | 1 }
+ * getAttendanceStatus() — returns { custom_in: 0 | 1 }
  */
 export const getAttendanceStatus = async () => {
   try {
     const employee_id = await AsyncStorage.getItem("employee_id");
-    if (!employee_id) return { custom_in: 0 };
 
+    if (!employee_id) {
+      return { custom_in: 0 }; // default
+    }
+
+    // Get latest 1 record
     const list = await getUserAttendance(employee_id, 0, 1);
 
-    if (!Array.isArray(list) || list.length === 0) return { custom_in: 0 };
+    if (!Array.isArray(list) || list.length === 0) {
+      return { custom_in: 0 }; // never checked in before
+    }
 
+    // Latest record
     const latest = list[0];
-    return { custom_in: latest?.custom_in === 1 ? 1 : 0 };
+
+    return {
+      custom_in: latest?.custom_in === 1 ? 1 : 0,
+    };
   } catch (e) {
-    console.warn("Status fetch error:", e);
+    console.log("Status fetch error:", e);
     return { custom_in: 0 };
   }
+};
+
+export default {
+  getOfficeLocation,
+  userCheckIn,
+  getUserAttendance,
+  getAttendanceStatus,
 };

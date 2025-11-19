@@ -4,26 +4,7 @@ import apiClient from "./apiClient";
 import { cleanBaseUrl } from "./utils";
 
 /**
- * Helper to format a date to yyyy-MM-dd or return empty string.
- */
-const formatDate = (date) => {
-  if (!date) return "";
-  const d = new Date(date);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
-    d.getDate()
-  ).padStart(2, "0")}`;
-};
-
-const REMOTE_AGREEMENT_TEXT = `I acknowledge and agree to the proposed remote work arrangement.
-I will fulfill all my job responsibilities while working remotely and maintain regular communication with my team and supervisors.
-I confirm that I possess the necessary equipment and technology required to perform my job remotely.
-I agree to maintain the confidentiality of all company information.
-I understand the employer may require me to return to the office if needed.
-The employer reserves the right to approve or deny the leave request based on business needs.`;
-
-/**
- * Create leave application.
- * leaveData: { posting_date, leave_type, from_date, to_date, reason, acknowledgement_policy }
+ * createLeaveApplication(leaveData)
  */
 export const createLeaveApplication = async (leaveData) => {
   try {
@@ -35,15 +16,37 @@ export const createLeaveApplication = async (leaveData) => {
 
     if (!rawBaseUrl || !token || !employeeCode) {
       let missingMessage;
-      if (!rawBaseUrl) missingMessage = "Base URL not found. Please scan QR code first.";
-      else if (!token) missingMessage = "Access token missing. Please log in again.";
-      else missingMessage = "Employee code missing. Please scan QR code again.";
+
+      if (!rawBaseUrl) {
+        missingMessage = "Base URL not found. Please scan QR code first.";
+      } else if (!token) {
+        missingMessage = "Access token missing. Please log in again.";
+      } else {
+        missingMessage = "Employee code missing. Please scan QR code again.";
+      }
 
       return { error: missingMessage };
     }
 
     const baseUrl = cleanBaseUrl(rawBaseUrl);
+
     const url = `${baseUrl}/api/method/employee_app.attendance_api.create_leave_application`;
+
+    const formatDate = (date) => {
+      if (!date) return "";
+      const d = new Date(date);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
+        2,
+        "0"
+      )}-${String(d.getDate()).padStart(2, "0")}`;
+    };
+
+    const remoteAgreementText = `I acknowledge and agree to the proposed remote work arrangement.
+I will fulfill all my job responsibilities while working remotely and maintain regular communication with my team and supervisors.
+I confirm that I possess the necessary equipment and technology required to perform my job remotely.
+I agree to maintain the confidentiality of all company information.
+I understand the employer may require me to return to the office if needed.
+The employer reserves the right to approve or deny the leave request based on business needs.`;
 
     const formData = new URLSearchParams();
     formData.append("employee", employeeCode);
@@ -53,9 +56,12 @@ export const createLeaveApplication = async (leaveData) => {
     formData.append("to_date", formatDate(leaveData.to_date));
     formData.append("reason", leaveData.reason || "N/A");
 
-    if (leaveData.leave_type === "Remote" && leaveData.acknowledgement_policy === 1) {
+    if (
+      leaveData.leave_type === "Remote" &&
+      leaveData.acknowledgement_policy === 1
+    ) {
       formData.append("acknowledgement_policy", "1");
-      formData.append("agreement", REMOTE_AGREEMENT_TEXT);
+      formData.append("agreement", remoteAgreementText);
     }
 
     const response = await apiClient.post(url, formData.toString(), {
@@ -67,7 +73,11 @@ export const createLeaveApplication = async (leaveData) => {
 
     return response.data;
   } catch (error) {
-    console.error("Error creating leave application:", error);
+    console.error("❌ Error creating leave application:", error);
     return { error: error.message || "Something went wrong" };
   }
+};
+
+export default {
+  createLeaveApplication,
 };

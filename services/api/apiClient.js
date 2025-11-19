@@ -33,7 +33,7 @@ export const refreshAccessToken = async () => {
 
   await AsyncStorage.multiSet([
     ["access_token", accessToken],
-    ["refresh_token", newRefresh]
+    ["refresh_token", newRefresh],
   ]);
 
   return accessToken;

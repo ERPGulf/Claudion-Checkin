@@ -1,29 +1,52 @@
 // src/services/api/auth.service.js
-import apiClient from "./apiClient";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import apiClient from "./apiClient";
 import { cleanBaseUrl } from "./utils";
 
 export const generateToken = async ({ api_key, app_key, api_secret }) => {
-  const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
-  const baseUrl = cleanBaseUrl(rawBaseUrl);
+  try {
+    let baseUrl = await AsyncStorage.getItem("baseUrl");
+    if (!baseUrl)
+      throw new Error("Base URL not found. Please scan QR code first.");
 
-  const url = `${baseUrl}/api/method/employee_app.gauth.generate_token_secure`;
+    baseUrl = cleanBaseUrl(baseUrl);
 
-  const body = new URLSearchParams();
-  body.append("api_key", api_key);
-  body.append("app_key", app_key);
-  body.append("api_secret", api_secret);
+    const url = `${baseUrl}/api/method/employee_app.gauth.generate_token_secure`;
 
-  const res = await apiClient.post(url, body.toString(), {
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-  });
+    const body = new URLSearchParams();
+    body.append("api_key", api_key);
+    body.append("app_key", app_key);
+    body.append("api_secret", api_secret);
 
-  const { access_token, refresh_token } = res.data.data;
+    const response = await apiClient.post(url, body.toString(), {
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    });
 
-  await AsyncStorage.multiSet([
-    ["access_token", access_token],
-    ["refresh_token", refresh_token || ""]
-  ]);
+    const tokenData = response?.data?.data;
+    const accessToken = tokenData?.access_token;
+    const refreshToken = tokenData?.refresh_token;
 
-  return { access_token, refresh_token };
+    if (!accessToken) throw new Error("Token not returned from server");
+
+    // Save both tokens
+    await AsyncStorage.multiSet([
+      ["access_token", accessToken],
+      ["refresh_token", refreshToken || ""],
+    ]);
+
+    return {
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    };
+  } catch (error) {
+    console.error(
+      "❌ generateToken error:",
+      error.response?.data || error.message
+    );
+    throw error;
+  }
+};
+
+export default {
+  generateToken,
 };
