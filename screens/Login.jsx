@@ -17,10 +17,11 @@ import { Formik } from "formik";
 import * as Yup from "yup";
 import { useNavigation } from "@react-navigation/native";
 import { setSignIn } from "../redux/Slices/AuthSlice";
-import { generateToken } from "../api/userApi";
+// import { generateToken } from "../api/userApi";
 import { COLORS, SIZES } from "../constants";
 import { WelcomeCard } from "../components/Login";
 import { selectEmployeeCode, selectName } from "../redux/Slices/UserSlice";
+import { generateToken } from "../services/api";
 
 function Login() {
   const navigation = useNavigation();

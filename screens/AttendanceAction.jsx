@@ -19,7 +19,8 @@ import { COLORS, SIZES } from "../constants";
 import { Retry, WelcomeCard } from "../components/AttendanceAction";
 import { updateDateTime } from "../utils/TimeServices";
 import { hapticsMessage } from "../utils/HapticsMessage";
-import { userCheckIn, getOfficeLocation } from "../api/userApi";
+import { getOfficeLocation, userCheckIn } from "../services/api";
+// import { userCheckIn, getOfficeLocation } from "../api/userApi";
 
 function AttendanceAction() {
   const navigation = useNavigation();

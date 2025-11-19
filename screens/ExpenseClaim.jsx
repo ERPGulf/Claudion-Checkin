@@ -16,8 +16,9 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { selectEmployeeCode } from "../redux/Slices/UserSlice";
 import ClaimForm from "../components/ExpenseClaim/ClaimForm";
 import ExpenseCard from "../components/ExpenseClaim/ExpenseCard";
-import { getExpenseClaims } from "../api/userApi";
+// import { getExpenseClaims } from "../api/userApi";
 import { COLORS, SIZES } from "../constants";
+import { getExpenseClaims } from "../services/api";
 
 const PAGE_SIZE = 5;
 
