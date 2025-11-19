@@ -69,10 +69,6 @@ export const getOfficeLocation = async (employeeCode) => {
   return { latitude, longitude, radius };
 };
 
-/**
- * userCheckIn({ employeeCode, type })
- * keeps original behavior and return shape
- */
 export const userCheckIn = async ({ employeeCode, type }) => {
   try {
     if (!employeeCode) throw new Error("Employee ID is required");
@@ -84,62 +80,81 @@ export const userCheckIn = async ({ employeeCode, type }) => {
     const token = await AsyncStorage.getItem("access_token");
     if (!token) throw new Error("Token missing");
 
-    // 1) Get allowed office location
-    const { latitude, longitude, radius } = await getOfficeLocation(employeeCode);
+    // ✅ Use correct key & trim value
+    const restrictLocation = (
+      await AsyncStorage.getItem("restrictLocation")
+    )?.trim();
 
-    if (!latitude || !longitude || !radius) {
-      return {
-        allowed: false,
-        distance: null,
-        radius: radius || 0,
-        message: "Reporting location not configured for this employee",
-      };
+    let distance = null;
+    let radius = null;
+
+    // ----------------------------------------------------------------
+    // 1️⃣ Location restriction enabled → perform GPS + distance check
+    // ----------------------------------------------------------------
+    if (restrictLocation === "1") {
+      const office = await getOfficeLocation(employeeCode);
+      const { latitude, longitude, radius: officeRadius } = office;
+
+      radius = Number(officeRadius); // ✅ FIX
+
+      if (!latitude || !longitude || !radius) {
+        return {
+          allowed: false,
+          distance: null,
+          radius: 0,
+          message: "Reporting location not configured for this employee",
+        };
+      }
+
+      // Permission request
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") {
+        return {
+          allowed: false,
+          distance: null,
+          radius,
+          message: "Location permission denied",
+        };
+      }
+
+      // Get live GPS
+      const userLoc = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Highest,
+      });
+
+      const userLat = userLoc.coords.latitude;
+      const userLng = userLoc.coords.longitude;
+
+      // Compare distance
+      distance = getPreciseDistance(
+        { latitude: userLat, longitude: userLng },
+        { latitude, longitude }
+      );
+
+      console.log("📍 Distance:", distance, "Allowed Radius:", radius);
+
+      if (distance > radius) {
+        return {
+          allowed: false,
+          distance,
+          radius,
+          message: `You must be within ${radius} meters to ${
+            type === "IN" ? "check in" : "check out"
+          }.`,
+        };
+      }
     }
 
-    // 2) Request permission & get device GPS
-    const { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== "granted") {
-      return {
-        allowed: false,
-        distance: null,
-        radius,
-        message: "Location permission denied",
-      };
-    }
+    // ----------------------------------------------------------------
+    // 2️⃣ Perform check-in or check-out API call
+    // ----------------------------------------------------------------
+    const timestamp = format(new Date(), "yyyy-MM-dd HH:mm:ss");
 
-    const userLocation = await Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.Highest,
-    });
-    const userLat = userLocation.coords.latitude;
-    const userLng = userLocation.coords.longitude;
-
-    // 3) Calculate distance (meters)
-    const distance = getPreciseDistance(
-      { latitude: userLat, longitude: userLng },
-      { latitude, longitude }
-    );
-
-    console.log("📍Distance:", distance, "Allowed:", radius);
-
-    // 4) If outside allowed radius -> return allowed:false
-    if (distance > radius) {
-      return {
-        allowed: false,
-        distance,
-        radius,
-        message: `You must be within ${radius} meters to ${
-          type === "IN" ? "check in" : "check out"
-        }.`,
-      };
-    }
-
-    // 5) Inside radius -> call check-in API
-    const formattedTime = format(new Date(), "yyyy-MM-dd HH:mm:ss");
     const payload = {
       device_id: "MobileAPP",
       employee_field_value: employeeCode,
-      log_type: type, // IN or OUT
-      timestamp: formattedTime,
+      log_type: type,
+      timestamp,
     };
 
     const response = await apiClient.post(
@@ -151,19 +166,25 @@ export const userCheckIn = async ({ employeeCode, type }) => {
     );
 
     const checkinId = response.data?.message?.name;
+
     if (!checkinId) {
       return {
         allowed: false,
         distance,
         radius,
-        message: "Failed to register check-in",
+        message: "Failed to register attendance",
       };
     }
 
-    return { allowed: true, name: checkinId, distance, radius };
+    return {
+      allowed: true,
+      name: checkinId,
+      distance,
+      radius,
+    };
   } catch (error) {
     console.error("❌ Check-in failed:", error);
-    // Return structured message instead of throwing so UI can react
+
     return {
       allowed: false,
       distance: null,
