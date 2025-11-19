@@ -41,9 +41,7 @@ export async function clearTokens() {
 const apiClient = axios.create({ timeout: 30000 });
 const plainAxios = axios.create({ timeout: 30000 });
 
-// ----------------------
-// REFRESH TOKEN QUEUE LOGIC
-// ----------------------
+
 let isRefreshing = false;
 let refreshPromise = null;
 let failedQueue = [];
@@ -116,7 +114,6 @@ apiClient.interceptors.response.use(
   async (error) => {
     const original = error.config;
 
-    // If request already retried once, reject it
     if (original._retry) {
       return Promise.reject(error);
     }
@@ -135,9 +132,7 @@ apiClient.interceptors.response.use(
     if (isAuthError) {
       original._retry = true;
 
-      // -------------------
-      // If refresh already happening → push request into queue
-      // -------------------
+
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           failedQueue.push({
@@ -153,9 +148,7 @@ apiClient.interceptors.response.use(
         });
       }
 
-      // -------------------
-      // Start refresh
-      // -------------------
+
       isRefreshing = true;
 
       refreshPromise = new Promise(async (resolve, reject) => {
