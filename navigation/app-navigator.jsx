@@ -5,8 +5,8 @@ import {
   AttendanceHistory,
   Notifications,
   SelectQuickAccess,
-  // TripDetails,
-  ExpenseClaim
+  LeaveRequest,
+  ExpenseClaim,
 } from "../screens";
 import HomeTabGroup from "./home.tabbar";
 import ComingSoon from "../screens/ComingSoon";
@@ -21,11 +21,11 @@ function AppNavigator() {
     >
       <Stack.Screen name="homeTab" component={HomeTabGroup} />
       <Stack.Screen name="Attendance action" component={AttendanceAction} />
+      <Stack.Screen name="Attendance camera" component={AttendanceCamera} />
       <Stack.Screen name="Attendance history" component={AttendanceHistory} />
       <Stack.Screen name="Quick access" component={SelectQuickAccess} />
-      {/* <Stack.Screen name="Trip details" component={TripDetails} /> */}
+      <Stack.Screen name="Leave request" component={LeaveRequest} />
       <Stack.Screen name="Expense claim" component={ExpenseClaim} />
-      <Stack.Screen name="Attendance camera" component={AttendanceCamera} />
       <Stack.Screen name="Notifications" component={Notifications} />
       <Stack.Screen name="comingsoon" component={ComingSoon} />
     </Stack.Navigator>
