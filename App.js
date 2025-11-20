@@ -13,7 +13,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SIZES } from "./constants";
 import { toastConfig } from "./Toast/Config";
 import Navigator from "./navigation/navigator";
-import ResetTokenButton from "./components/common/ResetTokenButton";
 
 function cacheFonts(fonts) {
   return fonts.map((font) => Font.loadAsync(font));
@@ -46,9 +45,6 @@ export default function App() {
       <PersistGate persistor={persistor} loading={null}>
         <QueryClientProvider client={queryClient}>
           <Navigator />
-          {/* Global Floating Button */}
-          <ResetTokenButton />
-
           <StatusBar style="auto" />
           <Toast
             topOffset={
