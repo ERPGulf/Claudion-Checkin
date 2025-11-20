@@ -19,7 +19,10 @@ export const generateToken = async ({ api_key, app_key, api_secret }) => {
     body.append("api_secret", api_secret);
 
     const response = await apiClient.post(url, body.toString(), {
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "x-skip-auth": "true",
+      },
     });
     console.log(response.data);
     const tokenData = response?.data?.data;
