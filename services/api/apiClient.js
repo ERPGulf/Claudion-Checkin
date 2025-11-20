@@ -2,6 +2,9 @@
 import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { cleanBaseUrl, setCommonHeaders } from "./utils";
+import { store } from "../../redux/Store";
+import { revertAll } from "../../redux/CommonActions";
+import { setSignOut } from "../../redux/Slices/AuthSlice";
 
 // ----------------------
 // MEMORY TOKEN CACHE
@@ -28,7 +31,10 @@ export async function saveTokens(access, refresh) {
     ["refresh_token", refresh],
   ]);
 }
-
+export function clearStore() {
+  store.dispatch(setSignOut());
+  store.dispatch(revertAll());
+}
 export async function clearTokens() {
   memoryAccessToken = null;
   memoryRefreshToken = null;
@@ -41,9 +47,15 @@ export async function clearTokens() {
 const apiClient = axios.create({ timeout: 30000 });
 const plainAxios = axios.create({ timeout: 30000 });
 
+// ----------------------
+// REFRESH CONTROL
+// ----------------------
 let isRefreshing = false;
 let refreshPromise = null;
 let failedQueue = [];
+
+let refreshFailCount = 0;
+const MAX_REFRESH_RETRIES = 3;
 
 const processQueue = (error, token = null) => {
   failedQueue.forEach((req) => {
@@ -80,9 +92,25 @@ export const refreshAccessToken = async () => {
     if (!newAccess) throw new Error("Refresh returned empty token");
 
     await saveTokens(newAccess, newRefresh);
+
+    // 🔥 FIX: update stale axios cache
+    apiClient.defaults.headers.common["Authorization"] = `Bearer ${newAccess}`;
+
+    refreshFailCount = 0;
+
     return newAccess;
   } catch (err) {
     console.log("❌ Refresh token failed:", err?.response?.data || err);
+
+    refreshFailCount += 1;
+
+    if (refreshFailCount >= MAX_REFRESH_RETRIES) {
+      await clearTokens();
+      clearStore();
+      refreshFailCount = 0;
+      throw new Error("Too many failed refresh attempts. Logging out.");
+    }
+
     throw err;
   }
 };
@@ -92,14 +120,18 @@ export const refreshAccessToken = async () => {
 // ----------------------
 apiClient.interceptors.request.use(async (config) => {
   const baseUrl = await AsyncStorage.getItem("baseUrl");
+
+  // skip auth header logic (generateToken)
+  if (config.headers?.["x-skip-auth"] === "true") {
+    return config;
+  }
+
   const { access } = await loadTokens();
 
   if (baseUrl && !config.url.startsWith("http")) {
     config.baseURL = `${cleanBaseUrl(baseUrl)}/api`;
   }
-  if (config.headers?.["x-skip-auth"] === "true") {
-    return config;
-  }
+
   if (access) {
     config.headers.Authorization = `Bearer ${access}`;
   }
@@ -115,6 +147,7 @@ apiClient.interceptors.response.use(
   async (error) => {
     const original = error.config;
 
+    // Skip refresh logic for generateToken()
     if (original.headers?.["x-skip-auth"] === "true") {
       return Promise.reject(error);
     }
@@ -124,11 +157,10 @@ apiClient.interceptors.response.use(
     }
 
     const status = error?.response?.status;
-
     const isAuthError = status === 401 || status === 403;
-
-    // Detect refresh token failure so we don't loop forever
     const isRefreshCall = original.url?.includes("create_refresh_token");
+
+    // If refresh API itself failed → logout
     if (isAuthError && isRefreshCall) {
       await clearTokens();
       return Promise.reject("Session expired. Please login again.");
@@ -170,7 +202,6 @@ apiClient.interceptors.response.use(
 
       const newToken = await refreshPromise;
 
-      // Retry original request with new token
       original.headers = {
         ...original.headers,
         Authorization: `Bearer ${newToken}`,
