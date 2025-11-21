@@ -14,11 +14,17 @@ import Toast from "react-native-toast-message";
 import { useNavigation } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getPreciseDistance } from "geolib";
-import { setOnlyCheckIn } from "../redux/Slices/AttendanceSlice";
+
+import { setCheckin, setCheckout } from "../redux/Slices/AttendanceSlice";
 import { COLORS } from "../constants";
-import { WelcomeCard } from "../components/AttendanceAction";
+import WelcomeCard from "../components/AttendanceAction/WelcomeCard";
 import { updateDateTime } from "../utils/TimeServices";
-import { getOfficeLocation, userCheckIn } from "../services/api";
+import {
+  getOfficeLocation,
+  userCheckIn,
+  getDailyWorkedHours,
+  getMonthlyWorkedHours,
+} from "../services/api/attendance.service";
 
 function AttendanceAction() {
   const navigation = useNavigation();
@@ -27,7 +33,6 @@ function AttendanceAction() {
   const userDetails = useSelector((state) => state.user.userDetails);
   const employeeCode = userDetails?.employeeCode;
 
-  // --------------------- STATES (ALL HOOKS MUST BE HERE) ---------------------
   const [refresh, setRefresh] = useState(false);
   const [dateTime, setDateTime] = useState(null);
 
@@ -36,23 +41,20 @@ function AttendanceAction() {
   const [distanceInfo, setDistanceInfo] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
 
-  const [restrictLocation, setRestrictLocation] = useState(null);
+  const [restrictLocation, setRestrictLocation] = useState("0");
   const [restrictionLoaded, setRestrictionLoaded] = useState(false);
-  // --------------------------------------------------------------------------
 
-  // Load restrict_location from AsyncStorage (NO CONDITIONAL HOOKS!)
+  // Load location restriction
   useEffect(() => {
     const loadRestriction = async () => {
       const r = await AsyncStorage.getItem("restrict_location");
-
-     setRestrictLocation(r === "1" ? "1" : "0");
-
+      setRestrictLocation(r === "1" ? "1" : "0");
       setRestrictionLoaded(true);
     };
     loadRestriction();
   }, []);
 
-  // Fetch office location + GPS only when required
+  // Fetch office location and live GPS
   const fetchStatusAndLocation = async () => {
     try {
       setReady(false);
@@ -70,58 +72,84 @@ function AttendanceAction() {
       }
 
       const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") {
-        throw new Error("Location permission denied");
-      }
+      if (status !== "granted") throw new Error("Location permission denied");
 
       const liveLoc = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.Highest,
       });
 
       const distance = getPreciseDistance(
-        { latitude: liveLoc.coords.latitude, longitude: liveLoc.coords.longitude },
+        {
+          latitude: liveLoc.coords.latitude,
+          longitude: liveLoc.coords.longitude,
+        },
         { latitude: office.latitude, longitude: office.longitude }
       );
 
-      const inside = distance <= office.radius;
-
-      setInTarget(inside);
+      setInTarget(distance <= office.radius);
       setDistanceInfo({ distance, radius: office.radius });
       setReady(true);
     } catch (error) {
       console.log("❌ Location error:", error);
-
       Toast.show({
         type: "error",
         text1: "⚠️ Location error",
         text2: error.message,
       });
-
-      setReady(true);
       setInTarget(false);
-      setDistanceInfo(null);
+      setReady(true);
     }
   };
 
-  // Load GPS status
+  // Fetch GPS on mount
   useEffect(() => {
-    if (employeeCode) fetchStatusAndLocation();
-  }, [employeeCode, restrictLocation]);
+    if (restrictionLoaded && employeeCode) fetchStatusAndLocation();
+  }, [restrictionLoaded, employeeCode]);
 
-  // Time updater
+  // Update date & time every 9 seconds
   useEffect(() => {
     const update = () => setDateTime(updateDateTime());
     update();
     const intervalId = setInterval(update, 9000);
     return () => clearInterval(intervalId);
   }, []);
+  useEffect(() => {
+    const unsubscribe = navigation.addListener("focus", async () => {
+      // refresh worked hours when user returns from camera screen
+      if (employeeCode) {
+        const today = new Date();
+        const todayFormatted = today
+          .toLocaleDateString("en-GB")
+          .replace(/\//g, "-");
+        const month = today.getMonth() + 1;
+        const year = today.getFullYear();
 
-  // Handle check-in or check-out
+        const [todayWorked, monthlyWorked] = await Promise.all([
+          getDailyWorkedHours(employeeCode, todayFormatted),
+          getMonthlyWorkedHours(employeeCode, month, year),
+        ]);
+
+        dispatch({
+          type: "attendance/setTodayHours",
+          payload: todayWorked ?? "00:00",
+        });
+        dispatch({
+          type: "attendance/setMonthlyHours",
+          payload: monthlyWorked ?? "00:00",
+        });
+      }
+    });
+
+    return unsubscribe;
+  }, [navigation, employeeCode]);
+
+  // Check-in / Check-out handler
   const handleDirectCheckInOut = async (type) => {
     try {
       setActionLoading(true);
 
       const response = await userCheckIn({ employeeCode, type });
+
       if (!response.allowed) {
         Toast.show({
           type: "error",
@@ -131,24 +159,40 @@ function AttendanceAction() {
         return;
       }
 
-      dispatch(setOnlyCheckIn(type === "IN"));
+      if (type === "IN") {
+        dispatch(setCheckin({ checkinTime: Date.now(), location: "Office" }));
+      } else {
+        dispatch(setCheckout({ checkoutTime: Date.now() }));
+      }
+
+      // Refresh totals
+      const today = new Date();
+      const todayFormatted = today
+        .toLocaleDateString("en-GB")
+        .replace(/\//g, "-");
+      const month = today.getMonth() + 1;
+      const year = today.getFullYear();
+
+      const [todayWorked, monthlyWorked] = await Promise.all([
+        getDailyWorkedHours(employeeCode, todayFormatted),
+        getMonthlyWorkedHours(employeeCode, month, year),
+      ]);
+
+      dispatch({ type: "attendance/setTodayHours", payload: todayWorked });
+      dispatch({ type: "attendance/setMonthlyHours", payload: monthlyWorked });
 
       Toast.show({
         type: "success",
         text1: type === "IN" ? "Checked in!" : "Checked out!",
       });
     } catch (error) {
-      Toast.show({
-        type: "error",
-        text1: "⚠️ Failed",
-        text2: error.message,
-      });
+      Toast.show({ type: "error", text1: "⚠️ Failed", text2: error.message });
     } finally {
       setActionLoading(false);
     }
   };
 
-  // ---------------- SAFE CONDITIONAL RETURN (AFTER HOOKS) ----------------
+  // Temporary loading screen
   if (!restrictionLoaded) {
     return (
       <View className="flex-1 items-center justify-center bg-white">
@@ -157,7 +201,6 @@ function AttendanceAction() {
       </View>
     );
   }
-  // ------------------------------------------------------------------------
 
   return (
     <>
@@ -195,7 +238,6 @@ function AttendanceAction() {
               <Text className="text-base text-gray-500 font-semibold">
                 DATE AND TIME *
               </Text>
-
               <View className="flex-row items-end border-b border-gray-400 pb-2 mb-6 justify-between">
                 <Text className="text-sm font-medium text-gray-500">
                   {dateTime}
@@ -211,18 +253,16 @@ function AttendanceAction() {
               <Text className="text-base text-gray-500 font-semibold">
                 LOCATION *
               </Text>
-
               <View className="flex-row items-end border-b border-gray-400 pb-2 mb-4 justify-between">
                 <Text className="text-sm font-medium text-gray-500">
                   {restrictLocation === "0"
                     ? "Not Required"
                     : !ready
-                    ? "Getting Location..."
-                    : inTarget
-                    ? "In bound"
-                    : "Out of bound"}
+                      ? "Getting Location..."
+                      : inTarget
+                        ? "In bound"
+                        : "Out of bound"}
                 </Text>
-
                 <MaterialCommunityIcons
                   name="map-marker-radius-outline"
                   size={28}
@@ -239,10 +279,9 @@ function AttendanceAction() {
                 </View>
               )}
 
+              {/* BUTTON */}
               <TouchableOpacity
-                className={`justify-center items-center h-16 mt-4 rounded-2xl ${
-                  checkin ? "bg-red-600" : "bg-green-600"
-                } ${restrictLocation === "1" && !inTarget ? "opacity-50" : ""}`}
+                className={`justify-center items-center h-16 mt-4 rounded-2xl ${checkin ? "bg-red-600" : "bg-green-600"} ${restrictLocation === "1" && !inTarget ? "opacity-50" : ""}`}
                 disabled={
                   actionLoading || (restrictLocation === "1" && !inTarget)
                 }

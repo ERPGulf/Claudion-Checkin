@@ -68,7 +68,7 @@ export const getOfficeLocation = async (employeeCode) => {
   console.log("✅ Parsed coordinates:", { latitude, longitude, radius });
   return { latitude, longitude, radius };
 };
-
+//check in function
 export const userCheckIn = async ({ employeeCode, type }) => {
   try {
     if (!employeeCode) throw new Error("Employee ID is required");
@@ -82,7 +82,7 @@ export const userCheckIn = async ({ employeeCode, type }) => {
 
     // ✅ Use correct key & trim value
     const restrictLocation = (
-      await AsyncStorage.getItem("restrictLocation")
+      await AsyncStorage.getItem("restrict_location")
     )?.trim();
 
     let distance = null;
@@ -274,10 +274,59 @@ export const getAttendanceStatus = async () => {
     return { custom_in: 0 };
   }
 };
+// Get daily worked hours
+export const getDailyWorkedHours = async (employeeCode, date) => {
+  const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
+  const baseUrl = cleanBaseUrl(rawBaseUrl);
+  const token = await AsyncStorage.getItem("access_token");
+
+  try {
+    const response = await apiClient.get(
+      `${baseUrl}/api/method/employee_app.attendance_api.get_total_hours`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+        params: { employee: employeeCode, date },
+      }
+    );
+
+    const hours = response.data?.message?.trim();
+
+    // If API returns something valid, show it. If it's empty/null → show "00:00"
+    return hours ? hours : "00:00";
+  } catch (err) {
+    console.error("Daily hours fetch error:", err);
+    return "00:00";
+  }
+};
+// Get monthly worked hours
+export const getMonthlyWorkedHours = async (employeeCode, month, year) => {
+  const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
+  const baseUrl = cleanBaseUrl(rawBaseUrl);
+  const token = await AsyncStorage.getItem("access_token");
+
+  try {
+    const response = await apiClient.get(
+      `${baseUrl}/api/method/employee_app.attendance_api.get_monthly_hours`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+        params: { employee: employeeCode, month, year },
+      }
+    );
+
+    const hours = response.data?.message?.trim();
+
+    return hours ? hours : "00:00";
+  } catch (err) {
+    console.error("Monthly hours fetch error:", err);
+    return "00:00";
+  }
+};
 
 export default {
   getOfficeLocation,
   userCheckIn,
   getUserAttendance,
   getAttendanceStatus,
+  getDailyWorkedHours,
+  getMonthlyWorkedHours,
 };
