@@ -1,5 +1,4 @@
 // NOSONAR
-
 import { View, Text, TouchableOpacity, ActivityIndicator } from "react-native";
 import { useEffect, useLayoutEffect, useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -15,20 +14,17 @@ import {
   setBaseUrl,
   setUsername,
   setFullname,
+  setEmployeeCode,
 } from "../redux/Slices/UserSlice";
 import { COLORS, SIZES } from "../constants";
-import { setEmployeeCode } from "../redux/Slices/UserSlice";
-
 function QrScan() {
   const navigation = useNavigation();
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
   const dispatch = useDispatch();
-
   useEffect(() => {
     if (!permission?.granted) requestPermission();
   }, [permission]);
-
   useLayoutEffect(() => {
     navigation.setOptions({
       headerShadowVisible: false,
@@ -46,7 +42,6 @@ function QrScan() {
       ),
     });
   }, []);
-
   const handleQRCodeData = async (data) => {
     try {
       const KEYS = [
@@ -54,48 +49,41 @@ function QrScan() {
         "Employee_Code",
         "Full_Name",
         "Photo",
+        "Restrict Location",   // :point_left: NEW FIELD
         "User_id",
         "API",
         "App_key",
       ];
-
-      // 1️⃣ Decode base64
+      // :one: Decode Base64
       let value = utf8.decode(base64.decode(data));
-      console.log("📥 Raw Decoded QR:", value);
-
-      // 2️⃣ Clean unwanted control characters or delimiters
-
+      console.log(":inbox_tray: Raw Decoded QR:", value);
+      // :two: Clean up weird characters
       value = value
         .replace(/[\u0000-\u001F\u00A0]+/g, " ")
         .replace(
-          /[%#;]+(?:\s+)?(Company|Employee_Code|Full_Name|Photo|User_id|API|App_key)(?:\s*[:=])/g,
+          /[%#;]+(?:\s+)?(Company|Employee_Code|Full_Name|Photo|Restrict Location|User_id|API|App_key)(?:\s*[:=])/g,
           (_, key) => `${key}:`
         )
         .replace(/[^\S\r\n]+/g, " ")
         .trim();
-
-      // 3️⃣ Extract key/value pairs dynamically
+      // :three: Dynamic extraction
       const qrData = {};
       const keyAlt = KEYS.join("|");
-
       const pairRE = new RegExp(
         `\\b(${keyAlt})\\s*[:=]\\s*([\\s\\S]*?)(?=\\s*(?:${keyAlt})\\s*[:=]|$)`,
         "gi"
       );
-
       let m;
       while ((m = pairRE.exec(value))) {
         const k = m[1].trim();
         const v = m[2].trim();
         qrData[k] = v;
       }
-
-      // 4️⃣ Clean trailing symbols in values
+      // :four: Trailing cleanup
       Object.keys(qrData).forEach((k) => {
         qrData[k] = qrData[k].replace(/[%#;]+$/, "").trim();
       });
-
-      // 5️⃣ Handle App_key carefully
+      // :five: App_key fix
       let appKey = qrData["App_key"]?.trim() || "";
       const missingPadding = appKey.length % 4;
       if (missingPadding) {
@@ -105,13 +93,11 @@ function QrScan() {
         if (appKey.endsWith("=")) appKey = appKey.slice(0, -1) + "==";
         else appKey += "==";
       }
-
-      // 6️⃣ Parse photo flag (default = 1)
+      // :six: Photo default=1
       const photoFlag = qrData["Photo"]
         ? Number.parseInt(qrData["Photo"], 10)
         : 1;
-
-      // 7️⃣ Build final cleaned data
+      // :seven: Build final object
       const cleanedData = {
         company: qrData["Company"],
         employee_code: qrData["Employee_Code"],
@@ -120,11 +106,10 @@ function QrScan() {
         baseUrl: qrData["API"]?.trim(),
         app_key: appKey,
         photo: photoFlag,
+        restrict_location: qrData["Restrict Location"]?.trim() ?? "0", // :point_left: NEW
       };
-
-      console.log("✅ Cleaned QR Data:", cleanedData);
-
-      // 8️⃣ Validate and store
+      console.log(":white_check_mark: Cleaned QR:", cleanedData);
+      // :eight: Validate required fields
       if (
         cleanedData.company &&
         cleanedData.employee_code &&
@@ -137,30 +122,27 @@ function QrScan() {
           ["api_key", cleanedData.api_key],
           ["app_key", cleanedData.app_key],
           ["baseUrl", cleanedData.baseUrl],
-          ["photo", String(cleanedData.photo)], // ✅ store photo flag
+          ["photo", String(cleanedData.photo)],
+          ["restrict_location", cleanedData.restrict_location], // :point_left: NEW
         ]);
-
+        // Redux dispatch (NO restrict_location)
         dispatch(setUsername(cleanedData.api_key));
         dispatch(setFullname(cleanedData.full_name));
         dispatch(setBaseUrl(cleanedData.baseUrl));
         dispatch(setEmployeeCode(cleanedData.employee_code));
-
         navigation.navigate("login");
       } else {
-        console.log("❌ Parsing failed:", value);
         alert("Invalid QR code. Please try again.");
       }
     } catch (err) {
-      console.log("❌ QR parse error:", err);
+      console.log(":x: QR parse error:", err);
       alert("Invalid QR code");
     }
   };
-
   const handleBarCodeScanned = async ({ type, data }) => {
     setScanned(true);
     await handleQRCodeData(data);
   };
-
   const pickImage = async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -170,41 +152,38 @@ function QrScan() {
         quality: 1,
       });
       if (result?.canceled) return;
-      if (result?.assets[0]?.uri) {
+      if (result.assets[0]?.uri) {
         const scannedResults = await Camera.scanFromURLAsync(
           result.assets[0].uri
         );
         const { data } = scannedResults[0];
         await handleQRCodeData(data);
       }
-    } catch (error) {
+    } catch {
       alert("No QR-CODE Found");
     }
   };
-
   if (!permission || permission.status === "undetermined") {
     return (
-      <SafeAreaView className="flex-1 items-center justify-center px-3 bg-white relative">
+      <SafeAreaView className="flex-1 items-center justify-center px-3 bg-white">
         <ActivityIndicator size="large" />
       </SafeAreaView>
     );
   }
-
   if (!permission.granted) {
     return (
-      <SafeAreaView className="flex-1 items-center justify-center px-3 bg-white relative">
+      <SafeAreaView className="flex-1 items-center justify-center px-3 bg-white">
         <Text>No access to camera</Text>
       </SafeAreaView>
     );
   }
-
   return (
     <CameraView
       barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
       onBarcodeScanned={handleBarCodeScanned}
       style={{ flex: 1, width: "100%", height: "100%" }}
       type="back"
-      className="flex-1 items-center px-3 py-1 bg-white justify-end relative"
+      className="flex-1 items-center px-3 py-1 bg-white justify-end"
     >
       <View
         style={{ position: "absolute", top: 100, height: SIZES.width * 0.9 }}
@@ -216,7 +195,6 @@ function QrScan() {
           color="rgba(255,255,255,0.1)"
         />
       </View>
-
       <View
         style={{
           width: "100%",
@@ -227,20 +205,17 @@ function QrScan() {
       >
         {scanned ? (
           <TouchableOpacity
-            style={{ backgroundColor: COLORS.primary, width: "100%" }}
-            className="mt-2 h-16 justify-center rounded-xl items-center flex-row space-x-2"
+            style={{ backgroundColor: COLORS.primary }}
+            className="mt-2 h-16 justify-center rounded-xl items-center flex-row"
             onPress={() => setScanned(false)}
           >
             <Ionicons name="scan-outline" size={SIZES.xxxLarge} color="white" />
-            <Text className="text-base text-center font-semibold text-white">
+            <Text className="text-base font-semibold text-white ml-2">
               TAP TO SCAN AGAIN
             </Text>
           </TouchableOpacity>
         ) : (
-          <View
-            className="h-16 justify-center rounded-xl bg-white border-2 items-center mt-4 flex-row"
-            style={{ width: "100%" }}
-          >
+          <View className="h-16 justify-center rounded-xl bg-white border-2 items-center mt-4">
             <Ionicons
               name="qr-code-outline"
               size={SIZES.xxxLarge}
@@ -248,19 +223,13 @@ function QrScan() {
             />
           </View>
         )}
-
         <TouchableOpacity
-          style={{ backgroundColor: COLORS.primary, width: "100%" }}
-          className=" mt-2 h-16 justify-center flex-row items-center rounded-xl relative"
+          style={{ backgroundColor: COLORS.primary }}
+          className="mt-2 h-16 justify-center flex-row items-center rounded-xl"
           onPress={pickImage}
         >
-          <Ionicons
-            name="image"
-            size={SIZES.xxxLarge}
-            color="white"
-            className="mr-2"
-          />
-          <Text className="text-base text-center font-semibold text-white">
+          <Ionicons name="image" size={SIZES.xxxLarge} color="white" />
+          <Text className="text-base font-semibold text-white ml-2">
             SELECT FROM PHOTOS
           </Text>
         </TouchableOpacity>
@@ -268,5 +237,4 @@ function QrScan() {
     </CameraView>
   );
 }
-
 export default QrScan;

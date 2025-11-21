@@ -1,16 +1,16 @@
-const { createSlice } = require('@reduxjs/toolkit');
-
+const { createSlice } = require("@reduxjs/toolkit");
 const initialState = {
   checkin: false,
   checkinTime: null,
   checkoutTime: null,
   location: null,
+  todayHours: 0,
+  monthlyHours: 0,
 };
-
 export const AttendanceSlice = createSlice({
-  name: 'attendance',
+  name: "attendance",
   initialState,
-  extraReducers: builder => builder.addCase('REVERT_ALL', () => initialState),
+  extraReducers: (builder) => builder.addCase("REVERT_ALL", () => initialState),
   reducers: {
     setCheckin: (state, action) => {
       state.checkin = true;
@@ -24,16 +24,26 @@ export const AttendanceSlice = createSlice({
     setOnlyCheckIn: (state, action) => {
       state.checkin = action.payload;
     },
+    setTodayHours: (state, action) => {
+      state.todayHours = action.payload;
+    },
+    setMonthlyHours: (state, action) => {
+      state.monthlyHours = action.payload;
+    },
   },
 });
-
-export const { setCheckin, setCheckout, setOnlyCheckIn } =
-  AttendanceSlice.actions;
-
-// selector
-export const selectCheckin = state => state.attendance.checkin;
-export const selectCheckinTime = state => state.attendance.checkinTime;
-export const selectCheckoutTime = state => state.attendance.checkoutTime;
-export const selectLocation = state => state.attendance.location;
-
+export const {
+  setCheckin,
+  setCheckout,
+  setOnlyCheckIn,
+  setTodayHours,
+  setMonthlyHours,
+} = AttendanceSlice.actions;
+// selectors
+export const selectCheckin = (state) => state.attendance.checkin;
+export const selectCheckinTime = (state) => state.attendance.checkinTime;
+export const selectCheckoutTime = (state) => state.attendance.checkoutTime;
+export const selectLocation = (state) => state.attendance.location;
+export const selectTodayHours = (state) => state.attendance.todayHours;
+export const selectMonthlyHours = (state) => state.attendance.monthlyHours;
 export default AttendanceSlice.reducer;
