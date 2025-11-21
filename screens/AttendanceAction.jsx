@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -8,173 +8,184 @@ import {
   RefreshControl,
 } from "react-native";
 import * as Location from "expo-location";
-import { MaterialCommunityIcons, Entypo } from "@expo/vector-icons";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useDispatch, useSelector } from "react-redux";
 import Toast from "react-native-toast-message";
 import { useNavigation } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getPreciseDistance } from "geolib";
-import { setOnlyCheckIn } from "../redux/Slices/AttendanceSlice";
-import { COLORS, SIZES } from "../constants";
-import { Retry, WelcomeCard } from "../components/AttendanceAction";
+import { setCheckin, setCheckout } from "../redux/Slices/AttendanceSlice";
+import { COLORS } from "../constants";
+import WelcomeCard from "../components/AttendanceAction/WelcomeCard";
 import { updateDateTime } from "../utils/TimeServices";
-import { hapticsMessage } from "../utils/HapticsMessage";
-import { getOfficeLocation, userCheckIn } from "../services/api";
-// import { userCheckIn, getOfficeLocation } from "../api/userApi";
-
+import {
+  getOfficeLocation,
+  userCheckIn,
+  getDailyWorkedHours,
+  getMonthlyWorkedHours,
+} from "../services/api/attendance.service";
 function AttendanceAction() {
   const navigation = useNavigation();
   const dispatch = useDispatch();
   const checkin = useSelector((state) => state.attendance.checkin);
   const userDetails = useSelector((state) => state.user.userDetails);
   const employeeCode = userDetails?.employeeCode;
-
   const [refresh, setRefresh] = useState(false);
   const [dateTime, setDateTime] = useState(null);
-  const [inTarget, setInTarget] = useState(false);
+  const [inTarget, setInTarget] = useState(true);
   const [ready, setReady] = useState(false);
   const [distanceInfo, setDistanceInfo] = useState(null);
-  const [actionLoading, setActionLoading] = useState(false); // NEW
-
-  // HANDLE CHECK-IN / OUT
-  const handleDirectCheckInOut = async (type) => {
-    try {
-      setActionLoading(true);
-
-      const response = await userCheckIn({ employeeCode, type });
-
-      if (!response) {
-        throw new Error("No response from check-in function");
-      }
-
-      if (!response.allowed) {
-        Toast.show({
-          type: "error",
-          text1: "⚠️ Check-in blocked",
-          text2: response.message || "You are outside the allowed area",
-        });
-
-        setInTarget(false);
-        setDistanceInfo({
-          distance: response.distance,
-          radius: response.radius,
-        });
-
-        return;
-      }
-
-      dispatch(setOnlyCheckIn(type === "IN"));
-
-      Toast.show({
-        type: "success",
-        text1: type === "IN" ? "Checked in!" : "Checked out!",
-      });
-
-      setInTarget(true);
-      setDistanceInfo({ distance: response.distance, radius: response.radius });
-    } catch (error) {
-      Toast.show({
-        type: "error",
-        text1: `⚠️ ${type} failed`,
-        text2: error.message || "Please try again",
-      });
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  // HEADER CONFIG
-  useLayoutEffect(() => {
-    navigation.setOptions({
-      headerShadowVisible: false,
-      headerShown: true,
-      headerTitle: "Attendance action",
-      headerTitleAlign: "center",
-      headerLeft: () => (
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Entypo
-            name="chevron-left"
-            size={SIZES.xxxLarge - 5}
-            color={COLORS.primary}
-          />
-        </TouchableOpacity>
-      ),
-    });
+  const [actionLoading, setActionLoading] = useState(false);
+  const [restrictLocation, setRestrictLocation] = useState("0");
+  const [restrictionLoaded, setRestrictionLoaded] = useState(false);
+  // Load location restriction
+  useEffect(() => {
+    const loadRestriction = async () => {
+      const r = await AsyncStorage.getItem("restrict_location");
+      setRestrictLocation(r === "1" ? "1" : "0");
+      setRestrictionLoaded(true);
+    };
+    loadRestriction();
   }, []);
-
-  // FETCH LOCATION + STATUS
+  // Fetch office location and live GPS
   const fetchStatusAndLocation = async () => {
     try {
       setReady(false);
-
+      if (restrictLocation === "0") {
+        setInTarget(true);
+        setDistanceInfo(null);
+        setReady(true);
+        return;
+      }
       const office = await getOfficeLocation(employeeCode);
-
-      if (!office || !office.latitude || !office.longitude || !office.radius) {
+      if (!office?.latitude || !office?.longitude || !office?.radius) {
         throw new Error("Reporting location not configured");
       }
-
       const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") {
-        throw new Error("Location permission denied");
-      }
-
+      if (status !== "granted") throw new Error("Location permission denied");
       const liveLoc = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.Highest,
       });
-
-      const userCords = {
-        latitude: liveLoc.coords.latitude,
-        longitude: liveLoc.coords.longitude,
-      };
-
-      const targetLocation = {
-        latitude: office.latitude,
-        longitude: office.longitude,
-      };
-
-      const distance = getPreciseDistance(userCords, targetLocation);
-      const inside = distance <= office.radius;
-
-      setInTarget(inside);
+      const distance = getPreciseDistance(
+        {
+          latitude: liveLoc.coords.latitude,
+          longitude: liveLoc.coords.longitude,
+        },
+        { latitude: office.latitude, longitude: office.longitude }
+      );
+      setInTarget(distance <= office.radius);
       setDistanceInfo({ distance, radius: office.radius });
       setReady(true);
     } catch (error) {
-      console.error("❌ Status/location fetch failed:", error);
-      hapticsMessage("error");
-
+      console.log(":x: Location error:", error);
       Toast.show({
         type: "error",
-        text1: "⚠️ Status fetching failed",
-        text2: error.message || "Please try again",
+        text1: ":warning: Location error",
+        text2: error.message,
       });
-
-      setReady(false);
       setInTarget(false);
-      setDistanceInfo(null);
+      setReady(true);
     }
   };
-
+  // Fetch GPS on mount
   useEffect(() => {
-    if (employeeCode) fetchStatusAndLocation();
-  }, [employeeCode]);
-
+    if (restrictionLoaded && employeeCode) fetchStatusAndLocation();
+  }, [restrictionLoaded, employeeCode]);
+  // Update date & time every 9 seconds
   useEffect(() => {
     const update = () => setDateTime(updateDateTime());
     update();
     const intervalId = setInterval(update, 9000);
     return () => clearInterval(intervalId);
   }, []);
-
+  useEffect(() => {
+    const unsubscribe = navigation.addListener("focus", async () => {
+      // refresh worked hours when user returns from camera screen
+      if (employeeCode) {
+        const today = new Date();
+        const todayFormatted = today
+          .toLocaleDateString("en-GB")
+          .replace(/\//g, "-");
+        const month = today.getMonth() + 1;
+        const year = today.getFullYear();
+        const [todayWorked, monthlyWorked] = await Promise.all([
+          getDailyWorkedHours(employeeCode, todayFormatted),
+          getMonthlyWorkedHours(employeeCode, month, year),
+        ]);
+        dispatch({
+          type: "attendance/setTodayHours",
+          payload: todayWorked ?? "00:00",
+        });
+        dispatch({
+          type: "attendance/setMonthlyHours",
+          payload: monthlyWorked ?? "00:00",
+        });
+      }
+    });
+    return unsubscribe;
+  }, [navigation, employeeCode]);
+  // Check-in / Check-out handler
+  const handleDirectCheckInOut = async (type) => {
+    try {
+      setActionLoading(true);
+      const response = await userCheckIn({ employeeCode, type });
+      if (!response.allowed) {
+        Toast.show({
+          type: "error",
+          text1: ":warning: Action blocked",
+          text2: response.message,
+        });
+        return;
+      }
+      if (type === "IN") {
+        dispatch(setCheckin({ checkinTime: Date.now(), location: "Office" }));
+      } else {
+        dispatch(setCheckout({ checkoutTime: Date.now() }));
+      }
+      // Refresh totals
+      const today = new Date();
+      const todayFormatted = today
+        .toLocaleDateString("en-GB")
+        .replace(/\//g, "-");
+      const month = today.getMonth() + 1;
+      const year = today.getFullYear();
+      const [todayWorked, monthlyWorked] = await Promise.all([
+        getDailyWorkedHours(employeeCode, todayFormatted),
+        getMonthlyWorkedHours(employeeCode, month, year),
+      ]);
+      dispatch({ type: "attendance/setTodayHours", payload: todayWorked });
+      dispatch({ type: "attendance/setMonthlyHours", payload: monthlyWorked });
+      Toast.show({
+        type: "success",
+        text1: type === "IN" ? "Checked in!" : "Checked out!",
+      });
+    } catch (error) {
+      Toast.show({
+        type: "error",
+        text1: ":warning: Failed",
+        text2: error.message,
+      });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+  // Temporary loading screen
+  if (!restrictionLoaded) {
+    return (
+      <View className="flex-1 items-center justify-center bg-white">
+        <ActivityIndicator size="large" color={COLORS.primary} />
+        <Text className="mt-2 text-gray-600">Loading settings...</Text>
+      </View>
+    );
+  }
   return (
     <>
-      {/* FULL PAGE LOADING WHEN CHECK-IN/OUT */}
       {actionLoading && (
         <View className="absolute top-0 left-0 h-screen w-screen bg-black/50 z-50 items-center justify-center">
           <ActivityIndicator size="large" color="white" />
           <Text className="text-white mt-2 text-base">Processing...</Text>
         </View>
       )}
-
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{
@@ -193,21 +204,14 @@ function AttendanceAction() {
           />
         }
       >
-        {!ready && (
-          <View className="h-screen absolute bottom-0 w-screen items-center bg-black/50 justify-center z-40">
-            <ActivityIndicator size="large" color="white" />
-          </View>
-        )}
-
         <View style={{ width: "100%" }} className="flex-1 px-3">
           <WelcomeCard />
-
           <View className="h-72 mt-4">
             <View className="p-3">
+              {/* DATE & TIME */}
               <Text className="text-base text-gray-500 font-semibold">
                 DATE AND TIME *
               </Text>
-
               <View className="flex-row items-end border-b border-gray-400 pb-2 mb-6 justify-between">
                 <Text className="text-sm font-medium text-gray-500">
                   {dateTime}
@@ -218,20 +222,19 @@ function AttendanceAction() {
                   color={COLORS.gray}
                 />
               </View>
-
+              {/* LOCATION */}
               <Text className="text-base text-gray-500 font-semibold">
                 LOCATION *
               </Text>
-
               <View className="flex-row items-end border-b border-gray-400 pb-2 mb-4 justify-between">
                 <Text className="text-sm font-medium text-gray-500">
-                  {!ready ? (
-                    <ActivityIndicator size="small" />
-                  ) : inTarget ? (
-                    "In bound"
-                  ) : (
-                    "Out of bound"
-                  )}
+                  {restrictLocation === "0"
+                    ? "Not Required"
+                    : !ready
+                      ? "Getting Location..."
+                      : inTarget
+                        ? "In bound"
+                        : "Out of bound"}
                 </Text>
                 <MaterialCommunityIcons
                   name="map-marker-radius-outline"
@@ -239,8 +242,7 @@ function AttendanceAction() {
                   color={COLORS.gray}
                 />
               </View>
-
-              {distanceInfo && (
+              {restrictLocation === "1" && distanceInfo && (
                 <View className="mb-3">
                   <Text className="text-xs text-gray-400">
                     Distance: {distanceInfo.distance} m | Allowed:{" "}
@@ -248,17 +250,16 @@ function AttendanceAction() {
                   </Text>
                 </View>
               )}
-
+              {/* BUTTON */}
               <TouchableOpacity
-                className={`justify-center items-center h-16 mt-4 rounded-2xl ${
-                  checkin ? "bg-red-600" : "bg-green-600"
-                } ${!inTarget || actionLoading ? "opacity-50" : ""}`}
-                disabled={!ready || !inTarget || actionLoading}
+                className={`justify-center items-center h-16 mt-4 rounded-2xl ${checkin ? "bg-red-600" : "bg-green-600"} ${restrictLocation === "1" && !inTarget ? "opacity-50" : ""}`}
+                disabled={
+                  actionLoading || (restrictLocation === "1" && !inTarget)
+                }
                 onPress={async () => {
                   try {
                     const photoValue = await AsyncStorage.getItem("photo");
                     const actionType = checkin ? "OUT" : "IN";
-
                     if (photoValue !== "1") {
                       await handleDirectCheckInOut(actionType);
                     } else {
@@ -269,8 +270,8 @@ function AttendanceAction() {
                   } catch (error) {
                     Toast.show({
                       type: "error",
-                      text1: "⚠️ Action failed",
-                      text2: error.message || "Please try again",
+                      text1: ":warning: Action failed",
+                      text2: error.message,
                     });
                   }
                 }}
@@ -286,17 +287,8 @@ function AttendanceAction() {
             </View>
           </View>
         </View>
-
-        {!inTarget && (
-          <View className="items-center mt-auto mb-4">
-            <Text className="text-xs text-gray-400">
-              Swipe Down to Refresh*
-            </Text>
-          </View>
-        )}
       </ScrollView>
     </>
   );
 }
-
 export default AttendanceAction;
