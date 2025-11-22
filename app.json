@@ -2,7 +2,7 @@
   "expo": {
     "name": "Claudion Checkin",
     "slug": "claudion-checkin",
-    "version": "1.0.7",
+    "version": "1.0.8",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -50,7 +50,7 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.bazim.claudioncheckin",
-      "versionCode": 5,
+      "versionCode": 6,
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.ACCESS_COARSE_LOCATION",
