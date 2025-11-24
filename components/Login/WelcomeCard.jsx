@@ -2,7 +2,7 @@ import { View, Text } from "react-native";
 import React from "react";
 import { useSelector } from "react-redux";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { COLORS } from "../../constants";
+import { COLORS, SIZES } from "../../constants";
 
 function WelcomeCard() {
   const fullname = useSelector((state) => state.user.fullname);
