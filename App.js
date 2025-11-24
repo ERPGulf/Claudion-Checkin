@@ -13,6 +13,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SIZES } from "./constants";
 import { toastConfig } from "./Toast/Config";
 import Navigator from "./navigation/navigator";
+import * as Updates from "expo-updates";   // ✅ OTA import
 
 function cacheFonts(fonts) {
   return fonts.map((font) => Font.loadAsync(font));
@@ -21,12 +22,26 @@ const queryClient = new QueryClient();
 
 export default function App() {
   const [appReady, setAppReady] = useState(false);
+
   useEffect(() => {
     const loadResourcesAndDataAsync = async () => {
       try {
         SplashScreen.preventAutoHideAsync();
+
+        // Load fonts
         const IconAssets = cacheFonts([Ionicons.font]);
         await Promise.all([...IconAssets]);
+
+        // ✅ Check for OTA updates
+        try {
+          const update = await Updates.checkForUpdateAsync();
+          if (update.isAvailable) {
+            await Updates.fetchUpdateAsync();
+            await Updates.reloadAsync();
+          }
+        } catch (err) {
+          console.log("OTA Update Error:", err);
+        }
       } catch (error) {
         console.warn(error);
       } finally {
@@ -34,12 +49,14 @@ export default function App() {
         SplashScreen.hideAsync();
       }
     };
+
     loadResourcesAndDataAsync();
   }, []);
 
   if (!appReady) {
     return null;
   }
+
   return (
     <Provider store={store}>
       <PersistGate persistor={persistor} loading={null}>
