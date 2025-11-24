@@ -43,12 +43,17 @@ function WelcomeCard() {
             minimumFontScale={0.8}
             numberOfLines={2}
             style={{
-              maxWidth: "80%",
-              textAlign: isArabic ? "right" : "left",
-              writingDirection: isArabic ? "rtl" : "ltr",
+              width: "90%",
+              textAlign:
+                fullname && /[\u0600-\u06FF]/.test(fullname) ? "right" : "left",
+              writingDirection: "auto",
               flexShrink: 1,
+              flexWrap: "wrap",
+              fontSize: SIZES.xxLarge,
+              fontWeight: "600",
+              color: COLORS.white,
+              fontFamily: undefined,
             }}
-            className="text-3xl font-semibold text-white"
           >
             {fullname || "username"}
           </Text>
