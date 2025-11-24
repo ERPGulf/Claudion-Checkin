@@ -39,8 +39,11 @@ function WelcomeCard() {
               writingDirection: "auto",
               flexShrink: 1,
               flexWrap: "wrap",
+              fontSize: SIZES.xxLarge,
+              fontWeight: "600",
+              color: COLORS.white,
+              fontFamily: undefined,
             }}
-            className="text-3xl font-semibold text-white"
           >
             {fullname || "username"}
           </Text>
