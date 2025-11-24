@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useLayoutEffect, useState } from "react";
 import {
   View,
   Text,
@@ -8,14 +8,14 @@ import {
   RefreshControl,
 } from "react-native";
 import * as Location from "expo-location";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { Entypo, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useDispatch, useSelector } from "react-redux";
 import Toast from "react-native-toast-message";
 import { useNavigation } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getPreciseDistance } from "geolib";
 import { setCheckin, setCheckout } from "../redux/Slices/AttendanceSlice";
-import { COLORS } from "../constants";
+import { COLORS, SIZES } from "../constants";
 import WelcomeCard from "../components/AttendanceAction/WelcomeCard";
 import { updateDateTime } from "../utils/TimeServices";
 import {
@@ -24,6 +24,7 @@ import {
   getDailyWorkedHours,
   getMonthlyWorkedHours,
 } from "../services/api/attendance.service";
+import { SafeAreaView } from "react-native-safe-area-context";
 function AttendanceAction() {
   const navigation = useNavigation();
   const dispatch = useDispatch();
@@ -38,6 +39,24 @@ function AttendanceAction() {
   const [actionLoading, setActionLoading] = useState(false);
   const [restrictLocation, setRestrictLocation] = useState("0");
   const [restrictionLoaded, setRestrictionLoaded] = useState(false);
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerShadowVisible: false,
+      headerShown: true,
+      headerTitle: "Attendance History",
+      headerTitleAlign: "center",
+      headerLeft: () => (
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <Entypo
+            name="chevron-left"
+            size={SIZES.xxxLarge - 5}
+            color={COLORS.primary}
+          />
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation]);
+
   // Load location restriction
   useEffect(() => {
     const loadRestriction = async () => {
@@ -178,6 +197,7 @@ function AttendanceAction() {
       </View>
     );
   }
+
   return (
     <>
       {actionLoading && (
