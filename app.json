@@ -27,9 +27,7 @@
       "expo-font",
       "expo-asset"
     ],
-    "assetBundlePatterns": [
-      "**/*"
-    ],
+    "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.bazim.claudioncheckin",
@@ -80,7 +78,8 @@
     },
     "updates": {
       "url": "https://u.expo.dev/ee37c3a6-1da3-43ae-ad14-6b34a26c92ac",
-      "enabled": true
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD"
     }
   },
   "build": {
