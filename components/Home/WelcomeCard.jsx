@@ -27,7 +27,7 @@ function WelcomeCard() {
         <Text className="text-xl font-bold text-white">Home</Text>
       </View>
       <View>
-        <Text className="text-base font-medium text-white">Welcome,</Text>
+        <Text className="text-base font-medium text-white">Claudion,</Text>
         <View className="flex-row items-center space-x-2 -mt-1">
           <Text
             adjustsFontSizeToFit
