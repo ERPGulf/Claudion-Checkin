@@ -7,9 +7,7 @@ export const getItem = async (barcode, warehouse) => {
   try {
     const body = new URLSearchParams();
     body.append("barcode", barcode);
-    console.log("barcode", barcode);
     body.append("warehouse", warehouse);
-    console.log("warehouse", warehouse);
 
     const response = await apiClient.post(
       GET_ITEMS_PATH,

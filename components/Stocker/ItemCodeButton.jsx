@@ -1,18 +1,18 @@
+// ItemCodeButton.jsx
 import debounce from "lodash.debounce";
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useRef } from "react";
 import {
-    Button,
-    FlatList,
-    Modal,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-    ActivityIndicator
+  Button,
+  FlatList,
+  Modal,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  ActivityIndicator
 } from "react-native";
 import { searchItems } from "../../services/searchItems";
-import { getItem } from "../../services/getItems";
 import { getItemUom } from "../../services/getItemUom";
 import { useSelector } from "react-redux";
 import { selectedWarehouse } from "../../redux/Slices/Warehouse";
@@ -44,6 +44,10 @@ const ItemCodeButton = ({
   const [currentSearchTerm, setCurrentSearchTerm] = useState('');
   const warehouse = useSelector(selectedWarehouse);
 
+  // We keep a ref counter to guarantee uniqueness in keys when backend gives duplicates.
+  const uniqueCounterRef = useRef(0);
+
+  // debounce fetchItems - stable function reference
   const fetchItems = useCallback(
     debounce(async (text, pageNum = 1) => {
       if (!text) {
@@ -67,13 +71,17 @@ const ItemCodeButton = ({
 
       try {
         const data = await searchItems(text, 3, offset);
-        console.log("data", data);
-        if (data) {
-          setItems(prev =>
-            isNewSearch ? data : [...prev, ...data]
-          );
+        console.log("searchItems -> data:", data);
+
+        if (Array.isArray(data)) {
+          // optionally, you can detect duplicates here and log them:
+          // const seen = new Set();
+          // data.forEach(d => { if (seen.has(d.item_code)) console.warn('dup code', d.item_code); seen.add(d.item_code); });
+
+          setItems(prev => (isNewSearch ? data : [...prev, ...data]));
           setHasMore(data.length === 3);
         } else {
+          // no data returned
           if (isNewSearch) setItems([]);
           setHasMore(false);
         }
@@ -82,9 +90,11 @@ const ItemCodeButton = ({
         if (isNewSearch) setItems([]);
         setHasMore(false);
       } finally {
-        isNewSearch ? setLoading(false) : setLoadingMore(false);
+        if (isNewSearch) setLoading(false);
+        else setLoadingMore(false);
       }
     }, 250),
+    // intentionally exclude uniqueCounterRef from deps
     [currentSearchTerm]
   );
 
@@ -105,14 +115,14 @@ const ItemCodeButton = ({
     );
   };
 
+  // Remove any `key` prop from this root — FlatList supplies keys using keyExtractor.
   const renderItem = useCallback(({ item }) => (
     <TouchableOpacity
-      key={item.item_code}
       style={styles.suggestionItem}
       onPress={() => handleItemSelect(item)}
     >
-      <Text style={styles.itemText}>{item.item_code}</Text>
-      <Text style={styles.itemText2}>{item.item_name}</Text>
+      <Text style={styles.itemText}>{item?.item_code ?? '—'}</Text>
+      <Text style={styles.itemText2}>{item?.item_name ?? ''}</Text>
     </TouchableOpacity>
   ), []);
 
@@ -145,23 +155,20 @@ const ItemCodeButton = ({
   const handleSelectUom = () => {
     if (!selectedItem || !selectedUom) return;
 
-    // notify parent
     onSelectItem({
       item_code: selectedItem.item_code,
       uom: selectedUom
     });
 
-    // stop scanner in parent (if provided)
     try {
       if (typeof setScanned === "function") setScanned(true);
       if (typeof setIsCameraActive === "function") setIsCameraActive(false);
     } catch (e) {
-      // swallow any errors from parent callbacks
       console.warn("Error calling scanner setters:", e);
     }
 
-    // close & reset local state
     setModalVisible(false);
+    // reset
     setSearchTerm('');
     setItems([]);
     setSelectedItem(null);
@@ -170,11 +177,11 @@ const ItemCodeButton = ({
     setPage(1);
     setHasMore(true);
     setCurrentSearchTerm('');
+    // reset unique counter for next session (optional)
+    uniqueCounterRef.current = 0;
   };
 
-  // When opening modal, also stop camera to avoid accidental scanning while user interacts
   const openModal = () => {
-    // stop scanner in parent (if provided)
     try {
       if (typeof setScanned === "function") setScanned(true);
       if (typeof setIsCameraActive === "function") setIsCameraActive(false);
@@ -196,12 +203,26 @@ const ItemCodeButton = ({
       setPage(1);
       setHasMore(true);
       setCurrentSearchTerm('');
+      uniqueCounterRef.current = 0;
     }, 300);
+  };
+
+  // keyExtractor guarantees: prefer item_code -> id -> sku -> fallback to index-based unique key.
+  // We also append a counter to absolutely avoid duplicates when backend duplicates item_code across pages.
+  const keyExtractor = (item, index) => {
+    // increment counter so keys are unique across renders/fetched pages
+    uniqueCounterRef.current = uniqueCounterRef.current + 1;
+    const base =
+      (item && (item.item_code || item.id || item.sku)) ??
+      `item-${index}`;
+
+    // stringify safely and append counter
+    return `${String(base)}-${uniqueCounterRef.current}`;
   };
 
   return (
     <>
-      <View >
+      <View>
         <TouchableOpacity
           onPress={openModal}
           style={[styles.button, { backgroundColor: "#fff" }]}
@@ -242,7 +263,8 @@ const ItemCodeButton = ({
                     value={searchTerm}
                     onChangeText={setSearchTerm}
                     placeholder="Type item code..."
-                    autoFocus
+                    // avoid forcing focus in some contexts — keep it if you like
+                    // autoFocus
                     style={[styles.input, { flex: 1 }]}
                     placeholderTextColor="#999"
                     underlineColorAndroid="transparent"
@@ -252,7 +274,12 @@ const ItemCodeButton = ({
                   />
                   <TouchableOpacity
                     style={styles.search}
-                    onPress={() => searchTerm && fetchItems(searchTerm, 1)}
+                    onPress={() => {
+                      if (!searchTerm) return;
+                      // reset the unique counter for a fresh search session (optional)
+                      uniqueCounterRef.current = 0;
+                      fetchItems(searchTerm, 1);
+                    }}
                     disabled={!searchTerm}
                   >
                     <Text style={styles.searchButtonText}>Search</Text>
@@ -266,10 +293,13 @@ const ItemCodeButton = ({
                     <FlatList
                       data={items}
                       renderItem={renderItem}
-                      keyExtractor={item => item.item_code || ''}
+                      keyExtractor={keyExtractor}
                       onEndReached={loadMoreItems}
                       onEndReachedThreshold={0.1}
                       ListFooterComponent={renderFooter}
+                      // minor performance hints:
+                      initialNumToRender={6}
+                      removeClippedSubviews={true}
                     />
                   )}
                 </View>
@@ -286,9 +316,10 @@ const ItemCodeButton = ({
                   <>
                     <Text style={styles.uomLabel}>Select Unit of Measure:</Text>
                     <View style={styles.uomList}>
-                      {uoms.map((uom) => (
+                      {uoms.map((uom, i) => (
                         <TouchableOpacity
-                          key={uom}
+                          // use composite key to guarantee uniqueness even for duplicate strings
+                          key={`${String(uom ?? 'uom')}-${i}`}
                           style={[
                             styles.uomItem,
                             selectedUom === uom && styles.uomItemSelected

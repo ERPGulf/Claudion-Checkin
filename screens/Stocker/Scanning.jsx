@@ -26,7 +26,6 @@ export default function Scanning() {
   const navigation = useNavigation();
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
-  console.log("scanned", scanned);
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [barcode, setBarcode] = useState("");
   const [showManualInput, setShowManualInput] = useState(false);
@@ -158,7 +157,6 @@ export default function Scanning() {
         }
 
         const itemDetails = await getItem(String(data).trim(), warehouse.warehouse_id);
-        console.log("getItem result:", itemDetails);
 
         if (!itemDetails) {
           Alert.alert("Error", "Item not found");
