@@ -380,7 +380,7 @@ export default function Scanning() {
                       onPress={() => removeItem(item.item_code)}
                       style={styles.iconBtn}
                     >
-                      <AntDesign name="delete" size={18} color="#FF3B30" />
+                      <AntDesign name="delete" size={18} color="black" />
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -389,8 +389,18 @@ export default function Scanning() {
             />
 
             <View style={styles.submitRow}>
-              <Button title="Proceed to Item Details" onPress={goToItemDetails} disabled={!items.length} />
-            </View>
+            <TouchableOpacity
+              onPress={goToItemDetails}
+              disabled={!items.length}
+              style={[
+                styles.proceedBtn,
+                !items.length && styles.ButtonDisabled
+              ]}
+            >
+              <Text style={styles.proceedBtnText}>Proceed to Item Details</Text>
+            </TouchableOpacity>
+          </View>
+
           </View>
         </>
       ) : (
@@ -402,11 +412,28 @@ export default function Scanning() {
 
           <View style={styles.buttonRow}>
             <View style={styles.buttonWrapper}>
-              <Button title="Cancel" onPress={() => setShowManualInput(false)} color="#FF3B30" />
+             <TouchableOpacity
+    onPress={() => setShowManualInput(false)}
+    style={[
+              styles.cancelBtn,
+            ]}
+  >
+    <Text style={styles.cancelBtnText}>Cancel</Text>
+  </TouchableOpacity>
             </View>
 
             <View style={styles.buttonWrapper}>
-              <Button title="Submit" onPress={handleManualSubmit} disabled={!barcode.trim()} />
+             <TouchableOpacity
+            onPress={handleManualSubmit}
+            disabled={!barcode.trim()}
+            style={[
+              styles.submitButton,
+              !barcode.trim() && styles.ButtonDisabled
+            ]}
+          >
+            <Text style={styles.submitButtonText}>Submit</Text>
+          </TouchableOpacity>
+
             </View>
           </View>
         </View>
@@ -540,4 +567,49 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginTop: 10,
   },
+  submitButton: {
+  backgroundColor: '#198b43ff',
+  paddingVertical: 12,
+  borderRadius: 8,
+  alignItems: 'center',
+},
+
+ButtonDisabled: {
+  backgroundColor: '#a9b1aaff', // your custom disabled color
+  opacity: 0.6,
+},
+
+submitButtonText: {
+  color: '#fff',
+  fontWeight: '600',
+  fontSize: 16,
+},
+cancelBtn: {
+  flex: 1,
+  backgroundColor: "black",
+  paddingVertical: 12,
+  borderRadius: 8,
+  alignItems: "center",
+},
+cancelBtnText: {
+  color: "#fff",
+  fontWeight: "600",
+  fontSize: 16,
+},
+
+proceedBtn: {
+  backgroundColor: "#198b43ff",     // blue
+  paddingVertical: 14,
+  borderRadius: 10,
+  alignItems: "center",
+},
+
+
+proceedBtnText: {
+  color: "#fff",
+  fontSize: 16,
+  fontWeight: "600",
+},
+
+
 });
