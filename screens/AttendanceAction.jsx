@@ -66,34 +66,27 @@ function AttendanceAction() {
     };
     loadRestriction();
   }, []);
-  // Fetch office location and live GPS
+
   const fetchStatusAndLocation = async () => {
     try {
       setReady(false);
+
+      // if (restrictLocation === "0") {
+      //   setInTarget(true);
+      //   setDistanceInfo(null);
+      //   setReady(true);
+      //   return;
+      // }
       if (restrictLocation === "0") {
         setInTarget(true);
         setDistanceInfo(null);
         setReady(true);
         return;
       }
-      const office = await getOfficeLocation(employeeCode);
-      if (!office?.latitude || !office?.longitude || !office?.radius) {
-        throw new Error("Reporting location not configured");
-      }
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") throw new Error("Location permission denied");
-      const liveLoc = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Highest,
-      });
-      const distance = getPreciseDistance(
-        {
-          latitude: liveLoc.coords.latitude,
-          longitude: liveLoc.coords.longitude,
-        },
-        { latitude: office.latitude, longitude: office.longitude }
-      );
-      setInTarget(distance <= office.radius);
-      setDistanceInfo({ distance, radius: office.radius });
+
+      const nearest = await getOfficeLocation(employeeCode);
+      setInTarget(nearest.withinRadius);
+      setDistanceInfo(nearest);
       setReady(true);
     } catch (error) {
       console.log(":x: Location error:", error);
@@ -106,6 +99,7 @@ function AttendanceAction() {
       setReady(true);
     }
   };
+
   // Fetch GPS on mount
   useEffect(() => {
     if (restrictionLoaded && employeeCode) fetchStatusAndLocation();
@@ -147,7 +141,12 @@ function AttendanceAction() {
   const handleDirectCheckInOut = async (type) => {
     try {
       setActionLoading(true);
-      const response = await userCheckIn({ employeeCode, type });
+      const response = await userCheckIn({
+        employeeCode,
+        type,
+        locationData: distanceInfo,
+      });
+
       if (!response.allowed) {
         Toast.show({
           type: "error",
@@ -156,11 +155,26 @@ function AttendanceAction() {
         });
         return;
       }
+
       if (type === "IN") {
-        dispatch(setCheckin({ checkinTime: Date.now(), location: "Office" }));
+        // clear previous selected location first
+        dispatch({ type: "attendance/setSelectedLocation", payload: null });
+
+        dispatch(
+          setCheckin({
+            checkinTime: Date.now(),
+            location: restrictLocation === "1" ? response.location : null,
+          })
+        );
       } else {
-        dispatch(setCheckout({ checkoutTime: Date.now() }));
+        dispatch(
+          setCheckout({
+            checkoutTime: Date.now(),
+          })
+        );
+        dispatch({ type: "attendance/setSelectedLocation", payload: null }); // also clear
       }
+
       // Refresh totals
       const today = new Date();
       const todayFormatted = today
@@ -252,10 +266,13 @@ function AttendanceAction() {
                     ? "Not Required"
                     : !ready
                       ? "Getting Location..."
-                      : inTarget
-                        ? "In bound"
-                        : "Out of bound"}
+                      // : distanceInfo?.locationName
+                      //   ? distanceInfo.locationName
+                        : inTarget
+                          ? "In bound"
+                          : "Out of bound"}
                 </Text>
+
                 <MaterialCommunityIcons
                   name="map-marker-radius-outline"
                   size={28}
@@ -296,13 +313,9 @@ function AttendanceAction() {
                   }
                 }}
               >
-                {actionLoading ? (
-                  <ActivityIndicator size="small" color="white" />
-                ) : (
-                  <Text className="text-xl font-bold text-white">
-                    {checkin ? "CHECK-OUT" : "CHECK-IN"}
-                  </Text>
-                )}
+                <Text className="text-xl font-bold text-white">
+                  {checkin ? "CHECK-OUT" : "CHECK-IN"}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>

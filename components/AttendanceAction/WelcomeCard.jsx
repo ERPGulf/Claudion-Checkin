@@ -17,6 +17,7 @@ function WelcomeCard() {
   const location = useSelector(selectLocation);
   const checkin = useSelector(selectCheckin);
   const checkinTime = useSelector(selectCheckinTime);
+
   // :white_check_mark: Redux totals from API
   const todayTotal = useSelector(selectTodayHours); // expects "HH:MM"
   const monthlyTotal = useSelector(selectMonthlyHours); // expects "HH:MM"
@@ -52,6 +53,7 @@ function WelcomeCard() {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, [checkin, checkinTime]);
+ 
   return (
     <View
       style={{ width: "100%" }}
@@ -67,9 +69,11 @@ function WelcomeCard() {
               <Text className="text-base font-normal pt-1 text-white">
                 Working from
               </Text>
+
               <Text className="text-lg font-bold text-white pb-1">
-                {location}
+                {location?.locationName ?? "Office"}
               </Text>
+
               <Text className="text-base font-normal pt-1 text-white">
                 You have been working for
               </Text>

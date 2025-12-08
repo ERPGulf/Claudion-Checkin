@@ -5,18 +5,21 @@ import * as Location from "expo-location";
 import { format } from "date-fns";
 import apiClient from "./apiClient";
 import { cleanBaseUrl } from "./utils";
-/**
- * getOfficeLocation(employeeCode) — fetches employee and parses reporting location
- * keeps same name/signature as original.
- */
+
+// getOfficeLocation(employeeCode) — returns nearest location object or null
+
 export const getOfficeLocation = async (employeeCode) => {
   if (!employeeCode) throw new Error("Employee ID is required");
+
   const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
   const baseUrl = cleanBaseUrl(rawBaseUrl);
   if (!baseUrl) throw new Error("Base URL missing");
+
   const token = await AsyncStorage.getItem("access_token");
   if (!token) throw new Error("Access token missing");
+
   const url = `${baseUrl}/api/method/employee_app.attendance_api.get_employee_data`;
+
   const { data } = await apiClient.get(url, {
     params: { employee_id: employeeCode },
     headers: {
@@ -25,110 +28,129 @@ export const getOfficeLocation = async (employeeCode) => {
     },
     timeout: 10000,
   });
-  const employee = data.message;
-  if (!employee?.custom_reporting_location) {
-    console.warn(":warning: No reporting location found");
-    return { latitude: null, longitude: null, radius: 0 };
+
+  const employee = data?.message;
+  const locations = employee?.employee_locations || [];
+
+  // Instead of throwing immediately, return null safely
+  if (!locations.length) {
+    console.log("⚠ No reporting locations from server");
+    return null;
   }
-  let locationJson;
-  try {
-    locationJson = JSON.parse(employee.custom_reporting_location);
-  } catch (err) {
-    console.error(":x: Invalid location JSON format:", err);
-    return { latitude: null, longitude: null, radius: 0 };
+
+  // Request location permission
+  const { status } = await Location.requestForegroundPermissionsAsync();
+  if (status !== "granted") throw new Error("Location permission denied");
+
+  // Get current GPS coordinates
+  const gps = await Location.getCurrentPositionAsync({
+    accuracy: Location.Accuracy.Highest,
+  });
+
+  const userLat = gps.coords.latitude;
+  const userLng = gps.coords.longitude;
+  console.log("📍 Current GPS:", userLat, userLng);
+
+  // Find nearest location
+  let nearest = null;
+
+  locations.forEach((loc) => {
+    try {
+      const parsed = JSON.parse(loc.reporting_location);
+      const coords = parsed?.features?.[0]?.geometry?.coordinates;
+
+      if (coords?.length === 2) {
+        const [lng, lat] = coords;
+
+        const dist = getPreciseDistance(
+          { latitude: userLat, longitude: userLng },
+          { latitude: lat, longitude: lng }
+        );
+
+        if (!nearest || dist < nearest.distance) {
+          nearest = {
+            locationName: loc.location,
+            latitude: lat,
+            longitude: lng,
+            distance: dist,
+            radius: Number(loc.reporting_radius) || 0,
+            withinRadius: dist <= Number(loc.reporting_radius),
+          };
+        }
+      }
+    } catch (err) {
+      console.error("Location JSON parse error:", err);
+    }
+  });
+
+  if (!nearest) {
+    console.log("⚠ Failed to determine nearest location.");
+    return null;
   }
-  const coords = locationJson?.features?.[0]?.geometry?.coordinates || [
-    null,
-    null,
-  ];
-  if (
-    !Array.isArray(coords) ||
-    coords.length !== 2 ||
-    typeof coords[0] !== "number" ||
-    typeof coords[1] !== "number"
-  ) {
-    console.warn(":warning: Coordinates are missing or invalid");
-    return { latitude: null, longitude: null, radius: 0 };
-  }
-  const longitude = coords[0];
-  const latitude = coords[1];
-  const radius = Number(employee.custom_reporting_radius) || 0;
-  console.log(":white_check_mark: Parsed coordinates:", { latitude, longitude, radius });
-  return { latitude, longitude, radius };
+
+  console.log("🏁 Nearest location:", nearest);
+  return nearest;
 };
-//check in function
-export const userCheckIn = async ({ employeeCode, type }) => {
+
+// userCheckIn({ employeeCode, type }) — performs check-in/check-out
+export const userCheckIn = async ({ employeeCode, type, locationData }) => {
   try {
     if (!employeeCode) throw new Error("Employee ID is required");
+
     const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
     const baseUrl = cleanBaseUrl(rawBaseUrl);
     if (!baseUrl) throw new Error("Base URL missing");
+
     const token = await AsyncStorage.getItem("access_token");
     if (!token) throw new Error("Token missing");
-    // :white_check_mark: Use correct key & trim value
+
     const restrictLocation = (
       await AsyncStorage.getItem("restrict_location")
     )?.trim();
-    let distance = null;
+    let nearest = null;
     let radius = null;
-    // ----------------------------------------------------------------
-    // :one: Location restriction enabled → perform GPS + distance check
-    // ----------------------------------------------------------------
+
+    // 📍 Location restriction is enabled
     if (restrictLocation === "1") {
-      const office = await getOfficeLocation(employeeCode);
-      const { latitude, longitude, radius: officeRadius } = office;
-      radius = Number(officeRadius); // :white_check_mark: FIX
-      if (!latitude || !longitude || !radius) {
+      nearest = await getOfficeLocation(employeeCode); // Returns closest office + distance
+
+      if (!nearest) {
         return {
           allowed: false,
+          message: "Reporting locations are not configured",
           distance: null,
-          radius: 0,
-          message: "Reporting location not configured for this employee",
+          radius: null,
+          location: null,
         };
       }
-      // Permission request
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") {
+
+      if (!nearest.withinRadius) {
         return {
           allowed: false,
-          distance: null,
-          radius,
-          message: "Location permission denied",
-        };
-      }
-      // Get live GPS
-      const userLoc = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Highest,
-      });
-      const userLat = userLoc.coords.latitude;
-      const userLng = userLoc.coords.longitude;
-      // Compare distance
-      distance = getPreciseDistance(
-        { latitude: userLat, longitude: userLng },
-        { latitude, longitude }
-      );
-      console.log(":round_pushpin: Distance:", distance, "Allowed Radius:", radius);
-      if (distance > radius) {
-        return {
-          allowed: false,
-          distance,
-          radius,
-          message: `You must be within ${radius} meters to ${
-            type === "IN" ? "check in" : "check out"
-          }.`,
+          message: `You are ${nearest.distance}m away from nearest location (${nearest.locationName}). Must be within ${nearest.radius}m.`,
+          distance: nearest.distance,
+          radius: nearest.radius,
+          location: nearest,
         };
       }
     }
-    // ----------------------------------------------------------------
-    // :two: Perform check-in or check-out API call
-    // ----------------------------------------------------------------
+
+    // 🕒 Timestamp for check-in
     const timestamp = format(new Date(), "yyyy-MM-dd HH:mm:ss");
+
     const payload = {
       device_id: "MobileAPP",
       employee_field_value: employeeCode,
       log_type: type,
       timestamp,
+      location: nearest?.locationName || null,
+      latitude: nearest?.latitude || null,
+      longitude: nearest?.longitude || null,
+      distance: nearest?.distance || null,
+      radius: nearest?.radius || null,
     };
+
+    // 📡 Send check-in / check-out request
     const response = await apiClient.post(
       `${baseUrl}/api/method/employee_app.attendance_api.add_log_based_on_employee_field`,
       payload,
@@ -136,31 +158,43 @@ export const userCheckIn = async ({ employeeCode, type }) => {
         headers: { Authorization: `Bearer ${token}` },
       }
     );
+
     const checkinId = response.data?.message?.name;
+
     if (!checkinId) {
       return {
         allowed: false,
-        distance,
-        radius,
         message: "Failed to register attendance",
+        distance: nearest?.distance || null,
+        radius: nearest?.radius || null,
+        location: nearest || null,
       };
     }
+
+    // 🎉 SUCCESS RESPONSE
     return {
       allowed: true,
       name: checkinId,
-      distance,
-      radius,
+      message: `Successfully ${type === "IN" ? "checked in" : "checked out"}`,
+      distance: nearest?.distance ?? null,
+      radius: nearest?.radius ?? null,
+      location: nearest ?? null, // Full location object for Redux
     };
   } catch (error) {
-    console.error(":x: Check-in failed:", error);
+    console.error("❌ Check-in failed:", error);
+
     return {
       allowed: false,
+      message: error.message || "Something went wrong during check-in",
       distance: null,
       radius: null,
-      message: error.message || "Something went wrong during check-in",
+      location: null,
     };
   }
 };
+
+
+
 /**
  * getUserAttendance(employee_id, limit_start, limit_page_length)
  */
