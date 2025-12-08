@@ -39,6 +39,18 @@ import {
 function AttendanceCamera() {
   const navigation = useNavigation();
   const dispatch = useDispatch();
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerShown: true,
+      headerTitle: "Attendance Camera",
+      headerTitleAlign: "center",
+      headerLeft: () => (
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <Ionicons name="arrow-back" size={28} color="black" />
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation]);
   const [permission, requestPermission] = useCameraPermissions();
   const [facing, setFacing] = useState("front");
   const [mode, setMode] = useState("camera");
