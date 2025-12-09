@@ -5,6 +5,24 @@ import * as Location from "expo-location";
 import { format } from "date-fns";
 import apiClient from "./apiClient";
 import { cleanBaseUrl } from "./utils";
+import { get } from "react-native/Libraries/TurboModule/TurboModuleRegistry";
+
+export const getServerTime = async () => {
+  const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
+  const baseUrl = cleanBaseUrl(rawBaseUrl);
+  const token = await AsyncStorage.getItem("access_token");
+
+  const url = `${baseUrl}/api/method/employee_app.attendance_api.get_server_time`;
+
+  const response = await apiClient.get(url, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  // Extract correct field from API response
+  return response.data?.message?.server_time;
+};
 
 // getOfficeLocation(employeeCode) — returns nearest location object or null
 
@@ -136,7 +154,8 @@ export const userCheckIn = async ({ employeeCode, type, locationData }) => {
     }
 
     // 🕒 Timestamp for check-in
-    const timestamp = format(new Date(), "yyyy-MM-dd HH:mm:ss");
+    const timestamp = await getServerTime();
+    console.log("⏱ Server Timestamp:", timestamp);
 
     const payload = {
       device_id: "MobileAPP",
@@ -192,8 +211,6 @@ export const userCheckIn = async ({ employeeCode, type, locationData }) => {
     };
   }
 };
-
-
 
 /**
  * getUserAttendance(employee_id, limit_start, limit_page_length)
@@ -307,6 +324,7 @@ export const getMonthlyWorkedHours = async (employeeCode, month, year) => {
   }
 };
 export default {
+  getServerTime,
   getOfficeLocation,
   userCheckIn,
   getUserAttendance,

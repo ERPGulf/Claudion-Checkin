@@ -6,7 +6,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { Image } from "expo-image";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect,useLayoutEffect, useRef, useState } from "react";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import Constants from "expo-constants";
 import { Ionicons } from "@expo/vector-icons";
@@ -19,12 +19,6 @@ import {
   setCheckin,
   setCheckout,
 } from "../redux/Slices/AttendanceSlice";
-// import {
-//   putUserFile,
-//   userCheckIn,
-//   userFileUpload,
-//   userStatusPut,
-// } from "../api/userApi";
 import { selectIsWfh, setFileid } from "../redux/Slices/UserSlice";
 import { SIZES } from "../constants";
 import { hapticsMessage } from "../utils/HapticsMessage";
@@ -41,12 +35,17 @@ function AttendanceCamera() {
   const dispatch = useDispatch();
   useLayoutEffect(() => {
     navigation.setOptions({
+      headerShadowVisible: false,
       headerShown: true,
       headerTitle: "Attendance Camera",
       headerTitleAlign: "center",
       headerLeft: () => (
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={28} color="black" />
+          <Entypo
+            name="chevron-left"
+            size={SIZES.xxxLarge - 5}
+            color={COLORS.primary}
+          />
         </TouchableOpacity>
       ),
     });
@@ -155,64 +154,6 @@ function AttendanceCamera() {
       setIsLoading(false);
     }
   };
-
-  // const handleChecking = async (type, custom_in) => {
-  //   try {
-  //     setIsLoading(true);
-
-  //     const timestamp = format(new Date(), "yyyy-MM-dd HH:mm:ss");
-  //     const dataField = { timestamp, employeeCode, type };
-
-  //     console.log("📅 Sending Check-In Data:", dataField);
-
-  //     // 1️⃣ Send check-in request to create Employee Checkin
-  //     const checkinResponse = await userCheckIn(dataField);
-  //     const docname = checkinResponse?.name;
-
-  //     if (!docname) throw new Error("Check-in failed: Missing Checkin ID");
-
-  //     // 2️⃣ Update employee status
-  //     await userStatusPut(employeeCode, custom_in);
-
-  //     // 3️⃣ Update Redux store
-  //     if (custom_in === 1) {
-  //       dispatch(
-  //         setCheckin({
-  //           checkinTime: new Date().toISOString(),
-  //           location: isWFH ? "On-site" : "Head Office",
-  //         })
-  //       );
-  //     } else {
-  //       dispatch(setCheckout({ checkoutTime: new Date().toISOString() }));
-  //     }
-
-  //     // 4️⃣ Upload captured photo to ERP
-  //     await uploadPicture(docname);
-
-  //     // 5️⃣ Success haptic + Toast
-  //     hapticsMessage("success");
-  //     Toast.show({
-  //       type: "success",
-  //       text1: `CHECKED ${type}`,
-  //       autoHide: true,
-  //       visibilityTime: 3000,
-  //     });
-
-  //     navigation.navigate("Attendance action");
-  //   } catch (error) {
-  //     console.error("❌ Check-in process failed:", error);
-  //     hapticsMessage("error");
-  //     Toast.show({
-  //       type: "error",
-  //       text1: "Check-in failed",
-  //       text2: error.message || "Unknown error occurred",
-  //       autoHide: true,
-  //       visibilityTime: 3000,
-  //     });
-  //   } finally {
-  //     setIsLoading(false);
-  //   }
-  // };
 
   // ✅ UPLOAD PHOTO FUNCTION
   const uploadPicture = async (docname) => {
