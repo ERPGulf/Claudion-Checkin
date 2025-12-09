@@ -1,40 +1,40 @@
-import { View, Text, TouchableOpacity, Alert, Platform } from 'react-native';
-import { Image } from 'expo-image';
-import React, { useLayoutEffect } from 'react';
-import { useNavigation } from '@react-navigation/native';
-import { useDispatch, useSelector } from 'react-redux';
-import { Toast } from 'react-native-toast-message/lib/src/Toast';
-import Ionicons from 'react-native-vector-icons/Ionicons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { revertAll } from '../redux/CommonActions';
-import { COLORS, SIZES } from '../constants';
-import user from '../assets/images/user.png';
-import { hapticsMessage } from '../utils/HapticsMessage';
-import { selectUserDetails } from '../redux/Slices/UserSlice';
-
+import { View, Text, TouchableOpacity, Alert, Platform } from "react-native";
+import { Image } from "expo-image";
+import React, { useLayoutEffect } from "react";
+import { useNavigation } from "@react-navigation/native";
+import { useDispatch, useSelector } from "react-redux";
+import { Toast } from "react-native-toast-message/lib/src/Toast";
+import Ionicons from "react-native-vector-icons/Ionicons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { revertAll } from "../redux/CommonActions";
+import { COLORS, SIZES } from "../constants";
+import user from "../assets/images/user.png";
+import { hapticsMessage } from "../utils/HapticsMessage";
+import { selectUserDetails } from "../redux/Slices/UserSlice";
+const VERSION_CODE = require("../../app.json").expo.version+"A"
 function Profile() {
   const dispatch = useDispatch();
   const navigation = useNavigation();
   useLayoutEffect(() => {
     navigation.setOptions({
       headerShown: true,
-      headerTitle: 'My Profile',
-      headerTitleAlign: 'center',
+      headerTitle: "My Profile",
+      headerTitleAlign: "center",
       headerShadowVisible: false,
     });
   }, []);
-  const fullname = useSelector(state => state.user.fullname);
+  const fullname = useSelector((state) => state.user.fullname);
   const handleLogout = async () => {
     try {
-      hapticsMessage('success');
+      hapticsMessage("success");
       dispatch(revertAll());
       await AsyncStorage.clear();
     } catch (error) {
-      console.error(error, 'logout error');
-      hapticsMessage('error');
+      console.error(error, "logout error");
+      hapticsMessage("error");
       Toast.show({
-        type: 'error',
-        text1: 'Logout failed',
+        type: "error",
+        text1: "Logout failed",
         autoHide: true,
         visibilityTime: 3000,
       });
@@ -45,8 +45,8 @@ function Profile() {
       style={{
         flex: 1,
         flexGrow: 1,
-        alignItems: 'center',
-        backgroundColor: 'white',
+        alignItems: "center",
+        backgroundColor: "white",
       }}
     >
       <View
@@ -54,7 +54,7 @@ function Profile() {
           width: SIZES.width,
           paddingHorizontal: 12,
           paddingVertical: 16,
-          alignItems: 'center',
+          alignItems: "center",
         }}
       >
         <View
@@ -74,33 +74,39 @@ function Profile() {
               Employee
             </Text>
           </View>
+          <View className="justify-center">
+            <Text className="text-xl font-semibold text-white">{VERSION_CODE}</Text>
+            <Text className="text-base font-normal text-gray-300">
+             VERSION
+            </Text>
+          </View>
         </View>
         <TouchableOpacity
           onPress={() => {
-            Alert.alert('Logout out', 'Are you sure you want to logout', [
+            Alert.alert("Logout out", "Are you sure you want to logout", [
               {
-                text: 'Cancel',
+                text: "Cancel",
                 onPress: () => {
-                  hapticsMessage('warning');
+                  hapticsMessage("warning");
                   Toast.show({
-                    type: 'info',
-                    text1: 'Logout cancelled',
+                    type: "info",
+                    text1: "Logout cancelled",
                     visibilityTime: 3000,
                     autoHide: true,
                   });
                 },
-                style: 'cancel',
+                style: "cancel",
               },
               {
-                text: 'OK',
+                text: "OK",
                 onPress: handleLogout,
               },
             ]);
           }}
           className={`flex-row h-16 w-full items-center rounded-xl px-3 justify-between bg-white mt-4 ${
-            Platform.OS === 'ios'
-              ? 'shadow-sm shadow-black/10'
-              : 'shadow-sm shadow-black'
+            Platform.OS === "ios"
+              ? "shadow-sm shadow-black/10"
+              : "shadow-sm shadow-black"
           }`}
         >
           <View className="flex-row items-center">
