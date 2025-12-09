@@ -59,28 +59,34 @@ function Profile() {
       >
         <View
           style={{ backgroundColor: COLORS.primary }}
-          className="flex-row w-full h-24 rounded-2xl"
+          className="flex-row w-full h-32 rounded-2xl p-3 items-center"
         >
-          <View className="justify-center items-center p-3">
-            <Image
-              cachePolicy="memory-disk"
-              source={user}
-              style={{ width: 75, height: 75 }}
-            />
-          </View>
-          <View className="justify-center">
+          {/* Profile Icon */}
+          <Image
+            cachePolicy="memory-disk"
+            source={user}
+            style={{ width: 75, height: 75 }}
+          />
+
+          {/* Name, Employee & Version */}
+          <View className="ml-3 justify-center">
             <Text className="text-xl font-semibold text-white">{fullname}</Text>
             <Text className="text-base font-normal text-gray-300">
               Employee
             </Text>
-          </View>
-          <View className="justify-center">
-            <Text className="text-xl font-semibold text-white">{VERSION_CODE}</Text>
-            <Text className="text-base font-normal text-gray-300">
-             VERSION
-            </Text>
+
+            {/* Version row inside same card */}
+            <View className="flex-row items-center mt-1">
+              <Text className="text-sm font-normal text-gray-300 ">
+                Version
+              </Text>
+              <Text className="text-sm font-semibold text-white">
+                {VERSION_CODE}
+              </Text>
+            </View>
           </View>
         </View>
+
         <TouchableOpacity
           onPress={() => {
             Alert.alert("Logout out", "Are you sure you want to logout", [
