@@ -23,6 +23,7 @@ import {
   userCheckIn,
   getDailyWorkedHours,
   getMonthlyWorkedHours,
+  getServerTime,
 } from "../services/api/attendance.service";
 import { SafeAreaView } from "react-native-safe-area-context";
 function AttendanceAction() {
@@ -43,7 +44,7 @@ function AttendanceAction() {
     navigation.setOptions({
       headerShadowVisible: false,
       headerShown: true,
-      headerTitle: "Attendance History",
+      headerTitle: "Attendance Action",
       headerTitleAlign: "center",
       headerLeft: () => (
         <TouchableOpacity onPress={() => navigation.goBack()}>
@@ -71,12 +72,6 @@ function AttendanceAction() {
     try {
       setReady(false);
 
-      // if (restrictLocation === "0") {
-      //   setInTarget(true);
-      //   setDistanceInfo(null);
-      //   setReady(true);
-      //   return;
-      // }
       if (restrictLocation === "0") {
         setInTarget(true);
         setDistanceInfo(null);
@@ -104,13 +99,21 @@ function AttendanceAction() {
   useEffect(() => {
     if (restrictionLoaded && employeeCode) fetchStatusAndLocation();
   }, [restrictionLoaded, employeeCode]);
+
   // Update date & time every 9 seconds
   useEffect(() => {
-    const update = () => setDateTime(updateDateTime());
-    update();
-    const intervalId = setInterval(update, 9000);
+    const loadServerTime = async () => {
+      const server = await getServerTime();
+      if (server) {
+        setDateTime(updateDateTime(server));
+      }
+    };
+
+    loadServerTime();
+    const intervalId = setInterval(loadServerTime, 10000);
     return () => clearInterval(intervalId);
   }, []);
+
   useEffect(() => {
     const unsubscribe = navigation.addListener("focus", async () => {
       // refresh worked hours when user returns from camera screen
@@ -266,11 +269,11 @@ function AttendanceAction() {
                     ? "Not Required"
                     : !ready
                       ? "Getting Location..."
-                      // : distanceInfo?.locationName
-                      //   ? distanceInfo.locationName
-                        : inTarget
-                          ? "In bound"
-                          : "Out of bound"}
+                      : // : distanceInfo?.locationName
+                        //   ? distanceInfo.locationName
+                        inTarget
+                        ? "In bound"
+                        : "Out of bound"}
                 </Text>
 
                 <MaterialCommunityIcons

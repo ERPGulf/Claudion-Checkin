@@ -41,7 +41,7 @@ function QrScan() {
         </TouchableOpacity>
       ),
     });
-  }, []);
+  }, [navigation]);
   const handleQRCodeData = async (data) => {
     try {
       const KEYS = [
