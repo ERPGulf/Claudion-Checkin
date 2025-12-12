@@ -5,6 +5,7 @@ import {
   SafeAreaView,
   ActivityIndicator,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Image } from "expo-image";
 import { Entypo, MaterialCommunityIcons } from "@expo/vector-icons";
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -96,16 +97,25 @@ function AttendanceCamera() {
       setIsLoading(true);
 
       // 📍 GET OFFICE LOCATION FIRST
-      const locationData = await getOfficeLocation(employeeCode);
+      // Read restrict_location
+      const restrictLocation = (
+        await AsyncStorage.getItem("restrict_location")
+      )?.trim();
 
-      // If not within radius, block
-      if (locationData && !locationData.withinRadius) {
-        Toast.show({
-          type: "error",
-          text1: "Location Error",
-          text2: `You are ${locationData.distance}m away. Allowed: ${locationData.radius}m`,
-        });
-        return;
+      // 📍 Only call location API if restriction is enabled
+      let locationData = null;
+      if (restrictLocation === "1") {
+        locationData = await getOfficeLocation(employeeCode);
+
+        // If not within radius, block
+        if (locationData && !locationData.withinRadius) {
+          Toast.show({
+            type: "error",
+            text1: "Location Error",
+            text2: `You are ${locationData.distance}m away. Allowed: ${locationData.radius}m`,
+          });
+          return;
+        }
       }
 
       const timestamp = format(new Date(), "yyyy-MM-dd HH:mm:ss");

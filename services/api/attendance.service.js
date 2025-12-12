@@ -129,7 +129,7 @@ export const userCheckIn = async ({ employeeCode, type, locationData }) => {
     let radius = null;
 
     // 📍 Location restriction is enabled
-    if (restrictLocation === "1") {
+    if (restrictLocation && restrictLocation.toString() === "1") {
       nearest = await getOfficeLocation(employeeCode); // Returns closest office + distance
 
       if (!nearest) {
@@ -153,21 +153,41 @@ export const userCheckIn = async ({ employeeCode, type, locationData }) => {
       }
     }
 
+    // // 🕒 Timestamp for check-in
+    // const timestamp = await getServerTime();
+    // console.log("⏱ Server Timestamp:", timestamp);
+
+    // const payload = {
+    //   device_id: "MobileAPP",
+    //   employee_field_value: employeeCode,
+    //   log_type: type,
+    //   timestamp,
+    //   location: nearest?.locationName || null,
+    //   latitude: nearest?.latitude || null,
+    //   longitude: nearest?.longitude || null,
+    //   distance: nearest?.distance || null,
+    //   radius: nearest?.radius || null,
+    // };
     // 🕒 Timestamp for check-in
     const timestamp = await getServerTime();
     console.log("⏱ Server Timestamp:", timestamp);
 
+    // Build base payload
     const payload = {
       device_id: "MobileAPP",
       employee_field_value: employeeCode,
       log_type: type,
       timestamp,
-      location: nearest?.locationName || null,
-      latitude: nearest?.latitude || null,
-      longitude: nearest?.longitude || null,
-      distance: nearest?.distance || null,
-      radius: nearest?.radius || null,
     };
+
+    // 👉 Only attach location fields when restriction is enabled
+    if (restrictLocation === "1" && nearest) {
+      payload.location = nearest.locationName;
+      payload.latitude = nearest.latitude;
+      payload.longitude = nearest.longitude;
+      payload.distance = nearest.distance;
+      payload.radius = nearest.radius;
+    }
 
     // 📡 Send check-in / check-out request
     const response = await apiClient.post(
