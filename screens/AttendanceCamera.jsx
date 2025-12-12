@@ -6,7 +6,8 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { Image } from "expo-image";
-import React, { useEffect,useLayoutEffect, useRef, useState } from "react";
+import { Entypo, MaterialCommunityIcons } from "@expo/vector-icons";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import Constants from "expo-constants";
 import { Ionicons } from "@expo/vector-icons";
@@ -14,13 +15,13 @@ import { useDispatch, useSelector } from "react-redux";
 import { Toast } from "react-native-toast-message/lib/src/Toast";
 import { useNavigation } from "@react-navigation/native";
 import { format } from "date-fns";
+import { COLORS, SIZES } from "../constants";
 import {
   selectCheckin,
   setCheckin,
   setCheckout,
 } from "../redux/Slices/AttendanceSlice";
 import { selectIsWfh, setFileid } from "../redux/Slices/UserSlice";
-import { SIZES } from "../constants";
 import { hapticsMessage } from "../utils/HapticsMessage";
 import {
   putUserFile,
@@ -71,15 +72,24 @@ function AttendanceCamera() {
 
   const takePicture = async () => {
     try {
-      const options = { quality: 0.7, base64: true };
-      const newPhoto = await cameraRef.current.takePictureAsync(options);
-      if (!newPhoto.uri) throw new Error("Photo capture failed: URI missing");
+      if (!cameraRef.current) {
+        console.warn("Camera not ready yet");
+        return;
+      }
+
+      const newPhoto = await cameraRef.current.takePictureAsync({
+        quality: 0.6,
+        skipProcessing: true,
+        base64: false,
+      });
+
       setPhoto(newPhoto);
     } catch (error) {
       console.error("Photo capture error:", error);
       Toast.show({ type: "error", text1: "Photo capture failed" });
     }
   };
+
   // ✅ CHECK-IN / CHECK-OUT HANDLER
   const handleChecking = async (type, custom_in) => {
     try {
@@ -233,7 +243,11 @@ function AttendanceCamera() {
           <View className="flex-row pb-4 pt-2 items-center justify-center relative">
             <TouchableOpacity
               className="absolute left-0"
-              onPress={() => setPhoto(null)}
+              // onPress={() => setPhoto(null)}
+              onPress={() => {
+                setPhoto(null);
+                setTimeout(() => {}, 120);
+              }}
             >
               <Text className="text-base text-red-500">Retake</Text>
             </TouchableOpacity>
@@ -252,7 +266,8 @@ function AttendanceCamera() {
               borderRadius: 12,
               marginVertical: 12,
             }}
-            source={{ uri: `data:image/jpg;base64,${photo.base64}` }}
+            // source={{ uri: `data:image/jpg;base64,${photo.base64}` }}
+            source={{ uri: photo.uri }}
           />
           <View className="w-full items-center justify-center">
             {checkin ? (

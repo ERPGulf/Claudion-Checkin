@@ -6,20 +6,28 @@ import { format, parse } from "date-fns";
 import { COLORS } from "../../constants";
 
 function LogCard({ type, time }) {
-  const formattedDate = time
-    ? format(parse(time, "yyyy-MM-dd HH:mm:ss", new Date()), "hh:mm a, dd/MM/yy")
-    : "Invalid date";
+  
+  // Fix backend time format: remove microseconds + replace space with T
+  let fixedTime = time?.split(".")[0];
+
+  if (fixedTime?.includes(" ")) {
+    fixedTime = fixedTime.replace(" ", "T");
+  }
+
+  const formattedDate = fixedTime
+    ? format(new Date(fixedTime), "hh:mm a, dd/MM/yy")
+    : "Invalid date";s
 
   const bgColor =
     type?.toUpperCase() === "IN"
       ? "bg-green-500"
       : type?.toUpperCase() === "OUT"
-      ? "bg-red-500"
-      : type?.toUpperCase() === "LATE ENTRY"
-      ? "bg-yellow-500"
-      : type?.toUpperCase() === "EARLY EXIT"
-      ? "bg-orange-500"
-      : "bg-gray-500";
+        ? "bg-red-500"
+        : type?.toUpperCase() === "LATE ENTRY"
+          ? "bg-yellow-500"
+          : type?.toUpperCase() === "EARLY EXIT"
+            ? "bg-orange-500"
+            : "bg-gray-500";
 
   return (
     <View
@@ -29,7 +37,9 @@ function LogCard({ type, time }) {
       <Text className="text-white font-semibold text-xs">
         CHECKED {type?.toUpperCase()} AT {formattedDate}
       </Text>
-      <View className={`justify-center items-center rounded-full p-1 ${bgColor}`}>
+      <View
+        className={`justify-center items-center rounded-full p-1 ${bgColor}`}
+      >
         <MaterialCommunityIcons name="clock-check" color="white" size={30} />
       </View>
     </View>
