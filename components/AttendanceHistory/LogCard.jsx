@@ -16,7 +16,7 @@ function LogCard({ type, time }) {
 
   const formattedDate = fixedTime
     ? format(new Date(fixedTime), "hh:mm a, dd/MM/yy")
-    : "Invalid date";s
+    : "Invalid date";
 
   const bgColor =
     type?.toUpperCase() === "IN"

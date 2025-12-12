@@ -11,7 +11,7 @@ import { COLORS, SIZES } from "../constants";
 import user from "../assets/images/user.png";
 import { hapticsMessage } from "../utils/HapticsMessage";
 import { selectUserDetails } from "../redux/Slices/UserSlice";
-const VERSION_CODE = "1.0.9A";
+const VERSION_CODE = "1.0.9B";
 function Profile() {
   const dispatch = useDispatch();
   const navigation = useNavigation();
