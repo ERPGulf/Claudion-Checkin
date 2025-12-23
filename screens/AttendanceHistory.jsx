@@ -1,4 +1,3 @@
-
 import React, { useLayoutEffect } from "react";
 import { View, TouchableOpacity, Text, ActivityIndicator } from "react-native";
 import Entypo from "@expo/vector-icons/Entypo";
@@ -6,8 +5,6 @@ import { useNavigation } from "@react-navigation/native";
 import { useSelector } from "react-redux";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { FlashList } from "@shopify/flash-list";
-
-// import { getUserAttendance } from "../api/userApi";
 import { selectEmployeeCode } from "../redux/Slices/UserSlice";
 import { LogCard, RenderLoader } from "../components/AttendanceHistory";
 import { COLORS, SIZES } from "../constants";

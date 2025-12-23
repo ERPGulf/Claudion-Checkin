@@ -11,7 +11,10 @@ import AttendanceCamera from './AttendanceCamera';
 import Profile from './Profile';
 import Chat from './Chat';
 import Notifications from './Notifications';
-
+import Shortcut1 from './Shortcut1';
+import Shortcut3 from './Shortcut3';
+import Shortcut2 from './Shortcut2';
+import MyQrCode from './MyQrCode';
 export {
   Home,
   AttendanceAction,
@@ -26,4 +29,9 @@ export {
   Profile,
   Chat,
   Notifications,
+  Shortcut2,
+  Shortcut1,
+  Shortcut3,
+  MyQrCode
+
 };

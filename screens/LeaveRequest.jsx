@@ -10,19 +10,16 @@ import {
   ActivityIndicator,
   Platform,
 } from "react-native";
-
 import Entypo from "@expo/vector-icons/Entypo";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import Checkbox from "expo-checkbox";
 import { useSelector } from "react-redux";
 import { selectEmployeeCode } from "../redux/Slices/UserSlice";
-// import { createLeaveApplication } from "../api/userApi";
 import { COLORS, SIZES } from "../constants";
 import { createLeaveApplication } from "../services/api";
 
 export default function LeaveRequestScreen() {
   const employeeCode = useSelector(selectEmployeeCode);
-
   const [leaveType, setLeaveType] = useState("");
   const [reason, setReason] = useState("");
   const [fromDate, setFromDate] = useState(new Date());
