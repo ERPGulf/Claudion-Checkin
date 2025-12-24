@@ -12,6 +12,8 @@ import {
 } from "react-native";
 
 import Entypo from "@expo/vector-icons/Entypo";
+import { Picker } from "@react-native-picker/picker";
+
 import DateTimePicker from "@react-native-community/datetimepicker";
 import Checkbox from "expo-checkbox";
 import { useSelector } from "react-redux";
@@ -126,27 +128,15 @@ export default function LeaveRequestScreen() {
       </Text>
 
       {/* Leave Type Selection */}
-      <Text className="text-sm font-medium text-gray-700 mb-2">Leave Type</Text>
-      <View className="flex-row justify-between mb-4">
-        {["Remote", "Annual", "Out Of Office"].map((type) => (
-          <TouchableOpacity
-            key={type}
-            onPress={() => setLeaveType(type)}
-            className={`flex-1 mx-1 p-3 rounded-xl border ${
-              leaveType === type
-                ? "bg-gray-600 border-gray-600 shadow-md"
-                : "border-gray-300 bg-gray-100"
-            }`}
-          >
-            <Text
-              className={`text-center font-semibold ${
-                leaveType === type ? "text-white" : "text-gray-700"
-              }`}
-            >
-              {type}
-            </Text>
-          </TouchableOpacity>
-        ))}
+      <Text className="text-sm font-medium text-gray-700 mb-1">Leave Type</Text>
+      <View className="border border-gray-300 rounded mb-4 bg-gray-50">
+        <Picker selectedValue={leaveType} onValueChange={setLeaveType}>
+          <Picker.Item label="Select Leave Type" value="" />
+          <Picker.Item label="Remote" value="Remote" />
+          <Picker.Item label="Annual" value="Annual" />
+          <Picker.Item label="Out of Office" value="Out of Office" />
+          <Picker.Item label="Other" value="Other" />
+        </Picker>
       </View>
 
       {/* Reason */}
