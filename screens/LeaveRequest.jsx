@@ -18,9 +18,8 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import Checkbox from "expo-checkbox";
 import { useSelector } from "react-redux";
 import { selectEmployeeCode } from "../redux/Slices/UserSlice";
-// import { createLeaveApplication } from "../api/userApi";
 import { COLORS, SIZES } from "../constants";
-import { createLeaveApplication } from "../services/api";
+import { createLeaveApplication, getLeaveTypes } from "../services/api";
 
 export default function LeaveRequestScreen() {
   const employeeCode = useSelector(selectEmployeeCode);
@@ -34,6 +33,8 @@ export default function LeaveRequestScreen() {
   const [showFromPicker, setShowFromPicker] = useState(false);
   const [showToPicker, setShowToPicker] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [leaveTypes, setLeaveTypes] = useState([]);
+
   const navigation = useNavigation();
 
   useLayoutEffect(() => {
@@ -52,6 +53,8 @@ export default function LeaveRequestScreen() {
         </TouchableOpacity>
       ),
     });
+
+    fetchLeaveTypes(); // ✅ LOAD API HERE
   }, [navigation]);
 
   // ✅ Helper: format date as YYYY-MM-DD
@@ -60,6 +63,15 @@ export default function LeaveRequestScreen() {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
       d.getDate()
     ).padStart(2, "0")}`;
+  };
+  const fetchLeaveTypes = async () => {
+    const { message, error } = await getLeaveTypes();
+
+    if (error) {
+      Alert.alert("Error", error);
+    } else {
+      setLeaveTypes(message || []);
+    }
   };
 
   const handleFromChange = (event, selectedDate) => {
@@ -127,15 +139,19 @@ export default function LeaveRequestScreen() {
         Leave Application
       </Text>
 
-      {/* Leave Type Selection */}
-      <Text className="text-sm font-medium text-gray-700 mb-1">Leave Type</Text>
+      {/* Leave Type Picker */}
+      <Text className="text-sm font-medium text-gray-700 mb-1">
+        Select Leave Type
+      </Text>
       <View className="border border-gray-300 rounded mb-4 bg-gray-50">
         <Picker selectedValue={leaveType} onValueChange={setLeaveType}>
-          <Picker.Item label="Select Leave Type" value="" />
-          <Picker.Item label="Remote" value="Remote" />
-          <Picker.Item label="Annual" value="Annual" />
-          <Picker.Item label="Out of Office" value="Out of Office" />
-          <Picker.Item label="Other" value="Other" />
+          {leaveTypes.map((item, index) => (
+            <Picker.Item
+              key={index}
+              label={item.leave_type}
+              value={item.leave_type}
+            />
+          ))}
         </Picker>
       </View>
 

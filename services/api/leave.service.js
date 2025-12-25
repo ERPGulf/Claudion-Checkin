@@ -77,7 +77,42 @@ The employer reserves the right to approve or deny the leave request based on bu
     return { error: error.message || "Something went wrong" };
   }
 };
+// getLeaveTypes()
+
+export const getLeaveTypes = async () => {
+  try {
+    const [rawBaseUrl, token, employeeCode] = await Promise.all([
+      AsyncStorage.getItem("baseUrl"),
+      AsyncStorage.getItem("access_token"),
+      AsyncStorage.getItem("employee_code"),
+    ]);
+
+    if (!rawBaseUrl || !token || !employeeCode) {
+      return { error: "Base URL, token or employee missing." };
+    }
+
+    const baseUrl = cleanBaseUrl(rawBaseUrl);
+
+    const url = `${baseUrl}/api/method/employee_app.attendance_api.get_leave_type`;
+
+    const formData = new URLSearchParams();
+    formData.append("employee", employeeCode);
+
+    const response = await apiClient.post(url, formData.toString(), {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+    });
+
+    return response.data;
+  } catch (error) {
+    console.log("🔥 Leave type error:", error.response?.data || error.message);
+    return { error: "Unable to load leave types." };
+  }
+};
 
 export default {
   createLeaveApplication,
+  getLeaveTypes,
 };
