@@ -168,7 +168,7 @@ function LavaMenu() {
           <TouchableOpacity
             className="w-16 mr-4"
             onPress={() => {
-              navigation.navigate("comingsoon");
+              navigation.navigate("Stocker");
             }}
           >
             <View className="bg-gray-100 p-2 justify-center items-center rounded-lg w-16">
@@ -179,7 +179,7 @@ function LavaMenu() {
               />
             </View>
             <Text className="text-xs text-center font-medium text-gray-500 mt-1">
-              My card
+              Stocker
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
