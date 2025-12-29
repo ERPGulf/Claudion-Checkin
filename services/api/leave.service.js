@@ -15,68 +15,56 @@ export const createLeaveApplication = async (leaveData) => {
     ]);
 
     if (!rawBaseUrl || !token || !employeeCode) {
-      let missingMessage;
-
-      if (!rawBaseUrl) {
-        missingMessage = "Base URL not found. Please scan QR code first.";
-      } else if (!token) {
-        missingMessage = "Access token missing. Please log in again.";
-      } else {
-        missingMessage = "Employee code missing. Please scan QR code again.";
-      }
-
-      return { error: missingMessage };
+      return { error: "Session expired. Please login again." };
     }
 
     const baseUrl = cleanBaseUrl(rawBaseUrl);
-
     const url = `${baseUrl}/api/method/employee_app.attendance_api.create_leave_application`;
 
-    const formatDate = (date) => {
-      if (!date) return "";
-      const d = new Date(date);
-      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
-        2,
-        "0"
-      )}-${String(d.getDate()).padStart(2, "0")}`;
-    };
-
-    const remoteAgreementText = `I acknowledge and agree to the proposed remote work arrangement.
-I will fulfill all my job responsibilities while working remotely and maintain regular communication with my team and supervisors.
-I confirm that I possess the necessary equipment and technology required to perform my job remotely.
-I agree to maintain the confidentiality of all company information.
-I understand the employer may require me to return to the office if needed.
-The employer reserves the right to approve or deny the leave request based on business needs.`;
-
-    const formData = new URLSearchParams();
+    const formData = new FormData();
     formData.append("employee", employeeCode);
-    formData.append("posting_date", formatDate(leaveData.posting_date));
+    formData.append("posting_date", leaveData.posting_date);
     formData.append("leave_type", leaveData.leave_type);
-    formData.append("from_date", formatDate(leaveData.from_date));
-    formData.append("to_date", formatDate(leaveData.to_date));
+    formData.append("from_date", leaveData.from_date);
+    formData.append("to_date", leaveData.to_date);
     formData.append("reason", leaveData.reason || "N/A");
 
-    if (
-      leaveData.leave_type === "Remote" &&
-      leaveData.acknowledgement_policy === 1
-    ) {
-      formData.append("acknowledgement_policy", "1");
-      formData.append("agreement", remoteAgreementText);
+    if (leaveData.leave_type === "Remote" && leaveData.agreement) {
+      formData.append("agreement", leaveData.agreement);
     }
 
-    const response = await apiClient.post(url, formData.toString(), {
+    const response = await apiClient.post(url, formData, {
       headers: {
         Authorization: `Bearer ${token}`,
-        "Content-Type": "application/x-www-form-urlencoded",
       },
     });
 
-    return response.data;
+    return { message: response.data?.message };
   } catch (error) {
-    console.error("❌ Error creating leave application:", error);
-    return { error: error.message || "Something went wrong" };
+    let msg = "Leave submission failed.";
+
+    const data = error?.response?.data;
+
+    try {
+      const serverMsg = data?._server_messages;
+
+      if (typeof serverMsg === "string") {
+        const parsed = JSON.parse(serverMsg);
+        if (parsed?.[0]?.message) msg = parsed[0].message;
+      } else if (Array.isArray(serverMsg)) {
+        if (serverMsg[0]?.message) msg = serverMsg[0].message;
+      } else if (data?.message) {
+        msg = data.message;
+      }
+    } catch (_) {
+      console.log("⚠️ Message parse error:", data);
+    }
+
+    console.log("❌ Leave submit crash:", msg);
+    return { error: msg };
   }
 };
+
 // getLeaveTypes()
 
 export const getLeaveTypes = async () => {
@@ -88,26 +76,28 @@ export const getLeaveTypes = async () => {
     ]);
 
     if (!rawBaseUrl || !token || !employeeCode) {
-      return { error: "Base URL, token or employee missing." };
+      return { error: "Missing credentials." };
     }
 
     const baseUrl = cleanBaseUrl(rawBaseUrl);
 
     const url = `${baseUrl}/api/method/employee_app.attendance_api.get_leave_type`;
 
-    const formData = new URLSearchParams();
-    formData.append("employee", employeeCode);
-
-    const response = await apiClient.post(url, formData.toString(), {
+    const response = await apiClient.get(url, {
+      params: { employee: employeeCode },
       headers: {
         Authorization: `Bearer ${token}`,
-        "Content-Type": "application/x-www-form-urlencoded",
       },
     });
 
-    return response.data;
+    if (!Array.isArray(response.data?.message)) {
+      console.log("❌ Invalid leave type response:", response.data);
+      return { error: "Invalid leave type response" };
+    }
+
+    return { message: response.data.message };
   } catch (error) {
-    console.log("🔥 Leave type error:", error.response?.data || error.message);
+    console.log("🔥 Leave type error:", error?.response?.data || error.message);
     return { error: "Unable to load leave types." };
   }
 };
