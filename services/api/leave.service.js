@@ -21,50 +21,52 @@ export const createLeaveApplication = async (leaveData) => {
     const baseUrl = cleanBaseUrl(rawBaseUrl);
     const url = `${baseUrl}/api/method/employee_app.attendance_api.create_leave_application`;
 
-    const formData = new FormData();
-    formData.append("employee", employeeCode);
-    formData.append("posting_date", leaveData.posting_date);
-    formData.append("leave_type", leaveData.leave_type);
-    formData.append("from_date", leaveData.from_date);
-    formData.append("to_date", leaveData.to_date);
-    formData.append("reason", leaveData.reason || "N/A");
+    // ✅ x-www-form-urlencoded (exactly like Postman)
+    const params = new URLSearchParams();
+    params.append("employee", employeeCode);
+    params.append("posting_date", leaveData.posting_date);
+    params.append("leave_type", leaveData.leave_type);
+    params.append("from_date", leaveData.from_date);
+    params.append("to_date", leaveData.to_date);
+    params.append("reason", leaveData.reason);
 
-    if (leaveData.leave_type === "Remote" && leaveData.agreement) {
-      formData.append("agreement", leaveData.agreement);
+    // ✅ REQUIRED for Remote leave
+    if (leaveData.leave_type === "Remote") {
+      params.append("acknowledgement_policy", "1");
     }
 
-    const response = await apiClient.post(url, formData, {
+    const response = await apiClient.post(url, params.toString(), {
       headers: {
         Authorization: `Bearer ${token}`,
+        "Content-Type": "application/x-www-form-urlencoded",
       },
     });
 
     return { message: response.data?.message };
   } catch (error) {
-    let msg = "Leave submission failed.";
+    let msg = "Server error. Please try again later.";
 
-    const data = error?.response?.data;
-
-    try {
-      const serverMsg = data?._server_messages;
-
-      if (typeof serverMsg === "string") {
-        const parsed = JSON.parse(serverMsg);
-        if (parsed?.[0]?.message) msg = parsed[0].message;
-      } else if (Array.isArray(serverMsg)) {
-        if (serverMsg[0]?.message) msg = serverMsg[0].message;
-      } else if (data?.message) {
-        msg = data.message;
-      }
-    } catch (_) {
-      console.log("⚠️ Message parse error:", data);
+    if (error.response?.data) {
+      const data = error.response.data;
+      try {
+        if (data._server_messages) {
+          const parsed = JSON.parse(data._server_messages);
+          if (parsed?.[0]?.message) msg = parsed[0].message;
+        } else if (typeof data.message === "string") {
+          msg = data.message;
+        }
+      } catch (_) {}
+    } else if (error.message === "Network Error") {
+      msg = "Unable to reach server. Please check your internet connection.";
     }
 
-    console.log("❌ Leave submit crash:", msg);
+    console.log(
+      "❌ Leave submit error:",
+      error?.response?.data || error.message
+    );
     return { error: msg };
   }
 };
-
 // getLeaveTypes()
 
 export const getLeaveTypes = async () => {

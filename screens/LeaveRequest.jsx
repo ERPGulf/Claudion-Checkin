@@ -143,17 +143,13 @@ export default function LeaveRequestScreen() {
     }
 
     const leaveData = {
-      employee: employeeCode,
       leave_type: leaveType,
       from_date: formatDate(fromDate),
       to_date: formatDate(toDate),
       posting_date: formatDate(new Date()),
       reason: reason.trim(),
+      acknowledgement_policy: leaveType === "Remote" ? 1 : undefined,
     };
-
-    if (leaveType === "Remote" && agreed) {
-      leaveData.agreement = REMOTE_AGREEMENT_TEXT;
-    }
 
     try {
       setLoading(true);
@@ -249,25 +245,29 @@ export default function LeaveRequestScreen() {
       )}
       {/* Remote Work Acknowledgement Section */}
       {leaveType === "Remote" && (
-        <View className="border border-blue-200 bg-blue-20 p-4 rounded-lg mb-5">
-          <ScrollView
-            style={{
-              maxHeight: 200,
-              padding: 8,
-              backgroundColor: "#fff",
-              borderRadius: 6,
-              borderWidth: 1,
-              borderColor: "#bfdbfe",
-            }}
-            showsVerticalScrollIndicator
-            nestedScrollEnabled
-          >
-            <Text style={{ color: "#374151", fontSize: 13, lineHeight: 18 }}>
-              {REMOTE_AGREEMENT_TEXT}
-            </Text>
-          </ScrollView>
+        <View className="border border-gray-200 bg-gray-100 p-4 rounded-lg mb-5">
+          {/* Agreement text only when NOT agreed */}
+          {!agreed && (
+            <ScrollView
+              style={{
+                maxHeight: 200,
+                padding: 8,
+                backgroundColor: "#fff",
+                borderRadius: 6,
+                borderWidth: 1,
+                borderColor: "#e5e7eb",
+              }}
+              showsVerticalScrollIndicator
+              nestedScrollEnabled
+            >
+              <Text style={{ color: "#374151", fontSize: 13, lineHeight: 18 }}>
+                {REMOTE_AGREEMENT_TEXT}
+              </Text>
+            </ScrollView>
+          )}
 
-          <View className="flex-row items-center mt-2">
+          {/* Checkbox always visible */}
+          <View className="flex-row items-center mt-3">
             <Checkbox
               value={agreed}
               onValueChange={setAgreed}
