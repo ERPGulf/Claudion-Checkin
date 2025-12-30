@@ -24,6 +24,7 @@ import {
 function LavaMenu() {
   const navigation = useNavigation();
   const [shortcuts, setShortcuts] = useState([]);
+  const [loadingShortcuts, setLoadingShortcuts] = useState(true);
 
   // Safe access to employeeCode from Redux
   const employeeCode = useSelector((state) =>
@@ -37,42 +38,32 @@ function LavaMenu() {
     if (!employeeCode) return;
 
     const fetchShortcuts = async () => {
-      try {
-        const results = [];
-        // Shortcut 1
-        const res1 = await getShortcut1(employeeCode);
-        if (res1) {
-          results.push({
-            ...res1,
-            screen: "Shortcut1", // 👈 where to navigate
-            icon: "medkit-outline",
-          });
-        }
+      setLoadingShortcuts(true);
 
-        // Shortcut 2
-        const res2 = await getShortcut2(employeeCode);
-        if (res2) {
-          results.push({
-            ...res2,
-            screen: "Shortcut2", // 👈 where to navigate
-            icon: "id-card-outline",
-          });
-        }
+      const requests = [
+        getShortcut1(employeeCode),
+        getShortcut2(employeeCode),
+        getShortcut3(employeeCode),
+      ];
 
-        // Shortcut 3
-        const res3 = await getShortcut3(employeeCode);
-        if (res3) {
-          results.push({
-            ...res3,
-            screen: "Shortcut3",
-            icon: "business-outline",
-          });
-        }
+      const responses = await Promise.allSettled(requests);
 
-        setShortcuts(results);
-      } catch (err) {
-        console.error("Error fetching shortcuts:", err);
-      }
+      const configs = [
+        { screen: "Shortcut1", icon: "medkit-outline" },
+        { screen: "Shortcut2", icon: "id-card-outline" },
+        { screen: "Shortcut3", icon: "person-outline" },
+      ];
+
+      const results = responses
+        .map((res, index) =>
+          res.status === "fulfilled" && res.value?.shortcut
+            ? { ...res.value, ...configs[index] }
+            : null
+        )
+        .filter(Boolean);
+
+      setShortcuts(results);
+      setLoadingShortcuts(false);
     };
 
     fetchShortcuts();
@@ -241,8 +232,18 @@ function LavaMenu() {
         </View>
 
         {/* Buttons */}
-        {/* Buttons */}
         <View className="flex-row bg-white flex-wrap py-4 items-center px-2 rounded-b-xl">
+          {/* 🔹 Skeleton while shortcuts load */}
+          {loadingShortcuts && (
+            <View className="flex-row px-2 py-4">
+              {[1, 2, 3].map((_, i) => (
+                <View key={i} className="w-16 mr-4 items-center">
+                  <View className="bg-gray-200 h-14 w-14 rounded-lg" />
+                  <View className="h-8 mt-1 bg-gray-200 w-14 rounded" />
+                </View>
+              ))}
+            </View>
+          )}
           {shortcuts.map((shortcut, index) => (
             <TouchableOpacity
               key={index}
@@ -254,36 +255,48 @@ function LavaMenu() {
                 })
               }
             >
-              <View className="bg-gray-100 p-2 justify-center items-center rounded-lg w-16 mt-3">
-                <Ionicons
-                  name={shortcut.icon}
-                  size={SIZES.xxxLarge - 3}
-                  color={COLORS.primary}
-                />
-              </View>
+              <View className="items-center mt-3">
+                {/* FIXED icon box */}
+                <View className="bg-gray-100 h-14 w-14 justify-center items-center rounded-lg">
+                  <Ionicons
+                    name={shortcut.icon}
+                    size={SIZES.xxxLarge - 6}
+                    color={COLORS.primary}
+                  />
+                </View>
 
-              <Text className="text-xs text-center font-medium text-gray-500 mt-1">
-                {shortcut.shortcut.replace(/_/g, " ")}
-              </Text>
+                {/* FIXED text space */}
+                <View className="h-8 mt-1 justify-center">
+                  <Text
+                    className="text-xs text-center font-medium text-gray-500"
+                    numberOfLines={2}
+                    ellipsizeMode="tail"
+                  >
+                    {shortcut.shortcut?.replace(/_/g, " ") || ""}
+                  </Text>
+                </View>
+              </View>
             </TouchableOpacity>
           ))}
-
-          {/* ✅ My QR inside same row */}
           <TouchableOpacity
             className="w-16 mr-4"
             onPress={() => navigation.navigate("My QR Code")}
           >
-            <View className="bg-gray-100 p-2 justify-center items-center rounded-lg w-16 -mt-5">
-              <Ionicons
-                name="qr-code"
-                size={SIZES.xxxLarge - 3}
-                color={COLORS.primary}
-              />
-            </View>
+            <View className="items-center mt-3">
+              <View className="bg-gray-100 h-14 w-14 justify-center items-center rounded-lg">
+                <Ionicons
+                  name="qr-code"
+                  size={SIZES.xxxLarge - 6}
+                  color={COLORS.primary}
+                />
+              </View>
 
-            <Text className="text-xs text-center font-medium text-gray-500 mt-1">
-              My QR
-            </Text>
+              <View className="min-h-[32px] mt-1 justify-center">
+                <Text className="text-xs text-center font-medium text-gray-500">
+                  My QR
+                </Text>
+              </View>
+            </View>
           </TouchableOpacity>
         </View>
       </View>

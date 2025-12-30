@@ -6,11 +6,13 @@ import {
   TouchableOpacity,
   ActivityIndicator,
 } from "react-native";
-import { useSelector } from "react-redux";
 import { useNavigation } from "@react-navigation/native";
 import Entypo from "@expo/vector-icons/Entypo";
-import { getShortcut3 } from "../services/api/records.service";
 import { COLORS, SIZES } from "../constants";
+import { useRoute } from "@react-navigation/native";
+import { Linking } from "react-native";
+import { useSelector } from "react-redux";
+
 
 /**
  * Format backend keys into readable labels
@@ -24,30 +26,18 @@ const Shortcut3 = () => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [shortcutTitle, setShortcutTitle] = useState("");
-
+  const route = useRoute();
+  const { shortcutData, title } = route.params || {};
   const employeeCode = useSelector(
     (state) => state.user?.userDetails?.employeeCode
   );
-// Fetch data
+
+
   useEffect(() => {
-    if (!employeeCode) return;
-
-    const fetchData = async () => {
-      try {
-        const result = await getShortcut3(employeeCode);
-        console.log("API result:", result);
-
-        setData(result?.data || {});
-        setShortcutTitle(formatLabel(result?.shortcut || "Records"));
-      } catch (err) {
-        console.error("Error fetching shortcut data:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, [employeeCode]);
+  setData(shortcutData || {});
+  setShortcutTitle(formatLabel(title || "Records"));
+  setLoading(false);
+}, [shortcutData, title]);
 
   useLayoutEffect(() => {
     navigation.setOptions({
