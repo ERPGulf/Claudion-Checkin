@@ -102,20 +102,21 @@ function LavaMenu() {
         api: getShortcut1,
         screen: "Shortcut1",
         icon: "folder-outline",
+        order: 1,
       },
       {
         api: getShortcut2,
         screen: "Shortcut2",
         icon: "documents-outline",
+        order: 2,
       },
       {
         api: getShortcut3,
         screen: "Shortcut3",
         icon: "document-text-outline",
+        order: 3,
       },
     ];
-
-    setLoadingShortcuts(true);
 
     configs.forEach(async (cfg) => {
       try {
@@ -124,7 +125,9 @@ function LavaMenu() {
           setShortcuts((prev) => {
             const filtered = prev.filter((item) => item.screen !== cfg.screen);
 
-            const updated = [...filtered, { ...res, ...cfg }];
+            const updated = [...filtered, { ...res, ...cfg }].sort(
+              (a, b) => a.order - b.order
+            );
 
             AsyncStorage.setItem(SHORTCUT_CACHE_KEY, JSON.stringify(updated));
 
@@ -135,8 +138,6 @@ function LavaMenu() {
         console.log("Shortcut API error", e);
       }
     });
-
-    setLoadingShortcuts(false);
   }, [employeeCode]);
 
   return (
