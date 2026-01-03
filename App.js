@@ -13,7 +13,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SIZES } from "./constants";
 import { toastConfig } from "./Toast/Config";
 import Navigator from "./navigation/navigator";
-import * as Updates from "expo-updates";   // ✅ OTA import
+import * as Updates from "expo-updates"; // ✅ OTA import
+import { SafeAreaProvider } from "react-native-safe-area-context";
 
 function cacheFonts(fonts) {
   return fonts.map((font) => Font.loadAsync(font));
@@ -58,19 +59,21 @@ export default function App() {
   }
 
   return (
-    <Provider store={store}>
-      <PersistGate persistor={persistor} loading={null}>
-        <QueryClientProvider client={queryClient}>
-          <Navigator />
-          <StatusBar style="auto" />
-          <Toast
-            topOffset={
-              Platform.OS === "ios" ? SIZES.topOffset + 55 : SIZES.topOffset
-            }
-            config={toastConfig}
-          />
-        </QueryClientProvider>
-      </PersistGate>
-    </Provider>
+    <SafeAreaProvider>
+      <Provider store={store}>
+        <PersistGate persistor={persistor} loading={null}>
+          <QueryClientProvider client={queryClient}>
+            <Navigator />
+            <StatusBar style="auto" />
+            <Toast
+              topOffset={
+                Platform.OS === "ios" ? SIZES.topOffset + 55 : SIZES.topOffset
+              }
+              config={toastConfig}
+            />
+          </QueryClientProvider>
+        </PersistGate>
+      </Provider>
+    </SafeAreaProvider>
   );
 }

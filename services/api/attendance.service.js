@@ -153,21 +153,7 @@ export const userCheckIn = async ({ employeeCode, type, locationData }) => {
       }
     }
 
-    // // 🕒 Timestamp for check-in
-    // const timestamp = await getServerTime();
-    // console.log("⏱ Server Timestamp:", timestamp);
-
-    // const payload = {
-    //   device_id: "MobileAPP",
-    //   employee_field_value: employeeCode,
-    //   log_type: type,
-    //   timestamp,
-    //   location: nearest?.locationName || null,
-    //   latitude: nearest?.latitude || null,
-    //   longitude: nearest?.longitude || null,
-    //   distance: nearest?.distance || null,
-    //   radius: nearest?.radius || null,
-    // };
+    
     // 🕒 Timestamp for check-in
     const timestamp = await getServerTime();
     console.log("⏱ Server Timestamp:", timestamp);
