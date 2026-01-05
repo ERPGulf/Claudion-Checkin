@@ -7,16 +7,18 @@ import {
   ActivityIndicator,
   Linking,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 import Entypo from "@expo/vector-icons/Entypo";
 import { useNavigation } from "@react-navigation/native";
 import { COLORS, SIZES } from "../constants";
 import { getShortcut2 } from "../services/api/records.service";
 import { useSelector } from "react-redux";
-import { selectEmployeeCode } from "../redux/Slices/UserSlice";
 
-const formatLabel = (key) =>
-  key.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+const formatLabel = (key = "") =>
+  key
+    .toString()
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+
 const Shortcut2 = () => {
   const navigation = useNavigation();
   const employeeCode = useSelector(
@@ -78,7 +80,12 @@ const Shortcut2 = () => {
   }
 
   /* ---------------- Empty UI ---------------- */
-  if (!data || Object.keys(data).length === 0) {
+  // if (!data || Object.keys(data).length === 0)
+  const hasValidData = Object.values(data).some(
+    (value) => value !== null && value !== undefined && value !== ""
+  );
+
+  if (!hasValidData) {
     return (
       <View className="flex-1 justify-center items-center">
         <Text className="text-gray-500 text-sm">No records available</Text>

@@ -7,16 +7,18 @@ import {
   ActivityIndicator,
   Linking,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 import Entypo from "@expo/vector-icons/Entypo";
 import { useNavigation } from "@react-navigation/native";
 import { COLORS, SIZES } from "../constants";
 import { getShortcut1 } from "../services/api/records.service";
 import { useSelector } from "react-redux";
-import { selectEmployeeCode } from "../redux/Slices/UserSlice";
 
-const formatLabel = (key) =>
-  key.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+const formatLabel = (key = "") =>
+  key
+    .toString()
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+
 const Shortcut1 = () => {
   const navigation = useNavigation();
   const employeeCode = useSelector(

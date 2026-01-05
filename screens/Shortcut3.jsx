@@ -13,13 +13,11 @@ import { useRoute } from "@react-navigation/native";
 import { Linking } from "react-native";
 import { useSelector } from "react-redux";
 
-
-/**
- * Format backend keys into readable labels
- * passport_number -> Passport Number
- */
-const formatLabel = (key) =>
-  key.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+const formatLabel = (key = "") =>
+  key
+    .toString()
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
 
 const Shortcut3 = () => {
   const navigation = useNavigation();
@@ -28,16 +26,12 @@ const Shortcut3 = () => {
   const [shortcutTitle, setShortcutTitle] = useState("");
   const route = useRoute();
   const { shortcutData, title } = route.params || {};
-  const employeeCode = useSelector(
-    (state) => state.user?.userDetails?.employeeCode
-  );
-
 
   useEffect(() => {
-  setData(shortcutData || {});
-  setShortcutTitle(formatLabel(title || "Records"));
-  setLoading(false);
-}, [shortcutData, title]);
+    setData(shortcutData || {});
+    setShortcutTitle(formatLabel(title || "Records"));
+    setLoading(false);
+  }, [shortcutData, title]);
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -68,7 +62,10 @@ const Shortcut3 = () => {
   }
 
   /* ---------------- Empty UI ---------------- */
-  if (!data) {
+  
+  const hasValidData = data && Object.keys(data).length > 0;
+
+  if (!hasValidData) {
     return (
       <View className="flex-1 justify-center items-center">
         <Text className="text-gray-500 text-sm">No records available</Text>
