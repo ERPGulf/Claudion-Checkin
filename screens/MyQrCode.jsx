@@ -6,50 +6,59 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Image,
+  Linking,
 } from "react-native";
-import { Ionicons, Octicons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import Entypo from "@expo/vector-icons/Entypo";
 import { useNavigation } from "@react-navigation/native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { COLORS, SIZES } from "../constants";
-import { getQrCode } from "../services/api/records.service";
-import { cleanBaseUrl } from "../services/api/utils";
+import { getQrCode } from "../services/api/qr.service";
 import { useSelector } from "react-redux";
 
 const MyQrCode = () => {
   const navigation = useNavigation();
   const [qrData, setQrData] = useState(null);
   const [loading, setLoading] = useState(true);
+
   const employeeCode = useSelector(
     (state) => state.user?.userDetails?.employeeCode
   );
 
-  // 🔹 Fetch QR code
+  /* ---------- Fetch QR Code ---------- */
   useEffect(() => {
     if (!employeeCode) return;
 
+    let isMounted = true;
+
     const fetchQr = async () => {
       try {
-        const data = await getQrCode(employeeCode); // ✅ pass employee
-        console.log("📦 QR DATA FROM API:", data); 
-        setQrData(data);
+        const data = await getQrCode(employeeCode);
+        if (isMounted) {
+          setQrData(data);
+        }
       } catch (error) {
-        console.error("Failed to fetch QR code:", error);
+        console.error("❌ Failed to fetch QR code:", error.message);
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
 
     fetchQr();
+
+    return () => {
+      isMounted = false;
+    };
   }, [employeeCode]);
 
-  // 🔹 Header
+  /* ---------- Header ---------- */
   useLayoutEffect(() => {
     navigation.setOptions({
-      headerShadowVisible: false,
       headerShown: true,
       headerTitle: "My QR Code",
       headerTitleAlign: "center",
+      headerShadowVisible: false,
       headerLeft: () => (
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Entypo
@@ -87,7 +96,7 @@ const MyQrCode = () => {
               color={COLORS.primary}
             />
             <Text className="ml-2 text-base font-semibold text-gray-900">
-              {qrData?.employee}
+              {qrData?.employee || "—"}
             </Text>
           </View>
         </View>
