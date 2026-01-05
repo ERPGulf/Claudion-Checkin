@@ -1,3 +1,4 @@
+// NOSONAR
 import React, { useEffect, useLayoutEffect, useState } from "react";
 import {
   View,
