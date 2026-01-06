@@ -10,7 +10,6 @@ import {
   ActivityIndicator,
   Platform,
 } from "react-native";
-
 import Entypo from "@expo/vector-icons/Entypo";
 import { Picker } from "@react-native-picker/picker";
 
