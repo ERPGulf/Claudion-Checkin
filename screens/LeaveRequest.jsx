@@ -1,4 +1,4 @@
-import React, { useState, useLayoutEffect } from "react";
+import React, { useState, useLayoutEffect, useEffect } from "react";
 import { useNavigation } from "@react-navigation/native";
 import {
   View,
@@ -11,16 +11,38 @@ import {
   Platform,
 } from "react-native";
 import Entypo from "@expo/vector-icons/Entypo";
+import { Picker } from "@react-native-picker/picker";
+
 import DateTimePicker from "@react-native-community/datetimepicker";
 import Checkbox from "expo-checkbox";
 import { useSelector } from "react-redux";
 import { selectEmployeeCode } from "../redux/Slices/UserSlice";
 import { COLORS, SIZES } from "../constants";
-import { createLeaveApplication } from "../services/api";
+import { createLeaveApplication, getLeaveTypes } from "../services/api";
+const REMOTE_AGREEMENT_TEXT = `I acknowledge and agree to the proposed remote work arrangement.
+
+I understand and agree to fulfil all my job responsibilities while working remotely, as outlined in my job description or as assigned by the Company.
+
+I will maintain regular communication (30 minutes span) with my team members, supervisors, and other stakeholders through the designated communication channels established by the Company.
+
+I will be available during the Company's regular working hours, making any necessary adjustments to accommodate time zone differences, if applicable. I will promptly notify my supervisor or designated point of contact of any anticipated unavailability or need for schedule adjustments.
+
+I confirm that I possess the necessary equipment and technology required to perform my job remotely, including a reliable internet connection, a suitable computer or device, and any other tools specified by the Company.
+
+I will be responsible for maintaining and securing my equipment and promptly reporting any technical issues or concerns to the designated IT support team.
+
+I agree to maintain the confidentiality of all company information, trade secrets, customer data, and other sensitive information, both during and after the remote work arrangement.
+
+I acknowledge that the remote work arrangement may be subject to reasonable changes and adjustments based on the Company's evolving needs, operational requirements, or changing circumstances.
+
+I acknowledge that, at the Company's discretion, I may be required to return to the office for important meetings, collaborative work, training sessions, or as directed by the Company.
+
+The employer reserves the right to approve or deny the leave request based on business needs and operational requirements.`;
 
 export default function LeaveRequestScreen() {
   const employeeCode = useSelector(selectEmployeeCode);
-  const [leaveType, setLeaveType] = useState("");
+
+  const [leaveType, setLeaveType] = useState("__none__");
   const [reason, setReason] = useState("");
   const [fromDate, setFromDate] = useState(new Date());
   const [toDate, setToDate] = useState(new Date());
@@ -29,7 +51,17 @@ export default function LeaveRequestScreen() {
   const [showFromPicker, setShowFromPicker] = useState(false);
   const [showToPicker, setShowToPicker] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [leaveTypes, setLeaveTypes] = useState([]);
+
   const navigation = useNavigation();
+  useEffect(() => {
+    fetchLeaveTypes();
+  }, []);
+  useEffect(() => {
+    if (leaveType !== "Remote") {
+      setAgreed(false);
+    }
+  }, [leaveType]);
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -56,22 +88,50 @@ export default function LeaveRequestScreen() {
       d.getDate()
     ).padStart(2, "0")}`;
   };
+  const fetchLeaveTypes = async () => {
+    const { message, error } = await getLeaveTypes();
+
+    if (error) {
+      Alert.alert("Error", error);
+    } else {
+      setLeaveTypes(message || []);
+    }
+  };
 
   const handleFromChange = (event, selectedDate) => {
     setShowFromPicker(false);
+    if (event.type === "dismissed") return;
     if (selectedDate) setFromDate(selectedDate);
   };
 
   const handleToChange = (event, selectedDate) => {
     setShowToPicker(false);
+    if (event.type === "dismissed") return;
     if (selectedDate) setToDate(selectedDate);
   };
 
   const handleSubmit = async () => {
-    if (!leaveType) {
+    const normalizeDate = (date) => {
+      const d = new Date(date);
+      d.setHours(0, 0, 0, 0);
+      return d;
+    };
+
+    const from = normalizeDate(fromDate);
+    const to = normalizeDate(toDate);
+
+    // ❌ Only block if To date is BEFORE From date
+    if (to < from) {
+      Alert.alert("Invalid Date", "To date cannot be before From date.");
+      return;
+    }
+    if (!leaveType || leaveType === "__none__") {
       Alert.alert("Missing Field", "Please select a leave type.");
       return;
     }
+
+    // 🟢 Single day leave when dates are same
+    const isSingleDayLeave = from.getTime() === to.getTime();
 
     if (leaveType === "Remote" && !agreed) {
       Alert.alert(
@@ -82,13 +142,12 @@ export default function LeaveRequestScreen() {
     }
 
     const leaveData = {
-      employee: employeeCode,
       leave_type: leaveType,
       from_date: formatDate(fromDate),
       to_date: formatDate(toDate),
-      posting_date: formatDate(postingDate),
-      reason,
-      acknowledgement_policy: leaveType === "Remote" && agreed ? 1 : undefined,
+      posting_date: formatDate(new Date()),
+      reason: reason.trim(),
+      acknowledgement_policy: leaveType === "Remote" ? 1 : undefined,
     };
 
     try {
@@ -115,35 +174,29 @@ export default function LeaveRequestScreen() {
       setLoading(false);
     }
   };
-  console.log("result");
+
   return (
     <ScrollView className="p-4 bg-white">
       <Text className="text-xl font-semibold mb-4 text-gray-800">
         Leave Application
       </Text>
 
-      {/* Leave Type Selection */}
-      <Text className="text-sm font-medium text-gray-700 mb-2">Leave Type</Text>
-      <View className="flex-row justify-between mb-4">
-        {["Remote", "Annual", "Out Of Office"].map((type) => (
-          <TouchableOpacity
-            key={type}
-            onPress={() => setLeaveType(type)}
-            className={`flex-1 mx-1 p-3 rounded-xl border ${
-              leaveType === type
-                ? "bg-gray-600 border-gray-600 shadow-md"
-                : "border-gray-300 bg-gray-100"
-            }`}
-          >
-            <Text
-              className={`text-center font-semibold ${
-                leaveType === type ? "text-white" : "text-gray-700"
-              }`}
-            >
-              {type}
-            </Text>
-          </TouchableOpacity>
-        ))}
+      {/* Leave Type Picker */}
+      <Text className="text-sm font-medium text-gray-700 mb-1">
+        Select Leave Type
+      </Text>
+      <View className="border border-gray-300 rounded mb-4 bg-gray-50">
+        <Picker selectedValue={leaveType} onValueChange={setLeaveType}>
+          <Picker.Item label="Select Leave Type" value="__none__" />
+
+          {leaveTypes.map((item, index) => (
+            <Picker.Item
+              key={index}
+              label={String(item?.leave_type || "")}
+              value={String(item?.leave_type || "")}
+            />
+          ))}
+        </Picker>
       </View>
 
       {/* Reason */}
@@ -189,57 +242,31 @@ export default function LeaveRequestScreen() {
           onChange={handleToChange}
         />
       )}
-
       {/* Remote Work Acknowledgement Section */}
       {leaveType === "Remote" && (
-        <View className="border border-blue-200 bg-blue-20 p-4 rounded-lg mb-5">
-          <ScrollView
-            style={{
-              maxHeight: 200,
-              padding: 8,
-              backgroundColor: "#fff",
-              borderRadius: 6,
-              borderWidth: 1,
-              borderColor: "#bfdbfe",
-            }}
-            nestedScrollEnabled={true}
-          >
-            <Text style={{ color: "#374151", fontSize: 13, lineHeight: 18 }}>
-              I acknowledge and agree to the proposed remote work arrangement.
-              {"\n\n"}I understand and agree to fulfil all my job
-              responsibilities while working remotely, as outlined in my job
-              description or as assigned by the Company.{"\n\n"}I will maintain
-              regular communication (30 minutes span) with my team members,
-              supervisors, and other stakeholders through the designated
-              communication channels established by the Company.{"\n\n"}I will
-              be available during the Company's regular working hours, making
-              any necessary adjustments to accommodate time zone differences, if
-              applicable. I will promptly notify my supervisor or designated
-              point of contact of any anticipated unavailability or need for
-              schedule adjustments.{"\n\n"}I confirm that I possess the
-              necessary equipment and technology required to perform my job
-              remotely, including a reliable internet connection, a suitable
-              computer or device, and any other tools specified by the Company.
-              {"\n\n"}I will be responsible for maintaining and securing my
-              equipment and promptly reporting any technical issues or concerns
-              to the designated IT support team.{"\n\n"}I agree to maintain the
-              confidentiality of all company information, trade secrets,
-              customer data, and other sensitive information, both during and
-              after the remote work arrangement.{"\n\n"}I acknowledge that the
-              remote work arrangement may be subject to reasonable changes and
-              adjustments based on the Company's evolving needs, operational
-              requirements, or changing circumstances.{"\n\n"}I acknowledge
-              that, at the Company's discretion, I may be required to return to
-              the office for important meetings, collaborative work, training
-              sessions, or as directed by the Company.{"\n\n"}
-              The employer reserves the right to approve or deny the leave
-              request based on business needs and operational requirements.
-              {"\n\n"}
-            </Text>
-          </ScrollView>
+        <View className="border border-gray-200 bg-gray-100 p-4 rounded-lg mb-5">
+          {/* Agreement text only when NOT agreed */}
+          {!agreed && (
+            <ScrollView
+              style={{
+                maxHeight: 200,
+                padding: 8,
+                backgroundColor: "#fff",
+                borderRadius: 6,
+                borderWidth: 1,
+                borderColor: "#e5e7eb",
+              }}
+              showsVerticalScrollIndicator
+              nestedScrollEnabled
+            >
+              <Text style={{ color: "#374151", fontSize: 13, lineHeight: 18 }}>
+                {REMOTE_AGREEMENT_TEXT}
+              </Text>
+            </ScrollView>
+          )}
 
-          {/* Checkbox agreement */}
-          <View className="flex-row items-center mt-2">
+          {/* Checkbox always visible */}
+          <View className="flex-row items-center mt-3">
             <Checkbox
               value={agreed}
               onValueChange={setAgreed}
