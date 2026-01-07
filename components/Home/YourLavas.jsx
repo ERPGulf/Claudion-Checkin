@@ -1,3 +1,4 @@
+/* eslint-disable react/prop-types */
 import React, { useEffect, useState } from "react";
 import {
   View,
@@ -6,6 +7,26 @@ import {
   ScrollView,
   Linking,
 } from "react-native";
+/* ---------------- DEFAULT FALLBACK RECORDS ---------------- */
+const DEFAULT_RECORDS = [
+  {
+    shortcut: "Record 1",
+    icon: "document-outline",
+    isFallback: true,
+  },
+  {
+    shortcut: "Record 2",
+    icon: "folder-outline",
+    isFallback: true,
+  },
+  {
+    shortcut: "Record 3",
+    icon: "document-text-outline",
+    isFallback: true,
+  },
+];
+
+/* ---------------------------------------------------------- */
 
 import { useSelector } from "react-redux";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -29,18 +50,25 @@ const SHORTCUT_CACHE_KEY = "user_shortcuts_cache_v2";
  * Memoized Shortcut Button (prevents re-render)
  * --------------------------------------------------- */
 const ShortcutButton = React.memo(({ shortcut, navigation }) => {
+  const handlePress = () => {
+    // 🛑 Fallback record → NO navigation
+    if (shortcut.isFallback) {
+      alert("No records available");
+      return;
+    }
+
+    // ✅ Real shortcut → navigate
+    if (shortcut.screen) {
+      navigation.navigate(shortcut.screen, {
+        shortcutData: shortcut.data,
+        title: shortcut.shortcut,
+      });
+    }
+  };
+
   return (
-    <TouchableOpacity
-      className="w-16 mr-4"
-      onPress={() =>
-        navigation.navigate(shortcut.screen, {
-          shortcutData: shortcut.data,
-          title: shortcut.shortcut,
-        })
-      }
-    >
+    <TouchableOpacity className="w-16 mr-4" onPress={handlePress}>
       <View className="items-center mt-3">
-        {/* Icon */}
         <View className="bg-gray-100 h-14 w-14 justify-center items-center rounded-lg">
           <Ionicons
             name={shortcut.icon}
@@ -49,10 +77,9 @@ const ShortcutButton = React.memo(({ shortcut, navigation }) => {
           />
         </View>
 
-        {/* Text */}
         <View className="mt-1 px-1">
           <Text className="text-xs text-center font-medium text-gray-500">
-            {shortcut.shortcut?.replace(/_/g, " ")}
+            {shortcut.shortcut}
           </Text>
         </View>
       </View>
@@ -71,6 +98,8 @@ function LavaMenu() {
   const employeeCode = useSelector(
     (state) => state.user?.userDetails?.employeeCode
   );
+  const recordsToShow =
+    !loadingShortcuts && shortcuts.length === 0 ? DEFAULT_RECORDS : shortcuts;
 
   /* ---------------------------------------------------
    * Load cached shortcuts immediately
@@ -118,25 +147,28 @@ function LavaMenu() {
       },
     ];
 
-    configs.forEach(async (cfg) => {
-      try {
-        const res = await cfg.api(employeeCode);
-        if (res?.shortcut) {
-          setShortcuts((prev) => {
-            const filtered = prev.filter((item) => item.screen !== cfg.screen);
+    Promise.all(
+      configs.map(async (cfg) => {
+        try {
+          const res = await cfg.api(employeeCode);
+          if (res?.shortcut) {
+            setShortcuts((prev) => {
+              const filtered = prev.filter(
+                (item) => item.screen !== cfg.screen
+              );
 
-            const updated = [...filtered, { ...res, ...cfg }].sort(
-              (a, b) => a.order - b.order
-            );
-
-            AsyncStorage.setItem(SHORTCUT_CACHE_KEY, JSON.stringify(updated));
-
-            return updated;
-          });
+              return [...filtered, { ...res, ...cfg }].sort(
+                (a, b) => a.order - b.order
+              );
+            });
+          }
+        } catch (e) {
+          console.log("Shortcut API error", e);
         }
-      } catch (e) {
-        console.log("Shortcut API error", e);
-      }
+      })
+    ).finally(() => {
+      // ✅ THIS LINE WAS MISSING
+      setLoadingShortcuts(false);
     });
   }, [employeeCode]);
 
@@ -249,9 +281,9 @@ function LavaMenu() {
           )}
 
           {/* Dynamic shortcuts */}
-          {shortcuts.map((shortcut) => (
+          {recordsToShow.map((shortcut, index) => (
             <ShortcutButton
-              key={shortcut.shortcut}
+              key={shortcut.shortcut || index}
               shortcut={shortcut}
               navigation={navigation}
             />

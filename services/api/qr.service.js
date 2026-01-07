@@ -7,13 +7,13 @@ export const getQrCode = async (employeeCode) => {
       { employee: employeeCode }
     );
 
-    if (!message || message.status !== "success") {
+    if (message?.status !== "success") {
       throw new Error("Failed to fetch QR code");
     }
 
     return {
-      employee: message.employee,
-      imageUrl: message.image_url,
+      employee: message?.employee,
+      imageUrl: message?.image_url,
     };
   } catch (error) {
     console.error("❌ getQrCode error:", error.message);

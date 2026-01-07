@@ -14,6 +14,15 @@ import { useNavigation } from "@react-navigation/native";
 import { COLORS, SIZES } from "../constants";
 import { getQrCode } from "../services/api/qr.service";
 import { useSelector } from "react-redux";
+const HeaderBackButton = ({ onPress }) => (
+  <TouchableOpacity onPress={onPress}>
+    <Entypo
+      name="chevron-left"
+      size={SIZES.xxxLarge - 5}
+      color={COLORS.primary}
+    />
+  </TouchableOpacity>
+);
 
 const MyQrCode = () => {
   const navigation = useNavigation();
@@ -59,15 +68,7 @@ const MyQrCode = () => {
       headerTitle: "My QR Code",
       headerTitleAlign: "center",
       headerShadowVisible: false,
-      headerLeft: () => (
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Entypo
-            name="chevron-left"
-            size={SIZES.xxxLarge - 5}
-            color={COLORS.primary}
-          />
-        </TouchableOpacity>
-      ),
+      headerLeft: () => <HeaderBackButton onPress={navigation.goBack} />,
     });
   }, [navigation]);
 

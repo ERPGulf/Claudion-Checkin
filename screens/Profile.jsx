@@ -11,6 +11,9 @@ import { COLORS, SIZES } from "../constants";
 import user from "../assets/images/user.png";
 import { hapticsMessage } from "../utils/HapticsMessage";
 import { selectUserDetails } from "../redux/Slices/UserSlice";
+import { clearTokens, clearStore } from "../services/api/apiClient";
+import apiClient from "../services/api/apiClient";
+
 const VERSION_CODE = "1.0.9B";
 function Profile() {
   const dispatch = useDispatch();
@@ -27,10 +30,19 @@ function Profile() {
   const handleLogout = async () => {
     try {
       hapticsMessage("success");
-      dispatch(revertAll());
-      await AsyncStorage.clear();
+
+      // 1. Clear tokens
+      await clearTokens();
+
+      // 2. Clear redux store (sets isLoggedIn = false)
+      clearStore();
+
+      // 3. Clear axios header
+      delete apiClient.defaults.headers.common.Authorization;
+
+      // ❌ NO navigation here
     } catch (error) {
-      console.error(error, "logout error");
+      console.error("logout error", error);
       hapticsMessage("error");
       Toast.show({
         type: "error",
@@ -40,6 +52,7 @@ function Profile() {
       });
     }
   };
+
   return (
     <View
       style={{
