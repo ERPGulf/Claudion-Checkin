@@ -14,7 +14,7 @@ import { selectUserDetails } from "../redux/Slices/UserSlice";
 import { clearTokens, clearStore } from "../services/api/apiClient";
 import apiClient from "../services/api/apiClient";
 
-const VERSION_CODE = "1.0.9B";
+const VERSION_CODE = "1.1.0";
 function Profile() {
   const dispatch = useDispatch();
   const navigation = useNavigation();
