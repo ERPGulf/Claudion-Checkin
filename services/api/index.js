@@ -9,6 +9,7 @@ export * from "./expense.service";
 export * from "./leave.service";
 export * from "./trip.service";
 export * from "./records.service";
+export * from "./notification.service";
 
 import trip from "./trip.service";
 import auth from "./auth.service";
@@ -18,6 +19,7 @@ import upload from "./upload.service";
 import expense from "./expense.service";
 import leave from "./leave.service";
 import records from "./records.service";
+import notification from "./notification.service";
 
 export default {
   auth,
@@ -28,4 +30,5 @@ export default {
   leave,
   trip,
   records,
+  notification,
 };

@@ -90,7 +90,7 @@ export default function ExpenseClaim() {
 
   return (
     <ScrollView
-      className="flex-1 bg-gray-100"
+      className="flex-1 bg-white"
       contentContainerStyle={{ padding: 16 }}
     >
       {/* Claim Form */}
