@@ -29,14 +29,22 @@ export const getNotifications = async (employeeId) => {
           Authorization: `Bearer ${token}`,
         },
         params: {
-          employee: employeeId, // ✅ matches Postman
+          employee: employeeId,
         },
         timeout: 10000,
       },
     );
 
-    // ✅ Postman response: { message: [...] }
-    return Array.isArray(response.data?.message) ? response.data.message : [];
+    // ✅ Normalize response for UI
+    const notifications = Array.isArray(response.data?.message)
+      ? response.data.message.map((item) => ({
+          ...item,
+          read: Number(item.read), // ensure number
+          type: item.type?.toLowerCase() || "", // normalize type
+        }))
+      : [];
+
+    return notifications;
   } catch (error) {
     console.error(
       "❌ Notification fetch error:",

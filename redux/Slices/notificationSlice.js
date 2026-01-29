@@ -11,13 +11,20 @@ const notificationSlice = createSlice({
     setUnreadCount(state, action) {
       state.unreadCount = action.payload;
     },
+
+    decrementUnreadCount(state) {
+      if (state.unreadCount > 0) {
+        state.unreadCount -= 1;
+      }
+    },
+
     clearUnreadCount(state) {
       state.unreadCount = 0;
     },
   },
 });
 
-export const { setUnreadCount, clearUnreadCount } =
+export const { setUnreadCount, decrementUnreadCount, clearUnreadCount } =
   notificationSlice.actions;
 
 export default notificationSlice.reducer;
