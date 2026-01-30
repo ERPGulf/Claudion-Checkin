@@ -85,7 +85,7 @@ export default function LeaveRequestScreen() {
   const formatDate = (date) => {
     const d = new Date(date);
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
-      d.getDate()
+      d.getDate(),
     ).padStart(2, "0")}`;
   };
   const fetchLeaveTypes = async () => {
@@ -136,7 +136,7 @@ export default function LeaveRequestScreen() {
     if (leaveType === "Remote" && !agreed) {
       Alert.alert(
         "Agreement Required",
-        "Please scroll through and agree to the remote work policy before submitting."
+        "Please scroll through and agree to the remote work policy before submitting.",
       );
       return;
     }
@@ -157,14 +157,14 @@ export default function LeaveRequestScreen() {
       if (error) {
         Alert.alert(
           "Error",
-          typeof error === "string" ? error : JSON.stringify(error)
+          typeof error === "string" ? error : JSON.stringify(error),
         );
       } else {
         Alert.alert(
           "Success",
           typeof message === "string"
             ? message
-            : "Leave request submitted successfully!"
+            : "Leave request submitted successfully!",
         );
       }
     } catch (err) {
@@ -205,8 +205,9 @@ export default function LeaveRequestScreen() {
         value={reason}
         onChangeText={setReason}
         placeholder="Enter reason for leave"
+        placeholderTextColor="#6B7280"
         multiline
-        className="border border-gray-300 rounded-lg px-3 py-2 mb-3"
+        className="border border-gray-300 rounded-lg px-3 py-2 mb-3 text-gray-900"
       />
 
       {/* From Date */}

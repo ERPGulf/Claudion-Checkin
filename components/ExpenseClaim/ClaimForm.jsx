@@ -159,21 +159,23 @@ function ClaimForm({ onSubmit }) {
       <Label text="Description" optional />
       <TextInput
         placeholder="Enter description"
+        placeholderTextColor="#6B7280"
         value={description}
         onChangeText={setDescription}
         multiline
         numberOfLines={3}
-        className="border border-gray-300 rounded p-2 mb-3 bg-gray-50"
+        className="border border-gray-300 rounded p-2 mb-3 bg-gray-50  text-gray-900"
       />
 
       {/* Amount */}
       <Label text="Amount" required />
       <TextInput
         placeholder="Enter amount"
+        placeholderTextColor="#6B7280"
         value={amount}
         onChangeText={setAmount}
         keyboardType="numeric"
-        className="border border-gray-300 rounded p-2 mb-3 bg-gray-50"
+        className="border border-gray-300 rounded p-2 mb-3 bg-gray-50 text-gray-900"
       />
 
       {/* File Upload */}

@@ -181,8 +181,14 @@ function Login() {
                   value={values.password}
                   onChangeText={handleChange("password")}
                   placeholder="Enter password"
+                  placeholderTextColor={COLORS.gray2}
                   onBlur={() => setFieldTouched("password")}
-                  style={{ flex: 1, fontSize: 16, height: "100%" }}
+                  style={{
+                    flex: 1,
+                    fontSize: 16,
+                    height: "100%",
+                    color: COLORS.black,
+                  }}
                 />
                 <TouchableOpacity
                   onPress={() => setShowPassword((prev) => !prev)}
