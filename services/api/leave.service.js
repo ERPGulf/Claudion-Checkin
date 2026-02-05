@@ -2,6 +2,8 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import apiClient from "./apiClient";
 import { cleanBaseUrl } from "./utils";
+import { Platform } from "react-native";
+import axios from "axios";
 
 /**
  * createLeaveApplication(leaveData)
@@ -42,7 +44,7 @@ export const createLeaveApplication = async (leaveData) => {
       },
     });
 
-    return { message: response.data?.message };
+    return { message: response.data };
   } catch (error) {
     let msg = "Server error. Please try again later.";
 
@@ -62,7 +64,7 @@ export const createLeaveApplication = async (leaveData) => {
 
     console.log(
       "❌ Leave submit error:",
-      error?.response?.data || error.message
+      error?.response?.data || error.message,
     );
     return { error: msg };
   }
@@ -103,8 +105,56 @@ export const getLeaveTypes = async () => {
     return { error: "Unable to load leave types." };
   }
 };
+/**
+ * uploadLeaveAttachment
+ */
+export const uploadLeaveAttachment = async (file, docname) => {
+  try {
+    if (!file?.uri) throw new Error("Invalid file data");
+    if (!docname) throw new Error("Missing docname (leave ID)");
 
+    const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
+    const token = await AsyncStorage.getItem("access_token");
+
+    if (!rawBaseUrl || !token) {
+      throw new Error("Missing baseUrl or token");
+    }
+
+    const baseUrl = rawBaseUrl.trim().replace(/\/+$/, "");
+
+    const formData = new FormData();
+    formData.append("file", {
+      uri: file.uri,
+      name: file.name || "leave_attachment.jpg",
+      type: file.type || "application/octet-stream",
+    });
+    formData.append("file_name", "leave");
+    formData.append("doctype", "Leave Application");
+    formData.append("docname", String(docname));
+
+    const response = await apiClient.post(
+      `${baseUrl}/api/method/employee_app.attendance_api.upload_file`,
+      formData,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "multipart/form-data",
+        },
+        transformRequest: (data) => data,
+      },
+    );
+
+    return response.data;
+  } catch (error) {
+    console.error(
+      "❌ Leave attachment upload failed:",
+      error?.response?.data || error.message,
+    );
+    throw error;
+  }
+};
 export default {
   createLeaveApplication,
   getLeaveTypes,
+  uploadLeaveAttachment,
 };

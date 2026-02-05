@@ -1,5 +1,7 @@
-import React, { useState, useLayoutEffect, useEffect } from "react";
+import { useState, useLayoutEffect, useEffect } from "react";
 import { useNavigation } from "@react-navigation/native";
+import * as DocumentPicker from "expo-document-picker";
+import { uploadLeaveAttachment } from "../services/api";
 import {
   View,
   Text,
@@ -12,7 +14,6 @@ import {
 } from "react-native";
 import Entypo from "@expo/vector-icons/Entypo";
 import { Picker } from "@react-native-picker/picker";
-
 import DateTimePicker from "@react-native-community/datetimepicker";
 import Checkbox from "expo-checkbox";
 import { useSelector } from "react-redux";
@@ -41,7 +42,6 @@ The employer reserves the right to approve or deny the leave request based on bu
 
 export default function LeaveRequestScreen() {
   const employeeCode = useSelector(selectEmployeeCode);
-
   const [leaveType, setLeaveType] = useState("__none__");
   const [reason, setReason] = useState("");
   const [fromDate, setFromDate] = useState(new Date());
@@ -52,6 +52,7 @@ export default function LeaveRequestScreen() {
   const [showToPicker, setShowToPicker] = useState(false);
   const [loading, setLoading] = useState(false);
   const [leaveTypes, setLeaveTypes] = useState([]);
+  const [attachment, setAttachment] = useState(null);
 
   const navigation = useNavigation();
   useEffect(() => {
@@ -96,6 +97,22 @@ export default function LeaveRequestScreen() {
     } else {
       setLeaveTypes(message || []);
     }
+  };
+  const pickAttachment = async () => {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: ["image/*", "application/pdf"],
+      copyToCacheDirectory: true,
+    });
+
+    if (result.canceled) return;
+
+    const file = result.assets[0];
+
+    setAttachment({
+      uri: file.uri,
+      name: file.name,
+      type: file.mimeType || "application/octet-stream",
+    });
   };
 
   const handleFromChange = (event, selectedDate) => {
@@ -155,18 +172,25 @@ export default function LeaveRequestScreen() {
       const { message, error } = await createLeaveApplication(leaveData);
 
       if (error) {
-        Alert.alert(
-          "Error",
-          typeof error === "string" ? error : JSON.stringify(error),
-        );
-      } else {
-        Alert.alert(
-          "Success",
-          typeof message === "string"
-            ? message
-            : "Leave request submitted successfully!",
-        );
+        Alert.alert("Error", error);
+        return;
       }
+      const docname = message?.id;
+
+      if (!docname) {
+        throw new Error("Leave docname missing");
+      }
+
+      if (attachment) {
+        console.log("Uploading leave attachment:", {
+          attachment,
+          docname,
+        });
+        await uploadLeaveAttachment(attachment, docname);
+        console.log("Leave upload OK:", docname);
+      }
+
+      Alert.alert("Success", "Leave request submitted successfully!");
     } catch (err) {
       console.error("⚠️ Submit error:", err);
       Alert.alert("Error", err.message || "Something went wrong.");
@@ -209,6 +233,19 @@ export default function LeaveRequestScreen() {
         multiline
         className="border border-gray-300 rounded-lg px-3 py-2 mb-3 text-gray-900"
       />
+      {/* Attachment */}
+      <Text className="text-sm font-medium text-gray-700 mb-1">
+        Attachment (optional)
+      </Text>
+
+      <TouchableOpacity
+        onPress={pickAttachment}
+        className="border border-dashed border-gray-400 rounded-lg p-3 mb-3"
+      >
+        <Text className="text-gray-600 text-center">
+          {attachment ? attachment.name : "Upload Attachment (Image / PDF)"}
+        </Text>
+      </TouchableOpacity>
 
       {/* From Date */}
       <Text className="text-sm font-medium text-gray-700 mb-1">From Date</Text>
