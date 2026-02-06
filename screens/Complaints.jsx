@@ -11,6 +11,7 @@ import { useNavigation } from "@react-navigation/native";
 import * as DocumentPicker from "expo-document-picker";
 import Entypo from "@expo/vector-icons/Entypo";
 import { COLORS, SIZES } from "../constants";
+import { SafeAreaView } from "react-native-safe-area-context";
 import {
   createComplaint,
   uploadComplaintAttachment,
@@ -70,7 +71,6 @@ const Complaints = () => {
   };
 
   const submitComplaint = async () => {
-
     if (!message.trim()) {
       Alert.alert("Validation", "Please enter complaint message");
       return;
@@ -106,61 +106,92 @@ const Complaints = () => {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#f5f5f5", padding: 16 }}>
-      
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
+      <View style={{ flex: 1 }}>
+        {/* MAIN CONTENT */}
+        <View style={{ flex: 1, padding: 16 }}>
+          {/* MESSAGE BOX */}
+          <TextInput
+            style={{
+              minHeight: 160,
+              maxHeight: 240,
+              backgroundColor: "#fff",
+              borderRadius: 10,
+              padding: 16,
+              marginBottom: 14,
 
-      <TextInput
-        style={{
-          backgroundColor: "#fff",
-          borderRadius: 8,
-          padding: 14,
-          minHeight: 120,
-          marginBottom: 16,
-        }}
-        placeholder="Enter your message here..."
-        multiline
-        value={message}
-        onChangeText={setMessage}
-        textAlignVertical="top"
-      />
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.12,
+              shadowRadius: 6,
+              elevation: 3,
+            }}
+            placeholder="Enter your message here..."
+            multiline
+            value={message}
+            onChangeText={setMessage}
+            textAlignVertical="top"
+          />
 
-      <TouchableOpacity
-        onPress={pickFile}
-        style={{
-          backgroundColor: "#fff",
-          borderWidth: 1,
-          borderStyle: "dashed",
-          borderColor: "#aaa",
-          borderRadius: 8,
-          padding: 14,
-          marginBottom: 16,
-        }}
-      >
-        <Text style={{ textAlign: "center", color: "#555" }}>
-          {file ? file.name : "Attach file (optional)"}
-        </Text>
-      </TouchableOpacity>
+          {/* ATTACH FILE */}
+          <TouchableOpacity
+            onPress={pickFile}
+            style={{
+              backgroundColor: "#fff",
+              borderWidth: 1,
+              borderStyle: "dashed",
+              borderColor: "#d1d5db",
+              borderRadius: 10,
+              paddingVertical: 14,
+              paddingHorizontal: 12,
+              alignItems: "center",
+            }}
+          >
+            <Text
+              style={{
+                color: "#6b7280",
+                fontSize: 14,
+              }}
+              numberOfLines={1}
+            >
+              {file ? file.name : "Attach file (optional)"}
+            </Text>
+          </TouchableOpacity>
+        </View>
 
-      <TouchableOpacity
-        onPress={submitComplaint}
-        disabled={loading}
-        style={{
-          backgroundColor: "#2563eb",
-          padding: 14,
-          borderRadius: 8,
-          alignItems: "center",
-          opacity: loading ? 0.7 : 1,
-        }}
-      >
-        {loading ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={{ color: "#fff", fontWeight: "600" }}>
-            Submit Complaint
-          </Text>
-        )}
-      </TouchableOpacity>
-    </View>
+        {/* FOOTER */}
+        <View
+          style={{
+            padding: 16,
+            paddingBottom: 24,
+            borderTopWidth: 1,
+            borderTopColor: "#f1f5f9",
+            backgroundColor: "#fff",
+          }}
+        >
+          <TouchableOpacity
+            onPress={submitComplaint}
+            disabled={loading}
+            className="bg-green-600 p-4 rounded-xl items-center"
+            style={{ opacity: loading ? 0.7 : 1 }}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text
+                style={{
+                  color: "#fff",
+                  fontWeight: "600",
+                  fontSize: 16,
+                }}
+              >
+                Submit Complaint
+              </Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
+    </SafeAreaView>
   );
 };
 

@@ -18,12 +18,6 @@ export const createComplaint = async ({ date, message }) => {
   const url = `${baseUrl}/api/method/employee_app.attendance_api.create_complaint`;
 
   try {
-    console.log("Base URL:", baseUrl);
-    console.log("Final URL:", url);
-    console.log("Token (first 10 chars):", token?.slice(0, 10));
-    console.log("Employee:", employee);
-    console.log("Payload:", { employee, date, message });
-
     const response = await apiClient.post(
       url,
       {
@@ -38,8 +32,6 @@ export const createComplaint = async ({ date, message }) => {
         timeout: 15000,
       },
     );
-
-    console.log("Create complaint response:", response.data);
     return response.data;
   } catch (e) {
     console.log("AXIOS ERROR FULL:", e);

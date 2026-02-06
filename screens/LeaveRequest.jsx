@@ -243,7 +243,7 @@ export default function LeaveRequestScreen() {
         className="border border-dashed border-gray-400 rounded-lg p-3 mb-3"
       >
         <Text className="text-gray-600 text-center">
-          {attachment ? attachment.name : "Upload Attachment (Image / PDF)"}
+          {attachment ? attachment.name : "Attach file (optional)"}
         </Text>
       </TouchableOpacity>
 
