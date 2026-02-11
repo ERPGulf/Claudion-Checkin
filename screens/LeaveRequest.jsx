@@ -12,9 +12,12 @@ import {
   ActivityIndicator,
   Platform,
 } from "react-native";
+import AttachmentPicker from "../components/AttachmentPicker";
+import { SafeAreaView } from "react-native-safe-area-context";
 import Entypo from "@expo/vector-icons/Entypo";
 import { Picker } from "@react-native-picker/picker";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import SubmitButton from "../components/common/SubmitButton";
 import Checkbox from "expo-checkbox";
 import { useSelector } from "react-redux";
 import { selectEmployeeCode } from "../redux/Slices/UserSlice";
@@ -126,6 +129,14 @@ export default function LeaveRequestScreen() {
     if (event.type === "dismissed") return;
     if (selectedDate) setToDate(selectedDate);
   };
+  const resetForm = () => {
+    setLeaveType("__none__");
+    setReason("");
+    setFromDate(new Date());
+    setToDate(new Date());
+    setAgreed(false);
+    setAttachment(null);
+  };
 
   const handleSubmit = async () => {
     const normalizeDate = (date) => {
@@ -190,7 +201,12 @@ export default function LeaveRequestScreen() {
         console.log("Leave upload OK:", docname);
       }
 
-      Alert.alert("Success", "Leave request submitted successfully!");
+      Alert.alert("Success", "Leave request submitted successfully!", [
+        {
+          text: "OK",
+          onPress: resetForm,
+        },
+      ]);
     } catch (err) {
       console.error("⚠️ Submit error:", err);
       Alert.alert("Error", err.message || "Something went wrong.");
@@ -200,145 +216,131 @@ export default function LeaveRequestScreen() {
   };
 
   return (
-    <ScrollView className="p-4 bg-white">
-      <Text className="text-xl font-semibold mb-4 text-gray-800">
-        Leave Application
-      </Text>
-
-      {/* Leave Type Picker */}
-      <Text className="text-sm font-medium text-gray-700 mb-1">
-        Select Leave Type
-      </Text>
-      <View className="border border-gray-300 rounded mb-4 bg-gray-50">
-        <Picker selectedValue={leaveType} onValueChange={setLeaveType}>
-          <Picker.Item label="Select Leave Type" value="__none__" />
-
-          {leaveTypes.map((item, index) => (
-            <Picker.Item
-              key={index}
-              label={String(item?.leave_type || "")}
-              value={String(item?.leave_type || "")}
-            />
-          ))}
-        </Picker>
-      </View>
-
-      {/* Reason */}
-      <Text className="text-sm font-medium text-gray-700 mb-1">Reason</Text>
-      <TextInput
-        value={reason}
-        onChangeText={setReason}
-        placeholder="Enter reason for leave"
-        placeholderTextColor="#6B7280"
-        multiline
-        className="border border-gray-300 rounded-lg px-3 py-2 mb-3 text-gray-900"
-      />
-      {/* Attachment */}
-      <Text className="text-sm font-medium text-gray-700 mb-1">
-        Attachment (optional)
-      </Text>
-
-      <TouchableOpacity
-        onPress={pickAttachment}
-        className="border border-dashed border-gray-400 rounded-lg p-3 mb-3"
-      >
-        <Text className="text-gray-600 text-center">
-          {attachment ? attachment.name : "Attach file (optional)"}
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
+      <ScrollView className="p-4" contentContainerStyle={{ paddingBottom: 40 }}>
+        <Text className="text-xl font-semibold mb-4 text-gray-800">
+          Leave Application
         </Text>
-      </TouchableOpacity>
 
-      {/* From Date */}
-      <Text className="text-sm font-medium text-gray-700 mb-1">From Date</Text>
-      <TouchableOpacity
-        onPress={() => setShowFromPicker(true)}
-        className="border border-gray-300 rounded-lg px-3 py-2 mb-3"
-      >
-        <Text>{formatDate(fromDate)}</Text>
-      </TouchableOpacity>
-      {showFromPicker && (
-        <DateTimePicker
-          value={fromDate}
-          mode="date"
-          display={Platform.OS === "ios" ? "spinner" : "default"}
-          onChange={handleFromChange}
-        />
-      )}
+        {/* Leave Type Picker */}
+        <Text className="text-sm font-medium text-gray-700 mb-1">
+          Select Leave Type
+        </Text>
+        <View className="border border-gray-300 rounded mb-4 bg-gray-50">
+          <Picker selectedValue={leaveType} onValueChange={setLeaveType}>
+            <Picker.Item label="Select Leave Type" value="__none__" />
 
-      {/* To Date */}
-      <Text className="text-sm font-medium text-gray-700 mb-1">To Date</Text>
-      <TouchableOpacity
-        onPress={() => setShowToPicker(true)}
-        className="border border-gray-300 rounded-lg px-3 py-2 mb-3"
-      >
-        <Text>{formatDate(toDate)}</Text>
-      </TouchableOpacity>
-      {showToPicker && (
-        <DateTimePicker
-          value={toDate}
-          mode="date"
-          display={Platform.OS === "ios" ? "spinner" : "default"}
-          onChange={handleToChange}
-        />
-      )}
-      {/* Remote Work Acknowledgement Section */}
-      {leaveType === "Remote" && (
-        <View className="border border-gray-200 bg-gray-100 p-4 rounded-lg mb-5">
-          {/* Agreement text only when NOT agreed */}
-          {!agreed && (
-            <ScrollView
-              style={{
-                maxHeight: 200,
-                padding: 8,
-                backgroundColor: "#fff",
-                borderRadius: 6,
-                borderWidth: 1,
-                borderColor: "#e5e7eb",
-              }}
-              showsVerticalScrollIndicator
-              nestedScrollEnabled
-            >
-              <Text style={{ color: "#374151", fontSize: 13, lineHeight: 18 }}>
-                {REMOTE_AGREEMENT_TEXT}
-              </Text>
-            </ScrollView>
-          )}
-
-          {/* Checkbox always visible */}
-          <View className="flex-row items-center mt-3">
-            <Checkbox
-              value={agreed}
-              onValueChange={setAgreed}
-              color={agreed ? COLORS.primary : undefined}
-            />
-            <Text className="ml-2 text-gray-700 text-sm flex-1">
-              I have read and agree to the full remote work policy.
-            </Text>
-          </View>
+            {leaveTypes.map((item, index) => (
+              <Picker.Item key={index} label={item} value={item} />
+            ))}
+          </Picker>
         </View>
-      )}
 
-      {/* Posting Date */}
-      <Text className="text-sm font-medium text-gray-700 mb-1">
-        Posting Date
-      </Text>
-      <View className="border border-gray-300 rounded-lg px-3 py-2 mb-4 bg-gray-100">
-        <Text>{formatDate(postingDate)}</Text>
-      </View>
+        {/* Reason */}
+        <Text className="text-sm font-medium text-gray-700 mb-1">Reason</Text>
+        <TextInput
+          value={reason}
+          onChangeText={setReason}
+          placeholder="Enter reason for leave"
+          placeholderTextColor="#6B7280"
+          multiline
+          className="border border-gray-300 rounded-lg px-3 py-2 mb-3 text-gray-900"
+        />
+        <AttachmentPicker
+          file={attachment}
+          onPick={pickAttachment}
+          onRemove={() => setAttachment(null)}
+        />
 
-      {/* Submit button */}
-      <TouchableOpacity
-        onPress={handleSubmit}
-        disabled={loading}
-        className={`p-3 rounded-lg ${loading ? "bg-gray-400" : "bg-green-600"}`}
-      >
-        {loading ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text className="text-white text-center font-semibold">
-            Submit Leave Request
-          </Text>
+        {/* From Date */}
+        <Text className="text-sm font-medium text-gray-700 mb-1">
+          From Date
+        </Text>
+        <TouchableOpacity
+          onPress={() => setShowFromPicker(true)}
+          className="border border-gray-300 rounded-lg px-3 py-2 mb-3"
+        >
+          <Text>{formatDate(fromDate)}</Text>
+        </TouchableOpacity>
+        {showFromPicker && (
+          <DateTimePicker
+            value={fromDate}
+            mode="date"
+            display={Platform.OS === "ios" ? "spinner" : "default"}
+            onChange={handleFromChange}
+          />
         )}
-      </TouchableOpacity>
-    </ScrollView>
+
+        {/* To Date */}
+        <Text className="text-sm font-medium text-gray-700 mb-1">To Date</Text>
+        <TouchableOpacity
+          onPress={() => setShowToPicker(true)}
+          className="border border-gray-300 rounded-lg px-3 py-2 mb-3"
+        >
+          <Text>{formatDate(toDate)}</Text>
+        </TouchableOpacity>
+        {showToPicker && (
+          <DateTimePicker
+            value={toDate}
+            mode="date"
+            display={Platform.OS === "ios" ? "spinner" : "default"}
+            onChange={handleToChange}
+          />
+        )}
+        {/* Remote Work Acknowledgement Section */}
+        {leaveType === "Remote" && (
+          <View className="border border-gray-200 bg-gray-100 p-4 rounded-lg mb-5">
+            {/* Agreement text only when NOT agreed */}
+            {!agreed && (
+              <ScrollView
+                style={{
+                  maxHeight: 200,
+                  padding: 8,
+                  backgroundColor: "#fff",
+                  borderRadius: 6,
+                  borderWidth: 1,
+                  borderColor: "#e5e7eb",
+                }}
+                showsVerticalScrollIndicator
+                nestedScrollEnabled
+              >
+                <Text
+                  style={{ color: "#374151", fontSize: 13, lineHeight: 18 }}
+                >
+                  {REMOTE_AGREEMENT_TEXT}
+                </Text>
+              </ScrollView>
+            )}
+
+            {/* Checkbox always visible */}
+            <View className="flex-row items-center mt-3">
+              <Checkbox
+                value={agreed}
+                onValueChange={setAgreed}
+                color={agreed ? COLORS.primary : undefined}
+              />
+              <Text className="ml-2 text-gray-700 text-sm flex-1">
+                I have read and agree to the full remote work policy.
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {/* Posting Date */}
+        <Text className="text-sm font-medium text-gray-700 mb-1">
+          Posting Date
+        </Text>
+        <View className="border border-gray-300 rounded-lg px-3 py-2 mb-4 bg-gray-100">
+          <Text>{formatDate(postingDate)}</Text>
+        </View>
+
+        {/* Submit button */}
+        <SubmitButton
+          title="Submit Leave Request"
+          loading={loading}
+          onPress={handleSubmit}
+        />
+      </ScrollView>
+    </SafeAreaView>
   );
 }

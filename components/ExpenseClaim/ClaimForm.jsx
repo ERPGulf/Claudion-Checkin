@@ -14,19 +14,25 @@ import {
 import * as DocumentPicker from "expo-document-picker";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Picker } from "@react-native-picker/picker";
-import PropTypes from "prop-types"; // ✅ Add this import
+import PropTypes from "prop-types";
 import { COLORS } from "../../constants";
+import { useEffect } from "react";
+import SubmitButton from "../common/SubmitButton";
 
-function ClaimForm({ onSubmit }) {
+function ClaimForm({ onSubmit, isLoading, resetSignal }) {
   const [expenseDate, setExpenseDate] = useState("");
   const [expenseType, setExpenseType] = useState("");
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
   const [fileUrl, setFileUrl] = useState(null);
   const [showPicker, setShowPicker] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const expenseTypes = ["Calls", "Food", "Medical", "Travel", "Others"];
+   useEffect(() => {
+    setExpenseDate("");
+    setExpenseType("");
+    setDescription("");
+    setAmount("");
+    setFileUrl(null);
+  }, [resetSignal]);
 
   const handleDateChange = (event, selectedDate) => {
     setShowPicker(false);
@@ -35,6 +41,7 @@ function ClaimForm({ onSubmit }) {
       setExpenseDate(formatted);
     }
   };
+  const expenseTypes = ["Calls", "Food", "Medical", "Travel", "Others"];
 
   const showDatePicker = () => setShowPicker(true);
 
@@ -97,21 +104,9 @@ function ClaimForm({ onSubmit }) {
     };
 
     try {
-      setIsSubmitting(true);
       await onSubmit?.(payload);
-
-      setExpenseDate("");
-      setExpenseType("");
-      setDescription("");
-      setAmount("");
-      setFileUrl(null);
-
-      showToast("✅ Expense claim submitted successfully!");
-    } catch (error) {
-      console.error("❌ Error during submission:", error);
+    } catch {
       showToast("Failed to submit claim. Please try again.");
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -221,21 +216,11 @@ function ClaimForm({ onSubmit }) {
       )}
 
       {/* Submit Button */}
-      <TouchableOpacity
+      <SubmitButton
+        title="Submit Claim"
+        loading={isLoading}
         onPress={handleSubmit}
-        disabled={isSubmitting}
-        className={`p-3 rounded ${
-          isSubmitting ? "bg-gray-400" : "bg-green-600"
-        } mt-2`}
-      >
-        {isSubmitting ? (
-          <ActivityIndicator size="small" color={COLORS.white} />
-        ) : (
-          <Text className="text-white text-center font-semibold">
-            Submit Claim
-          </Text>
-        )}
-      </TouchableOpacity>
+      />
     </ScrollView>
   );
 }

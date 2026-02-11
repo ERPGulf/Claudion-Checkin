@@ -8,6 +8,8 @@ import {
   Alert,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
+import AttachmentPicker from "../components/AttachmentPicker";
+import SubmitButton from "../components/common/SubmitButton";
 import * as DocumentPicker from "expo-document-picker";
 import Entypo from "@expo/vector-icons/Entypo";
 import { COLORS, SIZES } from "../constants";
@@ -134,29 +136,12 @@ const Complaints = () => {
           />
 
           {/* ATTACH FILE */}
-          <TouchableOpacity
-            onPress={pickFile}
-            style={{
-              backgroundColor: "#fff",
-              borderWidth: 1,
-              borderStyle: "dashed",
-              borderColor: "#d1d5db",
-              borderRadius: 10,
-              paddingVertical: 14,
-              paddingHorizontal: 12,
-              alignItems: "center",
-            }}
-          >
-            <Text
-              style={{
-                color: "#6b7280",
-                fontSize: 14,
-              }}
-              numberOfLines={1}
-            >
-              {file ? file.name : "Attach file (optional)"}
-            </Text>
-          </TouchableOpacity>
+          <AttachmentPicker
+            file={file}
+            onPick={pickFile}
+            onRemove={() => setFile(null)}
+            label="Attach file (optional) "
+          />
         </View>
 
         {/* FOOTER */}
@@ -169,26 +154,11 @@ const Complaints = () => {
             backgroundColor: "#fff",
           }}
         >
-          <TouchableOpacity
+          <SubmitButton
+            title="Submit Complaint"
+            loading={loading}
             onPress={submitComplaint}
-            disabled={loading}
-            className="bg-green-600 p-4 rounded-xl items-center"
-            style={{ opacity: loading ? 0.7 : 1 }}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text
-                style={{
-                  color: "#fff",
-                  fontWeight: "600",
-                  fontSize: 16,
-                }}
-              >
-                Submit Complaint
-              </Text>
-            )}
-          </TouchableOpacity>
+          />
         </View>
       </View>
     </SafeAreaView>

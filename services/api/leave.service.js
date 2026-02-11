@@ -69,6 +69,7 @@ export const createLeaveApplication = async (leaveData) => {
     return { error: msg };
   }
 };
+
 // getLeaveTypes()
 
 export const getLeaveTypes = async () => {
@@ -84,27 +85,29 @@ export const getLeaveTypes = async () => {
     }
 
     const baseUrl = cleanBaseUrl(rawBaseUrl);
-
     const url = `${baseUrl}/api/method/employee_app.attendance_api.get_leave_type`;
 
-    const response = await apiClient.get(url, {
-      params: { employee: employeeCode },
+    // same as: --data-urlencode 'employee=HR-EMP-00011'
+    const body = new URLSearchParams();
+    body.append("employee", employeeCode);
+
+    const response = await apiClient.post(url, body.toString(), {
       headers: {
         Authorization: `Bearer ${token}`,
+        "Content-Type": "application/x-www-form-urlencoded",
       },
     });
-
     if (!Array.isArray(response.data?.message)) {
       console.log("❌ Invalid leave type response:", response.data);
       return { error: "Invalid leave type response" };
     }
-
     return { message: response.data.message };
   } catch (error) {
-    console.log("🔥 Leave type error:", error?.response?.data || error.message);
+    console.log(" Leave type error:", error?.response?.data || error.message);
     return { error: "Unable to load leave types." };
   }
 };
+
 /**
  * uploadLeaveAttachment
  */
@@ -153,6 +156,7 @@ export const uploadLeaveAttachment = async (file, docname) => {
     throw error;
   }
 };
+
 export default {
   createLeaveApplication,
   getLeaveTypes,
