@@ -3,82 +3,110 @@ import apiClient from "./apiClient";
 import { cleanBaseUrl } from "./utils";
 
 /**
- * Create Complaint
+ * AUTH CONTEXT (same pattern as leave.service)
  */
-export const createComplaint = async ({ date, message }) => {
-  const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
-  const baseUrl = rawBaseUrl?.trim()?.replace(/\/+$/, "");
-  const token = await AsyncStorage.getItem("access_token");
-  const employee = await AsyncStorage.getItem("employee_code");
+const getAuthContext = async () => {
+  const [rawBaseUrl, token, employeeCode] = await Promise.all([
+    AsyncStorage.getItem("baseUrl"),
+    AsyncStorage.getItem("access_token"),
+    AsyncStorage.getItem("employee_code"),
+  ]);
 
-  if (!baseUrl || !token || !employee) {
-    throw new Error("Missing base URL, token, or employee code");
+  if (!rawBaseUrl || !token) {
+    throw new Error("Session expired");
   }
 
-  const url = `${baseUrl}/api/method/employee_app.attendance_api.create_complaint`;
+  return {
+    baseUrl: cleanBaseUrl(rawBaseUrl),
+    token,
+    employeeCode,
+  };
+};
 
+const buildHeaders = (token, contentType = "application/json") => ({
+  Authorization: `Bearer ${token}`,
+  "Content-Type": contentType,
+});
+
+/**
+ * CREATE COMPLAINT
+ */
+export const createComplaint = async ({ date, message }) => {
   try {
-    const response = await apiClient.post(
-      url,
-      {
-        employee,
-        date,
-        message,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        timeout: 15000,
-      },
+    const { baseUrl, token, employeeCode } = await getAuthContext();
+
+    if (!employeeCode) {
+      return { error: "Session expired. Please login again." };
+    }
+
+    const url = `${baseUrl}/api/method/employee_app.attendance_api.create_complaint`;
+
+    const body = {
+      employee: employeeCode,
+      date,
+      message,
+    };
+
+    const response = await apiClient.post(url, body, {
+      headers: buildHeaders(token),
+      timeout: 15000,
+    });
+
+    return { message: response.data };
+  } catch (error) {
+    console.error(
+      "❌ Create complaint failed:",
+      error?.response?.data || error.message,
     );
-    return response.data;
-  } catch (e) {
-    console.log("AXIOS ERROR FULL:", e);
-    console.log("AXIOS MESSAGE:", e.message);
-    console.log("AXIOS RESPONSE:", e.response);
-    throw e;
+
+    return {
+      error:
+        error?.response?.data?.message ||
+        "Unable to submit complaint. Please try again.",
+    };
   }
 };
 
 /**
- * Upload Complaint Attachment
+ * UPLOAD COMPLAINT ATTACHMENT
  */
 export const uploadComplaintAttachment = async (file, docname) => {
-  if (!file?.uri) throw new Error("Invalid file");
-  if (!docname && docname !== 0) throw new Error("Missing docname");
+  try {
+    if (!file?.uri) throw new Error("Invalid file");
+    if (!docname) throw new Error("Missing docname");
 
-  const [rawBaseUrl, token] = await Promise.all([
-    AsyncStorage.getItem("baseUrl"),
-    AsyncStorage.getItem("access_token"),
-  ]);
+    const { baseUrl, token } = await getAuthContext();
 
-  const baseUrl = cleanBaseUrl(rawBaseUrl);
+    const formData = new FormData();
 
-  const formData = new FormData();
-  formData.append("file", {
-    uri: file.uri,
-    name: file.name || "complaint.png",
-    type: file.type || "image/png",
-  });
+    formData.append("file", {
+      uri: file.uri,
+      name: file.name || "complaint.png",
+      type: file.type || "application/octet-stream",
+    });
 
-  formData.append("file_name", "complaint");
-  formData.append("doctype", "Employee Complaint");
-  formData.append("docname", String(docname)); 
+    formData.append("file_name", "complaint");
+    formData.append("doctype", "Employee Complaint");
+    formData.append("docname", String(docname));
 
-  const response = await apiClient.post(
-    `${baseUrl}/api/method/employee_app.attendance_api.upload_file`,
-    formData,
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "multipart/form-data",
+    const response = await apiClient.post(
+      `${baseUrl}/api/method/employee_app.attendance_api.upload_file`,
+      formData,
+      {
+        headers: buildHeaders(token, "multipart/form-data"),
+        transformRequest: (data) => data,
       },
-      transformRequest: (data) => data,
-    },
-  );
+    );
 
-  return response.data;
+    return response.data;
+  } catch (error) {
+    console.error(
+      "❌ Complaint attachment upload failed:",
+      error?.response?.data || error.message,
+    );
+
+    throw error;
+  }
 };
 
 export default {

@@ -88,20 +88,27 @@ const Complaints = () => {
     try {
       const date = new Date().toISOString().replace("T", " ").slice(0, 19);
 
-      const response = await createComplaint({ date, message });
-      const docname = response?.message?.name;
+      const result = await createComplaint({ date, message });
 
-      if (docname === undefined || docname === null) {
+      if (result.error) {
+        throw new Error(result.error);
+      }
+
+      const docname = result?.message?.message?.name;
+
+      if (!docname) {
         throw new Error("Complaint created but docname missing");
       }
 
       await uploadComplaintAttachment(file, docname);
 
       Alert.alert("Success", "Complaint submitted successfully");
+
       setMessage("");
       setFile(null);
     } catch (error) {
-      Alert.alert("Error", "Failed to submit complaint");
+      console.log("Complaint submit error:", error);
+      Alert.alert("Error", error?.message || "Failed to submit complaint");
     } finally {
       setLoading(false);
     }
