@@ -14,7 +14,6 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { selectEmployeeCode } from "../redux/Slices/UserSlice";
 import ClaimForm from "../components/ExpenseClaim/ClaimForm";
 import ExpenseCard from "../components/ExpenseClaim/ExpenseCard";
-// import { getExpenseClaims } from "../api/userApi";
 import { COLORS, SIZES } from "../constants";
 import { createExpenseClaim, getExpenseClaims } from "../services/api";
 
@@ -24,6 +23,7 @@ export default function ExpenseClaim() {
   const navigation = useNavigation();
   const employeeCode = useSelector(selectEmployeeCode);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [resetFormFlag, setResetFormFlag] = useState(false);
 
   // ✅ Header setup
   useLayoutEffect(() => {
@@ -54,21 +54,27 @@ export default function ExpenseClaim() {
     queryFn: async () => {
       const data = await getExpenseClaims(employeeCode);
       return (data || []).sort(
-        (a, b) => new Date(b.expense_date) - new Date(a.expense_date)
+        (a, b) => new Date(b.expense_date) - new Date(a.expense_date),
       );
     },
     enabled: !!employeeCode,
   });
-
-
 
   // ✅ React Query mutation
   const { mutate: addClaim, isPending: isCreating } = useMutation({
     mutationFn: createExpenseClaim,
     onSuccess: async () => {
       await refetch();
-      Alert.alert("Success", "Expense claim created successfully!");
+      Alert.alert("Success", "Expense claim submitted successfully!", [
+        {
+          text: "OK",
+          onPress: () => {
+            setResetFormFlag((prev) => !prev);
+          },
+        },
+      ]);
     },
+
     onError: (err) => {
       Alert.alert("Error", err.message || "Failed to create expense claim.");
     },
@@ -90,11 +96,15 @@ export default function ExpenseClaim() {
 
   return (
     <ScrollView
-      className="flex-1 bg-gray-100"
+      className="flex-1 bg-white"
       contentContainerStyle={{ padding: 16 }}
     >
       {/* Claim Form */}
-      <ClaimForm onSubmit={addClaim} isLoading={isCreating} />
+      <ClaimForm
+        onSubmit={addClaim}
+        isLoading={isCreating}
+        resetSignal={resetFormFlag}
+      />
 
       <Text className="text-lg font-semibold mt-6 mb-3 text-gray-800">
         Expense Claim History

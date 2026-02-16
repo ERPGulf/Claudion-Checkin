@@ -51,9 +51,7 @@ const ShortcutDetails = ({ title, data, loading }) => {
   /* ---------- Empty ---------- */
   const hasValidData =
     data &&
-    Object.values(data).some(
-      (v) => v !== null && v !== undefined && v !== ""
-    );
+    Object.values(data).some((v) => v !== null && v !== undefined && v !== "");
 
   if (!hasValidData) {
     return (
@@ -65,46 +63,50 @@ const ShortcutDetails = ({ title, data, loading }) => {
 
   /* ---------- Main UI ---------- */
   return (
-    <ScrollView contentContainerStyle={{ padding: 16 }}>
-      <View
-        className="bg-white rounded-xl px-4 py-3"
-        style={{
-          shadowColor: "#000",
-          shadowOpacity: 0.08,
-          shadowRadius: 6,
-          elevation: 3,
-        }}
-      >
-        {Object.entries(data)
-          .filter(([_, value]) => value !== null && value !== undefined)
-          .map(([key, value], index, arr) => (
-            <View key={key}>
-              <View className="flex-row justify-between items-center py-3">
-                <Text className="text-sm text-gray-500">
-                  {formatLabel(key)}
-                </Text>
+    <View style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
+      <ScrollView contentContainerStyle={{ padding: 16 }}>
+        <View
+          className="bg-white rounded-xl px-4 py-3"
+          style={{
+            shadowColor: "#000",
+            shadowOpacity: 0.08,
+            shadowRadius: 6,
+            elevation: 3,
+          }}
+        >
+          {Object.entries(data)
+            .filter(([_, value]) => value !== null && value !== undefined)
+            .map(([key, value], index, arr) => (
+              <View key={key}>
+                <View className="flex-row justify-between items-center py-3">
+                  <Text className="text-sm text-gray-500">
+                    {formatLabel(key)}
+                  </Text>
 
-                <Text className="text-sm font-semibold text-gray-800">
-                  {String(value)}
-                </Text>
+                  <Text className="text-sm font-semibold text-gray-800">
+                    {String(value)}
+                  </Text>
+                </View>
+
+                {index !== arr.length - 1 && (
+                  <View className="h-[1px] bg-gray-100" />
+                )}
               </View>
+            ))}
+        </View>
 
-              {index !== arr.length - 1 && (
-                <View className="h-[1px] bg-gray-100" />
-              )}
-            </View>
-          ))}
-      </View>
-
-      {/* Footer */}
-      <View className="mt-8 mb-4 pt-3 border-t border-gray-200 flex-row justify-end">
-        <TouchableOpacity onPress={() => Linking.openURL("https://erpgulf.com")}>
-          <Text className="text-lg font-semibold text-green-600">
-            ERPGulf.com
-          </Text>
-        </TouchableOpacity>
-      </View>
-    </ScrollView>
+        {/* Footer */}
+        <View className="mt-8 mb-4 pt-3 border-t border-gray-200 flex-row justify-end">
+          <TouchableOpacity
+            onPress={() => Linking.openURL("https://erpgulf.com")}
+          >
+            <Text className="text-lg font-semibold text-green-600">
+              ERPGulf.com
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </View>
   );
 };
 

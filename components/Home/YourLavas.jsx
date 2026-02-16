@@ -96,7 +96,7 @@ function LavaMenu() {
   const [loadingShortcuts, setLoadingShortcuts] = useState(true);
 
   const employeeCode = useSelector(
-    (state) => state.user?.userDetails?.employeeCode
+    (state) => state.user?.userDetails?.employeeCode,
   );
   const recordsToShow =
     !loadingShortcuts && shortcuts.length === 0 ? DEFAULT_RECORDS : shortcuts;
@@ -154,18 +154,18 @@ function LavaMenu() {
           if (res?.shortcut) {
             setShortcuts((prev) => {
               const filtered = prev.filter(
-                (item) => item.screen !== cfg.screen
+                (item) => item.screen !== cfg.screen,
               );
 
               return [...filtered, { ...res, ...cfg }].sort(
-                (a, b) => a.order - b.order
+                (a, b) => a.order - b.order,
               );
             });
           }
         } catch (e) {
           console.log("Shortcut API error", e);
         }
-      })
+      }),
     ).finally(() => {
       // ✅ THIS LINE WAS MISSING
       setLoadingShortcuts(false);
@@ -213,6 +213,11 @@ function LavaMenu() {
                 icon: "document-text-outline",
                 nav: "Leave request",
                 bold: true,
+              },
+              {
+                label: ["Complaints"],
+                icon:"chatbox-ellipses-outline",
+                nav: "Complaints",
               },
               {
                 label: ["Vacation", "list"],

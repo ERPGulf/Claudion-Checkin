@@ -73,7 +73,7 @@ const MyQrCode = () => {
   }, [navigation]);
 
   return (
-    <ScrollView className="flex-1 bg-gray-50 px-4 pt-4">
+    <ScrollView className="flex-1 bg-white px-4 pt-4">
       {loading ? (
         <ActivityIndicator size="large" color={COLORS.primary} />
       ) : (

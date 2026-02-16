@@ -8,6 +8,10 @@ import { COLORS, SIZES } from "../../constants";
 function WelcomeCard() {
   const navigation = useNavigation();
   const fullname = useSelector((state) => state.user.fullname);
+ const unreadCount = useSelector(
+  (state) => state.notification?.unreadCount ?? 0
+);
+
   return (
     <View
       style={{ backgroundColor: COLORS.primary, width: "100%" }}
@@ -23,6 +27,32 @@ function WelcomeCard() {
             color={COLORS.white}
             size={SIZES.xxLarge}
           />
+          {unreadCount > 0 && (
+            <View
+              style={{
+                position: "absolute",
+                top: 4,
+                right: 4,
+                minWidth: 18,
+                height: 18,
+                borderRadius: 9,
+                backgroundColor: "red",
+                alignItems: "center",
+                justifyContent: "center",
+                paddingHorizontal: 4,
+              }}
+            >
+              <Text
+                style={{
+                  color: "white",
+                  fontSize: 10,
+                  fontWeight: "bold",
+                }}
+              >
+                {unreadCount}
+              </Text>
+            </View>
+          )}
         </TouchableOpacity>
         <Text className="text-xl font-bold text-white">Home</Text>
       </View>
