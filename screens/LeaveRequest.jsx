@@ -102,20 +102,26 @@ export default function LeaveRequestScreen() {
     }
   };
   const pickAttachment = async () => {
-    const result = await DocumentPicker.getDocumentAsync({
-      type: ["image/*", "application/pdf"],
-      copyToCacheDirectory: true,
-    });
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ["image/*", "application/pdf"],
+        copyToCacheDirectory: true,
+      });
 
-    if (result.canceled) return;
+      if (result.canceled) return;
 
-    const file = result.assets[0];
+      const file = result.assets?.[0];
+      if (!file) return;
 
-    setAttachment({
-      uri: file.uri,
-      name: file.name,
-      type: file.mimeType || "application/octet-stream",
-    });
+      setAttachment({
+        uri: file.uri,
+        name: file.name,
+        type: file.mimeType || "application/octet-stream",
+      });
+    } catch (err) {
+      console.log("Attachment pick error:", err);
+      Alert.alert("Error", "Failed to pick attachment");
+    }
   };
 
   const handleFromChange = (event, selectedDate) => {

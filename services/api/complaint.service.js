@@ -1,32 +1,9 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import apiClient from "./apiClient";
 import { cleanBaseUrl } from "./utils";
+import { getAuthContext, buildHeaders } from "./authHelper";
+import { parseError } from "./errorHelper";
 
-/**
- * AUTH CONTEXT (same pattern as leave.service)
- */
-const getAuthContext = async () => {
-  const [rawBaseUrl, token, employeeCode] = await Promise.all([
-    AsyncStorage.getItem("baseUrl"),
-    AsyncStorage.getItem("access_token"),
-    AsyncStorage.getItem("employee_code"),
-  ]);
-
-  if (!rawBaseUrl || !token) {
-    throw new Error("Session expired");
-  }
-
-  return {
-    baseUrl: cleanBaseUrl(rawBaseUrl),
-    token,
-    employeeCode,
-  };
-};
-
-const buildHeaders = (token, contentType = "application/json") => ({
-  Authorization: `Bearer ${token}`,
-  "Content-Type": contentType,
-});
 
 /**
  * CREATE COMPLAINT

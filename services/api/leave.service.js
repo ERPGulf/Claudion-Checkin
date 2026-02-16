@@ -4,28 +4,11 @@ import apiClient from "./apiClient";
 import { cleanBaseUrl } from "./utils";
 import { Platform } from "react-native";
 import axios from "axios";
-const getAuthContext = async () => {
-  const [rawBaseUrl, token, employeeCode] = await Promise.all([
-    AsyncStorage.getItem("baseUrl"),
-    AsyncStorage.getItem("access_token"),
-    AsyncStorage.getItem("employee_code"),
-  ]);
+import { getAuthContext, buildHeaders } from "./authHelper";
+import { parseError } from "./errorHelper";
 
-  if (!rawBaseUrl || !token) {
-    throw new Error("Session expired");
-  }
 
-  return {
-    baseUrl: cleanBaseUrl(rawBaseUrl),
-    token,
-    employeeCode,
-  };
-};
 
-const buildHeaders = (token, contentType) => ({
-  Authorization: `Bearer ${token}`,
-  "Content-Type": contentType,
-});
 export const createLeaveApplication = async (leaveData) => {
   try {
     const { baseUrl, token, employeeCode } = await getAuthContext();
