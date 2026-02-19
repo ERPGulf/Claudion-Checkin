@@ -1,11 +1,11 @@
-
 import apiClient from "./apiClient";
 import { getAuthContext, buildHeaders } from "./authHelper";
+import { getServerTime } from "./attendance.service";
 
 /**
  * CREATE COMPLAINT
  */
-export const createComplaint = async ({ date, message }) => {
+export const createComplaint = async ({ message }) => {
   try {
     const { baseUrl, token, employeeCode } = await getAuthContext();
 
@@ -13,11 +13,18 @@ export const createComplaint = async ({ date, message }) => {
       return { error: "Session expired. Please login again." };
     }
 
+    // 🔥 Get accurate server time
+    const serverTime = await getServerTime();
+
+    if (!serverTime) {
+      return { error: "Unable to fetch server time." };
+    }
+
     const url = `${baseUrl}/api/method/employee_app.attendance_api.create_complaint`;
 
     const body = {
       employee: employeeCode,
-      date,
+      date: serverTime, // ✅ REQUIRED
       message,
     };
 
