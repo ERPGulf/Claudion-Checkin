@@ -1,4 +1,7 @@
 import React, { useState } from "react";
+import { getNotifications } from "../services/api/notification.service";
+import { setUnreadCount } from "../redux/Slices/notificationSlice";
+
 import {
   View,
   Text,
@@ -67,12 +70,35 @@ function Login() {
       if (!access_token) throw new Error("Token not returned from server");
 
       await AsyncStorage.setItem("access_token", access_token);
+
+      if (employeeCode) {
+        await AsyncStorage.setItem("employee_id", employeeCode);
+      }
+
       if (refresh_token) {
         await AsyncStorage.setItem("refresh_token", refresh_token);
       }
 
       dispatch(setSignIn({ isLoggedIn: true, access_token }));
 
+      // 🔔 NEW: fetch notifications at login
+      try {
+        const employeeId = await AsyncStorage.getItem("employee_id");
+
+        if (employeeId) {
+          const notifications = await getNotifications(employeeId);
+
+          const unreadCount = notifications.filter(
+            (item) => Number(item.read) === 0,
+          ).length;
+          console.log("🔔 Setting unread count:", unreadCount);
+
+          dispatch(setUnreadCount(unreadCount));
+        }
+      } catch (err) {
+        console.log("Notification fetch at login failed:", err);
+        // ❌ Do NOT block login if this fails
+      }
       Toast.show({
         type: "success",
         text1: "Login successful",
@@ -155,8 +181,14 @@ function Login() {
                   value={values.password}
                   onChangeText={handleChange("password")}
                   placeholder="Enter password"
+                  placeholderTextColor={COLORS.gray2}
                   onBlur={() => setFieldTouched("password")}
-                  style={{ flex: 1, fontSize: 16, height: "100%" }}
+                  style={{
+                    flex: 1,
+                    fontSize: 16,
+                    height: "100%",
+                    color: COLORS.black,
+                  }}
                 />
                 <TouchableOpacity
                   onPress={() => setShowPassword((prev) => !prev)}
