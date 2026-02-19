@@ -78,11 +78,6 @@ const Complaints = () => {
       return;
     }
 
-    if (!file) {
-      Alert.alert("Validation", "Please attach a file before submitting");
-      return;
-    }
-
     setLoading(true);
 
     try {
@@ -100,7 +95,10 @@ const Complaints = () => {
         throw new Error("Complaint created but docname missing");
       }
 
-      await uploadComplaintAttachment(file, docname);
+      // Upload only if file exists
+      if (file) {
+        await uploadComplaintAttachment(file, docname);
+      }
 
       Alert.alert("Success", "Complaint submitted successfully");
 
