@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  ScrollView
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import AttachmentPicker from "../components/AttachmentPicker";
@@ -114,7 +115,10 @@ const Complaints = () => {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
-      <View style={{ flex: 1 }}>
+      <ScrollView
+        contentContainerStyle={{ flexGrow: 1 }}
+        keyboardShouldPersistTaps="handled"
+      >
         {/* MAIN CONTENT */}
         <View style={{ flex: 1, padding: 16 }}>
           {/* MESSAGE BOX */}
@@ -165,7 +169,7 @@ const Complaints = () => {
             onPress={submitComplaint}
           />
         </View>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 };
