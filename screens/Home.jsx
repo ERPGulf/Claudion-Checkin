@@ -37,7 +37,7 @@ function Home() {
 >
   <MaterialCommunityIcons
     name="robot-outline"
-    size={22}
+    size={26}
     color="#FFFFFF"
   />
 </TouchableOpacity>
@@ -53,7 +53,7 @@ const styles = StyleSheet.create({
     width: 54,
     height: 54,
     borderRadius: 27,
-    backgroundColor:  "#1F2937",
+    backgroundColor: "#1F2937",
     justifyContent: "center",
     alignItems: "center",
 
@@ -66,7 +66,7 @@ const styles = StyleSheet.create({
 
     // Optional subtle border
     borderWidth: 1,
-    borderColor: "#1E293B",
+    borderColor: "#3B82F6",
   },
 });
 
