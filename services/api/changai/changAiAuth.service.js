@@ -1,8 +1,8 @@
+// changAiAuth.service.js
 import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-const TOKEN_URL =
-  "https://hyrin.erpgulf.com:7061/api/method/changai.changai.api.v2.text2sql_pipeline_v2.generate_token_secure";
+const BASE_URL = "https://hyrin.erpgulf.com:7061";
 
 export const generateChangAiToken = async () => {
   try {
@@ -11,27 +11,27 @@ export const generateChangAiToken = async () => {
     form.append("api_secret", "Friday2000@T");
     form.append("app_key", "Q2hhbmdBSQ==");
 
-    const { data } = await axios.post(TOKEN_URL, form.toString(), {
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-    });
+    const response = await axios.post(
+      `${BASE_URL}/api/method/changai.changai.api.v2.text2sql_pipeline_v2.generate_token_secure`,
+      form.toString(),
+      {
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+      }
+    );
 
-    const access = data?.data?.access_token;
-    const refresh = data?.data?.refresh_token;
+    const accessToken = response?.data?.data?.access_token;
 
-    if (!access) {
+    if (!accessToken) {
       throw new Error("Failed to generate ChangAI token");
     }
 
-    await AsyncStorage.multiSet([
-      ["changai_access_token", access],
-      ["changai_refresh_token", refresh],
-    ]);
+    await AsyncStorage.setItem("changai_access_token", accessToken);
 
-    return access;
-  } catch (err) {
-    console.log("❌ ChangAI token error:", err?.response?.data || err.message);
-    throw err;
+    return accessToken;
+  } catch (error) {
+    console.log("❌ ChangAI token error:", error?.response?.data || error.message);
+    throw error;
   }
 };

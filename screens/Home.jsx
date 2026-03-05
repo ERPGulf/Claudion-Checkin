@@ -31,17 +31,12 @@ function Home() {
       </ScrollView>
       {/* 🔥 Floating ChangAI Button */}
       <TouchableOpacity
-  style={styles.chatButton}
-  activeOpacity={0.85}
-  onPress={() => navigation.navigate("ChangAi")}
->
-  <MaterialCommunityIcons
-    name="robot-outline"
-    size={26}
-    color="#FFFFFF"
-  />
-</TouchableOpacity>
-
+        style={styles.chatButton}
+        activeOpacity={0.85}
+        onPress={() => navigation.navigate("ChangAi")}
+      >
+        <MaterialCommunityIcons name="message" size={28} color="#FFFFFF" />
+      </TouchableOpacity>
     </View>
   );
 }
@@ -53,7 +48,7 @@ const styles = StyleSheet.create({
     width: 54,
     height: 54,
     borderRadius: 27,
-    backgroundColor: "#1F2937",
+    backgroundColor: "#6d4fc2",
     justifyContent: "center",
     alignItems: "center",
 
@@ -64,9 +59,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowRadius: 4,
 
-    // Optional subtle border
-    borderWidth: 1,
-    borderColor: "#3B82F6",
   },
 });
 

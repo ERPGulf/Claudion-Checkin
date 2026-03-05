@@ -30,7 +30,11 @@ function Profile() {
   const handleLogout = async () => {
     try {
       hapticsMessage("success");
-
+      // 1️⃣ Clear ChangAI data
+      await AsyncStorage.multiRemove([
+        "changai_messages",
+        "changai_access_token",
+      ]);
       // 1. Clear tokens
       await clearTokens();
 
