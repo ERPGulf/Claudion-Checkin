@@ -3,8 +3,6 @@ import apiClient from "./apiClient";
 import { getAuthContext, buildHeaders } from "./authHelper";
 import { parseError } from "./errorHelper";
 
-
-
 export const createLeaveApplication = async (leaveData) => {
   try {
     const { baseUrl, token, employeeCode } = await getAuthContext();
@@ -34,10 +32,21 @@ export const createLeaveApplication = async (leaveData) => {
 
     return { message: response.data };
   } catch (error) {
-    return { error: parseError(error, "Server error. Please try again later.") };
+    const status = error?.response?.status;
+
+    if (status === 500) {
+      const backendError = error?.response?.data?.error;
+
+      return {
+        error: backendError || "Unable to create leave application.",
+      };
+    }
+
+    return {
+      error: parseError(error, "Server error. Please try again later."),
+    };
   }
 };
-
 
 export const getLeaveTypes = async () => {
   try {
@@ -65,8 +74,6 @@ export const getLeaveTypes = async () => {
   }
 };
 
-
-
 export const uploadLeaveAttachment = async (file, docname) => {
   try {
     if (!file?.uri) throw new Error("Invalid file data");
@@ -90,20 +97,22 @@ export const uploadLeaveAttachment = async (file, docname) => {
       {
         headers: buildHeaders(token, "multipart/form-data"),
         transformRequest: (data) => data,
-      }
+      },
     );
 
-    return response.data;
+    // return response.data;
+    return { message: response.data };
   } catch (error) {
     console.error(
       "❌ Leave attachment upload failed:",
-      error?.response?.data || error.message
+      error?.response?.data || error.message,
     );
-    throw error;
+
+    return {
+      error: parseError(error, "Failed to upload attachment."),
+    };
   }
 };
-
-
 
 export default {
   createLeaveApplication,
