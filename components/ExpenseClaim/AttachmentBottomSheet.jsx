@@ -37,8 +37,6 @@ const AttachmentBottomSheet = ({
     }
   }, [visible, slideAnim]);
 
-  if (!visible) return null;
-
   return (
     <Modal
       transparent
@@ -71,7 +69,10 @@ const AttachmentBottomSheet = ({
               <View style={styles.optionsContainer}>
                 <TouchableOpacity
                   style={styles.optionButton}
-                  onPress={onSelectCamera}
+                  onPress={() => {
+                    onClose();
+                    setTimeout(onSelectCamera, 100);
+                  }}
                 >
                   <View style={[styles.iconContainer, { backgroundColor: '#E0F2FE' }]}>
                     <Ionicons name="camera" size={24} color="#0284C7" />
@@ -81,7 +82,10 @@ const AttachmentBottomSheet = ({
 
                 <TouchableOpacity
                   style={styles.optionButton}
-                  onPress={onSelectGallery}
+                  onPress={() => {
+                    onClose();
+                    setTimeout(onSelectGallery, 100);
+                  }}
                 >
                   <View style={[styles.iconContainer, { backgroundColor: '#DCFCE7' }]}>
                     <Ionicons name="image" size={24} color="#16A34A" />
@@ -91,7 +95,10 @@ const AttachmentBottomSheet = ({
 
                 <TouchableOpacity
                   style={styles.optionButton}
-                  onPress={onSelectDocument}
+                  onPress={() => {
+                    onClose();
+                    setTimeout(onSelectDocument, 100);
+                  }}
                 >
                   <View style={[styles.iconContainer, { backgroundColor: '#FEF9C3' }]}>
                     <Ionicons name="document-text" size={24} color="#CA8A04" />

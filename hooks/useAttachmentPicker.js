@@ -101,28 +101,27 @@ export const useAttachmentPicker = () => {
     try {
       setIsPicking(true);
       const result = await DocumentPicker.getDocumentAsync({
-        type: [
-          'application/pdf',
-          'image/*',
-          'application/msword',
-          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-          'application/vnd.ms-excel',
-          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        ],
+        type: ["image/*", "*/*"],
         copyToCacheDirectory: true,
+        multiple: false,
       });
 
       if (result.canceled) {
         return null;
       }
 
-      if (result.assets && result.assets.length > 0) {
-        const asset = result.assets[0];
+      if (result?.assets && result.assets.length > 0) {
+        const file = result.assets[0];
         return {
-          uri: asset.uri,
-          name: asset.name,
-          type: asset.mimeType || 'application/octet-stream',
-          size: asset.size,
+          uri: file.uri,
+          name: file.name || "receipt",
+          type: file.mimeType || "application/octet-stream"
+        };
+      } else if (result?.uri) {
+        return {
+          uri: result.uri,
+          name: result.name || "receipt",
+          type: result.mimeType || "application/octet-stream"
         };
       }
       return null;
