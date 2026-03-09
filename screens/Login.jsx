@@ -91,14 +91,10 @@ function Login() {
           const unreadCount = notifications.filter(
             (item) => Number(item.read) === 0,
           ).length;
-          console.log("🔔 Setting unread count:", unreadCount);
 
           dispatch(setUnreadCount(unreadCount));
         }
-      } catch (err) {
-        console.log("Notification fetch at login failed:", err);
-        // ❌ Do NOT block login if this fails
-      }
+      } catch (err) {}
       Toast.show({
         type: "success",
         text1: "Login successful",
@@ -108,7 +104,6 @@ function Login() {
 
       // navigation.navigate("homeTab");
     } catch (error) {
-      console.log("Login error:", error);
       Toast.show({
         type: "error",
         text1: "Login failed",

@@ -52,7 +52,6 @@ const Complaints = () => {
       });
 
       if (result.canceled) {
-        console.log("User cancelled picker");
         return;
       }
 
@@ -68,7 +67,6 @@ const Complaints = () => {
       };
       setFile(pickedFile);
     } catch (err) {
-      console.log("File pick error:", err);
       Alert.alert("Error", "Failed to pick file");
     }
   };
@@ -106,7 +104,6 @@ const Complaints = () => {
       setMessage("");
       setFile(null);
     } catch (error) {
-      console.log("Complaint submit error:", error);
       Alert.alert("Error", error?.message || "Failed to submit complaint");
     } finally {
       setLoading(false);

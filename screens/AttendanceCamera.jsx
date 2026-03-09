@@ -74,7 +74,6 @@ function AttendanceCamera() {
   const takePicture = async () => {
     try {
       if (!cameraRef.current) {
-        console.warn("Camera not ready yet");
         return;
       }
 
@@ -86,7 +85,6 @@ function AttendanceCamera() {
 
       setPhoto(newPhoto);
     } catch (error) {
-      console.error("Photo capture error:", error);
       Toast.show({ type: "error", text1: "Photo capture failed" });
     }
   };
@@ -129,8 +127,6 @@ function AttendanceCamera() {
         radius: locationData?.radius || 0,
       };
 
-      console.log("📅 Sending Check-In Data:", dataField);
-
       const checkinResponse = await userCheckIn(dataField);
       const docname = checkinResponse?.name;
       if (!docname) throw new Error("Check-in failed: Missing Checkin ID");
@@ -164,7 +160,6 @@ function AttendanceCamera() {
 
       navigation.navigate("Attendance action");
     } catch (error) {
-      console.error("❌ Check-In Error:", error);
       Toast.show({
         type: "error",
         text1: "Check-in failed",
@@ -196,8 +191,6 @@ function AttendanceCamera() {
       // 1️⃣ Upload photo to ERP
       const uploadResponse = await userFileUpload(file, docname);
 
-      console.log("📸 File Upload Response:", uploadResponse);
-
       // The API returns: { message: ["/files/yourfile.png"] }
       const uploadedFileUrl = uploadResponse?.message?.[0];
       if (!uploadedFileUrl)
@@ -207,10 +200,7 @@ function AttendanceCamera() {
       const updateFormData = new FormData();
       updateFormData.append("custom_image", uploadedFileUrl);
       await putUserFile(updateFormData, docname);
-
-      console.log("✅ File linked successfully to check-in record");
     } catch (error) {
-      console.error("❌ Upload picture error:", error);
       Toast.show({
         type: "error",
         text1: "Photo Upload Failed",

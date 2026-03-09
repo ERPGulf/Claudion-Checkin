@@ -119,7 +119,6 @@ export default function LeaveRequestScreen() {
         type: file.mimeType || "application/octet-stream",
       });
     } catch (err) {
-      console.log("Attachment pick error:", err);
       Alert.alert("Error", "Failed to pick attachment");
     }
   };
@@ -199,12 +198,7 @@ export default function LeaveRequestScreen() {
       }
 
       if (attachment) {
-        console.log("Uploading leave attachment:", {
-          attachment,
-          docname,
-        });
         await uploadLeaveAttachment(attachment, docname);
-        console.log("Leave upload OK:", docname);
       }
 
       Alert.alert("Success", "Leave request submitted successfully!", [
@@ -214,7 +208,6 @@ export default function LeaveRequestScreen() {
         },
       ]);
     } catch (err) {
-      console.error("⚠️ Submit error:", err);
       Alert.alert("Error", err.message || "Something went wrong.");
     } finally {
       setLoading(false);

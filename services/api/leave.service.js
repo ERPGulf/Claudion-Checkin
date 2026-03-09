@@ -103,11 +103,6 @@ export const uploadLeaveAttachment = async (file, docname) => {
     // return response.data;
     return { message: response.data };
   } catch (error) {
-    console.error(
-      "❌ Leave attachment upload failed:",
-      error?.response?.data || error.message,
-    );
-
     return {
       error: parseError(error, "Failed to upload attachment."),
     };

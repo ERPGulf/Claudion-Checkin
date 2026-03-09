@@ -38,16 +38,13 @@ function ExpenseCard({ claim }) {
       <Text className="text-base font-semibold mb-1 text-gray-900">
         {claim.title || "Expense Claim"}
       </Text>
-
       <Text className="text-sm text-gray-700 mb-1">
         Amount:{" "}
         <Text className="font-semibold text-gray-900">₹{claim.amount}</Text>
       </Text>
-
       <Text className="text-sm text-gray-700 mb-1">
         Date: {claim.expense_date || "N/A"}
       </Text>
-
       <Text className="text-sm text-gray-700 mb-1">
         Type:{" "}
         {claim.expense_type
@@ -55,13 +52,11 @@ function ExpenseCard({ claim }) {
             claim.expense_type.slice(1)
           : "N/A"}
       </Text>
-
       {claim.description && (
         <Text className="text-sm text-gray-600 mb-2 italic">
           {claim.description}
         </Text>
       )}
-
       {/* ✅ Dynamic Attachments */}
       {filePaths.length > 0 ? (
         filePaths.map((file, idx) => {
@@ -107,7 +102,6 @@ function ExpenseCard({ claim }) {
       ) : (
         <Text className="text-xs text-gray-400 mt-1">No attachments</Text>
       )}
-
       {claim.status && (
         <View
           className={`self-start mt-3 px-3 py-1 rounded-full ${getStatusStyle(

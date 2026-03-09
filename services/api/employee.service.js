@@ -27,13 +27,8 @@ export const fetchEmployeeData = async (employeeCode) => {
       timeout: 10000,
     });
 
-    console.log("✅ Employee data response:", data);
     return data.message;
   } catch (error) {
-    console.error(
-      "❌ Get employee data error:",
-      error.response?.data || error.message
-    );
     throw error;
   }
 };

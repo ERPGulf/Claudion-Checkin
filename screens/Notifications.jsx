@@ -194,9 +194,7 @@ function Notifications() {
 
                 try {
                   await markNotificationAsRead(notification.name);
-                } catch (e) {
-                  console.log("mark read failed", e);
-                }
+                } catch (e) {}
               };
 
               return (
@@ -264,7 +262,6 @@ function Notifications() {
           </View>
         )}
       />
-
       {/* ---------- MODAL ---------- */}
       <Modal visible={!!selected} transparent animationType="slide">
         <View

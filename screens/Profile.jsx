@@ -42,7 +42,6 @@ function Profile() {
 
       // ❌ NO navigation here
     } catch (error) {
-      console.error("logout error", error);
       hapticsMessage("error");
       Toast.show({
         type: "error",

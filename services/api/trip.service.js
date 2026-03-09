@@ -25,7 +25,6 @@ export const getContracts = async (searchTerms = "") => {
 
     return { filteredData, error: null };
   } catch (error) {
-    console.error(error, "contract");
     throw new Error("Something went wrong");
   }
 };
@@ -55,7 +54,6 @@ export const getVehicle = async (searchTerms = "") => {
 
     return { filteredData, error: null };
   } catch (error) {
-    console.error(error, "vehicle");
     throw new Error("Something went wrong");
   }
 };
@@ -75,7 +73,6 @@ export const tripTrack = async (formData) => {
     if (!data.message) throw new Error("Trip not ended");
     return data.message;
   } catch (error) {
-    console.error(error, "tripTrack");
     throw new Error("something went wrong");
   }
 };
@@ -94,7 +91,6 @@ export const userTripStatus = async (employeeCode) => {
 
     return data.message;
   } catch (error) {
-    console.error(error, "trip status");
     throw new Error("Something went wrong");
   }
 };
@@ -115,7 +111,6 @@ export const endTripTrack = async (formData) => {
 
     return data.message;
   } catch (error) {
-    console.error(error, "trip end");
     throw new Error("Something went wrong");
   }
 };

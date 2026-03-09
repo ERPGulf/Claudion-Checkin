@@ -40,12 +40,8 @@ export default function App() {
             await Updates.fetchUpdateAsync();
             await Updates.reloadAsync();
           }
-        } catch (err) {
-          console.log("OTA Update Error:", err);
-        }
-      } catch (error) {
-        console.warn(error);
-      } finally {
+        } catch (err) {}
+      } catch (error) {} finally {
         setAppReady(true);
         SplashScreen.hideAsync();
       }

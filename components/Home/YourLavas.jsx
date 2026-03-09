@@ -112,9 +112,7 @@ function LavaMenu() {
           setShortcuts(JSON.parse(cached));
           setLoadingShortcuts(false);
         }
-      } catch (e) {
-        console.log("Failed to load shortcut cache", e);
-      }
+      } catch (e) {}
     };
 
     loadCachedShortcuts();
@@ -162,9 +160,7 @@ function LavaMenu() {
               );
             });
           }
-        } catch (e) {
-          console.log("Shortcut API error", e);
-        }
+        } catch (e) {}
       }),
     ).finally(() => {
       // ✅ THIS LINE WAS MISSING

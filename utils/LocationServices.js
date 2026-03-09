@@ -16,7 +16,6 @@ export const requestLocationAccess = async () => {
 
     return true;
   } catch (err) {
-    console.error("Location permission error:", err);
     return false;
   }
 };
@@ -32,7 +31,6 @@ export const getPreciseCoordinates = async () => {
       longitude: result.coords.longitude,
     };
   } catch (err) {
-    console.error("Error getting GPS position:", err);
     Toast.show({
       type: "error",
       text1: "Unable to fetch location",

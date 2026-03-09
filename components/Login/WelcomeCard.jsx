@@ -26,7 +26,6 @@ function WelcomeCard() {
       <View className="flex-row justify-center items-center mb-20">
         <Text className="text-3xl font-bold text-white">Login</Text>
       </View>
-
       {/* Greeting section */}
       <View>
         <Text className="text-xl font-semibold text-white mb-1">Hey,</Text>

@@ -55,7 +55,6 @@ export const useAttachmentPicker = () => {
       }
       return null;
     } catch (error) {
-      console.error('Camera picking error:', error);
       Alert.alert('Error', 'Failed to open camera.');
       return null;
     } finally {
@@ -88,7 +87,6 @@ export const useAttachmentPicker = () => {
       }
       return null;
     } catch (error) {
-      console.error('Gallery picking error:', error);
       Alert.alert('Error', 'Failed to pick image from gallery.');
       return null;
     } finally {
@@ -126,7 +124,6 @@ export const useAttachmentPicker = () => {
       }
       return null;
     } catch (error) {
-      console.error('Document picking error:', error);
       Alert.alert('Error', 'Failed to pick document.');
       return null;
     } finally {

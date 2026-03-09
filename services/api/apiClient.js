@@ -100,8 +100,6 @@ export const refreshAccessToken = async () => {
 
     return newAccess;
   } catch (err) {
-    console.log("❌ Refresh token failed:", err?.response?.data || err);
-
     refreshFailCount += 1;
 
     if (refreshFailCount >= MAX_REFRESH_RETRIES) {

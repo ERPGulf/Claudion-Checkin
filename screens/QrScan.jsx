@@ -56,7 +56,6 @@ function QrScan() {
       ];
       // :one: Decode Base64
       let value = utf8.decode(base64.decode(data));
-      console.log(":inbox_tray: Raw Decoded QR:", value);
       // :two: Clean up weird characters
       value = value
         .replace(/[\u0000-\u001F\u00A0]+/g, " ")
@@ -108,7 +107,6 @@ function QrScan() {
         photo: photoFlag,
         restrict_location: qrData["Restrict Location"]?.trim() ?? "0", // :point_left: NEW
       };
-      console.log(":white_check_mark: Cleaned QR:", cleanedData);
       // :eight: Validate required fields
       if (
         cleanedData.company &&
@@ -135,7 +133,6 @@ function QrScan() {
         alert("Invalid QR code. Please try again.");
       }
     } catch (err) {
-      console.log(":x: QR parse error:", err);
       alert("Invalid QR code");
     }
   };

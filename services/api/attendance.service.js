@@ -52,7 +52,6 @@ export const getOfficeLocation = async (employeeCode) => {
 
   // Instead of throwing immediately, return null safely
   if (!locations.length) {
-    console.log("⚠ No reporting locations from server");
     return null;
   }
 
@@ -67,7 +66,6 @@ export const getOfficeLocation = async (employeeCode) => {
 
   const userLat = gps.coords.latitude;
   const userLng = gps.coords.longitude;
-  console.log("📍 Current GPS:", userLat, userLng);
 
   // Find nearest location
   let nearest = null;
@@ -96,17 +94,13 @@ export const getOfficeLocation = async (employeeCode) => {
           };
         }
       }
-    } catch (err) {
-      console.error("Location JSON parse error:", err);
-    }
+    } catch (err) {}
   });
 
   if (!nearest) {
-    console.log("⚠ Failed to determine nearest location.");
     return null;
   }
 
-  console.log("🏁 Nearest location:", nearest);
   return nearest;
 };
 
@@ -153,10 +147,9 @@ export const userCheckIn = async ({ employeeCode, type, locationData }) => {
       }
     }
 
-    
+
     // 🕒 Timestamp for check-in
     const timestamp = await getServerTime();
-    console.log("⏱ Server Timestamp:", timestamp);
 
     // Build base payload
     const payload = {
@@ -206,8 +199,6 @@ export const userCheckIn = async ({ employeeCode, type, locationData }) => {
       location: nearest ?? null, // Full location object for Redux
     };
   } catch (error) {
-    console.error("❌ Check-in failed:", error);
-
     return {
       allowed: false,
       message: error.message || "Something went wrong during check-in",
@@ -253,10 +244,6 @@ export const getUserAttendance = async (
     // Return the attendance list
     return response.data?.message || [];
   } catch (error) {
-    console.error(
-      "Attendance fetch error:",
-      error.response?.data || error.message
-    );
     return {
       error:
         error.response?.data?.message ||
@@ -284,7 +271,6 @@ export const getAttendanceStatus = async () => {
       custom_in: latest?.custom_in === 1 ? 1 : 0,
     };
   } catch (e) {
-    console.log("Status fetch error:", e);
     return { custom_in: 0 };
   }
 };
@@ -305,7 +291,6 @@ export const getDailyWorkedHours = async (employeeCode, date) => {
     // If API returns something valid, show it. If it's empty/null → show "00:00"
     return hours ? hours : "00:00";
   } catch (err) {
-    console.error("Daily hours fetch error:", err);
     return "00:00";
   }
 };
@@ -325,7 +310,6 @@ export const getMonthlyWorkedHours = async (employeeCode, month, year) => {
     const hours = response.data?.message?.trim();
     return hours ? hours : "00:00";
   } catch (err) {
-    console.error("Monthly hours fetch error:", err);
     return "00:00";
   }
 };

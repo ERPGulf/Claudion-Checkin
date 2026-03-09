@@ -29,12 +29,6 @@ export const userFileUpload = async (file, docname) => {
     formData.append("doctype", "Employee Checkin");
     formData.append("docname", docname);
 
-    console.log("📤 Uploading file with data:", {
-      docname,
-      fileName: file.name,
-      uri: file.uri,
-    });
-
     const response = await apiClient.post(
       `${baseUrl}/api/method/employee_app.attendance_api.upload_file`,
       formData,
@@ -46,10 +40,8 @@ export const userFileUpload = async (file, docname) => {
       }
     );
 
-    console.log("✅ Upload API response:", response.data);
     return response.data;
   } catch (error) {
-    console.error("❌ Upload API Error:", error.message || error);
     throw new Error("Photo upload failed");
   }
 };
@@ -78,10 +70,6 @@ export const putUserFile = async (employeeCode) => {
 
     return data;
   } catch (error) {
-    console.error(
-      "Error updating employee:",
-      error.response?.data || error.message
-    );
     throw error;
   }
 };
@@ -100,7 +88,6 @@ export const userStatusPut = async (employeeCode, custom_in) => {
     if (!employeeCode) throw new Error("Employee code is required");
 
     const url = `${baseUrl}/api/method/employee_app.attendance_api.employee`;
-    console.log("🔗 PUT URL:", url);
 
     const formData = new URLSearchParams();
     formData.append("employee_code", employeeCode);
@@ -113,13 +100,8 @@ export const userStatusPut = async (employeeCode, custom_in) => {
       },
     });
 
-    console.log("✅ Response:", data);
     return data;
   } catch (error) {
-    console.error(
-      "❌ userStatusPut error:",
-      error.response?.data || error.message
-    );
     throw new Error("Something went wrong while updating employee status");
   }
 };

@@ -12,11 +12,7 @@ export default function ResetTokenButton() {
     try {
       const refreshToken = await AsyncStorage.getItem("refresh_token");
       saveTokens("aadasdsadsas", refreshToken);
-      //   dispatch(revertAll());
-      console.log("Access token reset");
-    } catch (err) {
-      console.log(err);
-    }
+    } catch (err) {}
   };
 
   return (

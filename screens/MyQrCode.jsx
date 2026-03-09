@@ -45,9 +45,7 @@ const MyQrCode = () => {
         if (isMounted) {
           setQrData(data);
         }
-      } catch (error) {
-        console.error("❌ Failed to fetch QR code:", error.message);
-      } finally {
+      } catch (error) {} finally {
         if (isMounted) {
           setLoading(false);
         }

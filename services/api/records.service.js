@@ -15,7 +15,6 @@ export const getShortcut1 = async (employeeCode) => {
       data: message.data || {},
     };
   } catch (error) {
-    console.error("❌ getShortcut1 error:", error.message);
     throw error;
   }
 };
@@ -35,7 +34,6 @@ export const getShortcut2 = async (employeeCode) => {
       data: message.fields || {},
     };
   } catch (error) {
-    console.error("❌ getShortcut2 error:", error.message);
     throw error;
   }
 };
@@ -55,7 +53,6 @@ export const getShortcut3 = async (employeeCode) => {
       data: message.data || {},
     };
   } catch (error) {
-    console.error("❌ getShortcut3 error:", error.message);
     throw error;
   }
 };

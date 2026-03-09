@@ -35,11 +35,6 @@ export const createComplaint = async ({ message }) => {
 
     return { message: response.data };
   } catch (error) {
-    console.error(
-      "❌ Create complaint failed:",
-      error?.response?.data || error.message,
-    );
-
     return {
       error:
         error?.response?.data?.message ||
@@ -81,11 +76,6 @@ export const uploadComplaintAttachment = async (file, docname) => {
 
     return response.data;
   } catch (error) {
-    console.error(
-      "❌ Complaint attachment upload failed:",
-      error?.response?.data || error.message,
-    );
-
     throw error;
   }
 };

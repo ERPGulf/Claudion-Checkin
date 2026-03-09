@@ -46,10 +46,6 @@ export const getNotifications = async (employeeId) => {
 
     return notifications;
   } catch (error) {
-    console.error(
-      "❌ Notification fetch error:",
-      error.response?.data || error.message,
-    );
     return [];
   }
 };
@@ -101,10 +97,6 @@ export const markNotificationAsRead = async (notificationId) => {
 
     return response.data?.message?.status === "success";
   } catch (error) {
-    console.error(
-      "❌ Mark notification as read error:",
-      error.response?.data || error.message,
-    );
     throw error;
   }
 };

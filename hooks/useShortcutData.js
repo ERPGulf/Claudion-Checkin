@@ -17,9 +17,7 @@ const useShortcutData = (employeeCode, fetchFn) => {
           setData(res?.data || {});
           setTitle(res?.shortcut || "Records");
         }
-      } catch (error) {
-        console.error("❌ Shortcut fetch failed:", error.message);
-      } finally {
+      } catch (error) {} finally {
         if (isMounted) {
           setLoading(false);
         }

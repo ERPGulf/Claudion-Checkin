@@ -27,7 +27,6 @@ export const getExpenseClaims = async () => {
     const data = response.data?.message || response.data;
     return Array.isArray(data) ? data : [];
   } catch (error) {
-    console.error("❌ Error fetching expense claims:", error);
     throw error;
   }
 };
@@ -80,10 +79,6 @@ export const createExpenseClaim = async (claimData) => {
 
     return response.data;
   } catch (error) {
-    console.error(
-      "❌ Error creating expense claim:",
-      error.response?.data || error.message
-    );
     throw error;
   }
 };
@@ -123,7 +118,6 @@ export const userExpenseFileUpload = async (file, docname) => {
 
     return response.data;
   } catch (error) {
-    console.error("❌ File upload failed:", error);
     throw error;
   }
 };

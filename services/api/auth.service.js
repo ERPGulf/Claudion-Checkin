@@ -24,7 +24,6 @@ export const generateToken = async ({ api_key, app_key, api_secret }) => {
         "x-skip-auth": "true",
       },
     });
-    console.log(response.data);
     const tokenData = response?.data?.data;
     const accessToken = tokenData?.access_token;
     const refreshToken = tokenData?.refresh_token;
@@ -42,10 +41,6 @@ export const generateToken = async ({ api_key, app_key, api_secret }) => {
       refresh_token: refreshToken,
     };
   } catch (error) {
-    console.error(
-      "❌ generateToken error:",
-      error.response?.data || error.message
-    );
     throw error;
   }
 };

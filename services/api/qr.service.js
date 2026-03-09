@@ -16,7 +16,6 @@ export const getQrCode = async (employeeCode) => {
       imageUrl: message?.image_url,
     };
   } catch (error) {
-    console.error("❌ getQrCode error:", error.message);
     throw error;
   }
 };

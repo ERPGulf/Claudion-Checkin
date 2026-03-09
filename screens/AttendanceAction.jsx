@@ -84,7 +84,6 @@ function AttendanceAction() {
       setDistanceInfo(nearest);
       setReady(true);
     } catch (error) {
-      console.log(":x: Location error:", error);
       Toast.show({
         type: "error",
         text1: ":warning: Location error",
