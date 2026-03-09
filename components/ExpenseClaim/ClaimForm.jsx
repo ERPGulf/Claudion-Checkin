@@ -11,14 +11,14 @@ import {
   Platform,
   Alert,
 } from "react-native";
-import * as DocumentPicker from "expo-document-picker";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Picker } from "@react-native-picker/picker";
 import PropTypes from "prop-types";
 import { COLORS } from "../../constants";
 import { useEffect } from "react";
 import SubmitButton from "../common/SubmitButton";
-
+import { useAttachmentPicker } from "../../hooks/useAttachmentPicker";
+import AttachmentBottomSheet from "./AttachmentBottomSheet";
 function ClaimForm({ onSubmit, isLoading, resetSignal }) {
   const [expenseDate, setExpenseDate] = useState("");
   const [expenseType, setExpenseType] = useState("");
@@ -26,6 +26,8 @@ function ClaimForm({ onSubmit, isLoading, resetSignal }) {
   const [amount, setAmount] = useState("");
   const [fileUrl, setFileUrl] = useState(null);
   const [showPicker, setShowPicker] = useState(false);
+  const [isBottomSheetVisible, setBottomSheetVisible] = useState(false);
+  const { pickFromCamera, pickFromGallery, pickDocument } = useAttachmentPicker();
    useEffect(() => {
     setExpenseDate("");
     setExpenseType("");
@@ -45,40 +47,39 @@ function ClaimForm({ onSubmit, isLoading, resetSignal }) {
 
   const showDatePicker = () => setShowPicker(true);
 
-  const pickFile = async () => {
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ["image/*", "*/*"],
-        copyToCacheDirectory: true,
-        multiple: false,
-      });
+  const pickFile = () => setBottomSheetVisible(true);
 
-      if (result?.assets && result.assets.length > 0) {
-        const file = result.assets[0];
-        const newFile = {
-          uri: file.uri,
-          name: file.name || "receipt",
-          type: file.mimeType || "application/octet-stream",
-        };
-        setFileUrl(newFile);
-        showToast(`✅ File attached: ${file.name}`);
-        console.log("📎 File attached:", newFile);
-      } else if (result?.uri) {
-        const newFile = {
-          uri: result.uri,
-          name: result.name || "receipt",
-          type: result.mimeType || "application/octet-stream",
-        };
-        setFileUrl(newFile);
-        showToast(`✅ File attached: ${result.name}`);
-        console.log("📎 File attached:", newFile);
-      } else {
-        console.log("⚠️ File picker cancelled");
+  const handlePickCamera = () => {
+    setBottomSheetVisible(false);
+    setTimeout(async () => {
+      const file = await pickFromCamera();
+      if (file) {
+        setFileUrl(file);
+        showToast(`✅ Photo attached: ${file.name}`);
       }
-    } catch (err) {
-      console.error("❌ File selection error:", err);
-      showToast("Failed to pick file.");
-    }
+    }, 500);
+  };
+
+  const handlePickGallery = () => {
+    setBottomSheetVisible(false);
+    setTimeout(async () => {
+      const file = await pickFromGallery();
+      if (file) {
+        setFileUrl(file);
+        showToast(`✅ Image attached: ${file.name}`);
+      }
+    }, 500);
+  };
+
+  const handlePickDocument = () => {
+    setBottomSheetVisible(false);
+    setTimeout(async () => {
+      const file = await pickDocument();
+      if (file) {
+        setFileUrl(file);
+        showToast(`✅ File attached: ${file.name}`);
+      }
+    }, 500);
   };
 
   const handleRemoveAttachment = () => setFileUrl(null);
@@ -220,6 +221,14 @@ function ClaimForm({ onSubmit, isLoading, resetSignal }) {
         title="Submit Claim"
         loading={isLoading}
         onPress={handleSubmit}
+      />
+
+      <AttachmentBottomSheet
+        visible={isBottomSheetVisible}
+        onClose={() => setBottomSheetVisible(false)}
+        onSelectCamera={handlePickCamera}
+        onSelectGallery={handlePickGallery}
+        onSelectDocument={handlePickDocument}
       />
     </ScrollView>
   );
