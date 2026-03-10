@@ -1,6 +1,5 @@
 import { useState, useLayoutEffect, useEffect } from "react";
 import { useNavigation } from "@react-navigation/native";
-import * as DocumentPicker from "expo-document-picker";
 import { uploadLeaveAttachment } from "../services/api";
 import {
   View,
@@ -12,7 +11,9 @@ import {
   ActivityIndicator,
   Platform,
 } from "react-native";
-import AttachmentPicker from "../components/AttachmentPicker";
+import { useAttachmentPicker } from "../hooks/useAttachmentPicker";
+import AttachmentBottomSheet from "../components/attachment/AttachmentBottomSheet";
+import AttachmentPicker from "../components/attachment/AttachmentPicker";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Entypo from "@expo/vector-icons/Entypo";
 import { Picker } from "@react-native-picker/picker";
@@ -56,6 +57,10 @@ export default function LeaveRequestScreen() {
   const [loading, setLoading] = useState(false);
   const [leaveTypes, setLeaveTypes] = useState([]);
   const [attachment, setAttachment] = useState(null);
+  const { pickFromCamera, pickFromGallery, pickDocument } =
+    useAttachmentPicker();
+
+  const [isBottomSheetVisible, setBottomSheetVisible] = useState(false);
 
   const navigation = useNavigation();
   useEffect(() => {
@@ -101,28 +106,41 @@ export default function LeaveRequestScreen() {
       setLeaveTypes(message || []);
     }
   };
-  const pickAttachment = async () => {
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ["image/*", "application/pdf"],
-        copyToCacheDirectory: true,
-      });
+  const pickAttachment = () => {
+    setBottomSheetVisible(true);
+  };
+  const handlePickCamera = () => {
+    setBottomSheetVisible(false);
 
-      if (result.canceled) return;
-
-      const file = result.assets?.[0];
-      if (!file) return;
-
-      setAttachment({
-        uri: file.uri,
-        name: file.name,
-        type: file.mimeType || "application/octet-stream",
-      });
-    } catch (err) {
-      Alert.alert("Error", "Failed to pick attachment");
-    }
+    setTimeout(async () => {
+      const file = await pickFromCamera();
+      if (file) {
+        setAttachment(file);
+      }
+    }, 400);
   };
 
+  const handlePickGallery = () => {
+    setBottomSheetVisible(false);
+
+    setTimeout(async () => {
+      const file = await pickFromGallery();
+      if (file) {
+        setAttachment(file);
+      }
+    }, 400);
+  };
+
+  const handlePickDocument = () => {
+    setBottomSheetVisible(false);
+
+    setTimeout(async () => {
+      const file = await pickDocument();
+      if (file) {
+        setAttachment(file);
+      }
+    }, 400);
+  };
   const handleFromChange = (event, selectedDate) => {
     setShowFromPicker(false);
     if (event.type === "dismissed") return;
@@ -340,6 +358,13 @@ export default function LeaveRequestScreen() {
           onPress={handleSubmit}
         />
       </ScrollView>
+      <AttachmentBottomSheet
+        visible={isBottomSheetVisible}
+        onClose={() => setBottomSheetVisible(false)}
+        onSelectCamera={handlePickCamera}
+        onSelectGallery={handlePickGallery}
+        onSelectDocument={handlePickDocument}
+      />
     </SafeAreaView>
   );
 }

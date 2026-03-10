@@ -3,10 +3,17 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { cleanBaseUrl } from "./utils";
 
+let cachedAuth = null;
+
 /**
  * Common Auth Context
  */
 export const getAuthContext = async () => {
+  // return cached version if available
+  if (cachedAuth) {
+    return cachedAuth;
+  }
+
   const [rawBaseUrl, token, employeeCode] = await Promise.all([
     AsyncStorage.getItem("baseUrl"),
     AsyncStorage.getItem("access_token"),
@@ -17,11 +24,20 @@ export const getAuthContext = async () => {
     throw new Error("Session expired");
   }
 
-  return {
+  cachedAuth = {
     baseUrl: cleanBaseUrl(rawBaseUrl),
     token,
     employeeCode,
   };
+
+  return cachedAuth;
+};
+
+/**
+ * Clear cache (call on logout)
+ */
+export const clearAuthCache = () => {
+  cachedAuth = null;
 };
 
 /**

@@ -40,7 +40,7 @@ function ExpenseCard({ claim }) {
       </Text>
       <Text className="text-sm text-gray-700 mb-1">
         Amount:{" "}
-        <Text className="font-semibold text-gray-900">₹{claim.amount}</Text>
+        <Text className="font-semibold text-gray-900">{claim.amount}</Text>
       </Text>
       <Text className="text-sm text-gray-700 mb-1">
         Date: {claim.expense_date || "N/A"}

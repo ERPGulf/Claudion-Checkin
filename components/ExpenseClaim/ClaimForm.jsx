@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState,useEffect } from "react";
 import {
   ToastAndroid,
   View,
@@ -15,10 +15,10 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import { Picker } from "@react-native-picker/picker";
 import PropTypes from "prop-types";
 import { COLORS } from "../../constants";
-import { useEffect } from "react";
 import SubmitButton from "../common/SubmitButton";
 import { useAttachmentPicker } from "../../hooks/useAttachmentPicker";
-import AttachmentBottomSheet from "./AttachmentBottomSheet";
+import AttachmentBottomSheet from "../attachment/AttachmentBottomSheet";
+import { getExpenseTypes } from "../../services/api/expense.service";
 function ClaimForm({ onSubmit, isLoading, resetSignal }) {
   const [expenseDate, setExpenseDate] = useState("");
   const [expenseType, setExpenseType] = useState("");
@@ -27,14 +27,32 @@ function ClaimForm({ onSubmit, isLoading, resetSignal }) {
   const [fileUrl, setFileUrl] = useState(null);
   const [showPicker, setShowPicker] = useState(false);
   const [isBottomSheetVisible, setBottomSheetVisible] = useState(false);
-  const { pickFromCamera, pickFromGallery, pickDocument } = useAttachmentPicker();
-   useEffect(() => {
+  const [expenseTypes, setExpenseTypes] = useState([]);
+  const { pickFromCamera, pickFromGallery, pickDocument } =
+    useAttachmentPicker();
+
+  useEffect(() => {
     setExpenseDate("");
     setExpenseType("");
     setDescription("");
     setAmount("");
     setFileUrl(null);
   }, [resetSignal]);
+
+  useEffect(() => {
+    loadExpenseTypes();
+  }, []);
+
+  const loadExpenseTypes = async () => {
+    const res = await getExpenseTypes();
+
+    if (res?.error) {
+      showToast(res.error);
+      return;
+    }
+
+    setExpenseTypes(res.message || []);
+  };
 
   const handleDateChange = (event, selectedDate) => {
     setShowPicker(false);
@@ -43,7 +61,6 @@ function ClaimForm({ onSubmit, isLoading, resetSignal }) {
       setExpenseDate(formatted);
     }
   };
-  const expenseTypes = ["Calls", "Food", "Medical", "Travel", "Others"];
 
   const showDatePicker = () => setShowPicker(true);
 
@@ -145,8 +162,9 @@ function ClaimForm({ onSubmit, isLoading, resetSignal }) {
       <View className="border border-gray-300 rounded mb-3 bg-gray-50">
         <Picker selectedValue={expenseType} onValueChange={setExpenseType}>
           <Picker.Item label="Select type" value="" />
-          {expenseTypes.map((t) => (
-            <Picker.Item key={t} label={t} value={t} />
+
+          {expenseTypes.map((type) => (
+            <Picker.Item key={type} label={type} value={type} />
           ))}
         </Picker>
       </View>

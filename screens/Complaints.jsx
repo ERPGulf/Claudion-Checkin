@@ -4,17 +4,21 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  ActivityIndicator,
   Alert,
-  ScrollView
+  ScrollView,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
-import AttachmentPicker from "../components/AttachmentPicker";
-import SubmitButton from "../components/common/SubmitButton";
-import * as DocumentPicker from "expo-document-picker";
-import Entypo from "@expo/vector-icons/Entypo";
-import { COLORS, SIZES } from "../constants";
 import { SafeAreaView } from "react-native-safe-area-context";
+import Entypo from "@expo/vector-icons/Entypo";
+
+import { COLORS, SIZES } from "../constants";
+
+import SubmitButton from "../components/common/SubmitButton";
+import AttachmentPicker from "../components/attachment/AttachmentPicker";
+import AttachmentBottomSheet from "../components/attachment/AttachmentBottomSheet";
+
+import { useAttachmentPicker } from "../hooks/useAttachmentPicker";
+
 import {
   createComplaint,
   uploadComplaintAttachment,
@@ -24,8 +28,13 @@ const Complaints = () => {
   const [message, setMessage] = useState("");
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [isBottomSheetVisible, setBottomSheetVisible] = useState(false);
+
   const navigation = useNavigation();
-  // ✅ Header setup
+
+  const { pickFromCamera, pickFromGallery, pickDocument } =
+    useAttachmentPicker();
+
   useLayoutEffect(() => {
     navigation.setOptions({
       headerShown: true,
@@ -44,31 +53,38 @@ const Complaints = () => {
     });
   }, [navigation]);
 
-  const pickFile = async () => {
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: "*/*",
-        copyToCacheDirectory: true,
-      });
+  /**
+   * Open Bottom Sheet
+   */
+  const pickFile = () => {
+    setBottomSheetVisible(true);
+  };
 
-      if (result.canceled) {
-        return;
-      }
+  const handlePickCamera = () => {
+    setBottomSheetVisible(false);
 
-      const doc = result.assets?.[0];
-      if (!doc) {
-        return;
-      }
+    setTimeout(async () => {
+      const pickedFile = await pickFromCamera();
+      if (pickedFile) setFile(pickedFile);
+    }, 400);
+  };
 
-      const pickedFile = {
-        uri: doc.uri,
-        name: doc.name,
-        type: doc.mimeType || "application/octet-stream",
-      };
-      setFile(pickedFile);
-    } catch (err) {
-      Alert.alert("Error", "Failed to pick file");
-    }
+  const handlePickGallery = () => {
+    setBottomSheetVisible(false);
+
+    setTimeout(async () => {
+      const pickedFile = await pickFromGallery();
+      if (pickedFile) setFile(pickedFile);
+    }, 400);
+  };
+
+  const handlePickDocument = () => {
+    setBottomSheetVisible(false);
+
+    setTimeout(async () => {
+      const pickedFile = await pickDocument();
+      if (pickedFile) setFile(pickedFile);
+    }, 400);
   };
 
   const submitComplaint = async () => {
@@ -94,7 +110,6 @@ const Complaints = () => {
         throw new Error("Complaint created but docname missing");
       }
 
-      // Upload only if file exists
       if (file) {
         await uploadComplaintAttachment(file, docname);
       }
@@ -116,7 +131,6 @@ const Complaints = () => {
         contentContainerStyle={{ flexGrow: 1 }}
         keyboardShouldPersistTaps="handled"
       >
-        {/* MAIN CONTENT */}
         <View style={{ flex: 1, padding: 16 }}>
           {/* MESSAGE BOX */}
           <TextInput
@@ -127,7 +141,6 @@ const Complaints = () => {
               borderRadius: 10,
               padding: 16,
               marginBottom: 14,
-
               shadowColor: "#000",
               shadowOffset: { width: 0, height: 2 },
               shadowOpacity: 0.12,
@@ -146,7 +159,7 @@ const Complaints = () => {
             file={file}
             onPick={pickFile}
             onRemove={() => setFile(null)}
-            label="Attach file (optional) "
+            label="Attach file (optional)"
           />
         </View>
 
@@ -167,6 +180,15 @@ const Complaints = () => {
           />
         </View>
       </ScrollView>
+
+      {/* Attachment Bottom Sheet */}
+      <AttachmentBottomSheet
+        visible={isBottomSheetVisible}
+        onClose={() => setBottomSheetVisible(false)}
+        onSelectCamera={handlePickCamera}
+        onSelectGallery={handlePickGallery}
+        onSelectDocument={handlePickDocument}
+      />
     </SafeAreaView>
   );
 };

@@ -5,7 +5,6 @@ import { useNavigation } from "@react-navigation/native";
 import { useDispatch, useSelector } from "react-redux";
 import { Toast } from "react-native-toast-message/lib/src/Toast";
 import Ionicons from "react-native-vector-icons/Ionicons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { revertAll } from "../redux/CommonActions";
 import { COLORS, SIZES } from "../constants";
 import user from "../assets/images/user.png";
@@ -13,6 +12,7 @@ import { hapticsMessage } from "../utils/HapticsMessage";
 import { selectUserDetails } from "../redux/Slices/UserSlice";
 import { clearTokens, clearStore } from "../services/api/apiClient";
 import apiClient from "../services/api/apiClient";
+import { clearAuthCache } from "../services/api/authHelper";
 
 const VERSION_CODE = "1.1.2";
 function Profile() {
@@ -31,16 +31,17 @@ function Profile() {
     try {
       hapticsMessage("success");
 
-      // 1. Clear tokens
+      // 1. Clear tokens from storage
       await clearTokens();
 
-      // 2. Clear redux store (sets isLoggedIn = false)
+      // 2. Clear cached auth data
+      clearAuthCache();
+
+      // 3. Clear redux store
       clearStore();
 
-      // 3. Clear axios header
+      // 4. Remove axios authorization header
       delete apiClient.defaults.headers.common.Authorization;
-
-      // ❌ NO navigation here
     } catch (error) {
       hapticsMessage("error");
       Toast.show({
