@@ -3,7 +3,6 @@
 import apiClient from "./apiClient";
 import { getAuthContext, buildHeaders } from "./authHelper";
 import { parseError } from "./errorHelper";
-
 /**
  * Get Expense Claims
  */
@@ -32,7 +31,6 @@ export const getExpenseClaims = async () => {
     };
   }
 };
-
 /**
  * Get Expense Types
  */

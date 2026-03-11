@@ -127,41 +127,40 @@ const Complaints = () => {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
-      <ScrollView
-        contentContainerStyle={{ flexGrow: 1 }}
-        keyboardShouldPersistTaps="handled"
-      >
-        <View style={{ flex: 1, padding: 16 }}>
-          {/* MESSAGE BOX */}
-          <TextInput
-            style={{
-              minHeight: 160,
-              maxHeight: 240,
-              backgroundColor: "#fff",
-              borderRadius: 10,
-              padding: 16,
-              marginBottom: 14,
-              shadowColor: "#000",
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.12,
-              shadowRadius: 6,
-              elevation: 3,
-            }}
-            placeholder="Enter your message here..."
-            multiline
-            value={message}
-            onChangeText={setMessage}
-            textAlignVertical="top"
-          />
+      <ScrollView className="p-4" contentContainerStyle={{ paddingBottom: 40 }}>
+        <Text className="text-xl font-semibold mb-4 text-gray-800">
+          Complaint Details
+        </Text>
 
-          {/* ATTACH FILE */}
-          <AttachmentPicker
-            file={file}
-            onPick={pickFile}
-            onRemove={() => setFile(null)}
-            label="Attach file (optional)"
-          />
-        </View>
+        {/* MESSAGE BOX */}
+        <TextInput
+          style={{
+            minHeight: 160,
+            maxHeight: 240,
+            backgroundColor: "#fff",
+            borderRadius: 10,
+            padding: 16,
+            marginBottom: 14,
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.12,
+            shadowRadius: 6,
+            elevation: 3,
+          }}
+          placeholder="Enter your message here..."
+          multiline
+          value={message}
+          onChangeText={setMessage}
+          textAlignVertical="top"
+        />
+
+        {/* ATTACH FILE */}
+        <AttachmentPicker
+          file={file}
+          onPick={pickFile}
+          onRemove={() => setFile(null)}
+          label="Attach file (optional)"
+        />
 
         {/* FOOTER */}
         <View
@@ -172,13 +171,12 @@ const Complaints = () => {
             borderTopColor: "#f1f5f9",
             backgroundColor: "#fff",
           }}
-        >
-          <SubmitButton
-            title="Submit Complaint"
-            loading={loading}
-            onPress={submitComplaint}
-          />
-        </View>
+        ></View>
+        <SubmitButton
+          title="Submit Complaint"
+          loading={loading}
+          onPress={submitComplaint}
+        />
       </ScrollView>
 
       {/* Attachment Bottom Sheet */}

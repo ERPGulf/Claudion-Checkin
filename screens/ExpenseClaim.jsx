@@ -16,6 +16,7 @@ import ClaimForm from "../components/ExpenseClaim/ClaimForm";
 import ExpenseCard from "../components/ExpenseClaim/ExpenseCard";
 import { COLORS, SIZES } from "../constants";
 import { createExpenseClaim, getExpenseClaims } from "../services/api";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 const PAGE_SIZE = 5;
 
@@ -52,8 +53,13 @@ export default function ExpenseClaim() {
   } = useQuery({
     queryKey: ["expenseClaims", employeeCode],
     queryFn: async () => {
-      const data = await getExpenseClaims(employeeCode);
-      return (data || []).sort(
+      const res = await getExpenseClaims();
+
+      if (res?.error) {
+        throw new Error(res.error);
+      }
+
+      return (res?.message || []).sort(
         (a, b) => new Date(b.expense_date) - new Date(a.expense_date),
       );
     },
@@ -83,10 +89,15 @@ export default function ExpenseClaim() {
   // ✅ Loading state
   if (isFetching) {
     return (
-      <View className="flex-1 justify-center items-center bg-gray-100">
-        <ActivityIndicator size="large" color={COLORS.primary} />
-        <Text className="mt-3 text-gray-600">Loading expense claims...</Text>
-      </View>
+      <SafeAreaView
+        style={{ flex: 1, backgroundColor: "#f3f4f6" }}
+        edges={["bottom"]}
+      >
+        <View className="flex-1 justify-center items-center bg-gray-100">
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text className="mt-3 text-gray-600">Loading expense claims...</Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
@@ -95,41 +106,46 @@ export default function ExpenseClaim() {
   const hasMore = visibleCount < claims.length;
 
   return (
-    <ScrollView
-      className="flex-1 bg-white"
-      contentContainerStyle={{ padding: 16 }}
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor: COLORS.white }}
+      edges={["bottom"]}
     >
-      {/* Claim Form */}
-      <ClaimForm
-        onSubmit={addClaim}
-        isLoading={isCreating}
-        resetSignal={resetFormFlag}
-      />
+      <ScrollView
+        className="flex-1 bg-white"
+        contentContainerStyle={{ padding: 16 }}
+      >
+        {/* Claim Form */}
+        <ClaimForm
+          onSubmit={addClaim}
+          isLoading={isCreating}
+          resetSignal={resetFormFlag}
+        />
 
-      <Text className="text-lg font-semibold mt-6 mb-3 text-gray-800">
-        Expense Claim History
-      </Text>
-
-      {visibleClaims.length === 0 ? (
-        <Text className="text-gray-500 text-center mt-6">
-          No expense claims yet.
+        <Text className="text-lg font-semibold mt-6 mb-3 text-gray-800">
+          Expense Claim History
         </Text>
-      ) : (
-        visibleClaims.map((item) => (
-          <View key={item.name || item.id} className="mb-4">
-            <ExpenseCard claim={item} />
-          </View>
-        ))
-      )}
 
-      {hasMore && (
-        <TouchableOpacity
-          onPress={() => setVisibleCount((prev) => prev + PAGE_SIZE)}
-          className="p-3 mb-6 rounded bg-gray-300"
-        >
-          <Text className="text-center font-semibold">Load More</Text>
-        </TouchableOpacity>
-      )}
-    </ScrollView>
+        {visibleClaims.length === 0 ? (
+          <Text className="text-gray-500 text-center mt-6">
+            No expense claims yet.
+          </Text>
+        ) : (
+          visibleClaims.map((item, index) => (
+            <View key={item?.name || index} className="mb-4">
+              <ExpenseCard claim={item} />
+            </View>
+          ))
+        )}
+
+        {hasMore && (
+          <TouchableOpacity
+            onPress={() => setVisibleCount((prev) => prev + PAGE_SIZE)}
+            className="p-3 mb-6 rounded bg-gray-300"
+          >
+            <Text className="text-center font-semibold">Load More</Text>
+          </TouchableOpacity>
+        )}
+      </ScrollView>
+    </SafeAreaView>
   );
 }
