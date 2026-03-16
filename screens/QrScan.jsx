@@ -10,6 +10,8 @@ import { Ionicons, Entypo } from "@expo/vector-icons";
 import { CameraView, Camera, useCameraPermissions } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
 import { useNavigation } from "@react-navigation/native";
+import { LinearGradient } from "expo-linear-gradient";
+import SubmitButton from "../components/common/SubmitButton";
 import {
   setBaseUrl,
   setUsername,
@@ -17,6 +19,7 @@ import {
   setEmployeeCode,
 } from "../redux/Slices/UserSlice";
 import { COLORS, SIZES } from "../constants";
+import { StyleSheet } from "react-native";
 function QrScan() {
   const navigation = useNavigation();
   const [permission, requestPermission] = useCameraPermissions();
@@ -25,23 +28,7 @@ function QrScan() {
   useEffect(() => {
     if (!permission?.granted) requestPermission();
   }, [permission]);
-  useLayoutEffect(() => {
-    navigation.setOptions({
-      headerShadowVisible: false,
-      headerShown: true,
-      headerTitle: "Scan QR Code",
-      headerTitleAlign: "center",
-      headerLeft: () => (
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Entypo
-            name="chevron-left"
-            size={SIZES.xxxLarge - 5}
-            color={COLORS.primary}
-          />
-        </TouchableOpacity>
-      ),
-    });
-  }, [navigation]);
+
   const handleQRCodeData = async (data) => {
     try {
       const KEYS = [
@@ -49,7 +36,7 @@ function QrScan() {
         "Employee_Code",
         "Full_Name",
         "Photo",
-        "Restrict Location",   // :point_left: NEW FIELD
+        "Restrict Location", // :point_left: NEW FIELD
         "User_id",
         "API",
         "App_key",
@@ -61,7 +48,7 @@ function QrScan() {
         .replace(/[\u0000-\u001F\u00A0]+/g, " ")
         .replace(
           /[%#;]+(?:\s+)?(Company|Employee_Code|Full_Name|Photo|Restrict Location|User_id|API|App_key)(?:\s*[:=])/g,
-          (_, key) => `${key}:`
+          (_, key) => `${key}:`,
         )
         .replace(/[^\S\r\n]+/g, " ")
         .trim();
@@ -70,7 +57,7 @@ function QrScan() {
       const keyAlt = KEYS.join("|");
       const pairRE = new RegExp(
         `\\b(${keyAlt})\\s*[:=]\\s*([\\s\\S]*?)(?=\\s*(?:${keyAlt})\\s*[:=]|$)`,
-        "gi"
+        "gi",
       );
       let m;
       while ((m = pairRE.exec(value))) {
@@ -151,7 +138,7 @@ function QrScan() {
       if (result?.canceled) return;
       if (result.assets[0]?.uri) {
         const scannedResults = await Camera.scanFromURLAsync(
-          result.assets[0].uri
+          result.assets[0].uri,
         );
         const { data } = scannedResults[0];
         await handleQRCodeData(data);
@@ -175,63 +162,188 @@ function QrScan() {
     );
   }
   return (
-    <CameraView
-      barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
-      onBarcodeScanned={handleBarCodeScanned}
-      style={{ flex: 1, width: "100%", height: "100%" }}
-      type="back"
-      className="flex-1 items-center px-3 py-1 bg-white justify-end"
+    <SafeAreaView
+      edges={["top"]}
+      style={{
+        flex: 1,
+        backgroundColor: "#FFFFFF",
+      }}
     >
-      <View
-        style={{ position: "absolute", top: 100, height: SIZES.width * 0.9 }}
-        className="w-full bg-transparent border-4 border-white/50 rounded-2xl justify-center items-center"
-      >
-        <Ionicons
-          name="qr-code-outline"
-          size={SIZES.width * 0.6}
-          color="rgba(255,255,255,0.1)"
-        />
-      </View>
-      <View
+      <LinearGradient
+        colors={["#F6D4BC", "#C45D2F"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
         style={{
-          width: "100%",
-          flex: 0.2,
-          justifyContent: "flex-end",
-          paddingVertical: 20,
+          height: 69,
+          paddingTop: 4,
+          paddingBottom: 4,
+          paddingLeft: 9,
+          paddingRight: 82,
+          borderWidth: 0.5,
+          borderColor: "#D3551D",
+          justifyContent: "center",
         }}
       >
-        {scanned ? (
-          <TouchableOpacity
-            style={{ backgroundColor: COLORS.primary }}
-            className="mt-2 h-16 justify-center rounded-xl items-center flex-row"
-            onPress={() => setScanned(false)}
-          >
-            <Ionicons name="scan-outline" size={SIZES.xxxLarge} color="white" />
-            <Text className="text-base font-semibold text-white ml-2">
-              TAP TO SCAN AGAIN
-            </Text>
-          </TouchableOpacity>
-        ) : (
-          <View className="h-16 justify-center rounded-xl bg-white border-2 items-center mt-4">
-            <Ionicons
-              name="qr-code-outline"
-              size={SIZES.xxxLarge}
-              color={COLORS.primary}
-            />
-          </View>
-        )}
-        <TouchableOpacity
-          style={{ backgroundColor: COLORS.primary }}
-          className="mt-2 h-16 justify-center flex-row items-center rounded-xl"
-          onPress={pickImage}
+        <View
+          style={{
+            width: "100%",
+            height: 56,
+            flexDirection: "row",
+            alignItems: "center",
+            paddingRight: 82,
+          }}
         >
-          <Ionicons name="image" size={SIZES.xxxLarge} color="white" />
-          <Text className="text-base font-semibold text-white ml-2">
-            SELECT FROM PHOTOS
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={{
+              width: 40,
+              height: 40,
+              justifyContent: "center",
+              alignItems: "center",
+              marginRight: 25,
+              marginLeft: 9,
+            }}
+          >
+            <Entypo name="chevron-left" size={28} color="black" />
+          </TouchableOpacity>
+
+          <Text
+            style={{
+              fontSize: 22,
+              fontWeight: "600",
+              color: "#000",
+            }}
+          >
+            Scan your QR code!
           </Text>
-        </TouchableOpacity>
-      </View>
-    </CameraView>
+        </View>
+      </LinearGradient>
+      <CameraView
+        barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
+        onBarcodeScanned={handleBarCodeScanned}
+        style={{ flex: 1, width: "100%" }}
+        type="back"
+        className="flex-1 items-center px-3 py-1 justify-end"
+      >
+        <View style={styles.scanFrame}>
+          <View style={styles.topLeftH} />
+          <View style={styles.topLeftV} />
+
+          <View style={styles.bottomLeftH} />
+          <View style={styles.bottomLeftV} />
+
+          <View style={styles.topRightH} />
+          <View style={styles.topRightV} />
+
+          <View style={styles.bottomRightH} />
+          <View style={styles.bottomRightV} />
+        </View>
+        <View style={{ width: "100%", alignItems: "center", marginBottom: 20 }}>
+          <LinearGradient
+            colors={["#77224C", "#8E273B"]}
+            start={{ x: 0, y: 0.5 }}
+            end={{ x: 1, y: 0.5 }}
+            style={{
+              borderRadius: 7,
+              paddingTop: 13,
+              paddingBottom: 14,
+              width: "90%",
+              paddingVertical: 14,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Text
+              numberOfLines={1}
+              style={{
+                fontSize: 22,
+                fontWeight: "500",
+                color: "#FFFFFF",
+              }}
+            >
+              Upload from Files/Photos
+            </Text>
+          </LinearGradient>
+        </View>
+      </CameraView>
+    </SafeAreaView>
   );
 }
 export default QrScan;
+
+const styles = StyleSheet.create({
+  scanFrame: {
+    position: "absolute",
+    top: "30%",
+    width: 220,
+    height: 229,
+    alignSelf: "center",
+  },
+  topLeftH: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    width: 40,
+    height: 2,
+    backgroundColor: "#444",
+  },
+  topLeftV: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    width: 2,
+    height: 60,
+    backgroundColor: "#444",
+  },
+
+  bottomLeftH: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    width: 40,
+    height: 2,
+    backgroundColor: "#444",
+  },
+  bottomLeftV: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    width: 2,
+    height: 60,
+    backgroundColor: "#444",
+  },
+
+  topRightH: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    width: 40,
+    height: 2,
+    backgroundColor: "#444",
+  },
+  topRightV: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    width: 2,
+    height: 60,
+    backgroundColor: "#444",
+  },
+
+  bottomRightH: {
+    position: "absolute",
+    bottom: 0,
+    right: 0,
+    width: 40,
+    height: 2,
+    backgroundColor: "#444",
+  },
+  bottomRightV: {
+    position: "absolute",
+    bottom: 0,
+    right: 0,
+    width: 2,
+    height: 60,
+    backgroundColor: "#444",
+  },
+});

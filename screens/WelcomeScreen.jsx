@@ -5,7 +5,9 @@ import React from "react";
 import { useNavigation } from "@react-navigation/native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { COLORS } from "../constants";
-import icon from "../assets/icon.png";
+import icon from "../assets/images/ERP-Gulf-Logo.png";
+import { LinearGradient } from "expo-linear-gradient";
+import SubmitButton from "../components/common/SubmitButton";
 
 function WelcomeScreen() {
   const navigation = useNavigation();
@@ -14,49 +16,36 @@ function WelcomeScreen() {
     <SafeAreaView
       style={{
         flex: 1,
-        alignItems: "center",
         backgroundColor: COLORS.white,
       }}
-      className="px-3 relative items-center justify-center"
+      className="relative items-center justify-center"
       edges={["top", "bottom"]}
     >
       <View className="justify-center items-center">
         <Image
           cachePolicy="memory-disk"
           source={icon}
-          style={{ width: 250, height: 250 }}
+          style={{
+            width: 294,
+            height: 133,
+            resizeMode: "contain",
+          }}
         />
       </View>
-
-      <TouchableOpacity
-        style={{
-          width: "100%",
-          borderWidth: 2,
-          borderColor: COLORS.primary,
-        }}
-        className="h-16 rounded-2xl justify-center items-center absolute bottom-6"
+      <SubmitButton
+        title="Get Started!"
         onPress={() => navigation.navigate("Qrscan")}
-      >
-        <View
-          style={{ width: "100%" }}
-          className="h-full rounded-2xl justify-center items-center relative flex-row"
-        >
-          <Text
-            className="text-xl font-semibold text-center"
-            style={{ color: COLORS.primary }}
-          >
-            GET STARTED
-          </Text>
-
-          <View className="absolute right-5">
-            <Ionicons
-              name="arrow-forward-outline"
-              size={38}
-              color={COLORS.primary}
-            />
-          </View>
-        </View>
-      </TouchableOpacity>
+        gradientColors={["#77224C", "#8E273B"]}
+        paddingVertical={13}
+        paddingHorizontal={108}
+        borderRadius={7}
+        textStyle={{ fontSize: 24, fontWeight: "500" }}
+        style={{
+          position: "absolute",
+          bottom: 24,
+          alignSelf: "center",
+        }}
+      />
     </SafeAreaView>
   );
 }
