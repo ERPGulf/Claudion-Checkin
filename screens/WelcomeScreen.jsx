@@ -34,16 +34,19 @@ function WelcomeScreen() {
       </View>
       <SubmitButton
         title="Get Started!"
+        height={56}
         onPress={() => navigation.navigate("Qrscan")}
-        gradientColors={["#77224C", "#8E273B"]}
-        paddingVertical={13}
-        paddingHorizontal={108}
-        borderRadius={7}
-        textStyle={{ fontSize: 24, fontWeight: "500" }}
         style={{
           position: "absolute",
           bottom: 24,
+          width: "90%",
           alignSelf: "center",
+        }}
+        textStyle={{
+          fontSize: 24, // ✅ override
+          fontWeight: "500",
+          color: "#FFF",
+          // fontFamily: "Inter_500Medium" (if using font)
         }}
       />
     </SafeAreaView>

@@ -16,6 +16,7 @@ import Shortcut1 from './Shortcut1';
 import Shortcut3 from './Shortcut3';
 import Shortcut2 from './Shortcut2';
 import MyQrCode from './MyQrCode';
+import QrPreview from './QrPreview';
 export {
   Home,
   AttendanceAction,
@@ -34,6 +35,8 @@ export {
   Shortcut2,
   Shortcut1,
   Shortcut3,
-  MyQrCode
+  MyQrCode,
+  QrPreview,
+  
 
 };

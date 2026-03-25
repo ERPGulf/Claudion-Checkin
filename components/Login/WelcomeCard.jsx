@@ -2,67 +2,97 @@ import { View, Text } from "react-native";
 import React from "react";
 import { useSelector } from "react-redux";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { COLORS, SIZES } from "../../constants";
+import icon from "../../assets/images/ERP-Gulf-Logo.png";
+import { Image } from "expo-image";
 
 function WelcomeCard() {
   const fullname = useSelector((state) => state.user.fullname);
-
   // Detect Arabic characters only for name direction
   const isArabic = fullname && /[\u0600-\u06FF]/.test(fullname);
 
   return (
-    <View
+    <LinearGradient
+      colors={["#C63A2D", "#B33438", "#8C2A4F", "#6B1E6B"]}
+      locations={[0, 0.35, 0.7, 1]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 0, y: 1 }}
       style={{
-        backgroundColor: COLORS.primary,
-        width: "100%",
-        minHeight: 260, // increased for longer names
-        paddingVertical: 16,
-        paddingHorizontal: 18,
-        borderRadius: 16,
-        justifyContent: "space-between",
+        width: 359,
+        height: 167,
+        borderRadius: 7,
+        border: "1px solid #63205F",
+        padding: 1,
+        alignSelf: "center",
+       backgroundColor: "#FFE8EA",
       }}
     >
-      {/* Top title section */}
-      <View className="flex-row justify-center items-center mb-20">
-        <Text className="text-3xl font-bold text-white">Login</Text>
-      </View>
-      {/* Greeting section */}
-      <View>
-        <Text className="text-xl font-semibold text-white mb-1">Hey,</Text>
+      <LinearGradient
+        colors={["#F7C6CD", "#FFDDE2"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0, y: 1 }}
+        style={{
+          flex: 1,
+          borderRadius: 7,
+          paddingTop: 16,
+          paddingHorizontal: 16,
+        }}
+      >
+        {/* Title */}
+        <View style={{ marginBottom: 20 }}>
+          <Text
+            style={{
+              fontSize: 20,
+              fontFamily: "Inter-SemiBold",
+              color: "#63205F",
+            }}
+          >
+            Login
+          </Text>
+        </View>
+        {/* Logo */}
+        <Image
+          source={icon}
+          style={{
+            position: "absolute",
+            top: 9,
+            right: 7,
+            width: 120,
+            height: 54,
+            resizeMode: "contain",
+          }}
+        />
 
+        {/* Greeting */}
         <View
           style={{
-            flexDirection: "row",
-            alignItems: "center",
-            flexWrap: "wrap",
+            position: "absolute",
+            left: 20,
+            top: 80,
+            right: 20,
+            bottom:39,
           }}
         >
           <Text
-            adjustsFontSizeToFit
-            minimumFontScale={0.8}
-            numberOfLines={2}
+            numberOfLines={1}
             style={{
-              width: "90%",
+              fontSize: 24,
+              fontFamily: "Inter-Medium",
+              color: "#000",
+              lineHeight: 29,
               textAlign:
                 fullname && /[\u0600-\u06FF]/.test(fullname) ? "right" : "left",
               writingDirection: "auto",
               flexShrink: 1,
               flexWrap: "wrap",
-              fontSize: SIZES.xxLarge,
-              fontWeight: "600",
-              color: COLORS.white,
-              fontFamily: undefined,
             }}
           >
-            {fullname || "username"}
+             {(fullname || "username") + "!"}
           </Text>
-
-          <View className="bg-gray-800 w-10 h-10 items-center justify-center rounded-full ml-2">
-            <MaterialCommunityIcons name="hand-wave" color="white" size={24} />
-          </View>
         </View>
-      </View>
-    </View>
+      </LinearGradient>
+    </LinearGradient>
   );
 }
 

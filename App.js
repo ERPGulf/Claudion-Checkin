@@ -30,8 +30,17 @@ export default function App() {
         SplashScreen.preventAutoHideAsync();
 
         // Load fonts
-        const IconAssets = cacheFonts([Ionicons.font]);
-        await Promise.all([...IconAssets]);
+        const fontAssets = cacheFonts([
+          Ionicons.font,
+          {
+            "Inter-Regular": require("./assets/fonts/Inter-Regular.ttf"),
+            "Inter-SemiBold": require("./assets/fonts/Inter-SemiBold.ttf"),
+            "Inter-Bold": require("./assets/fonts/Inter-Bold.ttf"),
+            "Inter-Medium": require("./assets/fonts/Inter-Medium.ttf"),
+          },
+        ]);
+
+        await Promise.all([...fontAssets]);
 
         // ✅ Check for OTA updates
         try {
@@ -41,7 +50,8 @@ export default function App() {
             await Updates.reloadAsync();
           }
         } catch (err) {}
-      } catch (error) {} finally {
+      } catch (error) {
+      } finally {
         setAppReady(true);
         SplashScreen.hideAsync();
       }

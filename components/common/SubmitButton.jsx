@@ -16,9 +16,9 @@ export default function SubmitButton({
   style,
   textStyle,
   gradientColors = ["#77224C", "#8E273B"],
-  paddingVertical = 14,
   paddingHorizontal = 20,
   borderRadius = 12,
+  height = 48, // ✅ default height
 }) {
   const isDisabled = loading || disabled;
 
@@ -33,12 +33,14 @@ export default function SubmitButton({
         start={{ x: 0, y: 0.5 }}
         end={{ x: 1, y: 0.5 }}
         style={{
-          paddingVertical,
+          height, // ✅ control height from outside
           paddingHorizontal,
           alignItems: "center",
           justifyContent: "center",
         }}
+        
       >
+        
         {loading ? (
           <ActivityIndicator color={COLORS.white} />
         ) : (
@@ -52,7 +54,7 @@ export default function SubmitButton({
 const styles = StyleSheet.create({
   text: {
     color: COLORS.white,
-    fontWeight: "600",
-    fontSize: 16,
+    fontWeight: "500",
+    fontSize: 22, // ✅ default for all buttons
   },
 });

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { getNotifications } from "../services/api/notification.service";
 import { setUnreadCount } from "../redux/Slices/notificationSlice";
+import SubmitButton from "../components/common/SubmitButton";
 
 import {
   View,
@@ -124,7 +125,7 @@ function Login() {
       style={{
         flex: 1,
         paddingTop: Constants.statusBarHeight,
-        backgroundColor: COLORS.grayBackground,
+        backgroundColor: "#FFF",
         paddingHorizontal: 12,
       }}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -150,24 +151,34 @@ function Login() {
             <View style={{ marginTop: 20 }}>
               <Text
                 style={{
-                  color: COLORS.grayText,
-                  fontSize: 16,
-                  marginBottom: 5,
+                  color: "#000",
+                  fontFamily: "Inter-regular",
+                  fontSize: 20,
+                  lineHeight: 24,
+                  paddingTop: 26,
+                  paddingBottom: 8,
+                  paddingRight: 106,
                 }}
               >
-                Password
+                Enter your password here!
               </Text>
 
               <View
                 style={{
                   flexDirection: "row",
                   alignItems: "center",
-                  backgroundColor: COLORS.white,
+                  justifyContent: "space-between",
+                  backgroundColor: "#FFF",
                   borderWidth: 1,
-                  borderColor: COLORS.borderGray,
-                  borderRadius: 12,
-                  paddingHorizontal: 12,
+                  borderColor: "#63205F",
+                  borderRadius: 7,
+
+                  width: 358,
                   height: 56,
+
+                  paddingHorizontal: 12,
+                  paddingLeft: 19,
+
                   marginBottom: 10,
                 }}
               >
@@ -176,21 +187,36 @@ function Login() {
                   value={values.password}
                   onChangeText={handleChange("password")}
                   placeholder="Enter password"
-                  placeholderTextColor={COLORS.gray2}
+                  placeholderTextColor="#B3B3B3"
                   onBlur={() => setFieldTouched("password")}
                   style={{
                     flex: 1,
                     fontSize: 16,
-                    height: "100%",
-                    color: COLORS.black,
+                    fontFamily: "Inter-Regular",
+                    color: "#000",
+
+                    textAlignVertical: "center",
+                    paddingVertical: 0,
+                    includeFontPadding: false,
                   }}
                 />
+
                 <TouchableOpacity
                   onPress={() => setShowPassword((prev) => !prev)}
+                  style={{
+                    width: 35,
+                    height: 35,
+                    justifyContent: "center",
+                    alignItems: "center",
+                  }}
                 >
                   <Ionicons
                     name={showPassword ? "eye" : "eye-off"}
-                    size={SIZES.xLarge}
+                    size={29}
+                    style={{
+                      width: 32,
+                      height: 29,
+                    }}
                     color={COLORS.gray2}
                   />
                 </TouchableOpacity>
@@ -205,53 +231,44 @@ function Login() {
               )}
             </View>
 
-            {/* Bottom Section */}
-            <View style={{ marginBottom: 20 }}>
-              <TouchableOpacity
-                disabled={!isValid || isLoading}
+            <View style={{ marginTop: "auto", marginBottom: 20 }}>
+              {/* LOGIN BUTTON */}
+              <SubmitButton
+                title="Login"
                 onPress={handleSubmit}
+                loading={isLoading} // ✅ added
+                disabled={!isValid || isLoading} // ✅ added
+                height={48}
+                borderRadius={7}
                 style={{
-                  backgroundColor: COLORS.primary,
-                  height: 56,
-                  borderRadius: 12,
-                  justifyContent: "center",
-                  alignItems: "center",
-                  opacity: !isValid ? 0.7 : 1,
+                  marginHorizontal: 16,
                   marginBottom: 12,
                 }}
-              >
-                {isLoading ? (
-                  <ActivityIndicator size="large" color={COLORS.white} />
-                ) : (
-                  <Text
-                    style={{
-                      color: COLORS.white,
-                      fontSize: 18,
-                      fontWeight: "bold",
-                    }}
-                  >
-                    Login
-                  </Text>
-                )}
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={() => navigation.navigate("Qrscan")}
-                style={{
-                  borderColor: COLORS.primary,
-                  borderWidth: 1,
-                  backgroundColor: COLORS.white,
-                  height: 56,
-                  borderRadius: 12,
-                  justifyContent: "center",
-                  alignItems: "center",
+                textStyle={{
+                  fontSize: 18,
+                  fontFamily: "Inter-Medium",
                 }}
+              />
+
+              {/* RESCAN BUTTON */}
+              <TouchableOpacity
+                style={{
+                  marginHorizontal: 16,
+                  height: 48,
+                  borderRadius: 7,
+                  borderWidth: 1,
+                  borderColor: "#333",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: "#FFF",
+                }}
+                onPress={() => navigation.navigate("Qrscan")} // ✅ updated
               >
                 <Text
                   style={{
-                    color: COLORS.primary,
+                    color: "#000",
                     fontSize: 18,
-                    fontWeight: "600",
+                    fontFamily: "Inter-Medium",
                   }}
                 >
                   Rescan QR Code
