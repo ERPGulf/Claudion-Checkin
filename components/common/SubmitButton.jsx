@@ -8,6 +8,7 @@ import {
 import { LinearGradient } from "expo-linear-gradient";
 import { COLORS } from "../../constants";
 
+
 export default function SubmitButton({
   title = "Submit",
   loading = false,
@@ -33,7 +34,7 @@ export default function SubmitButton({
         start={{ x: 0, y: 0.5 }}
         end={{ x: 1, y: 0.5 }}
         style={{
-          height, // ✅ control height from outside
+          height, 
           paddingHorizontal,
           alignItems: "center",
           justifyContent: "center",
@@ -55,6 +56,6 @@ const styles = StyleSheet.create({
   text: {
     color: COLORS.white,
     fontWeight: "500",
-    fontSize: 22, // ✅ default for all buttons
+    fontSize: 22, 
   },
 });

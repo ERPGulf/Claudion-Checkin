@@ -1,32 +1,33 @@
-import { ScrollView, View } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import Constants from 'expo-constants';
-import { LavaMenu, QuickAccess, WelcomeCard } from '../components/Home';
-import { COLORS, SIZES } from "../constants";
+import { ScrollView, View, Text, TouchableOpacity } from "react-native";
+import { useNavigation } from "@react-navigation/native";
+import Constants from "expo-constants";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { LavaMenu, QuickAccess, WelcomeCard } from "../components/Home";
 
 function Home() {
   const navigation = useNavigation();
+
   return (
     <View
       style={{
+        width: "100%",
+        alignSelf: "center", // ✅ IMPORTANT
         flex: 1,
-        flexGrow: 1,
-        alignItems: 'center',
+        backgroundColor: "#FFF",
         paddingTop: Constants.statusBarHeight,
-        paddingBottom: 68,
       }}
-      className="bg-gray-200"
     >
+      {/* SCROLL CONTENT */}
       <ScrollView
-        style={{ width: '95%' }}
-        contentContainerStyle={{ justifyContent: 'center' }}
+        style={{ width: "95%", alignSelf: "center" }}
+        contentContainerStyle={{ paddingBottom: 100 }}
         showsVerticalScrollIndicator={false}
-        StickyHeaderComponent={WelcomeCard}
-        alwaysBounceVertical
       >
         <WelcomeCard />
-        <QuickAccess navigation={navigation} />
-        <LavaMenu navigation={navigation} />
+        <View style={{ marginTop: 22 }}>
+          <QuickAccess />
+        </View>
+        <LavaMenu />
       </ScrollView>
     </View>
   );

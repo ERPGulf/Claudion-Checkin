@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { getNotifications } from "../services/api/notification.service";
 import { setUnreadCount } from "../redux/Slices/notificationSlice";
 import SubmitButton from "../components/common/SubmitButton";
-
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   View,
   Text,
@@ -33,7 +33,7 @@ function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const employeeCode = useSelector(selectEmployeeCode);
   const fullName = useSelector(selectName);
-
+  const insets = useSafeAreaInsets();
   // Form validation schema
   const loginSchema = Yup.object().shape({
     password: Yup.string()
@@ -154,6 +154,7 @@ function Login() {
                   color: "#000",
                   fontFamily: "Inter-regular",
                   fontSize: 20,
+                  fontWeight: "500",
                   lineHeight: 24,
                   paddingTop: 26,
                   paddingBottom: 8,
@@ -172,13 +173,10 @@ function Login() {
                   borderWidth: 1,
                   borderColor: "#63205F",
                   borderRadius: 7,
-
-                  width: 358,
+                  width: "100%",
                   height: 56,
-
                   paddingHorizontal: 12,
                   paddingLeft: 19,
-
                   marginBottom: 10,
                 }}
               >
@@ -194,7 +192,6 @@ function Login() {
                     fontSize: 16,
                     fontFamily: "Inter-Regular",
                     color: "#000",
-
                     textAlignVertical: "center",
                     paddingVertical: 0,
                     includeFontPadding: false,
@@ -231,29 +228,30 @@ function Login() {
               )}
             </View>
 
-            <View style={{ marginTop: "auto", marginBottom: 20 }}>
-              {/* LOGIN BUTTON */}
+            <View
+              style={{
+                marginTop: "auto",
+                paddingBottom: insets.bottom + 10,
+              }}
+            >
               <SubmitButton
                 title="Login"
                 onPress={handleSubmit}
-                loading={isLoading} // ✅ added
-                disabled={!isValid || isLoading} // ✅ added
+                loading={isLoading}
+                disabled={!isValid || isLoading}
                 height={48}
                 borderRadius={7}
+                borderColor="#63205F"
                 style={{
-                  marginHorizontal: 16,
+                  width: "100%",
                   marginBottom: 12,
-                }}
-                textStyle={{
-                  fontSize: 18,
-                  fontFamily: "Inter-Medium",
                 }}
               />
 
-              {/* RESCAN BUTTON */}
               <TouchableOpacity
+                onPress={() => navigation.navigate("Qrscan")}
                 style={{
-                  marginHorizontal: 16,
+                  width: "100%",
                   height: 48,
                   borderRadius: 7,
                   borderWidth: 1,
@@ -262,7 +260,6 @@ function Login() {
                   justifyContent: "center",
                   backgroundColor: "#FFF",
                 }}
-                onPress={() => navigation.navigate("Qrscan")} // ✅ updated
               >
                 <Text
                   style={{

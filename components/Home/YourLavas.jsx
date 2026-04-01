@@ -7,6 +7,15 @@ import {
   ScrollView,
   Linking,
 } from "react-native";
+import AttendanceHistory from "../../assets/images/AttendanceHistory.svg";
+import ComplaintIcon from "../../assets/images/complaint.svg";
+import ExpenseIcon from "../../assets/images/expense.svg";
+import LeaveIcon from "../../assets/images/leave.svg";
+import HealthCardIcon from "../../assets/images/healthCard.svg";
+import IdCardIcon from "../../assets/images/idCard.svg";
+import PassportIcon from "../../assets/images/passport.svg";
+import QrCodeIcon from "../../assets/images/qrCode.svg";
+import { LinearGradient } from "expo-linear-gradient";
 /* ---------------- DEFAULT FALLBACK RECORDS ---------------- */
 const DEFAULT_RECORDS = [
   {
@@ -25,7 +34,50 @@ const DEFAULT_RECORDS = [
     isFallback: true,
   },
 ];
-
+const items = [
+  {
+    title: "Attendance\nHistory",
+    component: AttendanceHistory,
+    nav: "Attendance history",
+  },
+  {
+    title: "Leave\nRequest",
+    component: LeaveIcon,
+    nav: "Leave request",
+  },
+  {
+    title: "Expense\nClaim",
+    component: ExpenseIcon,
+    nav: "Expense claim",
+  },
+  {
+    title: "Complaint",
+    component: ComplaintIcon,
+    nav: "Complaints",
+  },
+];
+const documentItems = [
+  {
+    title: "Health\nCard",
+    component: HealthCardIcon,
+    nav: "Health Card",
+  },
+  {
+    title: "Residence\nCard",
+    component: IdCardIcon,
+    nav: "Residence Card",
+  },
+  {
+    title: "Passport",
+    component: PassportIcon,
+    nav: "Passport",
+  },
+  {
+    title: "QR Code",
+    component: QrCodeIcon,
+    nav: "My QR Code",
+  },
+];
 /* ---------------------------------------------------------- */
 
 import { useSelector } from "react-redux";
@@ -121,214 +173,253 @@ function LavaMenu() {
   /* ---------------------------------------------------
    * Fetch shortcuts incrementally (no blocking)
    * --------------------------------------------------- */
-  useEffect(() => {
-    if (!employeeCode) return;
+  // useEffect(() => {
+  //   if (!employeeCode) return;
 
-    const configs = [
-      {
-        api: getShortcut1,
-        screen: "Shortcut1",
-        icon: "folder-outline",
-        order: 1,
-      },
-      {
-        api: getShortcut2,
-        screen: "Shortcut2",
-        icon: "documents-outline",
-        order: 2,
-      },
-      {
-        api: getShortcut3,
-        screen: "Shortcut3",
-        icon: "document-text-outline",
-        order: 3,
-      },
-    ];
+  //   const configs = [
+  //     {
+  //       api: getShortcut1,
+  //       screen: "Shortcut1",
+  //       icon: "folder-outline",
+  //       order: 1,
+  //     },
+  //     {
+  //       api: getShortcut2,
+  //       screen: "Shortcut2",
+  //       icon: "documents-outline",
+  //       order: 2,
+  //     },
+  //     {
+  //       api: getShortcut3,
+  //       screen: "Shortcut3",
+  //       icon: "document-text-outline",
+  //       order: 3,
+  //     },
+  //   ];
 
-    Promise.all(
-      configs.map(async (cfg) => {
-        try {
-          const res = await cfg.api(employeeCode);
-          if (res?.shortcut) {
-            setShortcuts((prev) => {
-              const filtered = prev.filter(
-                (item) => item.screen !== cfg.screen,
-              );
+  //   Promise.all(
+  //     configs.map(async (cfg) => {
+  //       try {
+  //         const res = await cfg.api(employeeCode);
+  //         if (res?.shortcut) {
+  //           setShortcuts((prev) => {
+  //             const filtered = prev.filter(
+  //               (item) => item.screen !== cfg.screen,
+  //             );
 
-              return [...filtered, { ...res, ...cfg }].sort(
-                (a, b) => a.order - b.order,
-              );
-            });
-          }
-        } catch (e) {}
-      }),
-    ).finally(() => {
-      // ✅ THIS LINE WAS MISSING
-      setLoadingShortcuts(false);
-    });
-  }, [employeeCode]);
+  //             return [...filtered, { ...res, ...cfg }].sort(
+  //               (a, b) => a.order - b.order,
+  //             );
+  //           });
+  //         }
+  //       } catch (e) {}
+  //     }),
+  //   ).finally(() => {
+  //     // ✅ THIS LINE WAS MISSING
+  //     setLoadingShortcuts(false);
+  //   });
+  // }, [employeeCode]);
 
   return (
-    <View className="my-2" style={{ width: "100%" }}>
-      {/* -------------------- HEADER -------------------- */}
-      <Text className="text-sm font-semibold mb-2">Menu</Text>
-
+    <View style={{ marginVertical: 8, width: "100%", alignSelf: "center" }}>
       {/* -------------------- HR SECTION -------------------- */}
-      <View>
-        <View
-          className="flex-row justify-between items-center py-2.5 px-3 rounded-t-xl"
-          style={{ backgroundColor: COLORS.primary }}
-        >
-          <Octicons name="people" size={SIZES.xxLarge + 4} color="#fff" />
-          <Text className="text-lg font-medium text-white">
-            Human Resources
+      <View style={{ marginTop: 4 }}>
+        {/* Title */}
+        <View style={{ marginTop: 13 }}>
+          <Text
+            style={{
+              fontSize: 20,
+              fontWeight: "600",
+              color: "#63205F",
+            }}
+          >
+            HR Services
           </Text>
-          <AntDesign name="right" size={SIZES.xxLarge + 4} color="#fff" />
         </View>
 
-        <View className="bg-white rounded-b-xl py-3 px-2 mb-4">
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            {[
-              {
-                label: ["Attendance", "action"],
-                icon: "calendar-outline",
-                nav: "Attendance action",
-              },
-              {
-                label: ["Attendance", "history"],
-                icon: "receipt-outline",
-                nav: "Attendance history",
-              },
-              {
-                label: ["Expense", "claim"],
-                icon: "wallet-outline",
-                nav: "Expense claim",
-              },
-              {
-                label: ["Leave", "Request"],
-                icon: "document-text-outline",
-                nav: "Leave request",
-                bold: true,
-              },
-              {
-                label: ["Complaints"],
-                icon:"chatbox-ellipses-outline",
-                nav: "Complaints",
-              },
-              {
-                label: ["Vacation", "list"],
-                icon: "list-outline",
-                nav: "comingsoon", // or your actual screen name
-              },
-            ].map((item, index) => (
-              <TouchableOpacity
-                key={index}
-                className="mr-4"
-                onPress={() => navigation.navigate(item.nav)}
-              >
-                <View className="bg-gray-100 p-2 items-center rounded-lg w-16">
-                  <Ionicons
-                    name={item.icon}
-                    size={SIZES.xxxLarge - 3}
-                    color={COLORS.primary}
-                  />
-                </View>
-                {item.label.map((t, i) => (
-                  <Text
-                    key={i}
-                    className={`text-xs text-center mt-1 ${
-                      item.bold
-                        ? "font-semibold text-gray-700"
-                        : "font-medium text-gray-500"
-                    }`}
+        {/* Card */}
+        <View
+          style={{
+            marginTop: 13,
+            backgroundColor: "#fff",
+            borderRadius: 7,
+            borderWidth: 1,
+            borderColor: "#B3B3B3",
+            padding: 12,
+            height: 151,
+            alignSelf: "stretch",
+
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.08,
+            shadowRadius: 8,
+            elevation: 2,
+
+            justifyContent: "space-between",
+          }}
+        >
+          {/* -------- GRID -------- */}
+          <View style={{ height: 90 }}>
+            <View
+              style={{
+                flexDirection: "row",
+                flexWrap: "wrap",
+                justifyContent: "space-between",
+                paddingHorizontal: 4,
+              }}
+            >
+              {items.map((item, index) => (
+                <TouchableOpacity
+                  key={index}
+                  style={{
+                    width: "22%",
+                    alignItems: "center",
+                  }}
+                  onPress={() => navigation.navigate(item.nav)}
+                >
+                  {/* Icon */}
+                  <View
+                    style={{
+                      width: 50,
+                      height: 50,
+                      borderRadius: 7,
+                      borderWidth: 1,
+                      borderColor: "#63205F",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      backgroundColor: "#FFEEFE",
+                    }}
                   >
-                    {t}
+                    <item.component width={36} height={36} />
+                  </View>
+
+                  {/* Title */}
+                  <Text
+                    numberOfLines={2}
+                    style={{
+                      fontSize: 12,
+                      textAlign: "center",
+                      marginTop: 5,
+                      color: "#333",
+                      fontWeight: "500",
+                      height: 30,
+                    }}
+                  >
+                    {item.title}
                   </Text>
-                ))}
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-      </View>
-
-      {/* -------------------- YOUR RECORDS -------------------- */}
-      <View>
-        <View
-          className="flex-row justify-between items-center py-2.5 px-3 rounded-t-xl"
-          style={{ backgroundColor: COLORS.primary }}
-        >
-          <MaterialCommunityIcons
-            name="card-account-details"
-            size={SIZES.xxLarge + 4}
-            color="#fff"
-          />
-          <Text className="text-lg font-medium text-white">
-            Your Records In The Company
-          </Text>
-          <AntDesign name="right" size={SIZES.xxLarge + 4} color="#fff" />
-        </View>
-
-        <View className="flex-row bg-white flex-wrap py-4 px-2 rounded-b-xl">
-          {/* Skeleton */}
-          {loadingShortcuts && shortcuts.length === 0 && (
-            <View className="flex-row px-2">
-              {[1, 2, 3].map((i) => (
-                <View key={i} className="w-16 mr-4 items-center">
-                  <View className="bg-gray-200 h-14 w-14 rounded-lg" />
-                  <View className="h-8 mt-1 bg-gray-200 w-14 rounded" />
-                </View>
+                </TouchableOpacity>
               ))}
             </View>
-          )}
+          </View>
 
-          {/* Dynamic shortcuts */}
-          {recordsToShow.map((shortcut, index) => (
-            <ShortcutButton
-              key={shortcut.shortcut || index}
-              shortcut={shortcut}
-              navigation={navigation}
-            />
-          ))}
-
-          {/* Static QR */}
-          <TouchableOpacity
-            className="w-16 mr-4"
-            onPress={() => navigation.navigate("My QR Code")}
-          >
-            <View className="items-center mt-3">
-              <View className="bg-gray-100 h-14 w-14 items-center justify-center rounded-lg">
-                <Ionicons
-                  name="qr-code"
-                  size={SIZES.xxxLarge - 6}
-                  color={COLORS.primary}
-                />
-              </View>
-              <Text className="text-xs text-center font-medium text-gray-500 mt-1">
-                My QR
+          {/* -------- BUTTON -------- */}
+          <TouchableOpacity activeOpacity={0.8}>
+            <LinearGradient
+              colors={["#77224C", "#8E273B"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={{
+                height: 47,
+                borderRadius: 7,
+                alignItems: "center",
+                justifyContent: "center",
+                marginTop: 1,
+                marginHorizontal: -12,
+              }}
+            >
+              <Text
+                style={{
+                  color: "#fff",
+                  fontWeight: "600",
+                  fontSize: 16,
+                }}
+              >
+                View All
               </Text>
-            </View>
+            </LinearGradient>
           </TouchableOpacity>
         </View>
-      </View>
 
-      {/* -------------------- FOOTER LINK -------------------- */}
-      <View
-        className="flex-row items-center justify-between px-4 py-3 rounded-xl mt-3"
-        style={{ backgroundColor: COLORS.primary }}
-      >
-        <Ionicons name="globe-outline" size={SIZES.xxLarge} color="#fff" />
+        {/* -------------------- YOUR RECORDS -------------------- */}
+        <View className="mt-4">
+          {/* Title */}
+          <View style={{ marginTop: 13 }}>
+            <Text
+              style={{
+                fontSize: 20,
+                fontWeight: "600",
+                color: "#63205F",
+              }}
+            >
+              Employee Documents
+            </Text>
+          </View>
 
-        <TouchableOpacity
-          onPress={() => Linking.openURL("https://erpgulf.com")}
-          className="flex-row items-center"
-        >
-          <Text className="text-lg font-semibold text-white mr-1">
-            ERPGulf.com
-          </Text>
-          <Ionicons name="open-outline" size={16} color="#fff" />
-        </TouchableOpacity>
+          {/* Card */}
+          <View
+            style={{
+              backgroundColor: "#fff",
+              borderRadius: 7,
+              borderWidth: 1,
+              borderColor: "#B3B3B3",
+              padding: 12,
+              marginTop: 13,
+              height: 115,
+              alignSelf: "stretch",
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.08,
+              shadowRadius: 8,
+              elevation: 2,
+            }}
+          >
+            {/* Grid */}
+            <View
+              style={{
+                flexDirection: "row",
+                flexWrap: "wrap",
+                justifyContent: "space-between",
+                paddingHorizontal: 4,
+              }}
+            >
+              {documentItems.map((item, index) => (
+                <TouchableOpacity
+                  key={index}
+                  style={{ width: "22%", alignItems: "center" }}
+                  onPress={() => navigation.navigate(item.nav)}
+                >
+                  <View
+                    style={{
+                      width: 55,
+                      height: 55,
+                      borderRadius: 7,
+                      borderWidth: 1,
+                      borderColor: "#6B1E6B",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      backgroundColor: "#FFEEFE",
+                    }}
+                  >
+                    <item.component width={40} height={40} />
+                  </View>
 
-        <View style={{ width: SIZES.xxLarge }} />
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      textAlign: "center",
+                      marginTop: 5,
+                      color: "#333",
+                      fontWeight: "500",
+                      height: 30,
+                    }}
+                  >
+                    {item.title}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        </View>
       </View>
     </View>
   );

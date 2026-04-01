@@ -15,23 +15,21 @@ function WelcomeCard() {
   return (
     <LinearGradient
       colors={["#C63A2D", "#B33438", "#8C2A4F", "#6B1E6B"]}
-      locations={[0, 0.35, 0.7, 1]}
+      // locations REMOVED (safe)
       start={{ x: 0, y: 0 }}
       end={{ x: 0, y: 1 }}
       style={{
-        width: 359,
+        width: "100%",
         height: 167,
         borderRadius: 7,
-        border: "1px solid #63205F",
+        borderWidth: 1,
+        borderColor: "#63205F",
         padding: 1,
         alignSelf: "center",
-       backgroundColor: "#FFE8EA",
       }}
     >
       <LinearGradient
-        colors={["#F7C6CD", "#FFDDE2"]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0, y: 1 }}
+        colors={["#FFE8EA", "#FFE8EA"]}
         style={{
           flex: 1,
           borderRadius: 7,
@@ -46,6 +44,7 @@ function WelcomeCard() {
               fontSize: 20,
               fontFamily: "Inter-SemiBold",
               color: "#63205F",
+              fontWeight: "600",
             }}
           >
             Login
@@ -58,8 +57,8 @@ function WelcomeCard() {
             position: "absolute",
             top: 9,
             right: 7,
-            width: 120,
-            height: 54,
+            width: 150,
+            height: 68,
             resizeMode: "contain",
           }}
         />
@@ -69,9 +68,8 @@ function WelcomeCard() {
           style={{
             position: "absolute",
             left: 20,
-            top: 80,
+            top: "75%",
             right: 20,
-            bottom:39,
           }}
         >
           <Text
@@ -88,7 +86,7 @@ function WelcomeCard() {
               flexWrap: "wrap",
             }}
           >
-             {(fullname || "username") + "!"}
+            {(fullname || "username") + "!"}
           </Text>
         </View>
       </LinearGradient>

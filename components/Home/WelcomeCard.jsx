@@ -1,87 +1,114 @@
-import { View, Text, TouchableOpacity } from "react-native";
-import React from "react";
+import { View, Text, TouchableOpacity, Image } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSelector } from "react-redux";
 import { useNavigation } from "@react-navigation/native";
-import { COLORS, SIZES } from "../../constants";
+import { LinearGradient } from "expo-linear-gradient";
 
 function WelcomeCard() {
   const navigation = useNavigation();
   const fullname = useSelector((state) => state.user.fullname);
- const unreadCount = useSelector(
-  (state) => state.notification?.unreadCount ?? 0
-);
+  const unreadCount = useSelector(
+    (state) => state.notification?.unreadCount ?? 0,
+  );
 
   return (
-    <View
-      style={{ backgroundColor: COLORS.primary, width: "100%" }}
-      className="h-48 rounded-2xl p-3 justify-between"
-    >
-      <View className="flex-row justify-center items-center relative h-14">
-        <TouchableOpacity
-          onPress={() => navigation.navigate("Notifications")}
-          className="bg-gray-800 w-12 h-12 items-center justify-center rounded-full absolute right-1 top-1"
-        >
-          <MaterialCommunityIcons
-            name="bell"
-            color={COLORS.white}
-            size={SIZES.xxLarge}
+    <View className="my-2" style={{ width: "100%" }}>
+      <LinearGradient
+        colors={["#FFE8EA", "#FFE8EA"]}
+        style={{
+          width: "100%",
+          height: 142,
+          borderRadius: 7,
+          borderWidth: 1,
+          borderColor: "#63205F",
+
+          paddingHorizontal: 12,
+          paddingBottom: 12,
+          paddingTop: 0,
+          paddingLeft: 0,
+          justifyContent: "space-between",
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.1,
+          shadowRadius: 12,
+          elevation: 5,
+        }}
+      >
+        {/* Top Row */}
+        <View className="flex-row justify-between items-center">
+          <Image
+            source={require("../../assets/images/ERP-Gulf-Logo.png")}
+            style={{ width: 150, height: 68, resizeMode: "contain" }}
           />
-          {unreadCount > 0 && (
-            <View
-              style={{
-                position: "absolute",
-                top: 4,
-                right: 4,
-                minWidth: 18,
-                height: 18,
-                borderRadius: 9,
-                backgroundColor: "red",
-                alignItems: "center",
-                justifyContent: "center",
-                paddingHorizontal: 4,
-              }}
-            >
-              <Text
-                style={{
-                  color: "white",
-                  fontSize: 10,
-                  fontWeight: "bold",
-                }}
-              >
-                {unreadCount}
-              </Text>
-            </View>
-          )}
-        </TouchableOpacity>
-        <Text className="text-xl font-bold text-white">Home</Text>
-      </View>
-      <View>
-        <Text className="text-base font-medium text-white">Welcome,</Text>
-        <View className="flex-row items-center space-x-2 -mt-1">
-          <Text
-            adjustsFontSizeToFit
-            minimumFontScale={0.8}
+
+          <TouchableOpacity
+            onPress={() => navigation.navigate("Notifications")}
             style={{
-              width: "90%",
-              textAlign:
-                fullname && /[\u0600-\u06FF]/.test(fullname) ? "right" : "left",
-              writingDirection: "auto",
-              flexShrink: 1,
-              flexWrap: "wrap",
-              fontSize: SIZES.xxLarge,
-              fontWeight: "600",
-              color: COLORS.white,
-              fontFamily: undefined,
+              position: "absolute",
+              top: 10,
+              right: 4,
+              backgroundColor: "#fff",
+              width: 50,
+              height: 50,
+              padding: 10,
+              borderRadius: 34,
+              alignItems: "center",
+              justifyContent: "center",
             }}
           >
-            {fullname || "username"}
-          </Text>
-          <View className="bg-gray-800 w-10 h-10 items-center justify-center rounded-full">
-            <MaterialCommunityIcons name="hand-wave" color="white" size={24} />
-          </View>
+            <MaterialCommunityIcons name="bell" size={30} color="#C63A2D" />
+
+            {unreadCount > 0 && (
+              <View
+                style={{
+                  position: "absolute",
+                  top: 2,
+                  right: 2,
+                  minWidth: 16,
+                  height: 16,
+                  borderRadius: 8,
+                  backgroundColor: "red",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Text style={{ color: "white", fontSize: 9 }}>
+                  {unreadCount}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
         </View>
-      </View>
+
+        {/* Bottom Row */}
+        <View className="flex-row items-center justify-between">
+          <Text
+            numberOfLines={1}
+            style={{
+              flex: 1,
+              fontSize: 18,
+              fontWeight: "600",
+              textAlign: "center",
+              color: "#000",
+            }}
+          >
+            {fullname ? `مرحبا يا ${fullname}` : "مرحبا"}
+          </Text>
+
+          <Image
+            source={require("../../assets/images/user.png")}
+            style={{
+              width: 45,
+              height: 45,
+              padding:12,
+              borderRadius: 22,
+              borderWidth: 2,
+              borderColor: "#63205F",
+              marginLeft: 8,
+            }}
+          />
+        </View>
+      </LinearGradient>
     </View>
   );
 }
