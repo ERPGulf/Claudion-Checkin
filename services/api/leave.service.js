@@ -76,39 +76,69 @@ export const getLeaveTypes = async () => {
 
 export const uploadLeaveAttachment = async (file, docname) => {
   try {
+
     if (!file?.uri) throw new Error("Invalid file data");
-    if (!docname) throw new Error("Missing docname (leave ID)");
+    if (!docname) throw new Error("Missing docname");
 
     const { baseUrl, token } = await getAuthContext();
 
     const formData = new FormData();
+
+    const getSafeFileName = (name) => {
+      if (!name) return "file.pdf";
+
+      const ext = name.split(".").pop();
+
+      const base = name
+        .replace(/\.[^/.]+$/, "")
+        .slice(0, 20)
+        .replace(/[^a-zA-Z0-9]/g, "");
+
+      return `${base}_${Date.now()}.${ext}`;
+    };
+
+    const safeName = getSafeFileName(file.name);
+
     formData.append("file", {
       uri: file.uri,
-      name: file.name || "leave_attachment.jpg",
+      name: safeName,
       type: file.type || "application/octet-stream",
     });
-    formData.append("file_name", "leave");
+
+    formData.append("file_name", safeName);
     formData.append("doctype", "Leave Application");
     formData.append("docname", String(docname));
 
-    const response = await apiClient.post(
+    const response = await fetch(
       `${baseUrl}/api/method/employee_app.attendance_api.upload_file`,
-      formData,
       {
-        headers: buildHeaders(token, "multipart/form-data"),
-        transformRequest: (data) => data,
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
       },
     );
 
-    // return response.data;
-    return { message: response.data };
+    const result = await response.json();
+
+    console.log(" LEAVE UPLOAD RESPONSE:", result);
+
+    if (!response.ok || result?.exc || result?._server_messages) {
+      return {
+        error: result?.message || "Upload failed (server validation error)",
+      };
+    }
+
+    return { message: result };
   } catch (error) {
+    console.log("❌ LEAVE UPLOAD ERROR:", error);
+
     return {
-      error: parseError(error, "Failed to upload attachment."),
+      error: error.message || "Upload failed",
     };
   }
 };
-
 export default {
   createLeaveApplication,
   getLeaveTypes,

@@ -171,23 +171,20 @@ export default function LeaveRequestScreen() {
     const from = normalizeDate(fromDate);
     const to = normalizeDate(toDate);
 
-    // ❌ Only block if To date is BEFORE From date
     if (to < from) {
       Alert.alert("Invalid Date", "To date cannot be before From date.");
       return;
     }
+
     if (!leaveType || leaveType === "__none__") {
       Alert.alert("Missing Field", "Please select a leave type.");
       return;
     }
 
-    // 🟢 Single day leave when dates are same
-    const isSingleDayLeave = from.getTime() === to.getTime();
-
     if (leaveType === "Remote" && !agreed) {
       Alert.alert(
         "Agreement Required",
-        "Please scroll through and agree to the remote work policy before submitting.",
+        "Please agree to the remote work policy.",
       );
       return;
     }
@@ -203,20 +200,32 @@ export default function LeaveRequestScreen() {
 
     try {
       setLoading(true);
-      const { message, error } = await createLeaveApplication(leaveData);
 
-      if (error) {
-        Alert.alert("Error", error);
+      const res = await createLeaveApplication(leaveData);
+
+      if (res?.error) {
+        Alert.alert("Error", res.error);
         return;
       }
-      const docname = message?.id;
+
+      const docname = res?.message?.id;
 
       if (!docname) {
         throw new Error("Leave docname missing");
       }
 
+      console.log("📄 DOCNAME:", docname);
+      console.log("📤 LEAVE FILE:", attachment);
+
       if (attachment) {
-        await uploadLeaveAttachment(attachment, docname);
+        const uploadRes = await uploadLeaveAttachment(attachment, docname);
+
+        if (uploadRes?.error) {
+          Alert.alert(
+            "Warning",
+            "Leave created, but attachment upload failed.",
+          );
+        }
       }
 
       Alert.alert("Success", "Leave request submitted successfully!", [
@@ -231,7 +240,6 @@ export default function LeaveRequestScreen() {
       setLoading(false);
     }
   };
-
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
       <ScrollView className="p-4" contentContainerStyle={{ paddingBottom: 40 }}>

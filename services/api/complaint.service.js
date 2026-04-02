@@ -24,7 +24,7 @@ export const createComplaint = async ({ message }) => {
 
     const body = {
       employee: employeeCode,
-      date: serverTime, // ✅ REQUIRED
+      date: serverTime, 
       message,
     };
 
@@ -48,6 +48,7 @@ export const createComplaint = async ({ message }) => {
  */
 export const uploadComplaintAttachment = async (file, docname) => {
   try {
+
     if (!file?.uri) throw new Error("Invalid file");
     if (!docname) throw new Error("Missing docname");
 
@@ -55,31 +56,63 @@ export const uploadComplaintAttachment = async (file, docname) => {
 
     const formData = new FormData();
 
+    const getSafeFileName = (name) => {
+      if (!name) return "file.pdf";
+
+      const ext = name.split(".").pop();
+
+      const base = name
+        .replace(/\.[^/.]+$/, "")
+        .slice(0, 20)
+        .replace(/[^a-zA-Z0-9]/g, "");
+
+      return `${base}_${Date.now()}.${ext}`;
+    };
+
+    const safeName = getSafeFileName(file.name);
+
     formData.append("file", {
       uri: file.uri,
-      name: file.name || "complaint.png",
+      name: safeName,
       type: file.type || "application/octet-stream",
     });
 
-    formData.append("file_name", "complaint");
+    formData.append("file_name", safeName); 
     formData.append("doctype", "Employee Complaint");
     formData.append("docname", String(docname));
 
-    const response = await apiClient.post(
+    const response = await fetch(
       `${baseUrl}/api/method/employee_app.attendance_api.upload_file`,
-      formData,
       {
-        headers: buildHeaders(token, "multipart/form-data"),
-        transformRequest: (data) => data,
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
       },
     );
 
-    return response.data;
+    let result;
+
+    try {
+      result = await response.json();
+    } catch {
+      throw new Error("Invalid server response");
+    }
+
+    if (!response.ok) {
+      console.log("❌ UPLOAD FAILED:", result);
+      throw new Error(result?.message || "Upload failed");
+    }
+
+    console.log("✅ COMPLAINT UPLOAD RESPONSE:", result);
+
+    return result;
   } catch (error) {
+    console.log("❌ COMPLAINT UPLOAD ERROR:", error);
     throw error;
   }
 };
-
 export default {
   createComplaint,
   uploadComplaintAttachment,

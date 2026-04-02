@@ -15,7 +15,11 @@ import { selectEmployeeCode } from "../redux/Slices/UserSlice";
 import ClaimForm from "../components/ExpenseClaim/ClaimForm";
 import ExpenseCard from "../components/ExpenseClaim/ExpenseCard";
 import { COLORS, SIZES } from "../constants";
-import { createExpenseClaim, getExpenseClaims } from "../services/api";
+import {
+  createExpenseClaim,
+  getExpenseClaims,
+  uploadExpenseAttachment,
+} from "../services/api";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 const PAGE_SIZE = 5;
@@ -69,8 +73,24 @@ export default function ExpenseClaim() {
   // ✅ React Query mutation
   const { mutate: addClaim, isPending: isCreating } = useMutation({
     mutationFn: createExpenseClaim,
-    onSuccess: async () => {
+    onSuccess: async (res, variables) => {
+      console.log("CREATE RES:", res);
+
+      const docname = res?.id;
+
+      console.log("DOCNAME:", docname);
+      console.log("📤 FILE FROM FORM:", variables.file_url);
+      try {
+        if (variables.file_url && docname) {
+          await uploadExpenseAttachment(variables.file_url, docname);
+        }
+      } catch (e) {
+        console.log("FILE UPLOAD ERROR:", e);
+        Alert.alert("Warning", "Expense created, but file upload failed.");
+      }
+
       await refetch();
+
       Alert.alert("Success", "Expense claim submitted successfully!", [
         {
           text: "OK",
@@ -80,7 +100,6 @@ export default function ExpenseClaim() {
         },
       ]);
     },
-
     onError: (err) => {
       Alert.alert("Error", err.message || "Failed to create expense claim.");
     },

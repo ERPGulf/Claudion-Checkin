@@ -43,10 +43,14 @@ export const clearAuthCache = () => {
 /**
  * Common Header Builder
  */
-export const buildHeaders = (
-  token,
-  contentType = "application/json"
-) => ({
-  Authorization: `Bearer ${token}`,
-  "Content-Type": contentType,
-});
+export const buildHeaders = (token, contentType) => {
+  const headers = {
+    Authorization: `Bearer ${token}`,
+  };
+
+  if (contentType) {
+    headers["Content-Type"] = contentType;
+  }
+
+  return headers;
+};

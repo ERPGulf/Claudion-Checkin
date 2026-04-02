@@ -69,32 +69,29 @@ export const createExpenseClaim = async (claimData) => {
 
     const url = `${baseUrl}/api/method/employee_app.attendance_api.create_expense_claim`;
 
-    const formData = new FormData();
+    const payload = {
+      employee: employeeCode,
+      expense_date: claimData.expense_date,
+      expense_type: claimData.expense_type,
+      amount: claimData.amount,
+      description: claimData.description || "",
+    };
 
-    formData.append("employee", employeeCode);
-    formData.append("expense_date", claimData.expense_date);
-    formData.append("expense_type", claimData.expense_type);
-    formData.append("amount", claimData.amount);
-    formData.append("description", claimData.description || "");
-
-    if (claimData.file_url?.uri) {
-      formData.append("file", {
-        uri: claimData.file_url.uri,
-        name: claimData.file_url.name || "receipt.jpg",
-        type:
-          claimData.file_url.type ||
-          claimData.file_url.mimeType ||
-          "application/octet-stream",
-      });
-    }
-
-    const response = await apiClient.post(url, formData, {
-      headers: buildHeaders(token, "multipart/form-data"),
-      transformRequest: (data) => data,
+    const response = await apiClient.post(url, payload, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json", 
+      },
+      timeout: 60000,
     });
 
-    return { message: response.data?.message || response.data };
+    console.log("CREATE RESPONSE:", response.data);
+
+    return response.data;
   } catch (error) {
+    console.log("CREATE ERROR FULL:", error);
+    console.log("CREATE ERROR RESPONSE:", error?.response?.data);
+
     return {
       error: parseError(error, "Unable to create expense claim."),
     };
@@ -106,41 +103,74 @@ export const createExpenseClaim = async (claimData) => {
  */
 export const uploadExpenseAttachment = async (file, docname) => {
   try {
+
     if (!file?.uri) throw new Error("Invalid file data");
-    if (!docname) throw new Error("Missing docname (claim ID)");
+    if (!docname) throw new Error("Missing docname");
 
     const { baseUrl, token } = await getAuthContext();
 
     const formData = new FormData();
 
+    const getSafeFileName = (name) => {
+      if (!name) return "file.pdf";
+
+      const ext = name.split(".").pop();
+
+      const base = name
+        .replace(/\.[^/.]+$/, "")
+        .slice(0, 20)
+        .replace(/[^a-zA-Z0-9]/g, "");
+
+      return `${base}_${Date.now()}.${ext}`;
+    };
+
+    const safeName = getSafeFileName(file.name);
+
     formData.append("file", {
       uri: file.uri,
-      name: file.name || "expense_receipt.jpg",
+      name: safeName,
       type: file.type || "application/octet-stream",
     });
 
-    formData.append("is_private", 0);
+    formData.append("file_name", safeName);
     formData.append("doctype", "Expense Claim");
     formData.append("docname", docname);
-    formData.append("fieldname", "file_url");
 
-    const response = await apiClient.post(
-      `${baseUrl}/api/method/upload_file`,
-      formData,
+    const response = await fetch(
+      `${baseUrl}/api/method/employee_app.attendance_api.upload_file`,
       {
-        headers: buildHeaders(token, "multipart/form-data"),
-        transformRequest: (data) => data,
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
       },
     );
 
-    return { message: response.data };
+    let result;
+
+    try {
+      result = await response.json();
+    } catch {
+      throw new Error("Invalid server response");
+    }
+
+    if (!response.ok) {
+      console.log("❌ UPLOAD FAILED:", result);
+      throw new Error(result?.message || "Upload failed");
+    }
+
+    console.log("✅ UPLOAD RESPONSE:", result);
+
+    return { message: result };
   } catch (error) {
+    console.log("❌ UPLOAD ERROR:", error);
+
     return {
       error: parseError(error, "Failed to upload expense attachment."),
     };
   }
 };
-
 export default {
   getExpenseClaims,
   getExpenseTypes,
