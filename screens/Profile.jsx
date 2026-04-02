@@ -14,7 +14,7 @@ import { clearTokens, clearStore } from "../services/api/apiClient";
 import apiClient from "../services/api/apiClient";
 import { clearAuthCache } from "../services/api/authHelper";
 
-const VERSION_CODE = "1.1.2";
+const VERSION_CODE = "1.1.3";
 function Profile() {
   const dispatch = useDispatch();
   const navigation = useNavigation();
