@@ -14,6 +14,8 @@ import { useQuery } from "@tanstack/react-query";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet } from "react-native";
+import Timericon from "../assets/images/timer-clock.svg";
+import Leaveicon from "../assets/images/user-leave.svg";
 
 import { selectEmployeeCode } from "../redux/Slices/UserSlice";
 import { COLORS } from "../constants";
@@ -41,29 +43,63 @@ function AttendanceHistory() {
     logs.forEach((log) => {
       const d = new Date(log.time);
       const date = d.toISOString().split("T")[0];
+      const monthKey = `${d.getFullYear()}-${d.getMonth()}`;
 
-      const monthKey = d.toLocaleString("default", {
+      const displayMonth = d.toLocaleString("default", {
         month: "long",
         year: "numeric",
       });
 
       const week = Math.ceil(d.getDate() / 7);
 
-      if (!months[monthKey]) months[monthKey] = {};
-      if (!months[monthKey][week]) months[monthKey][week] = {};
-      if (!months[monthKey][week][date]) {
-        months[monthKey][week][date] = {
+      if (!months[monthKey]) {
+        months[monthKey] = {
+          label: displayMonth,
+          weeks: {},
+          totalMinutes: 0, // 🔥 ADD
+          totalLeaves: 0, // 🔥 ADD
+        };
+      }
+
+      if (!months[monthKey].weeks[week]) {
+        months[monthKey].weeks[week] = {};
+      }
+
+      if (!months[monthKey].weeks[week][date]) {
+        months[monthKey].weeks[week][date] = {
           date,
           checkIn: null,
           checkOut: null,
+          isLeave: false,
         };
       }
 
       if (log.log_type === "IN") {
-        months[monthKey][week][date].checkIn = log.time;
+        months[monthKey].weeks[week][date].checkIn = log.time;
       } else {
-        months[monthKey][week][date].checkOut = log.time;
+        months[monthKey].weeks[week][date].checkOut = log.time;
       }
+    });
+
+    // 🔥 CALCULATE TOTALS
+    Object.values(months).forEach((month) => {
+      Object.values(month.weeks).forEach((week) => {
+        Object.values(week).forEach((day) => {
+          if (day.checkIn && day.checkOut) {
+            const diff =
+              (new Date(day.checkOut) - new Date(day.checkIn)) / (1000 * 60);
+
+            if (diff > 0) month.totalMinutes += diff;
+          } else {
+            month.totalLeaves += 1;
+          }
+        });
+      });
+
+      const h = Math.floor(month.totalMinutes / 60);
+      const m = Math.floor(month.totalMinutes % 60);
+
+      month.totalHours = `${h}h ${m}m`;
     });
 
     return months;
@@ -72,7 +108,18 @@ function AttendanceHistory() {
   const groupedData = useMemo(() => {
     return groupByMonthWeek(data || []);
   }, [data]);
+  const getDayTotalTime = (checkIn, checkOut) => {
+    if (!checkIn || !checkOut) return "-";
 
+    const diff = (new Date(checkOut) - new Date(checkIn)) / (1000 * 60);
+
+    if (diff <= 0) return "-";
+
+    const hours = Math.floor(diff / 60);
+    const minutes = Math.floor(diff % 60);
+
+    return `${hours}h ${minutes}m`;
+  };
   /* ================= UI ================= */
   return (
     <View style={{ flex: 1, backgroundColor: "#fff" }}>
@@ -100,84 +147,223 @@ function AttendanceHistory() {
             No attendance records found
           </Text>
         ) : (
-          Object.entries(groupedData).map(([month, weeks]) => (
-            <View key={month} style={{ marginBottom: 15 }}>
-              {/* MONTH */}
-              <TouchableOpacity
-                onPress={() => setOpenMonth(openMonth === month ? null : month)}
-                style={styles.monthBox}
-              >
-                <View style={styles.row}>
-                  <Entypo name="calendar" size={20} color="#8E273B" />
-                  <Text style={styles.monthText}>{month}</Text>
-                </View>
+          Object.entries(groupedData)
+            .sort((a, b) => b[0].localeCompare(a[0])) // newest month first
+            .map(([monthKey, monthData]) => {
+              const { label, weeks } = monthData;
 
-                <Entypo
-                  name={openMonth === month ? "chevron-up" : "chevron-down"}
-                  size={20}
-                  color="#77224C"
-                />
-              </TouchableOpacity>
-
-              {/* WEEKS */}
-              {openMonth === month &&
-                Object.entries(weeks).map(([week, days]) => {
-                  const weekKey = `${month}-${week}`;
-
-                  return (
-                    <View key={weekKey} style={{ marginTop: 10 }}>
-                      {/* WEEK */}
-                      <TouchableOpacity
-                        onPress={() =>
-                          setOpenWeek(openWeek === weekKey ? null : weekKey)
-                        }
-                        style={styles.weekHeader}
-                      >
-                        <Text style={styles.weekTitle}>Week {week}</Text>
-
-                        <Entypo
-                          name={
-                            openWeek === weekKey ? "chevron-up" : "chevron-down"
-                          }
-                          size={18}
-                        />
-                      </TouchableOpacity>
-
-                      {/* DAYS */}
-                      {openWeek === weekKey &&
-                        Object.values(days).map((day) => (
-                          <View key={day.date} style={styles.dayRow}>
-                            <View style={styles.dateBox}>
-                              <Text>{new Date(day.date).getDate()}</Text>
-                              <Text>
-                                {new Date(day.date).toLocaleDateString(
-                                  "en-US",
-                                  { weekday: "short" },
-                                )}
-                              </Text>
-                            </View>
-
-                            <View style={styles.timeBox}>
-                              <Text>{formatTime(day.checkIn)}</Text>
-                              <Text style={styles.label}>Check in</Text>
-                            </View>
-
-                            <View style={styles.timeBox}>
-                              <Text>{formatTime(day.checkOut)}</Text>
-                              <Text style={styles.label}>Check out</Text>
-                            </View>
-
-                            <View style={styles.timeBox}>
-                              <Text>7h 59m</Text>
-                              <Text style={styles.label}>Total</Text>
-                            </View>
-                          </View>
-                        ))}
+              return (
+                <View key={monthKey} style={{ marginBottom: 15 }}>
+                  {/* MONTH */}
+                  <TouchableOpacity
+                    onPress={() =>
+                      setOpenMonth(openMonth === monthKey ? null : monthKey)
+                    }
+                    style={styles.monthBox}
+                  >
+                    <View style={styles.row}>
+                      <Entypo name="calendar" size={33} color="#77224C" />
+                      <Text style={styles.monthText}>{label}</Text>
                     </View>
-                  );
-                })}
-            </View>
-          ))
+
+                    <Entypo
+                      name={
+                        openMonth === monthKey ? "chevron-up" : "chevron-down"
+                      }
+                      size={20}
+                      color="#77224C"
+                    />
+                  </TouchableOpacity>
+
+                  {/* WEEKS */}
+                  {/* SUMMARY CARD */}
+                  {openMonth === monthKey && (
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        marginTop: 10,
+                        borderWidth: 1,
+                        borderColor: "#ddd",
+                        borderRadius: 10,
+                        overflow: "hidden",
+                        backgroundColor: "#fff",
+                      }}
+                    >
+                      {/* TOTAL HOURS */}
+                      <View
+                        style={{
+                          flex: 1,
+                          flexDirection: "row",
+                          alignItems: "center",
+                          padding: 12,
+                          borderRightWidth: 1,
+                          borderColor: "#B3B3B3",
+                        }}
+                      >
+                        <Timericon width={40} height={40} />
+                        <View style={{ marginLeft: 10 }}>
+                          <Text style={{ fontWeight: "600" }}>
+                            {monthData.totalHours}
+                          </Text>
+                          <Text style={{ fontSize: 12, color: "#777" }}>
+                            Total Hours
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* TOTAL LEAVES */}
+                      <View
+                        style={{
+                          flex: 1,
+                          flexDirection: "row",
+                          alignItems: "center",
+                          padding: 12,
+                          borderColor: "#B3B3B3",
+                        }}
+                      >
+                        <Leaveicon width={40} height={40} />
+                        <View style={{ marginLeft: 10 }}>
+                          <Text style={{ fontWeight: "600" }}>
+                            {monthData.totalLeaves}
+                          </Text>
+                          <Text style={{ fontSize: 12, color: "#777" }}>
+                            Total Leaves
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  )}
+
+                  {/* WEEKS */}
+                  {openMonth === monthKey &&
+                    Object.entries(weeks)
+                      .sort((a, b) => Number(a[0]) - Number(b[0]))
+                      .map(([week, days]) => {
+                        const weekKey = `${monthKey}-${week}`;
+
+                        return (
+                          <View key={weekKey} style={{ marginTop: 10 }}>
+                            {/* WEEK HEADER */}
+                            <TouchableOpacity
+                              onPress={() =>
+                                setOpenWeek(
+                                  openWeek === weekKey ? null : weekKey,
+                                )
+                              }
+                              style={styles.weekBox}
+                            >
+                              <View>
+                                <Text style={styles.weekTitle}>
+                                  Week {week}
+                                </Text>
+                                <Text style={styles.weekDate}>01–07 Jan</Text>
+                                {/* optional */}
+                              </View>
+
+                              <View style={{ alignItems: "flex-end" }}>
+                                <Text style={styles.weekHours}>
+                                  {monthData.totalHours}
+                                </Text>
+                                <Text style={styles.label}>Total Hours</Text>
+                              </View>
+
+                              <Entypo
+                                name={
+                                  openWeek === weekKey
+                                    ? "chevron-up"
+                                    : "chevron-down"
+                                }
+                                size={20}
+                                color="#77224C"
+                              />
+                            </TouchableOpacity>
+
+                            {/* DAYS */}
+                            {openWeek === weekKey &&
+                              Object.values(days)
+                                .sort(
+                                  (a, b) => new Date(a.date) - new Date(b.date),
+                                )
+                                .map((day) => {
+                                  const isLeave = !day.checkIn && !day.checkOut;
+
+                                  return (
+                                    <View key={day.date} style={styles.dayCard}>
+                                      {/* DATE BOX */}
+                                      <View style={styles.dateBox}>
+                                        <Text style={styles.dateNum}>
+                                          {new Date(day.date).getDate()}
+                                        </Text>
+                                        <Text style={styles.dateDay}>
+                                          {new Date(
+                                            day.date,
+                                          ).toLocaleDateString("en-US", {
+                                            weekday: "short",
+                                          })}
+                                        </Text>
+                                      </View>
+
+                                      {/* CONTENT */}
+                                      {isLeave ? (
+                                        <>
+                                          <View style={styles.leaveBox}>
+                                            <Text style={{ color: "#777" }}>
+                                              ----Leave----
+                                            </Text>
+                                          </View>
+
+                                          <View style={styles.timeBox}>
+                                            <Text>0h 00m</Text>
+                                            <Text style={styles.label}>
+                                              Total Hours
+                                            </Text>
+                                          </View>
+                                        </>
+                                      ) : (
+                                        <>
+                                          {/* CHECK IN */}
+                                          <View style={styles.timeBox}>
+                                            <Text>
+                                              {formatTime(day.checkIn)}
+                                            </Text>
+                                            <Text style={styles.label}>
+                                              Check in
+                                            </Text>
+                                          </View>
+
+                                          {/* CHECK OUT */}
+                                          <View style={styles.timeBox}>
+                                            <Text>
+                                              {formatTime(day.checkOut)}
+                                            </Text>
+                                            <Text style={styles.label}>
+                                              Check out
+                                            </Text>
+                                          </View>
+
+                                          {/* TOTAL */}
+                                          <View style={styles.timeBox}>
+                                            <Text>
+                                              {getDayTotalTime(
+                                                day.checkIn,
+                                                day.checkOut,
+                                              )}
+                                            </Text>
+                                            <Text style={styles.label}>
+                                              Total Hours
+                                            </Text>
+                                          </View>
+                                        </>
+                                      )}
+                                    </View>
+                                  );
+                                })}
+                          </View>
+                        );
+                      })}
+                </View>
+              );
+            })
         )}
       </ScrollView>
     </View>
@@ -218,6 +404,7 @@ const styles = StyleSheet.create({
   },
   monthBox: {
     height: 48,
+    width: "100%",
     borderRadius: 7,
     borderWidth: 1,
     borderColor: "#B3B3B3",
@@ -232,37 +419,73 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontFamily: "Inter-Medium",
   },
-  weekHeader: {
-    borderWidth: 1,
+  weekBox: {
+    height: 60,
     borderRadius: 10,
-    padding: 12,
+    borderWidth: 1,
+    borderColor: "#ccc",
     flexDirection: "row",
+    alignItems: "center",
     justifyContent: "space-between",
+    paddingHorizontal: 12,
+    backgroundColor: "#fff",
   },
+
   weekTitle: {
-    fontFamily: "Inter-Medium",
+    fontWeight: "600",
+    fontSize: 16,
   },
-  dayRow: {
+
+  weekDate: {
+    fontSize: 12,
+    color: "#777",
+  },
+
+  weekHours: {
+    fontWeight: "600",
+  },
+  dayCard: {
     flexDirection: "row",
     borderWidth: 1,
     borderColor: "#8E273B",
     borderRadius: 10,
-    marginTop: 6,
+    marginTop: 8,
+    overflow: "hidden",
   },
+
   dateBox: {
     width: 60,
     alignItems: "center",
     justifyContent: "center",
+    backgroundColor: "#f5f5f5",
     borderRightWidth: 1,
     borderColor: "#8E273B",
   },
+
+  dateNum: {
+    fontSize: 18,
+    fontWeight: "600",
+  },
+
+  dateDay: {
+    fontSize: 12,
+  },
+
   timeBox: {
     flex: 1,
     alignItems: "center",
+    justifyContent: "center",
     padding: 8,
   },
+
+  leaveBox: {
+    flex: 2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
   label: {
-    fontSize: 10,
+    fontSize: 11,
     color: "#777",
   },
 });
