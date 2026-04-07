@@ -287,7 +287,6 @@ export const getDailyWorkedHours = async (employeeCode, date) => {
       },
     );
     const hours = response.data?.message?.trim();
-    // If API returns something valid, show it. If it's empty/null → show "00:00"
     return hours ? hours : "00:00";
   } catch (err) {
     return "00:00";
@@ -341,10 +340,7 @@ export const getTodayBreaks = async (employeeCode, date) => {
   }
 };
 
-export const employeeBreak = async ({
-  employeeCode,
-  type, // IN / OUT
-}) => {
+export const employeeBreak = async ({ employeeCode, type }) => {
   try {
     if (!employeeCode) throw new Error("Employee ID is required");
 
@@ -357,16 +353,15 @@ export const employeeBreak = async ({
 
     const timestamp = await getServerTime();
 
-    const payload = {
-      employee_field_value: employeeCode,
-      timestamp,
-      device_id: "MobileAPP",
-      log_type: type, // IN / OUT
-    };
+    const formData = new URLSearchParams();
+    formData.append("employee_field_value", employeeCode);
+    formData.append("timestamp", timestamp);
+    formData.append("device_id", "09267");
+    formData.append("log_type", type);
 
     const response = await apiClient.post(
       `${baseUrl}/api/method/employee_app.attendance_api.Employee_break`,
-      payload,
+      formData.toString(),
       {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -390,9 +385,12 @@ export const employeeBreak = async ({
       message: type === "IN" ? "Break started" : "Break ended",
     };
   } catch (error) {
+    console.log("Break error:", error?.response?.data || error.message);
+
     return {
       allowed: false,
-      message: error.message || "Break failed",
+      message:
+        error?.response?.data?.message || error.message || "Break failed",
     };
   }
 };

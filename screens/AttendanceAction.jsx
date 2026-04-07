@@ -122,30 +122,46 @@ function AttendanceAction() {
 
   useEffect(() => {
     const unsubscribe = navigation.addListener("focus", async () => {
-      // refresh worked hours when user returns from camera screen
       if (employeeCode) {
         const today = new Date();
         const todayFormatted = today
           .toLocaleDateString("en-GB")
           .replace(/\//g, "-");
+
         const month = today.getMonth() + 1;
         const year = today.getFullYear();
-        const [todayWorked, monthlyWorked] = await Promise.all([
+
+        const [todayWorked, monthlyWorked, breakData] = await Promise.all([
           getDailyWorkedHours(employeeCode, todayFormatted),
           getMonthlyWorkedHours(employeeCode, month, year),
           getTodayBreaks(employeeCode, todayFormatted),
         ]);
+
         dispatch({
           type: "attendance/setTodayHours",
           payload: todayWorked ?? "00:00",
         });
+
         dispatch({
           type: "attendance/setMonthlyHours",
           payload: monthlyWorked ?? "00:00",
         });
-        dispatch(setBreakMinutes(breakData.total_break_minutes ?? 0));
+
+        dispatch(setBreakMinutes(breakData?.total_break_minutes ?? 0));
+
+        const lastBreak = breakData?.breaks?.slice(-1)[0];
+
+        if (!lastBreak) {
+          setOnBreak(false);
+        } else {
+          const isBreakOpen =
+            !lastBreak.end || lastBreak.end === "" || lastBreak.end === null;
+
+          setOnBreak(isBreakOpen);
+        }
       }
     });
+
     return unsubscribe;
   }, [navigation, employeeCode]);
   // Check-in / Check-out handler
@@ -166,7 +182,6 @@ function AttendanceAction() {
         });
         return;
       }
-
       if (type === "IN") {
         dispatch({ type: "attendance/setSelectedLocation", payload: null });
 
@@ -177,6 +192,21 @@ function AttendanceAction() {
           }),
         );
       } else {
+        if (onBreak) {
+          const breakRes = await employeeBreak({
+            employeeCode,
+            type: "OUT",
+          });
+
+          if (!breakRes.allowed) {
+            Toast.show({
+              type: "error",
+              text1: "Failed to end break before checkout",
+            });
+            return;
+          }
+        }
+
         dispatch(
           setCheckout({
             checkoutTime: Date.now(),
@@ -185,16 +215,25 @@ function AttendanceAction() {
 
         dispatch({ type: "attendance/setSelectedLocation", payload: null });
 
-        // ✅ FIX: reset break when checkout
-        setOnBreak(false);
-        // ✅ Refresh break time after action
+        // Refresh break data
         const today = new Date();
         const todayFormatted = today
           .toLocaleDateString("en-GB")
           .replace(/\//g, "-");
 
         const breakData = await getTodayBreaks(employeeCode, todayFormatted);
-        dispatch(setBreakMinutes(breakData.total_break_minutes ?? 0));
+
+        dispatch(setBreakMinutes(breakData?.total_break_minutes ?? 0));
+        const lastBreak = breakData?.breaks?.slice(-1)[0];
+
+        if (!lastBreak) {
+          setOnBreak(false);
+        } else {
+          const isBreakOpen =
+            !lastBreak.end || lastBreak.end === "" || lastBreak.end === null;
+
+          setOnBreak(isBreakOpen);
+        }
       }
 
       // Refresh totals
@@ -244,7 +283,6 @@ function AttendanceAction() {
       return;
     }
 
-    // ✅ MOVE HERE
     if (restrictLocation === "1" && !inTarget) {
       Toast.show({
         type: "error",
@@ -271,16 +309,25 @@ function AttendanceAction() {
         return;
       }
 
-      setOnBreak(!onBreak);
-      // ✅ Refresh break time after break action
       const today = new Date();
       const todayFormatted = today
         .toLocaleDateString("en-GB")
         .replace(/\//g, "-");
 
       const breakData = await getTodayBreaks(employeeCode, todayFormatted);
+
       dispatch(setBreakMinutes(breakData?.total_break_minutes ?? 0));
 
+      const lastBreak = breakData?.breaks?.slice(-1)[0];
+
+      if (!lastBreak) {
+        setOnBreak(false);
+      } else {
+        const isBreakOpen =
+          !lastBreak.end || lastBreak.end === "" || lastBreak.end === null;
+
+        setOnBreak(isBreakOpen);
+      }
       Toast.show({
         type: "success",
         text1: response.message,
@@ -306,135 +353,137 @@ function AttendanceAction() {
   }
 
   return (
-    <>
-      {actionLoading && (
-        <View className="absolute top-0 left-0 h-screen w-screen bg-black/50 z-50 items-center justify-center">
-          <ActivityIndicator size="large" color="white" />
-          <Text className="text-white mt-2 text-base">Processing...</Text>
-        </View>
-      )}
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{
-          flex: 1,
-          alignItems: "center",
-          backgroundColor: "white",
-          paddingVertical: 16,
-        }}
-        refreshControl={
-          <RefreshControl
-            refreshing={refresh}
-            onRefresh={() => {
-              setRefresh(true);
-              fetchStatusAndLocation().finally(() => setRefresh(false));
-            }}
-          />
-        }
-      >
-        <View style={{ width: "100%" }} className="flex-1 px-3">
-          <WelcomeCard />
-          <View className="h-72 mt-4">
-            <View className="p-3">
-              {/* DATE & TIME */}
-              <Text className="text-base text-gray-500 font-semibold">
-                DATE AND TIME *
-              </Text>
-              <View className="flex-row items-end border-b border-gray-400 pb-2 mb-6 justify-between">
-                <Text className="text-sm font-medium text-gray-500">
-                  {dateTime}
+    <SafeAreaView style={{ flex: 1, backgroundColor: "white" }}>
+      <>
+        {actionLoading && (
+          <View className="absolute top-0 left-0 h-screen w-screen bg-black/50 z-50 items-center justify-center">
+            <ActivityIndicator size="large" color="white" />
+            <Text className="text-white mt-2 text-base">Processing...</Text>
+          </View>
+        )}
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{
+            flex: 1,
+            alignItems: "center",
+            backgroundColor: "white",
+            paddingVertical: 16,
+          }}
+          refreshControl={
+            <RefreshControl
+              refreshing={refresh}
+              onRefresh={() => {
+                setRefresh(true);
+                fetchStatusAndLocation().finally(() => setRefresh(false));
+              }}
+            />
+          }
+        >
+          <View style={{ width: "100%" }} className="flex-1 px-3">
+            <WelcomeCard />
+            <View className="h-72 mt-4">
+              <View className="p-3">
+                {/* DATE & TIME */}
+                <Text className="text-base text-gray-500 font-semibold">
+                  DATE AND TIME *
                 </Text>
-                <MaterialCommunityIcons
-                  name="calendar-month"
-                  size={28}
-                  color={COLORS.gray}
-                />
-              </View>
-              {/* LOCATION */}
-              <Text className="text-base text-gray-500 font-semibold">
-                LOCATION *
-              </Text>
-              <View className="flex-row items-end border-b border-gray-400 pb-2 mb-4 justify-between">
-                <Text className="text-sm font-medium text-gray-500">
-                  {restrictLocation === "0"
-                    ? "Not Required"
-                    : !ready
-                      ? "Getting Location..."
-                      : // : distanceInfo?.locationName
-                        //   ? distanceInfo.locationName
-                        inTarget
-                        ? "In bound"
-                        : "Out of bound"}
-                </Text>
-
-                <MaterialCommunityIcons
-                  name="map-marker-radius-outline"
-                  size={28}
-                  color={COLORS.gray}
-                />
-              </View>
-              {restrictLocation === "1" && distanceInfo && (
-                <View className="mb-3">
-                  <Text className="text-xs text-gray-400">
-                    Distance: {distanceInfo.distance} m | Allowed:{" "}
-                    {distanceInfo.radius} m
+                <View className="flex-row items-end border-b border-gray-400 pb-2 mb-6 justify-between">
+                  <Text className="text-sm font-medium text-gray-500">
+                    {dateTime}
                   </Text>
+                  <MaterialCommunityIcons
+                    name="calendar-month"
+                    size={28}
+                    color={COLORS.gray}
+                  />
                 </View>
-              )}
-
-              {/* CHECK-IN / CHECK-OUT BUTTON */}
-              <TouchableOpacity
-                className={`justify-center items-center h-16 w-full mt-4 rounded-2xl ${
-                  checkin ? "bg-red-600" : "bg-green-600"
-                } ${restrictLocation === "1" && !inTarget ? "opacity-50" : ""}`}
-                disabled={
-                  actionLoading || (restrictLocation === "1" && !inTarget)
-                }
-                onPress={async () => {
-                  try {
-                    const photoValue = await AsyncStorage.getItem("photo");
-                    const actionType = checkin ? "OUT" : "IN";
-
-                    if (photoValue !== "1") {
-                      await handleDirectCheckInOut(actionType);
-                    } else {
-                      navigation.navigate("Attendance camera", {
-                        type: actionType,
-                      });
-                    }
-                  } catch (error) {
-                    Toast.show({
-                      type: "error",
-                      text1: ":warning: Action failed",
-                      text2: error.message,
-                    });
-                  }
-                }}
-              >
-                <Text className="text-xl font-bold text-white">
-                  {checkin ? "CHECK-OUT" : "CHECK-IN"}
+                {/* LOCATION */}
+                <Text className="text-base text-gray-500 font-semibold">
+                  LOCATION *
                 </Text>
-              </TouchableOpacity>
-              {/* BREAK BUTTON */}
-              {checkin && (
+                <View className="flex-row items-end border-b border-gray-400 pb-2 mb-4 justify-between">
+                  <Text className="text-sm font-medium text-gray-500">
+                    {restrictLocation === "0"
+                      ? "Not Required"
+                      : !ready
+                        ? "Getting Location..."
+                        : // : distanceInfo?.locationName
+                          //   ? distanceInfo.locationName
+                          inTarget
+                          ? "In bound"
+                          : "Out of bound"}
+                  </Text>
+
+                  <MaterialCommunityIcons
+                    name="map-marker-radius-outline"
+                    size={28}
+                    color={COLORS.gray}
+                  />
+                </View>
+                {restrictLocation === "1" && distanceInfo && (
+                  <View className="mb-3">
+                    <Text className="text-xs text-gray-400">
+                      Distance: {distanceInfo.distance} m | Allowed:{" "}
+                      {distanceInfo.radius} m
+                    </Text>
+                  </View>
+                )}
+
+                {/* CHECK-IN / CHECK-OUT BUTTON */}
                 <TouchableOpacity
                   className={`justify-center items-center h-16 w-full mt-4 rounded-2xl ${
-                    onBreak ? "bg-slate-500" : "bg-blue-400"
+                    checkin ? "bg-red-600" : "bg-green-600"
                   } ${restrictLocation === "1" && !inTarget ? "opacity-50" : ""}`}
                   disabled={
                     actionLoading || (restrictLocation === "1" && !inTarget)
                   }
-                  onPress={handleBreak}
+                  onPress={async () => {
+                    try {
+                      const photoValue = await AsyncStorage.getItem("photo");
+                      const actionType = checkin ? "OUT" : "IN";
+
+                      if (photoValue !== "1") {
+                        await handleDirectCheckInOut(actionType);
+                      } else {
+                        navigation.navigate("Attendance camera", {
+                          type: actionType,
+                        });
+                      }
+                    } catch (error) {
+                      Toast.show({
+                        type: "error",
+                        text1: ":warning: Action failed",
+                        text2: error.message,
+                      });
+                    }
+                  }}
                 >
                   <Text className="text-xl font-bold text-white">
-                    {onBreak ? "END BREAK" : "TAKE BREAK"}
+                    {checkin ? "CHECK-OUT" : "CHECK-IN"}
                   </Text>
                 </TouchableOpacity>
-              )}
+                {/* BREAK BUTTON */}
+                {checkin && (
+                  <TouchableOpacity
+                    className={`justify-center items-center h-16 w-full mt-4 rounded-2xl ${
+                      onBreak ? "bg-slate-500" : "bg-blue-400"
+                    } ${restrictLocation === "1" && !inTarget ? "opacity-50" : ""}`}
+                    disabled={
+                      actionLoading || (restrictLocation === "1" && !inTarget)
+                    }
+                    onPress={handleBreak}
+                  >
+                    <Text className="text-xl font-bold text-white">
+                      {onBreak ? "END BREAK" : "TAKE BREAK"}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
           </View>
-        </View>
-      </ScrollView>
-    </>
+        </ScrollView>
+      </>
+    </SafeAreaView>
   );
 }
 export default AttendanceAction;
