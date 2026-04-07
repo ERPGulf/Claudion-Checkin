@@ -14,7 +14,11 @@ import Toast from "react-native-toast-message";
 import { useNavigation } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getPreciseDistance } from "geolib";
-import { setCheckin, setCheckout } from "../redux/Slices/AttendanceSlice";
+import {
+  setCheckin,
+  setCheckout,
+  setBreakMinutes,
+} from "../redux/Slices/AttendanceSlice";
 import { COLORS, SIZES } from "../constants";
 import WelcomeCard from "../components/AttendanceAction/WelcomeCard";
 import { updateDateTime } from "../utils/TimeServices";
@@ -24,6 +28,8 @@ import {
   getDailyWorkedHours,
   getMonthlyWorkedHours,
   getServerTime,
+  employeeBreak,
+  getTodayBreaks,
 } from "../services/api/attendance.service";
 import { SafeAreaView } from "react-native-safe-area-context";
 function AttendanceAction() {
@@ -40,6 +46,7 @@ function AttendanceAction() {
   const [actionLoading, setActionLoading] = useState(false);
   const [restrictLocation, setRestrictLocation] = useState("0");
   const [restrictionLoaded, setRestrictionLoaded] = useState(false);
+  const [onBreak, setOnBreak] = useState(false);
   useLayoutEffect(() => {
     navigation.setOptions({
       headerShadowVisible: false,
@@ -126,6 +133,7 @@ function AttendanceAction() {
         const [todayWorked, monthlyWorked] = await Promise.all([
           getDailyWorkedHours(employeeCode, todayFormatted),
           getMonthlyWorkedHours(employeeCode, month, year),
+          getTodayBreaks(employeeCode, todayFormatted),
         ]);
         dispatch({
           type: "attendance/setTodayHours",
@@ -135,6 +143,7 @@ function AttendanceAction() {
           type: "attendance/setMonthlyHours",
           payload: monthlyWorked ?? "00:00",
         });
+        dispatch(setBreakMinutes(breakData.total_break_minutes ?? 0));
       }
     });
     return unsubscribe;
@@ -159,22 +168,33 @@ function AttendanceAction() {
       }
 
       if (type === "IN") {
-        // clear previous selected location first
         dispatch({ type: "attendance/setSelectedLocation", payload: null });
 
         dispatch(
           setCheckin({
             checkinTime: Date.now(),
             location: restrictLocation === "1" ? response.location : null,
-          })
+          }),
         );
       } else {
         dispatch(
           setCheckout({
             checkoutTime: Date.now(),
-          })
+          }),
         );
-        dispatch({ type: "attendance/setSelectedLocation", payload: null }); // also clear
+
+        dispatch({ type: "attendance/setSelectedLocation", payload: null });
+
+        // ✅ FIX: reset break when checkout
+        setOnBreak(false);
+        // ✅ Refresh break time after action
+        const today = new Date();
+        const todayFormatted = today
+          .toLocaleDateString("en-GB")
+          .replace(/\//g, "-");
+
+        const breakData = await getTodayBreaks(employeeCode, todayFormatted);
+        dispatch(setBreakMinutes(breakData.total_break_minutes ?? 0));
       }
 
       // Refresh totals
@@ -184,12 +204,23 @@ function AttendanceAction() {
         .replace(/\//g, "-");
       const month = today.getMonth() + 1;
       const year = today.getFullYear();
-      const [todayWorked, monthlyWorked] = await Promise.all([
+      const [todayWorked, monthlyWorked, breakData] = await Promise.all([
         getDailyWorkedHours(employeeCode, todayFormatted),
         getMonthlyWorkedHours(employeeCode, month, year),
+        getTodayBreaks(employeeCode, todayFormatted),
       ]);
-      dispatch({ type: "attendance/setTodayHours", payload: todayWorked });
-      dispatch({ type: "attendance/setMonthlyHours", payload: monthlyWorked });
+
+      dispatch({
+        type: "attendance/setTodayHours",
+        payload: todayWorked ?? "00:00",
+      });
+
+      dispatch({
+        type: "attendance/setMonthlyHours",
+        payload: monthlyWorked ?? "00:00",
+      });
+
+      dispatch(setBreakMinutes(breakData?.total_break_minutes ?? 0));
       Toast.show({
         type: "success",
         text1: type === "IN" ? "Checked in!" : "Checked out!",
@@ -198,6 +229,66 @@ function AttendanceAction() {
       Toast.show({
         type: "error",
         text1: ":warning: Failed",
+        text2: error.message,
+      });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+  const handleBreak = async () => {
+    if (!checkin) {
+      Toast.show({
+        type: "error",
+        text1: "Please check-in first",
+      });
+      return;
+    }
+
+    // ✅ MOVE HERE
+    if (restrictLocation === "1" && !inTarget) {
+      Toast.show({
+        type: "error",
+        text1: "You are out of allowed location",
+      });
+      return;
+    }
+
+    const type = onBreak ? "OUT" : "IN";
+
+    try {
+      setActionLoading(true);
+
+      const response = await employeeBreak({
+        employeeCode,
+        type,
+      });
+
+      if (!response.allowed) {
+        Toast.show({
+          type: "error",
+          text1: response.message,
+        });
+        return;
+      }
+
+      setOnBreak(!onBreak);
+      // ✅ Refresh break time after break action
+      const today = new Date();
+      const todayFormatted = today
+        .toLocaleDateString("en-GB")
+        .replace(/\//g, "-");
+
+      const breakData = await getTodayBreaks(employeeCode, todayFormatted);
+      dispatch(setBreakMinutes(breakData?.total_break_minutes ?? 0));
+
+      Toast.show({
+        type: "success",
+        text1: response.message,
+      });
+    } catch (error) {
+      Toast.show({
+        type: "error",
+        text1: "Break failed",
         text2: error.message,
       });
     } finally {
@@ -289,9 +380,12 @@ function AttendanceAction() {
                   </Text>
                 </View>
               )}
-              {/* BUTTON */}
+
+              {/* CHECK-IN / CHECK-OUT BUTTON */}
               <TouchableOpacity
-                className={`justify-center items-center h-16 mt-4 rounded-2xl ${checkin ? "bg-red-600" : "bg-green-600"} ${restrictLocation === "1" && !inTarget ? "opacity-50" : ""}`}
+                className={`justify-center items-center h-16 w-full mt-4 rounded-2xl ${
+                  checkin ? "bg-red-600" : "bg-green-600"
+                } ${restrictLocation === "1" && !inTarget ? "opacity-50" : ""}`}
                 disabled={
                   actionLoading || (restrictLocation === "1" && !inTarget)
                 }
@@ -299,6 +393,7 @@ function AttendanceAction() {
                   try {
                     const photoValue = await AsyncStorage.getItem("photo");
                     const actionType = checkin ? "OUT" : "IN";
+
                     if (photoValue !== "1") {
                       await handleDirectCheckInOut(actionType);
                     } else {
@@ -319,6 +414,22 @@ function AttendanceAction() {
                   {checkin ? "CHECK-OUT" : "CHECK-IN"}
                 </Text>
               </TouchableOpacity>
+              {/* BREAK BUTTON */}
+              {checkin && (
+                <TouchableOpacity
+                  className={`justify-center items-center h-16 w-full mt-4 rounded-2xl ${
+                    onBreak ? "bg-slate-500" : "bg-blue-400"
+                  } ${restrictLocation === "1" && !inTarget ? "opacity-50" : ""}`}
+                  disabled={
+                    actionLoading || (restrictLocation === "1" && !inTarget)
+                  }
+                  onPress={handleBreak}
+                >
+                  <Text className="text-xl font-bold text-white">
+                    {onBreak ? "END BREAK" : "TAKE BREAK"}
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         </View>

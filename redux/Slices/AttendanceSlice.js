@@ -8,6 +8,7 @@ const initialState = {
   locations: [], // list of location objects
   todayHours: 0,
   monthlyHours: 0,
+  breakMinutes: 0,
 };
 
 export const AttendanceSlice = createSlice({
@@ -19,7 +20,6 @@ export const AttendanceSlice = createSlice({
       state.checkin = true;
       state.checkinTime = action.payload.checkinTime;
       state.location = action.payload?.location || null;
-
     },
     setCheckout: (state, action) => {
       state.checkin = false;
@@ -41,6 +41,9 @@ export const AttendanceSlice = createSlice({
     setSelectedLocation: (state, action) => {
       state.location = action.payload;
     },
+    setBreakMinutes: (state, action) => {
+      state.breakMinutes = action.payload;
+    },
   },
 });
 
@@ -52,6 +55,7 @@ export const {
   setMonthlyHours,
   setLocations,
   setSelectedLocation,
+  setBreakMinutes,
 } = AttendanceSlice.actions;
 
 // selectors
@@ -62,5 +66,6 @@ export const selectLocation = (state) => state.attendance.location;
 export const selectLocations = (state) => state.attendance.locations;
 export const selectTodayHours = (state) => state.attendance.todayHours;
 export const selectMonthlyHours = (state) => state.attendance.monthlyHours;
+export const selectBreakMinutes = (state) => state.attendance.breakMinutes;
 
 export default AttendanceSlice.reducer;

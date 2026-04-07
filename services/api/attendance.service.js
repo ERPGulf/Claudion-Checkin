@@ -80,7 +80,7 @@ export const getOfficeLocation = async (employeeCode) => {
 
         const dist = getPreciseDistance(
           { latitude: userLat, longitude: userLng },
-          { latitude: lat, longitude: lng }
+          { latitude: lat, longitude: lng },
         );
 
         if (!nearest || dist < nearest.distance) {
@@ -147,7 +147,6 @@ export const userCheckIn = async ({ employeeCode, type, locationData }) => {
       }
     }
 
-
     // 🕒 Timestamp for check-in
     const timestamp = await getServerTime();
 
@@ -174,7 +173,7 @@ export const userCheckIn = async ({ employeeCode, type, locationData }) => {
       payload,
       {
         headers: { Authorization: `Bearer ${token}` },
-      }
+      },
     );
 
     const checkinId = response.data?.message?.name;
@@ -215,7 +214,7 @@ export const userCheckIn = async ({ employeeCode, type, locationData }) => {
 export const getUserAttendance = async (
   employee_id,
   limit_start = 0,
-  limit_page_length = 20
+  limit_page_length = 20,
 ) => {
   try {
     const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
@@ -285,7 +284,7 @@ export const getDailyWorkedHours = async (employeeCode, date) => {
       {
         headers: { Authorization: `Bearer ${token}` },
         params: { employee: employeeCode, date },
-      }
+      },
     );
     const hours = response.data?.message?.trim();
     // If API returns something valid, show it. If it's empty/null → show "00:00"
@@ -305,12 +304,96 @@ export const getMonthlyWorkedHours = async (employeeCode, month, year) => {
       {
         headers: { Authorization: `Bearer ${token}` },
         params: { employee: employeeCode, month, year },
-      }
+      },
     );
     const hours = response.data?.message?.trim();
     return hours ? hours : "00:00";
   } catch (err) {
     return "00:00";
+  }
+};
+
+export const getTodayBreaks = async (employeeCode, date) => {
+  const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
+  const baseUrl = cleanBaseUrl(rawBaseUrl);
+  const token = await AsyncStorage.getItem("access_token");
+
+  try {
+    const response = await apiClient.get(
+      `${baseUrl}/api/method/employee_app.attendance_api.get_today_breaks`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        params: {
+          employee: employeeCode,
+          date,
+        },
+      },
+    );
+
+    const data = response.data?.message;
+
+    // Return full object (important for flexibility)
+    return data || { total_break_minutes: 0, breaks: [] };
+  } catch (err) {
+    return { total_break_minutes: 0, breaks: [] };
+  }
+};
+
+export const employeeBreak = async ({
+  employeeCode,
+  type, // IN / OUT
+}) => {
+  try {
+    if (!employeeCode) throw new Error("Employee ID is required");
+
+    const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
+    const baseUrl = cleanBaseUrl(rawBaseUrl);
+    if (!baseUrl) throw new Error("Base URL missing");
+
+    const token = await AsyncStorage.getItem("access_token");
+    if (!token) throw new Error("Token missing");
+
+    const timestamp = await getServerTime();
+
+    const payload = {
+      employee_field_value: employeeCode,
+      timestamp,
+      device_id: "MobileAPP",
+      log_type: type, // IN / OUT
+    };
+
+    const response = await apiClient.post(
+      `${baseUrl}/api/method/employee_app.attendance_api.Employee_break`,
+      payload,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+      },
+    );
+
+    const breakId = response.data?.message?.name;
+
+    if (!breakId) {
+      return {
+        allowed: false,
+        message: "Failed to register break",
+      };
+    }
+
+    return {
+      allowed: true,
+      name: breakId,
+      message: type === "IN" ? "Break started" : "Break ended",
+    };
+  } catch (error) {
+    return {
+      allowed: false,
+      message: error.message || "Break failed",
+    };
   }
 };
 export default {
@@ -321,4 +404,6 @@ export default {
   getAttendanceStatus,
   getDailyWorkedHours,
   getMonthlyWorkedHours,
+  employeeBreak,
+  getTodayBreaks,
 };
