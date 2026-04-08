@@ -9,6 +9,7 @@ import {
 import { Image } from "expo-image";
 import React, { useLayoutEffect, useState } from "react";
 import { useNavigation } from "@react-navigation/native";
+import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useSelector } from "react-redux";
 import { Toast } from "react-native-toast-message/lib/src/Toast";
 import Ionicons from "react-native-vector-icons/Ionicons";
@@ -31,6 +32,7 @@ const formatUpdateId = (updateId) => {
 
 function Profile() {
   const navigation = useNavigation();
+  const bottomTabBarHeight = useBottomTabBarHeight();
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
   const [updateStatus, setUpdateStatus] = useState(
     "Ready to check for an OTA update.",
@@ -203,8 +205,8 @@ function Profile() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{
-          paddingTop: Constants.statusBarHeight + 12,
-          paddingBottom: 40,
+          paddingTop: 16,
+          paddingBottom: bottomTabBarHeight + 32,
         }}
       >
         <View style={{ paddingHorizontal: 16 }}>
@@ -293,7 +295,7 @@ function Profile() {
                   Employee account
                 </Text>
                 <Text className="mt-3 text-sm font-medium text-gray-200">
-                  Version {appVersion} ({buildNumber})
+                  Version {appVersion}
                 </Text>
               </View>
             </View>
@@ -504,24 +506,24 @@ function Profile() {
               activeOpacity={0.9}
               style={{
                 marginTop: 16,
-                borderRadius: 18,
+                borderRadius: 20,
                 borderWidth: 1,
-                borderColor: "#F4C7CC",
-                backgroundColor: "#FFF5F5",
+                borderColor: "#F3D8DD",
+                backgroundColor: "#FFFBFB",
                 paddingHorizontal: 16,
-                paddingVertical: 16,
+                paddingVertical: 14,
                 flexDirection: "row",
                 alignItems: "center",
                 justifyContent: "space-between",
               }}
             >
-              <View className="flex-row items-center">
+              <View className="flex-row items-center flex-1 pr-3">
                 <View
                   style={{
-                    width: 42,
-                    height: 42,
-                    borderRadius: 14,
-                    backgroundColor: "#FFE3E3",
+                    width: 46,
+                    height: 46,
+                    borderRadius: 16,
+                    backgroundColor: "#FFF0F1",
                     alignItems: "center",
                     justifyContent: "center",
                   }}
@@ -534,16 +536,27 @@ function Profile() {
                 </View>
 
                 <View className="ml-3">
-                  <Text className="text-base font-semibold text-red-600">
+                  <Text className="text-base font-semibold text-slate-900">
                     Sign out
                   </Text>
-                  <Text className="mt-1 text-sm text-red-400">
+                  <Text className="mt-1 text-sm leading-5 text-slate-500">
                     Clear local data and end this session
                   </Text>
                 </View>
               </View>
 
-              <Ionicons name="chevron-forward" size={22} color={COLORS.red} />
+              <View
+                style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: 17,
+                  backgroundColor: "#FFF0F1",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Ionicons name="chevron-forward" size={18} color={COLORS.red} />
+              </View>
             </TouchableOpacity>
           </View>
         </View>
