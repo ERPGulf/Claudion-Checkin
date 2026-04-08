@@ -300,41 +300,7 @@ function Profile() {
               </View>
             </View>
 
-            <View className="mt-6 flex-row">
-              <View
-                style={{
-                  flex: 1,
-                  borderRadius: 20,
-                  backgroundColor: "rgba(255, 255, 255, 0.08)",
-                  padding: 14,
-                  marginRight: 8,
-                }}
-              >
-                <Text className="text-xs uppercase tracking-widest text-gray-400">
-                  Channel
-                </Text>
-                <Text className="mt-2 text-base font-semibold text-white">
-                  {updateChannel}
-                </Text>
-              </View>
-
-              <View
-                style={{
-                  flex: 1,
-                  borderRadius: 20,
-                  backgroundColor: "rgba(255, 255, 255, 0.08)",
-                  padding: 14,
-                  marginLeft: 8,
-                }}
-              >
-                <Text className="text-xs uppercase tracking-widest text-gray-400">
-                  Runtime
-                </Text>
-                <Text className="mt-2 text-base font-semibold text-white">
-                  {runtimeVersion}
-                </Text>
-              </View>
-            </View>
+           
           </View>
 
           <View
@@ -381,26 +347,6 @@ function Profile() {
                   size={24}
                   color={COLORS.primary2}
                 />
-              </View>
-            </View>
-
-            <View className="mt-5 flex-row justify-between">
-              <View className="flex-1 mr-2 rounded-2xl bg-slate-50 p-4">
-                <Text className="text-xs uppercase tracking-widest text-gray-400">
-                  Update ID
-                </Text>
-                <Text className="mt-2 text-base font-semibold text-slate-800">
-                  {updateId}
-                </Text>
-              </View>
-
-              <View className="flex-1 ml-2 rounded-2xl bg-slate-50 p-4">
-                <Text className="text-xs uppercase tracking-widest text-gray-400">
-                  Release lane
-                </Text>
-                <Text className="mt-2 text-base font-semibold text-slate-800">
-                  {isProductionChannel ? "Live" : "Testing"}
-                </Text>
               </View>
             </View>
 
