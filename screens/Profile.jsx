@@ -1,4 +1,11 @@
-import { View, Text, TouchableOpacity, Alert, Platform } from "react-native";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  Alert,
+  Platform,
+  ScrollView,
+} from "react-native";
 import { Image } from "expo-image";
 import React, { useLayoutEffect, useState } from "react";
 import { useNavigation } from "@react-navigation/native";
@@ -45,6 +52,54 @@ function Profile() {
   const updateChannel = Updates.channel ?? "none";
   const runtimeVersion = Updates.runtimeVersion ?? "unknown";
   const updateId = formatUpdateId(Updates.updateId);
+  const isProductionChannel = updateChannel === "production";
+
+  const getStatusTone = () => {
+    if (isCheckingUpdate) {
+      return {
+        backgroundColor: "#FFF4EA",
+        borderColor: "#F87627",
+        icon: "sync-outline",
+        iconColor: COLORS.primary2,
+      };
+    }
+
+    if (updateStatus.includes("No OTA update available")) {
+      return {
+        backgroundColor: "#F4F6F8",
+        borderColor: "#DADFE5",
+        icon: "checkmark-circle-outline",
+        iconColor: "#4B5563",
+      };
+    }
+
+    if (updateStatus.includes("failed") || updateStatus.includes("Unable")) {
+      return {
+        backgroundColor: "#FFF1F2",
+        borderColor: "#FECDD3",
+        icon: "alert-circle-outline",
+        iconColor: COLORS.red,
+      };
+    }
+
+    if (updateStatus.includes("Reloading") || updateStatus.includes("found")) {
+      return {
+        backgroundColor: "#EFFAF3",
+        borderColor: "#B7E4C7",
+        icon: "cloud-download-outline",
+        iconColor: "#15803D",
+      };
+    }
+
+    return {
+      backgroundColor: "#EEF4FF",
+      borderColor: "#CADBFF",
+      icon: "information-circle-outline",
+      iconColor: "#2457D6",
+    };
+  };
+
+  const statusTone = getStatusTone();
 
   const handleCheckForUpdates = async () => {
     if (__DEV__ || !Updates.isEnabled) {
@@ -142,119 +197,357 @@ function Profile() {
     <View
       style={{
         flex: 1,
-        flexGrow: 1,
-        alignItems: "center",
-        backgroundColor: "white",
+        backgroundColor: COLORS.offwhite,
       }}
     >
-      <View
-        style={{
-          width: SIZES.width,
-          paddingHorizontal: 12,
-          paddingVertical: 16,
-          alignItems: "center",
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{
+          paddingTop: Constants.statusBarHeight + 12,
+          paddingBottom: 40,
         }}
       >
-        <View
-          style={{ backgroundColor: COLORS.primary }}
-          className="flex-row w-full h-32 rounded-2xl p-3 items-center"
-        >
-          {/* Profile Icon */}
-          <Image
-            cachePolicy="memory-disk"
-            source={user}
-            style={{ width: 75, height: 75 }}
-          />
-
-          {/* Name, Employee & Version */}
-          <View className="ml-3 justify-center">
-            <Text className="text-xl font-semibold text-white">{fullname}</Text>
-            <Text className="text-base font-normal text-gray-300">
-              Employee
-            </Text>
-
-            {/* Version row inside same card */}
-            <View className="flex-row items-center mt-1">
-              <Text className="text-sm font-normal text-gray-300 ">
-                Version
-              </Text>
-              <Text className="ml-1 text-sm font-semibold text-white">
-                {appVersion} ({buildNumber})
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        <View
-          className={`w-full rounded-xl bg-white mt-4 p-4 ${
-            Platform.OS === "ios"
-              ? "shadow-sm shadow-black/10"
-              : "shadow-sm shadow-black"
-          }`}
-        >
-          <Text className="text-lg font-semibold text-black">OTA Updates</Text>
-          <Text className="mt-2 text-sm text-gray-500">
-            Channel: {updateChannel}
-          </Text>
-          <Text className="mt-1 text-sm text-gray-500">
-            Runtime: {runtimeVersion}
-          </Text>
-          <Text className="mt-1 text-sm text-gray-500">
-            Update ID: {updateId}
-          </Text>
-          <Text className="mt-3 text-sm text-gray-500">{updateStatus}</Text>
-
-          <TouchableOpacity
-            onPress={handleCheckForUpdates}
-            disabled={isCheckingUpdate}
-            className="mt-4 h-12 rounded-xl items-center justify-center"
+        <View style={{ paddingHorizontal: 16 }}>
+          <View
             style={{
-              backgroundColor: isCheckingUpdate ? COLORS.gray2 : COLORS.primary,
+              backgroundColor: COLORS.primary,
+              borderRadius: 28,
+              padding: 20,
+              overflow: "hidden",
             }}
           >
-            <Text className="text-base font-semibold text-white">
-              {isCheckingUpdate ? "Checking..." : "Check for OTA update"}
-            </Text>
-          </TouchableOpacity>
-        </View>
+            <View
+              style={{
+                position: "absolute",
+                top: -24,
+                right: -10,
+                width: 120,
+                height: 120,
+                borderRadius: 60,
+                backgroundColor: "rgba(248, 118, 39, 0.16)",
+              }}
+            />
+            <View
+              style={{
+                position: "absolute",
+                bottom: -32,
+                left: -18,
+                width: 110,
+                height: 110,
+                borderRadius: 55,
+                backgroundColor: "rgba(255, 255, 255, 0.06)",
+              }}
+            />
 
-        <TouchableOpacity
-          onPress={() => {
-            Alert.alert("Logout out", "Are you sure you want to logout", [
-              {
-                text: "Cancel",
-                onPress: () => {
-                  hapticsMessage("warning");
-                  Toast.show({
-                    type: "info",
-                    text1: "Logout cancelled",
-                    visibilityTime: 3000,
-                    autoHide: true,
-                  });
-                },
-                style: "cancel",
-              },
-              {
-                text: "OK",
-                onPress: handleLogout,
-              },
-            ]);
-          }}
-          className={`flex-row h-16 w-full items-center rounded-xl px-3 justify-between bg-white mt-4 ${
-            Platform.OS === "ios"
-              ? "shadow-sm shadow-black/10"
-              : "shadow-sm shadow-black"
-          }`}
-        >
-          <View className="flex-row items-center">
-            <Ionicons name="log-out" color="red" size={34} />
-            <Text className="ml-2 text-lg font-semibold text-red-500">
-              LOGOUT
-            </Text>
+            <View className="flex-row items-center justify-between">
+              <View
+                style={{
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  borderRadius: 999,
+                  backgroundColor: "rgba(248, 118, 39, 0.14)",
+                }}
+              >
+                <Text className="text-xs font-semibold uppercase tracking-widest text-orange-300">
+                  {isProductionChannel ? "Production" : updateChannel}
+                </Text>
+              </View>
+
+              <View className="flex-row items-center">
+                <Ionicons
+                  name="shield-checkmark-outline"
+                  size={16}
+                  color="#F2F4F7"
+                />
+                <Text className="ml-1 text-sm font-medium text-gray-200">
+                  Secure account
+                </Text>
+              </View>
+            </View>
+
+            <View className="mt-5 flex-row items-center">
+              <View
+                style={{
+                  width: 86,
+                  height: 86,
+                  borderRadius: 28,
+                  backgroundColor: "rgba(255, 255, 255, 0.08)",
+                  borderWidth: 1,
+                  borderColor: "rgba(255, 255, 255, 0.15)",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Image
+                  cachePolicy="memory-disk"
+                  source={user}
+                  style={{ width: 70, height: 70, borderRadius: 24 }}
+                />
+              </View>
+
+              <View className="ml-4 flex-1">
+                <Text className="text-2xl font-semibold text-white">
+                  {fullname}
+                </Text>
+                <Text className="mt-1 text-sm font-medium text-gray-300">
+                  Employee account
+                </Text>
+                <Text className="mt-3 text-sm font-medium text-gray-200">
+                  Version {appVersion} ({buildNumber})
+                </Text>
+              </View>
+            </View>
+
+            <View className="mt-6 flex-row">
+              <View
+                style={{
+                  flex: 1,
+                  borderRadius: 20,
+                  backgroundColor: "rgba(255, 255, 255, 0.08)",
+                  padding: 14,
+                  marginRight: 8,
+                }}
+              >
+                <Text className="text-xs uppercase tracking-widest text-gray-400">
+                  Channel
+                </Text>
+                <Text className="mt-2 text-base font-semibold text-white">
+                  {updateChannel}
+                </Text>
+              </View>
+
+              <View
+                style={{
+                  flex: 1,
+                  borderRadius: 20,
+                  backgroundColor: "rgba(255, 255, 255, 0.08)",
+                  padding: 14,
+                  marginLeft: 8,
+                }}
+              >
+                <Text className="text-xs uppercase tracking-widest text-gray-400">
+                  Runtime
+                </Text>
+                <Text className="mt-2 text-base font-semibold text-white">
+                  {runtimeVersion}
+                </Text>
+              </View>
+            </View>
           </View>
-          <Ionicons name="chevron-forward" size={30} color="red" />
-        </TouchableOpacity>
-      </View>
+
+          <View
+            style={{
+              marginTop: 18,
+              borderRadius: 24,
+              backgroundColor: COLORS.white,
+              padding: 18,
+              ...(Platform.OS === "ios"
+                ? {
+                    shadowColor: "#111827",
+                    shadowOffset: { width: 0, height: 10 },
+                    shadowOpacity: 0.08,
+                    shadowRadius: 18,
+                  }
+                : {
+                    elevation: 4,
+                  }),
+            }}
+          >
+            <View className="flex-row items-start justify-between">
+              <View className="flex-1 pr-3">
+                <Text className="text-xl font-semibold text-black">
+                  Over-the-air updates
+                </Text>
+                <Text className="mt-2 text-sm leading-5 text-gray-500">
+                  Deploy JavaScript fixes and content updates without waiting
+                  for store approval.
+                </Text>
+              </View>
+
+              <View
+                style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: 16,
+                  backgroundColor: "#FFF4EA",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Ionicons
+                  name="cloud-download-outline"
+                  size={24}
+                  color={COLORS.primary2}
+                />
+              </View>
+            </View>
+
+            <View className="mt-5 flex-row justify-between">
+              <View className="flex-1 mr-2 rounded-2xl bg-slate-50 p-4">
+                <Text className="text-xs uppercase tracking-widest text-gray-400">
+                  Update ID
+                </Text>
+                <Text className="mt-2 text-base font-semibold text-slate-800">
+                  {updateId}
+                </Text>
+              </View>
+
+              <View className="flex-1 ml-2 rounded-2xl bg-slate-50 p-4">
+                <Text className="text-xs uppercase tracking-widest text-gray-400">
+                  Release lane
+                </Text>
+                <Text className="mt-2 text-base font-semibold text-slate-800">
+                  {isProductionChannel ? "Live" : "Testing"}
+                </Text>
+              </View>
+            </View>
+
+            <View
+              style={{
+                marginTop: 16,
+                borderRadius: 20,
+                borderWidth: 1,
+                borderColor: statusTone.borderColor,
+                backgroundColor: statusTone.backgroundColor,
+                padding: 14,
+              }}
+            >
+              <View className="flex-row items-start">
+                <Ionicons
+                  name={statusTone.icon}
+                  size={20}
+                  color={statusTone.iconColor}
+                  style={{ marginTop: 1 }}
+                />
+                <Text className="ml-3 flex-1 text-sm leading-5 text-slate-700">
+                  {updateStatus}
+                </Text>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              onPress={handleCheckForUpdates}
+              disabled={isCheckingUpdate}
+              activeOpacity={0.9}
+              style={{
+                marginTop: 18,
+                height: 54,
+                borderRadius: 18,
+                backgroundColor: isCheckingUpdate
+                  ? COLORS.gray2
+                  : COLORS.primary,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Ionicons
+                name={isCheckingUpdate ? "sync-outline" : "refresh-outline"}
+                size={18}
+                color={COLORS.white}
+              />
+              <Text className="ml-2 text-base font-semibold text-white">
+                {isCheckingUpdate
+                  ? "Checking for update"
+                  : "Check for OTA update"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          <View
+            style={{
+              marginTop: 18,
+              borderRadius: 24,
+              backgroundColor: COLORS.white,
+              padding: 18,
+              ...(Platform.OS === "ios"
+                ? {
+                    shadowColor: "#111827",
+                    shadowOffset: { width: 0, height: 10 },
+                    shadowOpacity: 0.08,
+                    shadowRadius: 18,
+                  }
+                : {
+                    elevation: 4,
+                  }),
+            }}
+          >
+            <Text className="text-xl font-semibold text-black">Session</Text>
+            <Text className="mt-2 text-sm leading-5 text-gray-500">
+              Manage your authenticated session and sign out securely from this
+              device.
+            </Text>
+
+            <TouchableOpacity
+              onPress={() => {
+                Alert.alert("Logout", "Are you sure you want to logout?", [
+                  {
+                    text: "Cancel",
+                    onPress: () => {
+                      hapticsMessage("warning");
+                      Toast.show({
+                        type: "info",
+                        text1: "Logout cancelled",
+                        visibilityTime: 3000,
+                        autoHide: true,
+                      });
+                    },
+                    style: "cancel",
+                  },
+                  {
+                    text: "Logout",
+                    onPress: handleLogout,
+                    style: "destructive",
+                  },
+                ]);
+              }}
+              activeOpacity={0.9}
+              style={{
+                marginTop: 16,
+                borderRadius: 18,
+                borderWidth: 1,
+                borderColor: "#F4C7CC",
+                backgroundColor: "#FFF5F5",
+                paddingHorizontal: 16,
+                paddingVertical: 16,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <View className="flex-row items-center">
+                <View
+                  style={{
+                    width: 42,
+                    height: 42,
+                    borderRadius: 14,
+                    backgroundColor: "#FFE3E3",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Ionicons
+                    name="log-out-outline"
+                    color={COLORS.red}
+                    size={22}
+                  />
+                </View>
+
+                <View className="ml-3">
+                  <Text className="text-base font-semibold text-red-600">
+                    Sign out
+                  </Text>
+                  <Text className="mt-1 text-sm text-red-400">
+                    Clear local data and end this session
+                  </Text>
+                </View>
+              </View>
+
+              <Ionicons name="chevron-forward" size={22} color={COLORS.red} />
+            </TouchableOpacity>
+          </View>
+        </View>
+      </ScrollView>
     </View>
   );
 }
