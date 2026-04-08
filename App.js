@@ -13,7 +13,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SIZES } from "./constants";
 import { toastConfig } from "./Toast/Config";
 import Navigator from "./navigation/navigator";
-import * as Updates from "expo-updates"; // ✅ OTA import
+import * as Updates from "expo-updates";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 function cacheFonts(fonts) {
@@ -33,15 +33,20 @@ export default function App() {
         const IconAssets = cacheFonts([Ionicons.font]);
         await Promise.all([...IconAssets]);
 
-        // ✅ Check for OTA updates
-        try {
-          const update = await Updates.checkForUpdateAsync();
-          if (update.isAvailable) {
-            await Updates.fetchUpdateAsync();
-            await Updates.reloadAsync();
+        if (!__DEV__ && Updates.isEnabled) {
+          try {
+            const update = await Updates.checkForUpdateAsync();
+
+            if (update.isAvailable) {
+              await Updates.fetchUpdateAsync();
+              await Updates.reloadAsync();
+            }
+          } catch (error) {
+            // Ignore OTA check failures during startup and continue booting.
           }
-        } catch (err) {}
-      } catch (error) {} finally {
+        }
+      } catch (error) {
+      } finally {
         setAppReady(true);
         SplashScreen.hideAsync();
       }

@@ -7,6 +7,13 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
+    "eas:build:android:preview": "eas build --profile preview --platform android",
+    "eas:build:ios:preview": "eas build --profile preview --platform ios",
+    "eas:build:preview": "eas build --profile preview --platform all",
+    "eas:update:preview": "eas update --channel preview",
+    "eas:update:production": "eas update --channel production",
+    "eas:update:android:preview": "eas update --channel preview --platform android",
+    "eas:update:ios:preview": "eas update --channel preview --platform ios",
     "lint": "eslint . --ext .js,.jsx",
     "lint:fix": "eslint . --ext .js,.jsx --fix",
     "test": "jest"
