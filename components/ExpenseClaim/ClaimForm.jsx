@@ -1,4 +1,4 @@
-import React, { useState,useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import {
   ToastAndroid,
   View,
@@ -160,11 +160,15 @@ function ClaimForm({ onSubmit, isLoading, resetSignal }) {
       {/* Expense Type */}
       <Label text="Expense Type" required />
       <View className="border border-gray-300 rounded mb-3 bg-gray-50">
-        <Picker selectedValue={expenseType} onValueChange={setExpenseType}>
-          <Picker.Item label="Select type" value="" />
+        <Picker
+          selectedValue={expenseType}
+          onValueChange={setExpenseType}
+          style={{ color: "#111827" }}
+        >
+          <Picker.Item label="Select type" value="" color="#9CA3AF" />
 
           {expenseTypes.map((type) => (
-            <Picker.Item key={type} label={type} value={type} />
+            <Picker.Item key={type} label={type} value={type} color="#111827" />
           ))}
         </Picker>
       </View>

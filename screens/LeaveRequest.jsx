@@ -252,11 +252,24 @@ export default function LeaveRequestScreen() {
           Select Leave Type
         </Text>
         <View className="border border-gray-300 rounded mb-4 bg-gray-50">
-          <Picker selectedValue={leaveType} onValueChange={setLeaveType}>
-            <Picker.Item label="Select Leave Type" value="__none__" />
+          <Picker
+            selectedValue={leaveType}
+            onValueChange={setLeaveType}
+            style={{ color: "#111827" }}
+          >
+            <Picker.Item
+              label="Select Leave Type"
+              value="__none__"
+              color="#9CA3AF"
+            />
 
             {leaveTypes.map((item, index) => (
-              <Picker.Item key={index} label={item} value={item} />
+              <Picker.Item
+                key={index}
+                label={item}
+                value={item}
+                color="#111827"
+              />
             ))}
           </Picker>
         </View>
