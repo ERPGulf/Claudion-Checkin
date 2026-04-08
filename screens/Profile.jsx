@@ -326,10 +326,7 @@ function Profile() {
                 <Text className="text-xl font-semibold text-black">
                   Over-the-air updates
                 </Text>
-                <Text className="mt-2 text-sm leading-5 text-gray-500">
-                  Deploy JavaScript fixes and content updates without waiting
-                  for store approval.
-                </Text>
+                
               </View>
 
               <View
