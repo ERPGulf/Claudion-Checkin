@@ -394,6 +394,62 @@ export const employeeBreak = async ({ employeeCode, type }) => {
     };
   }
 };
+export const createAttendanceRequest = async ({
+  employee,
+  from_date,
+  to_date,
+  reason,
+}) => {
+  try {
+    if (!employee) throw new Error("Employee ID is required");
+
+    const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
+    const baseUrl = cleanBaseUrl(rawBaseUrl);
+    if (!baseUrl) throw new Error("Base URL missing");
+
+    const token = await AsyncStorage.getItem("access_token");
+    if (!token) throw new Error("Token missing");
+
+    const url = `${baseUrl}/api/method/employee_app.gauth.create_attendence_request`;
+
+    // ✅ form-urlencoded (same as your curl)
+    const formData = new URLSearchParams();
+    formData.append("employee", employee);
+    formData.append("from_date", from_date);
+    formData.append("to_date", to_date);
+    formData.append("reason", reason);
+
+    const response = await apiClient.post(url, formData.toString(), {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+    });
+
+    const res = response.data?.message;
+
+    if (!res) {
+      return {
+        success: false,
+        message: "Failed to create attendance request",
+      };
+    }
+
+    return {
+      success: true,
+      data: res,
+      message: "Attendance request submitted successfully",
+    };
+  } catch (error) {
+    return {
+      success: false,
+      message:
+        error?.response?.data?.message ||
+        error.message ||
+        "Attendance request failed",
+    };
+  }
+};
 export default {
   getServerTime,
   getOfficeLocation,
@@ -404,4 +460,5 @@ export default {
   getMonthlyWorkedHours,
   employeeBreak,
   getTodayBreaks,
+  createAttendanceRequest,
 };

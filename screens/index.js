@@ -16,6 +16,7 @@ import Shortcut1 from './Shortcut1';
 import Shortcut3 from './Shortcut3';
 import Shortcut2 from './Shortcut2';
 import MyQrCode from './MyQrCode';
+import AttendanceRequest from './AttendanceRequest';
 export {
   Home,
   AttendanceAction,
@@ -23,6 +24,7 @@ export {
   Login,
   WelcomeScreen,
   AttendanceHistory,
+  AttendanceRequest,
   SelectQuickAccess,
   LeaveRequest,
   Complaints,
