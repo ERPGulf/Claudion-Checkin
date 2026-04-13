@@ -26,6 +26,7 @@ import {
   getServerTime,
 } from "../services/api/attendance.service";
 import { SafeAreaView } from "react-native-safe-area-context";
+
 function AttendanceAction() {
   const navigation = useNavigation();
   const dispatch = useDispatch();

@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from "react";
+import React, { useLayoutEffect, useState, useMemo } from "react";
+import { Image } from "react-native";
 import {
   View,
   Text,
@@ -16,6 +17,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet } from "react-native";
 import Timericon from "../assets/images/timer-clock.svg";
 import Leaveicon from "../assets/images/user-leave.svg";
+import CheckInIcon from "../assets/images/check_in.svg";
+import CheckOutIcon from "../assets/images/check_out.svg";
+import TotalHoursIcon from "../assets/images/total_hours.svg";
 
 import { selectEmployeeCode } from "../redux/Slices/UserSlice";
 import { COLORS } from "../constants";
@@ -56,8 +60,8 @@ function AttendanceHistory() {
         months[monthKey] = {
           label: displayMonth,
           weeks: {},
-          totalMinutes: 0, // 🔥 ADD
-          totalLeaves: 0, // 🔥 ADD
+          totalMinutes: 0,
+          totalLeaves: 0,
         };
       }
 
@@ -81,7 +85,7 @@ function AttendanceHistory() {
       }
     });
 
-    // 🔥 CALCULATE TOTALS
+    //CALCULATE TOTALS
     Object.values(months).forEach((month) => {
       Object.values(month.weeks).forEach((week) => {
         Object.values(week).forEach((day) => {
@@ -120,6 +124,12 @@ function AttendanceHistory() {
 
     return `${hours}h ${minutes}m`;
   };
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerTitle: "My Attendance",
+      headerTitleAlign: "center",
+    });
+  }, []);
   /* ================= UI ================= */
   return (
     <View style={{ flex: 1, backgroundColor: "#fff" }}>
@@ -148,7 +158,7 @@ function AttendanceHistory() {
           </Text>
         ) : (
           Object.entries(groupedData)
-            .sort((a, b) => b[0].localeCompare(a[0])) // newest month first
+            .sort((a, b) => b[0].localeCompare(a[0]))
             .map(([monthKey, monthData]) => {
               const { label, weeks } = monthData;
 
@@ -162,21 +172,25 @@ function AttendanceHistory() {
                     style={styles.monthBox}
                   >
                     <View style={styles.row}>
-                      <Entypo name="calendar" size={33} color="#77224C" />
+                      <View style={styles.iconBox}>
+                        <Entypo name="calendar" size={22} color="#77224C" />
+                      </View>
+
                       <Text style={styles.monthText}>{label}</Text>
                     </View>
 
-                    <Entypo
-                      name={
-                        openMonth === monthKey ? "chevron-up" : "chevron-down"
-                      }
-                      size={20}
-                      color="#77224C"
-                    />
+                    <View style={styles.iconBox}>
+                      <Entypo
+                        name={
+                          openMonth === monthKey ? "chevron-up" : "chevron-down"
+                        }
+                        size={20}
+                        color="#77224C"
+                      />
+                    </View>
                   </TouchableOpacity>
 
-                  {/* WEEKS */}
-                  {/* SUMMARY CARD */}
+                  {/* SUMMARY */}
                   {openMonth === monthKey && (
                     <View
                       style={{
@@ -189,13 +203,13 @@ function AttendanceHistory() {
                         backgroundColor: "#fff",
                       }}
                     >
-                      {/* TOTAL HOURS */}
                       <View
                         style={{
-                          flex: 1,
+                          width: 180,
+                          height: 56,
                           flexDirection: "row",
                           alignItems: "center",
-                          padding: 12,
+                          paddingHorizontal: 12,
                           borderRightWidth: 1,
                           borderColor: "#B3B3B3",
                         }}
@@ -211,14 +225,13 @@ function AttendanceHistory() {
                         </View>
                       </View>
 
-                      {/* TOTAL LEAVES */}
                       <View
                         style={{
-                          flex: 1,
+                          width: 170,
+                          height: 56,
                           flexDirection: "row",
                           alignItems: "center",
-                          padding: 12,
-                          borderColor: "#B3B3B3",
+                          paddingHorizontal: 12,
                         }}
                       >
                         <Leaveicon width={40} height={40} />
@@ -241,8 +254,51 @@ function AttendanceHistory() {
                       .map(([week, days]) => {
                         const weekKey = `${monthKey}-${week}`;
 
+                        // ✅ FULL WEEK LOGIC (Mon–Sun)
+                        const weekDays = [
+                          "Mon",
+                          "Tue",
+                          "Wed",
+                          "Thu",
+                          "Fri",
+                          "Sat",
+                          "Sun",
+                        ];
+
+                        const sortedDays = Object.values(days).sort(
+                          (a, b) => new Date(a.date) - new Date(b.date),
+                        );
+
+                        // get first and last date of this week
+                        const startDate = new Date(sortedDays[0]?.date);
+                        const endDate = new Date(
+                          sortedDays[sortedDays.length - 1]?.date,
+                        );
+
+                        // generate all dates between start → end
+                        const fullWeek = [];
+                        let current = new Date(startDate);
+
+                        while (current <= endDate) {
+                          const dateStr = current.toISOString().split("T")[0];
+
+                          const found = sortedDays.find(
+                            (d) => d.date === dateStr,
+                          );
+
+                          fullWeek.push(
+                            found || {
+                              date: dateStr,
+                              checkIn: null,
+                              checkOut: null,
+                            },
+                          );
+
+                          current.setDate(current.getDate() + 1);
+                        }
+
                         return (
-                          <View key={weekKey} style={{ marginTop: 10 }}>
+                          <View key={weekKey} style={styles.weekContainer}>
                             {/* WEEK HEADER */}
                             <TouchableOpacity
                               onPress={() =>
@@ -257,7 +313,6 @@ function AttendanceHistory() {
                                   Week {week}
                                 </Text>
                                 <Text style={styles.weekDate}>01–07 Jan</Text>
-                                {/* optional */}
                               </View>
 
                               <View style={{ alignItems: "flex-end" }}>
@@ -273,91 +328,86 @@ function AttendanceHistory() {
                                     ? "chevron-up"
                                     : "chevron-down"
                                 }
-                                size={20}
+                                size={25}
                                 color="#77224C"
                               />
                             </TouchableOpacity>
 
                             {/* DAYS */}
                             {openWeek === weekKey &&
-                              Object.values(days)
-                                .sort(
-                                  (a, b) => new Date(a.date) - new Date(b.date),
-                                )
-                                .map((day) => {
-                                  const isLeave = !day.checkIn && !day.checkOut;
+                              fullWeek.map((day, index) => (
+                                <View key={index} style={styles.dayCard}>
+                                  {/* DATE */}
+                                  <View style={styles.dateBox}>
+                                    <Text style={styles.dateNum}>
+                                      {day.date
+                                        ? new Date(day.date).getDate()
+                                        : "--"}
+                                    </Text>
 
-                                  return (
-                                    <View key={day.date} style={styles.dayCard}>
-                                      {/* DATE BOX */}
-                                      <View style={styles.dateBox}>
-                                        <Text style={styles.dateNum}>
-                                          {new Date(day.date).getDate()}
-                                        </Text>
-                                        <Text style={styles.dateDay}>
-                                          {new Date(
-                                            day.date,
-                                          ).toLocaleDateString("en-US", {
-                                            weekday: "short",
-                                          })}
-                                        </Text>
-                                      </View>
+                                    <Text style={styles.dateDay}>
+                                      {day.date
+                                        ? new Date(day.date).toLocaleDateString(
+                                            "en-US",
+                                            {
+                                              weekday: "short",
+                                            },
+                                          )
+                                        : day.weekday}
+                                    </Text>
+                                  </View>
 
-                                      {/* CONTENT */}
-                                      {isLeave ? (
-                                        <>
-                                          <View style={styles.leaveBox}>
-                                            <Text style={{ color: "#777" }}>
-                                              ----Leave----
-                                            </Text>
-                                          </View>
-
-                                          <View style={styles.timeBox}>
-                                            <Text>0h 00m</Text>
-                                            <Text style={styles.label}>
-                                              Total Hours
-                                            </Text>
-                                          </View>
-                                        </>
-                                      ) : (
-                                        <>
-                                          {/* CHECK IN */}
-                                          <View style={styles.timeBox}>
-                                            <Text>
-                                              {formatTime(day.checkIn)}
-                                            </Text>
-                                            <Text style={styles.label}>
-                                              Check in
-                                            </Text>
-                                          </View>
-
-                                          {/* CHECK OUT */}
-                                          <View style={styles.timeBox}>
-                                            <Text>
-                                              {formatTime(day.checkOut)}
-                                            </Text>
-                                            <Text style={styles.label}>
-                                              Check out
-                                            </Text>
-                                          </View>
-
-                                          {/* TOTAL */}
-                                          <View style={styles.timeBox}>
-                                            <Text>
-                                              {getDayTotalTime(
-                                                day.checkIn,
-                                                day.checkOut,
-                                              )}
-                                            </Text>
-                                            <Text style={styles.label}>
-                                              Total Hours
-                                            </Text>
-                                          </View>
-                                        </>
-                                      )}
+                                  {/* TIMES */}
+                                  <View style={styles.timeSection}>
+                                    <View
+                                      style={[
+                                        styles.timeItem,
+                                        styles.timeDivider,
+                                      ]}
+                                    >
+                                      <CheckInIcon width={18} height={18} />
+                                      <Text>
+                                        {day.checkIn
+                                          ? formatTime(day.checkIn)
+                                          : "-/-"}
+                                      </Text>
+                                      <Text style={styles.label}>Check in</Text>
                                     </View>
-                                  );
-                                })}
+
+                                    <View
+                                      style={[
+                                        styles.timeItem,
+                                        styles.timeDivider,
+                                      ]}
+                                    >
+                                      <CheckOutIcon width={18} height={18} />
+                                      <Text>
+                                        {day.checkOut
+                                          ? formatTime(day.checkOut)
+                                          : "--:--"}
+                                      </Text>
+                                      <Text style={styles.label}>
+                                        Check out
+                                      </Text>
+                                    </View>
+
+                                    <View style={styles.timeItem}>
+                                      <TotalHoursIcon width={18} height={18} />
+                                      <Text>
+                                        {day.checkIn && day.checkOut
+                                          ? getDayTotalTime(
+                                              day.checkIn,
+                                              day.checkOut,
+                                            )
+                                          : "-/-"}
+                                      </Text>
+                                      <Text style={styles.label}>
+                                        Total Hours
+                                      </Text>
+                                    </View>
+                                  </View>
+                                </View>
+                              ))}
                           </View>
                         );
                       })}
@@ -385,23 +435,40 @@ const formatTime = (time) => {
 const styles = StyleSheet.create({
   header: {
     height: 56,
+    width: "100%",
     justifyContent: "center",
+    flexDirection: "row",
     alignItems: "center",
+    position: "relative", // important
   },
   backBtn: {
     position: "absolute",
     left: 10,
-    top: 10,
+    top: "50%",
+    marginLeft: 16,
+    transform: [{ translateY: -14 }],
   },
   headerTitle: {
     color: "#FFF",
-    fontSize: 24, // 🔥 fixed
-    fontFamily: "Inter-Medium",
+    fontSize: 24,
+    fontWeight: "500",
+    fontFamily: "Inter-Regular",
+    lineHeight: 29, // 120% of 24 ≈ 28.8 → round to 29
+    textAlign: "center",
   },
+  iconBox: {
+    width: 40,
+    height: 40,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
   row: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 8,
   },
+
   monthBox: {
     height: 48,
     width: "100%",
@@ -417,65 +484,133 @@ const styles = StyleSheet.create({
   monthText: {
     marginLeft: 10,
     fontSize: 20,
+    color: "#000",
+    fontWeight: "500",
     fontFamily: "Inter-Medium",
   },
-  weekBox: {
-    height: 60,
-    borderRadius: 10,
+  weekContainer: {
+    marginTop: 10,
     borderWidth: 1,
-    borderColor: "#ccc",
+    borderColor: "#D9D9D9",
+    borderRadius: 12,
+    backgroundColor: "#fff",
+    padding: 8,
+  },
+  weekBox: {
+    width: 318,
+    height: 57,
+
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+
     paddingHorizontal: 12,
-    backgroundColor: "#fff",
+
+    borderWidth: 1,
+    borderColor: "#B3B3B3",
+    borderRadius: 7,
+
+    backgroundColor: "#FFF",
+
+    alignSelf: "center",
   },
 
   weekTitle: {
-    fontWeight: "600",
-    fontSize: 16,
+    fontWeight: "500",
+    fontSize: 18,
   },
 
   weekDate: {
-    fontSize: 12,
+    fontSize: 14,
     color: "#777",
+    fontWeight: "400",
   },
 
   weekHours: {
-    fontWeight: "600",
+    fontWeight: "500",
+    fontSize: 18,
   },
+  weekHoursLabel: {
+    fontSize: 12,
+    color: "#777",
+    fontWeight: "400",
+    fontSize: 14,
+  },
+
   dayCard: {
+    width: 310,
+    height: 68,
     flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "center",
+    marginTop: 6,
+
     borderWidth: 1,
-    borderColor: "#8E273B",
-    borderRadius: 10,
-    marginTop: 8,
-    overflow: "hidden",
+    borderColor: "#fff",
+    borderRadius: 8,
+    backgroundColor: "#fff",
   },
 
   dateBox: {
-    width: 60,
-    alignItems: "center",
+    width: 51,
+    height: 59,
+
     justifyContent: "center",
-    backgroundColor: "#f5f5f5",
-    borderRightWidth: 1,
-    borderColor: "#8E273B",
+    alignItems: "center",
+
+    paddingTop: 8,
+    paddingRight: 9,
+    paddingBottom: 9,
+    paddingLeft: 10,
+
+    gap: 2,
+
+    borderRadius: 3.5,
+    borderWidth: 1,
+    borderColor: "#63205F",
+    borderRightWidth: 0.5,
+
+    backgroundColor: "rgba(255, 238, 254, 0.5)",
   },
 
   dateNum: {
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: "600",
+    color: "#000",
   },
 
   dateDay: {
     fontSize: 12,
+    color: "#555",
   },
 
-  timeBox: {
+  timeItem: {
     flex: 1,
-    alignItems: "center",
+    height: "100%",
+
     justifyContent: "center",
-    padding: 8,
+    alignItems: "center",
+
+    paddingVertical: 2,
+    paddingHorizontal: 4,
+  },
+
+  timeSection: {
+    width: 246,
+    height: 59,
+
+    flexDirection: "row",
+    alignItems: "center",
+
+    borderWidth: 1,
+    borderColor: "#63205F",
+    borderRadius: 3.5,
+    borderLeftWidth: 0.5,
+
+    backgroundColor: "#FFF",
+
+    overflow: "hidden", // important for clean borders
+    marginLeft: 0,
   },
 
   leaveBox: {
