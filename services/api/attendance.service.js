@@ -394,30 +394,35 @@ export const employeeBreak = async ({ employeeCode, type }) => {
     };
   }
 };
+
 export const createAttendanceRequest = async ({
   employee,
   from_date,
   to_date,
   reason,
+  from_time,
+  to_time,
 }) => {
   try {
     if (!employee) throw new Error("Employee ID is required");
 
     const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
     const baseUrl = cleanBaseUrl(rawBaseUrl);
-    if (!baseUrl) throw new Error("Base URL missing");
-
     const token = await AsyncStorage.getItem("access_token");
+
+    if (!baseUrl) throw new Error("Base URL missing");
     if (!token) throw new Error("Token missing");
 
     const url = `${baseUrl}/api/method/employee_app.gauth.create_attendence_request`;
 
-    // ✅ form-urlencoded (same as your curl)
     const formData = new URLSearchParams();
+
     formData.append("employee", employee);
     formData.append("from_date", from_date);
     formData.append("to_date", to_date);
-    formData.append("reason", reason);
+    formData.append("reason", reason || "");
+    formData.append("from_time", from_time || "");
+    formData.append("to_time", to_time || "");
 
     const response = await apiClient.post(url, formData.toString(), {
       headers: {
@@ -427,8 +432,9 @@ export const createAttendanceRequest = async ({
     });
 
     const res = response.data?.message;
+    const docname = res?.name || res;
 
-    if (!res) {
+    if (!docname) {
       return {
         success: false,
         message: "Failed to create attendance request",
@@ -437,8 +443,9 @@ export const createAttendanceRequest = async ({
 
     return {
       success: true,
+      docname,
       data: res,
-      message: "Attendance request submitted successfully",
+      message: "Attendance request created successfully",
     };
   } catch (error) {
     return {
@@ -447,6 +454,73 @@ export const createAttendanceRequest = async ({
         error?.response?.data?.message ||
         error.message ||
         "Attendance request failed",
+    };
+  }
+};
+
+export const uploadAttendanceAttachment = async (file, docname) => {
+  try {
+    if (!file?.uri) throw new Error("Invalid file");
+    if (!docname) throw new Error("Missing docname");
+
+    const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
+    const baseUrl = cleanBaseUrl(rawBaseUrl);
+    const token = await AsyncStorage.getItem("access_token");
+
+    const formData = new FormData();
+
+    const getSafeFileName = (name) => {
+      if (!name) return "file.jpg";
+
+      const ext = name.split(".").pop();
+
+      const base = name
+        .replace(/\.[^/.]+$/, "")
+        .slice(0, 20)
+        .replace(/[^a-zA-Z0-9]/g, "");
+
+      return `${base}_${Date.now()}.${ext}`;
+    };
+
+    const safeName = getSafeFileName(file.name);
+
+    formData.append("file", {
+      uri: file.uri,
+      name: safeName,
+      type: file.type || "image/jpeg",
+    });
+
+    formData.append("file_name", "FILE1"); // as per API
+    formData.append("doctype", "Attendance Request");
+    formData.append("docname", String(docname));
+
+    const response = await fetch(
+      `${baseUrl}/api/method/employee_app.attendance_api.upload_file`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      },
+    );
+
+    const result = await response.json();
+
+    console.log("📤 ATTENDANCE FILE RESPONSE:", result);
+
+    if (!response.ok || result?.exc || result?._server_messages) {
+      return {
+        error: result?.message || "Upload failed",
+      };
+    }
+
+    return { success: true, data: result };
+  } catch (error) {
+    console.log("❌ FILE UPLOAD ERROR:", error);
+
+    return {
+      error: error.message || "Upload failed",
     };
   }
 };
@@ -461,4 +535,5 @@ export default {
   employeeBreak,
   getTodayBreaks,
   createAttendanceRequest,
+  uploadAttendanceAttachment,
 };

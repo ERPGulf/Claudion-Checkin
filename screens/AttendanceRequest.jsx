@@ -17,6 +17,10 @@ import SubmitButton from "../components/common/SubmitButton";
 import { createAttendanceRequest } from "../services/api/attendance.service";
 import { useSelector } from "react-redux";
 import { selectEmployeeCode } from "../redux/Slices/UserSlice";
+import { useAttachmentPicker } from "../hooks/useAttachmentPicker";
+import AttachmentBottomSheet from "../components/attachment/AttachmentBottomSheet";
+import AttachmentPicker from "../components/attachment/AttachmentPicker";
+import { uploadAttendanceAttachment } from "../services/api/attendance.service";
 
 export default function AttendanceRequestScreen() {
   const navigation = useNavigation();
@@ -27,6 +31,11 @@ export default function AttendanceRequestScreen() {
 
   const [showFromPicker, setShowFromPicker] = useState(false);
   const [showToPicker, setShowToPicker] = useState(false);
+  const [fromTime, setFromTime] = useState(new Date());
+  const [toTime, setToTime] = useState(new Date());
+
+  const [showFromTimePicker, setShowFromTimePicker] = useState(false);
+  const [showToTimePicker, setShowToTimePicker] = useState(false);
 
   const [selectedReason, setSelectedReason] = useState("");
 
@@ -34,6 +43,11 @@ export default function AttendanceRequestScreen() {
 
   const reasons = ["Work From Home", "On Duty"];
   const [loading, setLoading] = useState(false);
+  const [attachment, setAttachment] = useState(null);
+  const [isBottomSheetVisible, setBottomSheetVisible] = useState(false);
+
+  const { pickFromCamera, pickFromGallery, pickDocument } =
+    useAttachmentPicker();
 
   // ✅ SAME HEADER
   useLayoutEffect(() => {
@@ -61,44 +75,95 @@ export default function AttendanceRequestScreen() {
       "0",
     )}-${String(d.getDate()).padStart(2, "0")}`;
   };
+  const formatTime = (date) => {
+    return date.toTimeString().split(" ")[0]; // HH:MM:SS
+  };
+  const pickAttachment = () => {
+    setBottomSheetVisible(true);
+  };
+
+  const handlePickCamera = () => {
+    setBottomSheetVisible(false);
+    setTimeout(async () => {
+      const file = await pickFromCamera();
+      if (file) setAttachment(file);
+    }, 400);
+  };
+
+  const handlePickGallery = () => {
+    setBottomSheetVisible(false);
+    setTimeout(async () => {
+      const file = await pickFromGallery();
+      if (file) setAttachment(file);
+    }, 400);
+  };
+
+  const handlePickDocument = () => {
+    setBottomSheetVisible(false);
+    setTimeout(async () => {
+      const file = await pickDocument();
+      if (file) setAttachment(file);
+    }, 400);
+  };
 
   const handleSubmit = async () => {
-    if (!employeeCode) {
-      Alert.alert("Error", "Employee not found. Please login again.");
-      return;
-    }
-
-    if (toDate < fromDate) {
-      Alert.alert("Invalid Date", "To date cannot be before From date.");
-      return;
-    }
-
-    if (!selectedReason) {
-      Alert.alert("Missing Field", "Please select a reason.");
-      return;
-    }
-
-    const payload = {
-      employee: employeeCode,
-      from_date: formatDate(fromDate),
-      to_date: formatDate(toDate),
-      reason: selectedReason,
-    };
-
     try {
+      if (!employeeCode) {
+        Alert.alert("Error", "Employee not found");
+        return;
+      }
+
+      if (toDate < fromDate) {
+        Alert.alert("Invalid Date", "To date cannot be before From date.");
+        return;
+      }
+
+      if (!selectedReason) {
+        Alert.alert("Missing Field", "Please select a reason.");
+        return;
+      }
+
+      const payload = {
+        employee: employeeCode,
+        from_date: formatDate(fromDate),
+        to_date: formatDate(toDate),
+        reason: selectedReason,
+        from_time: formatTime(fromTime),
+        to_time: formatTime(toTime),
+      };
+
       setLoading(true);
 
       const res = await createAttendanceRequest(payload);
 
       if (!res.success) {
         Alert.alert("Error", res.message);
-      } else {
-        Alert.alert("Success", res.message);
-
-        setFromDate(new Date());
-        setToDate(new Date());
-        setSelectedReason("");
+        return;
       }
+
+      const docname = res.docname;
+
+      // ✅ OPTIONAL FILE
+      if (attachment) {
+        const uploadRes = await uploadAttendanceAttachment(attachment, docname);
+
+        if (uploadRes?.error) {
+          Alert.alert(
+            "Warning",
+            "Request created, but attachment upload failed.",
+          );
+        }
+      }
+
+      Alert.alert("Success", "Attendance request submitted!");
+
+      // Reset
+      setAttachment(null);
+      setSelectedReason("");
+      setFromDate(new Date());
+      setToDate(new Date());
+      setFromTime(new Date());
+      setToTime(new Date());
     } catch (error) {
       Alert.alert("Error", "Something went wrong");
     } finally {
@@ -162,7 +227,59 @@ export default function AttendanceRequestScreen() {
             }}
           />
         )}
+        {/* FROM TIME */}
+        <Text className="text-sm font-medium text-gray-700 mb-1">
+          From Time
+        </Text>
+        <TouchableOpacity
+          onPress={() => setShowFromTimePicker(true)}
+          className="border border-gray-300 rounded px-3 py-2 mb-3"
+        >
+          <Text>
+            {fromTime.toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+          </Text>
+        </TouchableOpacity>
 
+        {showFromTimePicker && (
+          <DateTimePicker
+            value={fromTime}
+            mode="time"
+            display="default"
+            onChange={(e, selected) => {
+              setShowFromTimePicker(false);
+              if (selected) setFromTime(selected);
+            }}
+          />
+        )}
+
+        {/* TO TIME */}
+        <Text className="text-sm font-medium text-gray-700 mb-1">To Time</Text>
+        <TouchableOpacity
+          onPress={() => setShowToTimePicker(true)}
+          className="border border-gray-300 rounded px-3 py-2 mb-3"
+        >
+          <Text>
+            {toTime.toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+          </Text>
+        </TouchableOpacity>
+
+        {showToTimePicker && (
+          <DateTimePicker
+            value={toTime}
+            mode="time"
+            display="default"
+            onChange={(e, selected) => {
+              setShowToTimePicker(false);
+              if (selected) setToTime(selected);
+            }}
+          />
+        )}
         {/* REASON */}
         <Text className="text-sm font-medium text-gray-700 mb-2">
           Select Reason
@@ -182,15 +299,29 @@ export default function AttendanceRequestScreen() {
             <Text className="ml-2 text-gray-700">{item}</Text>
           </TouchableOpacity>
         ))}
+        <AttachmentPicker
+          file={attachment}
+          onPick={pickAttachment}
+          onRemove={() => setAttachment(null)}
+        />
 
         {/* SUBMIT */}
-        <SubmitButton
-          title="Submit Attendance Request"
-          loading={loading}
-          onPress={handleSubmit}
-          disabled={loading}
-        />
+        <View style={{ marginTop: 16 }}>
+          <SubmitButton
+            title="Submit Attendance Request"
+            loading={loading}
+            onPress={handleSubmit}
+            disabled={loading}
+          />
+        </View>
       </ScrollView>
+      <AttachmentBottomSheet
+        visible={isBottomSheetVisible}
+        onClose={() => setBottomSheetVisible(false)}
+        onSelectCamera={handlePickCamera}
+        onSelectGallery={handlePickGallery}
+        onSelectDocument={handlePickDocument}
+      />
     </SafeAreaView>
   );
 }
