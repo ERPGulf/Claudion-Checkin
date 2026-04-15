@@ -3,6 +3,7 @@ import {
   AttendanceAction,
   AttendanceCamera,
   AttendanceHistory,
+  AttendanceRequest,
   Notifications,
   SelectQuickAccess,
   LeaveRequest,
@@ -27,6 +28,7 @@ function AppNavigator() {
       <Stack.Screen name="Attendance action" component={AttendanceAction} />
       <Stack.Screen name="Attendance camera" component={AttendanceCamera} />
       <Stack.Screen name="Attendance history" component={AttendanceHistory} />
+      <Stack.Screen name="Attendance request" component={AttendanceRequest} />  
       <Stack.Screen name="Quick access" component={SelectQuickAccess} />
       <Stack.Screen name="Leave request" component={LeaveRequest} />
       <Stack.Screen name="Complaints" component={Complaints} />

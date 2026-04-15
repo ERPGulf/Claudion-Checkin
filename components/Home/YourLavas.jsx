@@ -200,6 +200,12 @@ function LavaMenu() {
                 nav: "Attendance history",
               },
               {
+                label: ["Attendance", "Request"],
+                icon: "clipboard-outline",
+                nav: "Attendance request",
+                bold: true,
+              },
+              {
                 label: ["Expense", "claim"],
                 icon: "wallet-outline",
                 nav: "Expense claim",
@@ -212,7 +218,7 @@ function LavaMenu() {
               },
               {
                 label: ["Complaints"],
-                icon:"chatbox-ellipses-outline",
+                icon: "chatbox-ellipses-outline",
                 nav: "Complaints",
               },
               {

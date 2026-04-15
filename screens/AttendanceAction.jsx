@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useState } from "react";
+import React, { useEffect, useLayoutEffect, useState, useRef } from "react";
 import {
   View,
   Text,
@@ -19,6 +19,7 @@ import {
   setCheckout,
   setBreakMinutes,
 } from "../redux/Slices/AttendanceSlice";
+import { Alert } from "react-native";
 import { COLORS, SIZES } from "../constants";
 import WelcomeCard from "../components/AttendanceAction/WelcomeCard";
 import { updateDateTime } from "../utils/TimeServices";
@@ -47,6 +48,9 @@ function AttendanceAction() {
   const [restrictLocation, setRestrictLocation] = useState("0");
   const [restrictionLoaded, setRestrictionLoaded] = useState(false);
   const [onBreak, setOnBreak] = useState(false);
+  const [breakStartTime, setBreakStartTime] = useState(null);
+  const BREAK_LIMIT = 2 * 60 * 60 * 1000;
+  const breakTriggeredRef = useRef(false);
   useLayoutEffect(() => {
     navigation.setOptions({
       headerShadowVisible: false,
@@ -150,20 +154,76 @@ function AttendanceAction() {
         dispatch(setBreakMinutes(breakData?.total_break_minutes ?? 0));
 
         const lastBreak = breakData?.breaks?.slice(-1)[0];
-
         if (!lastBreak) {
           setOnBreak(false);
+          setBreakStartTime(null);
         } else {
           const isBreakOpen =
             !lastBreak.end || lastBreak.end === "" || lastBreak.end === null;
 
           setOnBreak(isBreakOpen);
+
+          if (isBreakOpen) {
+            setBreakStartTime(new Date(lastBreak.start).getTime());
+          } else {
+            setBreakStartTime(null);
+          }
         }
       }
     });
 
     return unsubscribe;
   }, [navigation, employeeCode]);
+
+  useEffect(() => {
+    if (!onBreak || !breakStartTime) return;
+
+    breakTriggeredRef.current = false;
+
+    const interval = setInterval(async () => {
+      const now = Date.now();
+      const diff = now - breakStartTime;
+
+      if (diff >= BREAK_LIMIT && !breakTriggeredRef.current) {
+        breakTriggeredRef.current = true;
+
+        try {
+          // ✅ CALL API
+          await employeeBreak({
+            employeeCode,
+            type: "OUT",
+          });
+
+          // ✅ UPDATE UI
+          setOnBreak(false);
+          setBreakStartTime(null);
+
+          // ✅ REFRESH DATA
+          const today = new Date();
+          const todayFormatted = today
+            .toLocaleDateString("en-GB")
+            .replace(/\//g, "-");
+
+          const breakData = await getTodayBreaks(employeeCode, todayFormatted);
+
+          dispatch(setBreakMinutes(breakData?.total_break_minutes ?? 0));
+
+          // ✅ SHOW POPUP
+          Alert.alert(
+            "Break Ended",
+            "2-hour break limit reached. Break automatically stopped.",
+          );
+        } catch (error) {
+          Alert.alert("Error", "Auto break end failed");
+        }
+
+        clearInterval(interval);
+      }
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [onBreak, breakStartTime]);
+
   // Check-in / Check-out handler
   const handleDirectCheckInOut = async (type) => {
     try {
@@ -198,12 +258,9 @@ function AttendanceAction() {
             type: "OUT",
           });
 
-          if (!breakRes.allowed) {
-            Toast.show({
-              type: "error",
-              text1: "Failed to end break before checkout",
-            });
-            return;
+          // If backend already ended break, ignore safely
+          if (!breakRes?.allowed) {
+            console.log("Break already ended from backend");
           }
         }
 
@@ -322,11 +379,18 @@ function AttendanceAction() {
 
       if (!lastBreak) {
         setOnBreak(false);
+        setBreakStartTime(null);
       } else {
         const isBreakOpen =
           !lastBreak.end || lastBreak.end === "" || lastBreak.end === null;
 
         setOnBreak(isBreakOpen);
+
+        if (isBreakOpen) {
+          setBreakStartTime(new Date(lastBreak.start).getTime());
+        } else {
+          setBreakStartTime(null);
+        }
       }
       Toast.show({
         type: "success",

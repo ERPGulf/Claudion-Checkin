@@ -23,7 +23,12 @@ function WelcomeCard() {
   const todayTotal = useSelector(selectTodayHours);
   const monthlyTotal = useSelector(selectMonthlyHours);
   const breakMinutes = useSelector(selectBreakMinutes);
-
+  const onBreak = useSelector((state) => state.attendance.onBreak);
+  const breakStartTime = useSelector(
+    (state) => state.attendance.breakStartTime,
+  );
+  const [liveBreakMinutes, setLiveBreakMinutes] = useState(0);
+  const breakIntervalRef = useRef(null);
   const [sessionMinutes, setSessionMinutes] = useState(0);
   const intervalRef = useRef(null);
 
@@ -59,6 +64,34 @@ function WelcomeCard() {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, [checkin, checkinTime]);
+  useEffect(() => {
+    if (breakIntervalRef.current) {
+      clearInterval(breakIntervalRef.current);
+      breakIntervalRef.current = null;
+    }
+
+    // If not on break → no live timer
+    if (!onBreak || !breakStartTime) {
+      setLiveBreakMinutes(0);
+      return;
+    }
+
+    const parsed = breakStartTime ? new Date(breakStartTime) : null;
+    if (!parsed) return;
+
+    const updateBreak = () => {
+      const seconds = differenceInSeconds(new Date(), parsed);
+      const minutes = Math.floor(seconds / 60);
+      setLiveBreakMinutes(minutes);
+    };
+
+    updateBreak();
+    breakIntervalRef.current = setInterval(updateBreak, 1000);
+
+    return () => {
+      if (breakIntervalRef.current) clearInterval(breakIntervalRef.current);
+    };
+  }, [onBreak, breakStartTime]);
 
   return (
     <View
@@ -87,8 +120,12 @@ function WelcomeCard() {
               </Text>
 
               <Text className="text-sm text-orange-300 pt-1">
-                Break time: {breakMinutes ?? 0} Minutes
+                Break time:{" "}
+                {formatMinutes((breakMinutes ?? 0) + liveBreakMinutes)}
               </Text>
+              {onBreak && (
+                <Text className="text-xs text-red-300">On Break...</Text>
+              )}
 
               <Text className="text-sm text-white pt-1">
                 Today total: {todayTotal || "--:--"} Hours
