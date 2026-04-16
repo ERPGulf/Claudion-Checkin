@@ -92,7 +92,12 @@ export default function LeaveRequestScreen() {
 
   // ✅ Helper: format date as YYYY-MM-DD
   const formatDate = (date) => {
+    if (!date) return "Select date";
+
     const d = new Date(date);
+
+    if (isNaN(d.getTime())) return "Select date";
+
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
       d.getDate(),
     ).padStart(2, "0")}`;
@@ -143,14 +148,35 @@ export default function LeaveRequestScreen() {
   };
   const handleFromChange = (event, selectedDate) => {
     setShowFromPicker(false);
-    if (event.type === "dismissed") return;
-    if (selectedDate) setFromDate(selectedDate);
+
+    if (event?.type === "dismissed") return;
+    if (!selectedDate) return;
+
+    // ✅ Normalize safely
+    const validDate =
+      selectedDate instanceof Date ? selectedDate : new Date(selectedDate);
+
+    if (isNaN(validDate.getTime())) return;
+
+    setFromDate(validDate);
+
+    if (validDate > toDate) {
+      setToDate(validDate);
+    }
   };
 
   const handleToChange = (event, selectedDate) => {
     setShowToPicker(false);
-    if (event.type === "dismissed") return;
-    if (selectedDate) setToDate(selectedDate);
+
+    if (event?.type === "dismissed") return;
+    if (!selectedDate) return;
+
+    const validDate =
+      selectedDate instanceof Date ? selectedDate : new Date(selectedDate);
+
+    if (isNaN(validDate.getTime())) return;
+
+    setToDate(validDate);
   };
   const resetForm = () => {
     setLeaveType("__none__");
@@ -302,7 +328,11 @@ export default function LeaveRequestScreen() {
         </TouchableOpacity>
         {showFromPicker && (
           <DateTimePicker
-            value={fromDate}
+            value={
+              fromDate instanceof Date && !isNaN(fromDate)
+                ? fromDate
+                : new Date()
+            }
             mode="date"
             display={Platform.OS === "ios" ? "spinner" : "default"}
             onChange={handleFromChange}
@@ -319,8 +349,11 @@ export default function LeaveRequestScreen() {
         </TouchableOpacity>
         {showToPicker && (
           <DateTimePicker
-            value={toDate}
+            value={
+              toDate instanceof Date && !isNaN(toDate) ? toDate : new Date()
+            }
             mode="date"
+            minimumDate={fromDate} //
             display={Platform.OS === "ios" ? "spinner" : "default"}
             onChange={handleToChange}
           />
