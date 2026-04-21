@@ -79,7 +79,7 @@ function Login() {
         await AsyncStorage.setItem("refresh_token", refresh_token);
       }
 
-      dispatch(setSignIn({ isLoggedIn: true, access_token }));
+      dispatch(setSignIn({ isLoggedIn: true, token: access_token }));
 
       // 🔔 NEW: fetch notifications at login
       try {

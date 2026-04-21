@@ -12,6 +12,12 @@ import { setSignOut } from "../../redux/Slices/AuthSlice";
 let memoryAccessToken = null;
 let memoryRefreshToken = null;
 
+const getTokenFromResponse = (payload, key) => {
+  return (
+    payload?.data?.[key] ?? payload?.message?.[key] ?? payload?.[key] ?? null
+  );
+};
+
 async function loadTokens() {
   if (!memoryAccessToken) {
     memoryAccessToken = await AsyncStorage.getItem("access_token");
@@ -23,12 +29,24 @@ async function loadTokens() {
 }
 
 export async function saveTokens(access, refresh) {
-  memoryAccessToken = access;
-  memoryRefreshToken = refresh;
+  const nextAccess =
+    access ?? memoryAccessToken ?? (await AsyncStorage.getItem("access_token"));
+  const nextRefresh =
+    refresh ??
+    memoryRefreshToken ??
+    (await AsyncStorage.getItem("refresh_token")) ??
+    "";
+
+  if (!nextAccess) {
+    throw new Error("Access token missing");
+  }
+
+  memoryAccessToken = nextAccess;
+  memoryRefreshToken = nextRefresh;
 
   await AsyncStorage.multiSet([
-    ["access_token", access],
-    ["refresh_token", refresh],
+    ["access_token", String(nextAccess)],
+    ["refresh_token", String(nextRefresh)],
   ]);
 }
 export function clearStore() {
@@ -45,7 +63,7 @@ export async function clearTokens() {
 // AXIOS CLIENTS
 // ----------------------
 const apiClient = axios.create({ timeout: 30000 });
-const plainAxios = axios.create({ timeout: 30000 });
+export const plainAxios = axios.create({ timeout: 30000 });
 
 // ----------------------
 // REFRESH CONTROL
@@ -86,8 +104,8 @@ export const refreshAccessToken = async () => {
       headers: setCommonHeaders(),
     });
 
-    const newAccess = data?.data?.access_token;
-    const newRefresh = data?.data?.refresh_token;
+    const newAccess = getTokenFromResponse(data, "access_token");
+    const newRefresh = getTokenFromResponse(data, "refresh_token") ?? refresh;
 
     if (!newAccess) throw new Error("Refresh returned empty token");
 
@@ -100,6 +118,15 @@ export const refreshAccessToken = async () => {
 
     return newAccess;
   } catch (err) {
+    console.log("refreshAccessToken failed", {
+      status: err?.response?.status,
+      responseData: err?.response?.data,
+      message: err?.message,
+      refreshToken: refresh?.slice
+        ? `${refresh.slice(0, 6)}...${refresh.slice(-4)}`
+        : refresh,
+    });
+
     refreshFailCount += 1;
 
     if (refreshFailCount >= MAX_REFRESH_RETRIES) {
@@ -160,11 +187,21 @@ apiClient.interceptors.response.use(
 
     // If refresh API itself failed → logout
     if (isAuthError && isRefreshCall) {
+      console.log("Refresh endpoint auth failure", {
+        url: original.url,
+        status: error?.response?.status,
+        data: error?.response?.data,
+      });
       await clearTokens();
       return Promise.reject("Session expired. Please login again.");
     }
 
     if (isAuthError) {
+      console.log("Auth error detected, attempting refresh", {
+        url: original.url,
+        status: error?.response?.status,
+        data: error?.response?.data,
+      });
       original._retry = true;
 
       if (isRefreshing) {
@@ -209,7 +246,7 @@ apiClient.interceptors.response.use(
     }
 
     return Promise.reject(error);
-  }
+  },
 );
 
 export default apiClient;

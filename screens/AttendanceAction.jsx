@@ -23,6 +23,7 @@ import { Alert } from "react-native";
 import { COLORS, SIZES } from "../constants";
 import WelcomeCard from "../components/AttendanceAction/WelcomeCard";
 import { updateDateTime } from "../utils/TimeServices";
+import { saveTokens } from "../services/api/apiClient";
 import {
   getOfficeLocation,
   userCheckIn,
@@ -322,15 +323,56 @@ function AttendanceAction() {
         text1: type === "IN" ? "Checked in!" : "Checked out!",
       });
     } catch (error) {
+      console.log("AttendanceAction.handleDirectCheckInOut error:", {
+        errorMessage: error?.message,
+        status: error?.response?.status,
+        responseData: error?.response?.data,
+      });
+
       Toast.show({
         type: "error",
         text1: ":warning: Failed",
-        text2: error.message,
+        text2:
+          error?.response?.data?.message ||
+          error?.response?.data ||
+          error.message ||
+          "Request failed",
       });
     } finally {
       setActionLoading(false);
     }
   };
+
+  const handleInvalidateAccessToken = async () => {
+    try {
+      const refreshToken = await AsyncStorage.getItem("refresh_token");
+
+      if (!refreshToken) {
+        Toast.show({
+          type: "error",
+          text1: "Refresh token missing",
+          text2: "Cannot invalidate access token without a refresh token.",
+        });
+        return;
+      }
+
+      await saveTokens("invalid-access-token-123", refreshToken);
+      const maskedRefresh = `${refreshToken.slice(0, 6)}...${refreshToken.slice(-4)}`;
+
+      Toast.show({
+        type: "success",
+        text1: "Dev token invalidated",
+        text2: `Refresh token preserved: ${maskedRefresh}`,
+      });
+    } catch (error) {
+      Toast.show({
+        type: "error",
+        text1: "Dev token reset failed",
+        text2: error.message || "Unable to invalidate access token.",
+      });
+    }
+  };
+
   const handleBreak = async () => {
     if (!checkin) {
       Toast.show({
@@ -445,6 +487,16 @@ function AttendanceAction() {
         >
           <View style={{ width: "100%" }} className="flex-1 px-3">
             <WelcomeCard />
+            {__DEV__ && (
+              <TouchableOpacity
+                className="mt-4 rounded-2xl bg-red-600 px-4 py-3 items-center"
+                onPress={handleInvalidateAccessToken}
+              >
+                <Text className="text-white font-bold">
+                  DEV: Invalidate access token
+                </Text>
+              </TouchableOpacity>
+            )}
             <View className="h-72 mt-4">
               <View className="p-3">
                 {/* DATE & TIME */}
