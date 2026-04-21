@@ -38,6 +38,7 @@ function AttendanceAction() {
   const dispatch = useDispatch();
   const checkin = useSelector((state) => state.attendance.checkin);
   const userDetails = useSelector((state) => state.user.userDetails);
+  const breakMinutes = useSelector((state) => state.attendance.breakMinutes);
   const employeeCode = userDetails?.employeeCode;
   const [refresh, setRefresh] = useState(false);
   const [dateTime, setDateTime] = useState(null);
@@ -48,6 +49,7 @@ function AttendanceAction() {
   const [restrictLocation, setRestrictLocation] = useState("0");
   const [restrictionLoaded, setRestrictionLoaded] = useState(false);
   const [onBreak, setOnBreak] = useState(false);
+  const [liveBreakTime, setLiveBreakTime] = useState("00:00:00");
   const [breakStartTime, setBreakStartTime] = useState(null);
   const BREAK_LIMIT = 2 * 60 * 60 * 1000;
   const breakTriggeredRef = useRef(false);
@@ -176,53 +178,48 @@ function AttendanceAction() {
   }, [navigation, employeeCode]);
 
   useEffect(() => {
-    if (!onBreak || !breakStartTime) return;
+    if (!onBreak || !breakStartTime) {
+      setLiveBreakTime("00:00:00");
+      return;
+    }
 
-    breakTriggeredRef.current = false;
-
-    const interval = setInterval(async () => {
+    const interval = setInterval(() => {
       const now = Date.now();
-      const diff = now - breakStartTime;
+      // const diff = now - breakStartTime;
+      const diff = Math.floor(now - breakStartTime);
 
-      if (diff >= BREAK_LIMIT && !breakTriggeredRef.current) {
+      // ✅ integer seconds only
+      const currentBreakSeconds = Math.floor(diff / 1000);
+
+      // ✅ total seconds (past + current)
+      // const totalSeconds = (breakMinutes ?? 0) * 60 + currentBreakSeconds;
+
+      const totalSeconds =
+        Math.floor((breakMinutes ?? 0) * 60) + currentBreakSeconds;
+
+      // ✅ BREAK LIMIT = 2 HOURS
+      const BREAK_LIMIT = 2 * 60 * 60; // seconds
+
+      // ✅ TRIGGER ONLY ONCE
+      if (totalSeconds >= BREAK_LIMIT && !breakTriggeredRef.current) {
         breakTriggeredRef.current = true;
 
-        try {
-          // ✅ CALL API
-          await employeeBreak({
-            employeeCode,
-            type: "OUT",
-          });
-
-          // ✅ UPDATE UI
-          setOnBreak(false);
-          setBreakStartTime(null);
-
-          // ✅ REFRESH DATA
-          const today = new Date();
-          const todayFormatted = today
-            .toLocaleDateString("en-GB")
-            .replace(/\//g, "-");
-
-          const breakData = await getTodayBreaks(employeeCode, todayFormatted);
-
-          dispatch(setBreakMinutes(breakData?.total_break_minutes ?? 0));
-
-          // ✅ SHOW POPUP
-          Alert.alert(
-            "Break Ended",
-            "2-hour break limit reached. Break automatically stopped.",
-          );
-        } catch (error) {
-          Alert.alert("Error", "Auto break end failed");
-        }
-
-        clearInterval(interval);
+        Alert.alert("Break Limit", "You have reached 2 hours break time");
       }
-    }, 30000);
+
+      // ✅ format clean
+      const hrs = String(Math.floor(totalSeconds / 3600)).padStart(2, "0");
+      const mins = String(Math.floor((totalSeconds % 3600) / 60)).padStart(
+        2,
+        "0",
+      );
+      const secs = String(totalSeconds % 60).padStart(2, "0");
+
+      setLiveBreakTime(`${hrs}:${mins}:${secs}`);
+    }, 1000);
 
     return () => clearInterval(interval);
-  }, [onBreak, breakStartTime]);
+  }, [onBreak, breakStartTime, breakMinutes]);
 
   // Check-in / Check-out handler
   const handleDirectCheckInOut = async (type) => {
@@ -269,7 +266,7 @@ function AttendanceAction() {
             checkoutTime: Date.now(),
           }),
         );
-
+        breakTriggeredRef.current = false;
         dispatch({ type: "attendance/setSelectedLocation", payload: null });
 
         // Refresh break data
@@ -331,6 +328,7 @@ function AttendanceAction() {
       setActionLoading(false);
     }
   };
+
   const handleBreak = async () => {
     if (!checkin) {
       Toast.show({
@@ -528,19 +526,27 @@ function AttendanceAction() {
                 </TouchableOpacity>
                 {/* BREAK BUTTON */}
                 {checkin && (
-                  <TouchableOpacity
-                    className={`justify-center items-center h-16 w-full mt-4 rounded-2xl ${
-                      onBreak ? "bg-slate-500" : "bg-blue-400"
-                    } ${restrictLocation === "1" && !inTarget ? "opacity-50" : ""}`}
-                    disabled={
-                      actionLoading || (restrictLocation === "1" && !inTarget)
-                    }
-                    onPress={handleBreak}
-                  >
-                    <Text className="text-xl font-bold text-white">
-                      {onBreak ? "END BREAK" : "TAKE BREAK"}
-                    </Text>
-                  </TouchableOpacity>
+                  <View>
+                    <TouchableOpacity
+                      className={`justify-center items-center h-16 w-full mt-4 rounded-2xl ${
+                        onBreak ? "bg-slate-500" : "bg-blue-400"
+                      } ${restrictLocation === "1" && !inTarget ? "opacity-50" : ""}`}
+                      disabled={
+                        actionLoading || (restrictLocation === "1" && !inTarget)
+                      }
+                      onPress={handleBreak}
+                    >
+                      <Text className="text-xl font-bold text-white">
+                        {onBreak ? "END BREAK" : "TAKE BREAK"}
+                      </Text>
+                    </TouchableOpacity>
+
+                    {onBreak && (
+                      <Text className="text-lg font-bold text-black text-center mt-2">
+                        Break Time running : {liveBreakTime || "00:00:00"}
+                      </Text>
+                    )}
+                  </View>
                 )}
               </View>
             </View>
