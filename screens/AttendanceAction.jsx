@@ -13,6 +13,7 @@ import {
   ScrollView,
   RefreshControl,
   Alert,
+  StyleSheet,
 } from "react-native";
 import { Entypo, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useDispatch, useSelector } from "react-redux";
@@ -39,7 +40,10 @@ import {
   employeeBreak,
   getTodayBreaks,
 } from "../services/api/attendance.service";
-import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 
 const BREAK_LIMIT_MS = 2 * 60 * 60 * 1000; // 2 hours
 
@@ -48,6 +52,7 @@ const getTodayString = () =>
   new Date().toLocaleDateString("en-GB").replace(/\//g, "-");
 
 function AttendanceAction() {
+  const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const dispatch = useDispatch();
   const checkin = useSelector((state) => state.attendance.checkin);
@@ -80,6 +85,8 @@ function AttendanceAction() {
       headerShown: true,
       headerTitle: "Attendance Action",
       headerTitleAlign: "center",
+      statusBarTranslucent: false,
+      statusBarStyle: "dark",
       headerLeft: () => (
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Entypo
@@ -201,7 +208,6 @@ function AttendanceAction() {
     return unsubscribe;
   }, [navigation, employeeCode, refreshAttendanceData, syncBreakState]);
 
- 
   useEffect(() => {
     if (!onBreak || !breakStartTime) {
       setLiveBreakTime("00:00:00");
@@ -411,162 +417,180 @@ function AttendanceAction() {
   // Temporary loading screen
   if (!restrictionLoaded) {
     return (
-      <View className="flex-1 items-center justify-center bg-white">
-        <ActivityIndicator size="large" color={COLORS.primary} />
-        <Text className="mt-2 text-gray-600">Loading settings...</Text>
-      </View>
+      <SafeAreaView
+        style={{ flex: 1, backgroundColor: "white" }}
+        edges={["bottom", "left", "right"]}
+      >
+        <View className="flex-1 items-center justify-center bg-white">
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text className="mt-2 text-gray-600">Loading settings...</Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "white" }}>
-      <>
-        {actionLoading && (
-          <View className="absolute top-0 left-0 h-screen w-screen bg-black/50 z-50 items-center justify-center">
-            <ActivityIndicator size="large" color="white" />
-            <Text className="text-white mt-2 text-base">Processing...</Text>
-          </View>
-        )}
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{
-            flex: 1,
-            alignItems: "center",
-            backgroundColor: "white",
-            paddingVertical: 16,
-          }}
-          refreshControl={
-            <RefreshControl
-              refreshing={refresh}
-              onRefresh={() => {
-                setRefresh(true);
-                fetchStatusAndLocation().finally(() => setRefresh(false));
-              }}
-            />
-          }
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor: "white" }}
+      edges={["bottom", "left", "right"]}
+    >
+      {actionLoading && (
+        <View
+          style={[
+            StyleSheet.absoluteFillObject,
+            {
+              zIndex: 50,
+              backgroundColor: "rgba(0,0,0,0.5)",
+              paddingTop: insets.top,
+              paddingBottom: insets.bottom,
+            },
+          ]}
+          className="items-center justify-center"
         >
-          <View style={{ width: "100%" }} className="flex-1 px-3">
-            <WelcomeCard />
-            {__DEV__ && (
+          <ActivityIndicator size="large" color="white" />
+          <Text className="text-white mt-2 text-base">Processing...</Text>
+        </View>
+      )}
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{
+          flexGrow: 1,
+          alignItems: "center",
+          backgroundColor: "white",
+          paddingVertical: 16,
+          paddingBottom: Math.max(insets.bottom, 16),
+        }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refresh}
+            onRefresh={() => {
+              setRefresh(true);
+              fetchStatusAndLocation().finally(() => setRefresh(false));
+            }}
+          />
+        }
+      >
+        <View style={{ width: "100%" }} className="flex-1 px-3">
+          <WelcomeCard />
+          {__DEV__ && (
+            <TouchableOpacity
+              className="mt-4 rounded-2xl bg-red-600 px-4 py-3 items-center"
+              onPress={handleInvalidateAccessToken}
+            >
+              <Text className="text-white font-bold">
+                DEV: Invalidate access token
+              </Text>
+            </TouchableOpacity>
+          )}
+          <View className="h-72 mt-4">
+            <View className="p-3">
+              {/* DATE & TIME */}
+              <Text className="text-base text-gray-500 font-semibold">
+                DATE AND TIME *
+              </Text>
+              <View className="flex-row items-end border-b border-gray-400 pb-2 mb-6 justify-between">
+                <Text className="text-sm font-medium text-gray-500">
+                  {dateTime}
+                </Text>
+                <MaterialCommunityIcons
+                  name="calendar-month"
+                  size={28}
+                  color={COLORS.gray}
+                />
+              </View>
+              {/* LOCATION */}
+              <Text className="text-base text-gray-500 font-semibold">
+                LOCATION *
+              </Text>
+              <View className="flex-row items-end border-b border-gray-400 pb-2 mb-4 justify-between">
+                <Text className="text-sm font-medium text-gray-500">
+                  {restrictLocation === "0"
+                    ? "Not Required"
+                    : !ready
+                      ? "Getting Location..."
+                      : // : distanceInfo?.locationName
+                        //   ? distanceInfo.locationName
+                        inTarget
+                        ? "In bound"
+                        : "Out of bound"}
+                </Text>
+
+                <MaterialCommunityIcons
+                  name="map-marker-radius-outline"
+                  size={28}
+                  color={COLORS.gray}
+                />
+              </View>
+              {restrictLocation === "1" && distanceInfo && (
+                <View className="mb-3">
+                  <Text className="text-xs text-gray-400">
+                    Distance: {distanceInfo.distance} m | Allowed:{" "}
+                    {distanceInfo.radius} m
+                  </Text>
+                </View>
+              )}
+
+              {/* CHECK-IN / CHECK-OUT BUTTON */}
               <TouchableOpacity
-                className="mt-4 rounded-2xl bg-red-600 px-4 py-3 items-center"
-                onPress={handleInvalidateAccessToken}
-              >
-                <Text className="text-white font-bold">
-                  DEV: Invalidate access token
-                </Text>
-              </TouchableOpacity>
-            )}
-            <View className="h-72 mt-4">
-              <View className="p-3">
-                {/* DATE & TIME */}
-                <Text className="text-base text-gray-500 font-semibold">
-                  DATE AND TIME *
-                </Text>
-                <View className="flex-row items-end border-b border-gray-400 pb-2 mb-6 justify-between">
-                  <Text className="text-sm font-medium text-gray-500">
-                    {dateTime}
-                  </Text>
-                  <MaterialCommunityIcons
-                    name="calendar-month"
-                    size={28}
-                    color={COLORS.gray}
-                  />
-                </View>
-                {/* LOCATION */}
-                <Text className="text-base text-gray-500 font-semibold">
-                  LOCATION *
-                </Text>
-                <View className="flex-row items-end border-b border-gray-400 pb-2 mb-4 justify-between">
-                  <Text className="text-sm font-medium text-gray-500">
-                    {restrictLocation === "0"
-                      ? "Not Required"
-                      : !ready
-                        ? "Getting Location..."
-                        : // : distanceInfo?.locationName
-                          //   ? distanceInfo.locationName
-                          inTarget
-                          ? "In bound"
-                          : "Out of bound"}
-                  </Text>
+                className={`justify-center items-center h-16 w-full mt-4 rounded-2xl ${
+                  checkin ? "bg-red-600" : "bg-green-600"
+                } ${restrictLocation === "1" && !inTarget ? "opacity-50" : ""}`}
+                disabled={
+                  actionLoading || (restrictLocation === "1" && !inTarget)
+                }
+                onPress={async () => {
+                  try {
+                    const photoValue = await AsyncStorage.getItem("photo");
+                    const actionType = checkin ? "OUT" : "IN";
 
-                  <MaterialCommunityIcons
-                    name="map-marker-radius-outline"
-                    size={28}
-                    color={COLORS.gray}
-                  />
-                </View>
-                {restrictLocation === "1" && distanceInfo && (
-                  <View className="mb-3">
-                    <Text className="text-xs text-gray-400">
-                      Distance: {distanceInfo.distance} m | Allowed:{" "}
-                      {distanceInfo.radius} m
-                    </Text>
-                  </View>
-                )}
-
-                {/* CHECK-IN / CHECK-OUT BUTTON */}
-                <TouchableOpacity
-                  className={`justify-center items-center h-16 w-full mt-4 rounded-2xl ${
-                    checkin ? "bg-red-600" : "bg-green-600"
-                  } ${restrictLocation === "1" && !inTarget ? "opacity-50" : ""}`}
-                  disabled={
-                    actionLoading || (restrictLocation === "1" && !inTarget)
-                  }
-                  onPress={async () => {
-                    try {
-                      const photoValue = await AsyncStorage.getItem("photo");
-                      const actionType = checkin ? "OUT" : "IN";
-
-                      if (photoValue !== "1") {
-                        await handleDirectCheckInOut(actionType);
-                      } else {
-                        navigation.navigate("Attendance camera", {
-                          type: actionType,
-                        });
-                      }
-                    } catch (error) {
-                      Toast.show({
-                        type: "error",
-                        text1: ":warning: Action failed",
-                        text2: error.message,
+                    if (photoValue !== "1") {
+                      await handleDirectCheckInOut(actionType);
+                    } else {
+                      navigation.navigate("Attendance camera", {
+                        type: actionType,
                       });
                     }
-                  }}
-                >
-                  <Text className="text-xl font-bold text-white">
-                    {checkin ? "CHECK-OUT" : "CHECK-IN"}
-                  </Text>
-                </TouchableOpacity>
-                {/* BREAK BUTTON */}
-                {checkin && (
-                  <View>
-                    <TouchableOpacity
-                      className={`justify-center items-center h-16 w-full mt-4 rounded-2xl ${
-                        onBreak ? "bg-slate-500" : "bg-blue-400"
-                      } ${restrictLocation === "1" && !inTarget ? "opacity-50" : ""}`}
-                      disabled={
-                        actionLoading || (restrictLocation === "1" && !inTarget)
-                      }
-                      onPress={handleBreak}
-                    >
-                      <Text className="text-xl font-bold text-white">
-                        {onBreak ? "END BREAK" : "TAKE BREAK"}
-                      </Text>
-                    </TouchableOpacity>
+                  } catch (error) {
+                    Toast.show({
+                      type: "error",
+                      text1: ":warning: Action failed",
+                      text2: error.message,
+                    });
+                  }
+                }}
+              >
+                <Text className="text-xl font-bold text-white">
+                  {checkin ? "CHECK-OUT" : "CHECK-IN"}
+                </Text>
+              </TouchableOpacity>
+              {/* BREAK BUTTON */}
+              {checkin && (
+                <View>
+                  <TouchableOpacity
+                    className={`justify-center items-center h-16 w-full mt-4 rounded-2xl ${
+                      onBreak ? "bg-slate-500" : "bg-blue-400"
+                    } ${restrictLocation === "1" && !inTarget ? "opacity-50" : ""}`}
+                    disabled={
+                      actionLoading || (restrictLocation === "1" && !inTarget)
+                    }
+                    onPress={handleBreak}
+                  >
+                    <Text className="text-xl font-bold text-white">
+                      {onBreak ? "END BREAK" : "TAKE BREAK"}
+                    </Text>
+                  </TouchableOpacity>
 
-                    {onBreak && (
-                      <Text className="text-lg font-bold text-black text-center mt-2">
-                        Break Time running : {liveBreakTime || "00:00:00"}
-                      </Text>
-                    )}
-                  </View>
-                )}
-              </View>
+                  {onBreak && (
+                    <Text className="text-lg font-bold text-black text-center mt-2">
+                      Break Time running : {liveBreakTime || "00:00:00"}
+                    </Text>
+                  )}
+                </View>
+              )}
             </View>
           </View>
-        </ScrollView>
-      </>
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
