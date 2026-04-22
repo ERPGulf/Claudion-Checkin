@@ -51,7 +51,7 @@ function AttendanceAction() {
   const [onBreak, setOnBreak] = useState(false);
   const [liveBreakTime, setLiveBreakTime] = useState("00:00:00");
   const [breakStartTime, setBreakStartTime] = useState(null);
-  const BREAK_LIMIT = 2 * 60 * 60 * 1000;
+  // const BREAK_LIMIT = 2 * 60 * 60 * 1000;
   const breakTriggeredRef = useRef(false);
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -166,7 +166,9 @@ function AttendanceAction() {
           setOnBreak(isBreakOpen);
 
           if (isBreakOpen) {
-            setBreakStartTime(new Date(lastBreak.start).getTime());
+            // setBreakStartTime(new Date(lastBreak.start).getTime());
+            setBreakStartTime(Date.now()); // ✅ always device time
+            breakTriggeredRef.current = false;
           } else {
             setBreakStartTime(null);
           }
@@ -177,49 +179,49 @@ function AttendanceAction() {
     return unsubscribe;
   }, [navigation, employeeCode]);
 
+ 
   useEffect(() => {
     if (!onBreak || !breakStartTime) {
       setLiveBreakTime("00:00:00");
       return;
     }
 
+    const BREAK_LIMIT = 2 * 60 * 60; // seconds
+
     const interval = setInterval(() => {
       const now = Date.now();
-      // const diff = now - breakStartTime;
-      const diff = Math.floor(now - breakStartTime);
+      const diff = now - breakStartTime;
 
-      // ✅ integer seconds only
       const currentBreakSeconds = Math.floor(diff / 1000);
 
-      // ✅ total seconds (past + current)
-      // const totalSeconds = (breakMinutes ?? 0) * 60 + currentBreakSeconds;
+      // ✅ FREEZE when limit reached
+      if (currentBreakSeconds >= BREAK_LIMIT) {
+        if (!breakTriggeredRef.current) {
+          breakTriggeredRef.current = true;
+          Alert.alert("Break Limit", "You have reached 2 hours break time");
+        }
 
-      const totalSeconds =
-        Math.floor((breakMinutes ?? 0) * 60) + currentBreakSeconds;
+        // 🔴 Freeze at exactly 02:00:00
+        setLiveBreakTime("02:00:00");
 
-      // ✅ BREAK LIMIT = 2 HOURS
-      const BREAK_LIMIT = 2 * 60 * 60; // seconds
-
-      // ✅ TRIGGER ONLY ONCE
-      if (totalSeconds >= BREAK_LIMIT && !breakTriggeredRef.current) {
-        breakTriggeredRef.current = true;
-
-        Alert.alert("Break Limit", "You have reached 2 hours break time");
+        return; // ⛔ STOP further updates
       }
 
-      // ✅ format clean
-      const hrs = String(Math.floor(totalSeconds / 3600)).padStart(2, "0");
-      const mins = String(Math.floor((totalSeconds % 3600) / 60)).padStart(
+      // ✅ Normal timer
+      const hrs = String(Math.floor(currentBreakSeconds / 3600)).padStart(
         2,
         "0",
       );
-      const secs = String(totalSeconds % 60).padStart(2, "0");
+      const mins = String(
+        Math.floor((currentBreakSeconds % 3600) / 60),
+      ).padStart(2, "0");
+      const secs = String(currentBreakSeconds % 60).padStart(2, "0");
 
       setLiveBreakTime(`${hrs}:${mins}:${secs}`);
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [onBreak, breakStartTime, breakMinutes]);
+  }, [onBreak, breakStartTime]);
 
   // Check-in / Check-out handler
   const handleDirectCheckInOut = async (type) => {
@@ -384,10 +386,23 @@ function AttendanceAction() {
 
         setOnBreak(isBreakOpen);
 
-        if (isBreakOpen) {
-          setBreakStartTime(new Date(lastBreak.start).getTime());
-        } else {
-          setBreakStartTime(null);
+        // if (isBreakOpen) {
+        //   setBreakStartTime(new Date(lastBreak.start).getTime());
+        // } else {
+        //   setBreakStartTime(null);
+        // }
+        // if (isBreakOpen) {
+        //   setBreakStartTime(new Date(lastBreak.start).getTime());
+        // } else {
+        //   setBreakStartTime(null);
+        //   setLiveBreakTime("00:00:00"); // ✅ reset UI
+        // }
+        if (!onBreak) {
+          const startTime = Date.now(); // ✅ device time
+
+          setBreakStartTime(startTime);
+          setLiveBreakTime("00:00:00");
+          breakTriggeredRef.current = false;
         }
       }
       Toast.show({

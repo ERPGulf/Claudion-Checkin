@@ -122,8 +122,9 @@ function WelcomeCard() {
               </Text>
 
               <Text className="text-sm text-orange-300 pt-1">
-                Break time:{" "}
-                {formatMinutes((breakMinutes ?? 0) + liveBreakMinutes)}
+                {/* Break time:{" "}
+                {formatMinutes((breakMinutes ?? 0) + liveBreakMinutes)} */}
+                Break time: {formatMinutes(breakMinutes)}
               </Text>
 
               <Text className="text-sm text-white pt-1">
