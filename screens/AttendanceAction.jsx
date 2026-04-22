@@ -86,7 +86,6 @@ function AttendanceAction() {
       headerTitle: "Attendance Action",
       headerTitleAlign: "center",
       statusBarTranslucent: false,
-      statusBarStyle: "dark",
       headerLeft: () => (
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Entypo
@@ -451,13 +450,14 @@ function AttendanceAction() {
           <Text className="text-white mt-2 text-base">Processing...</Text>
         </View>
       )}
+
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{
           flexGrow: 1,
           alignItems: "center",
           backgroundColor: "white",
-          paddingVertical: 16,
+          paddingTop: 16,
           paddingBottom: Math.max(insets.bottom, 16),
         }}
         refreshControl={
@@ -471,6 +471,22 @@ function AttendanceAction() {
         }
       >
         <View style={{ width: "100%" }} className="flex-1 px-3">
+          {onBreak && (
+            <View className="mb-3 rounded-2xl bg-amber-500 px-4 py-3">
+              <Text className="text-center text-xs font-semibold tracking-widest text-amber-100">
+                BREAK IN PROGRESS
+              </Text>
+              <Text
+                className="mt-1 text-center text-3xl font-extrabold text-white"
+                style={{ fontVariant: ["tabular-nums"] }}
+              >
+                {liveBreakTime || "00:00:00"}
+              </Text>
+              <Text className="mt-1 text-center text-xs text-amber-100">
+                Auto-ends at 02:00:00
+              </Text>
+            </View>
+          )}
           <WelcomeCard />
           {__DEV__ && (
             <TouchableOpacity
@@ -580,11 +596,6 @@ function AttendanceAction() {
                     </Text>
                   </TouchableOpacity>
 
-                  {onBreak && (
-                    <Text className="text-lg font-bold text-black text-center mt-2">
-                      Break Time running : {liveBreakTime || "00:00:00"}
-                    </Text>
-                  )}
                 </View>
               )}
             </View>
