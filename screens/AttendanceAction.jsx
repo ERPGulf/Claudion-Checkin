@@ -52,6 +52,7 @@ function AttendanceAction() {
   const dispatch = useDispatch();
   const checkin = useSelector((state) => state.attendance.checkin);
   const userDetails = useSelector((state) => state.user.userDetails);
+  const breakMinutes = useSelector((state) => state.attendance.breakMinutes);
   const employeeCode = userDetails?.employeeCode;
   const [refresh, setRefresh] = useState(false);
   const [dateTime, setDateTime] = useState(null);
@@ -62,6 +63,7 @@ function AttendanceAction() {
   const [restrictLocation, setRestrictLocation] = useState("0");
   const [restrictionLoaded, setRestrictionLoaded] = useState(false);
   const [onBreak, setOnBreak] = useState(false);
+  const [liveBreakTime, setLiveBreakTime] = useState("00:00:00");
   const [breakStartTime, setBreakStartTime] = useState(null);
   const breakTriggeredRef = useRef(false);
   const isMountedRef = useRef(true);
@@ -184,13 +186,13 @@ function AttendanceAction() {
     const isOpen =
       !lastBreak.end || lastBreak.end === "" || lastBreak.end === null;
     setOnBreak(isOpen);
+    if (isOpen) breakTriggeredRef.current = false;
     setBreakStartTime(isOpen ? new Date(lastBreak.start).getTime() : null);
   }, []);
 
   useEffect(() => {
     const unsubscribe = navigation.addListener("focus", async () => {
       if (!employeeCode) return;
-
       const breakData = await refreshAttendanceData();
       if (!isMountedRef.current) return;
       syncBreakState(breakData);
@@ -199,13 +201,26 @@ function AttendanceAction() {
     return unsubscribe;
   }, [navigation, employeeCode, refreshAttendanceData, syncBreakState]);
 
+ 
   useEffect(() => {
-    if (!onBreak || !breakStartTime) return;
-
-    breakTriggeredRef.current = false;
+    if (!onBreak || !breakStartTime) {
+      setLiveBreakTime("00:00:00");
+      return;
+    }
 
     const interval = setInterval(async () => {
       const diff = Date.now() - breakStartTime;
+      const currentBreakSeconds = Math.floor(diff / 1000);
+
+      const hrs = String(Math.floor(currentBreakSeconds / 3600)).padStart(
+        2,
+        "0",
+      );
+      const mins = String(
+        Math.floor((currentBreakSeconds % 3600) / 60),
+      ).padStart(2, "0");
+      const secs = String(currentBreakSeconds % 60).padStart(2, "0");
+      setLiveBreakTime(`${hrs}:${mins}:${secs}`);
 
       if (diff >= BREAK_LIMIT_MS && !breakTriggeredRef.current) {
         breakTriggeredRef.current = true;
@@ -231,10 +246,8 @@ function AttendanceAction() {
         } catch {
           Alert.alert("Error", "Auto break end failed");
         }
-
-        clearInterval(interval);
       }
-    }, 30000);
+    }, 1000);
 
     return () => clearInterval(interval);
   }, [onBreak, breakStartTime, dispatch, employeeCode]);
@@ -333,7 +346,6 @@ function AttendanceAction() {
 
       await saveTokens("invalid-access-token-123", refreshToken);
       const maskedRefresh = `${refreshToken.slice(0, 6)}...${refreshToken.slice(-4)}`;
-
       Toast.show({
         type: "success",
         text1: "Dev token invalidated",
@@ -377,7 +389,6 @@ function AttendanceAction() {
       const breakData = await getTodayBreaks(employeeCode, getTodayString());
       dispatch(setBreakMinutes(breakData?.total_break_minutes ?? 0));
       syncBreakState(breakData);
-
       Toast.show({ type: "success", text1: response.message });
     } catch (error) {
       Toast.show({
@@ -529,19 +540,27 @@ function AttendanceAction() {
                 </TouchableOpacity>
                 {/* BREAK BUTTON */}
                 {checkin && (
-                  <TouchableOpacity
-                    className={`justify-center items-center h-16 w-full mt-4 rounded-2xl ${
-                      onBreak ? "bg-slate-500" : "bg-blue-400"
-                    } ${restrictLocation === "1" && !inTarget ? "opacity-50" : ""}`}
-                    disabled={
-                      actionLoading || (restrictLocation === "1" && !inTarget)
-                    }
-                    onPress={handleBreak}
-                  >
-                    <Text className="text-xl font-bold text-white">
-                      {onBreak ? "END BREAK" : "TAKE BREAK"}
-                    </Text>
-                  </TouchableOpacity>
+                  <View>
+                    <TouchableOpacity
+                      className={`justify-center items-center h-16 w-full mt-4 rounded-2xl ${
+                        onBreak ? "bg-slate-500" : "bg-blue-400"
+                      } ${restrictLocation === "1" && !inTarget ? "opacity-50" : ""}`}
+                      disabled={
+                        actionLoading || (restrictLocation === "1" && !inTarget)
+                      }
+                      onPress={handleBreak}
+                    >
+                      <Text className="text-xl font-bold text-white">
+                        {onBreak ? "END BREAK" : "TAKE BREAK"}
+                      </Text>
+                    </TouchableOpacity>
+
+                    {onBreak && (
+                      <Text className="text-lg font-bold text-black text-center mt-2">
+                        Break Time running : {liveBreakTime || "00:00:00"}
+                      </Text>
+                    )}
+                  </View>
                 )}
               </View>
             </View>
