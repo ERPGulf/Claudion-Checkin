@@ -1,4 +1,10 @@
-import React, { useEffect, useLayoutEffect, useState, useRef } from "react";
+import React, {
+  useEffect,
+  useLayoutEffect,
+  useState,
+  useRef,
+  useCallback,
+} from "react";
 import {
   View,
   Text,
@@ -6,20 +12,20 @@ import {
   ActivityIndicator,
   ScrollView,
   RefreshControl,
+  Alert,
 } from "react-native";
-import * as Location from "expo-location";
 import { Entypo, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useDispatch, useSelector } from "react-redux";
 import Toast from "react-native-toast-message";
 import { useNavigation } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { getPreciseDistance } from "geolib";
 import {
   setCheckin,
   setCheckout,
   setBreakMinutes,
+  setTodayHours,
+  setMonthlyHours,
 } from "../redux/Slices/AttendanceSlice";
-import { Alert } from "react-native";
 import { COLORS, SIZES } from "../constants";
 import WelcomeCard from "../components/AttendanceAction/WelcomeCard";
 import { updateDateTime } from "../utils/TimeServices";
@@ -34,6 +40,13 @@ import {
   getTodayBreaks,
 } from "../services/api/attendance.service";
 import { SafeAreaView } from "react-native-safe-area-context";
+
+const BREAK_LIMIT_MS = 2 * 60 * 60 * 1000; // 2 hours
+
+/** Returns today's date formatted as DD-MM-YYYY */
+const getTodayString = () =>
+  new Date().toLocaleDateString("en-GB").replace(/\//g, "-");
+
 function AttendanceAction() {
   const navigation = useNavigation();
   const dispatch = useDispatch();
@@ -50,8 +63,15 @@ function AttendanceAction() {
   const [restrictionLoaded, setRestrictionLoaded] = useState(false);
   const [onBreak, setOnBreak] = useState(false);
   const [breakStartTime, setBreakStartTime] = useState(null);
-  const BREAK_LIMIT = 2 * 60 * 60 * 1000;
   const breakTriggeredRef = useRef(false);
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   useLayoutEffect(() => {
     navigation.setOptions({
       headerShadowVisible: false,
@@ -74,13 +94,14 @@ function AttendanceAction() {
   useEffect(() => {
     const loadRestriction = async () => {
       const r = await AsyncStorage.getItem("restrict_location");
+      if (!isMountedRef.current) return;
       setRestrictLocation(r === "1" ? "1" : "0");
       setRestrictionLoaded(true);
     };
     loadRestriction();
   }, []);
 
-  const fetchStatusAndLocation = async () => {
+  const fetchStatusAndLocation = useCallback(async () => {
     try {
       setReady(false);
 
@@ -92,10 +113,12 @@ function AttendanceAction() {
       }
 
       const nearest = await getOfficeLocation(employeeCode);
+      if (!isMountedRef.current) return;
       setInTarget(nearest.withinRadius);
       setDistanceInfo(nearest);
       setReady(true);
     } catch (error) {
+      if (!isMountedRef.current) return;
       Toast.show({
         type: "error",
         text1: ":warning: Location error",
@@ -104,20 +127,19 @@ function AttendanceAction() {
       setInTarget(false);
       setReady(true);
     }
-  };
+  }, [restrictLocation, employeeCode]);
 
   // Fetch GPS on mount
   useEffect(() => {
     if (restrictionLoaded && employeeCode) fetchStatusAndLocation();
-  }, [restrictionLoaded, employeeCode]);
+  }, [restrictionLoaded, employeeCode, fetchStatusAndLocation]);
 
-  // Update date & time every 9 seconds
+  // Update date & time every 10 seconds
   useEffect(() => {
     const loadServerTime = async () => {
       const server = await getServerTime();
-      if (server) {
-        setDateTime(updateDateTime(server));
-      }
+      if (!isMountedRef.current) return;
+      if (server) setDateTime(updateDateTime(server));
     };
 
     loadServerTime();
@@ -125,56 +147,57 @@ function AttendanceAction() {
     return () => clearInterval(intervalId);
   }, []);
 
+  /**
+   * Dispatches today + monthly worked hours and break minutes to Redux.
+   * Avoids duplicating three identical Promise.all blocks across handlers.
+   */
+  const refreshAttendanceData = useCallback(async () => {
+    const todayStr = getTodayString();
+    const now = new Date();
+    const [todayWorked, monthlyWorked, breakData] = await Promise.all([
+      getDailyWorkedHours(employeeCode, todayStr),
+      getMonthlyWorkedHours(
+        employeeCode,
+        now.getMonth() + 1,
+        now.getFullYear(),
+      ),
+      getTodayBreaks(employeeCode, todayStr),
+    ]);
+
+    dispatch(setTodayHours(todayWorked ?? "00:00"));
+    dispatch(setMonthlyHours(monthlyWorked ?? "00:00"));
+    dispatch(setBreakMinutes(breakData?.total_break_minutes ?? 0));
+
+    return breakData;
+  }, [dispatch, employeeCode]);
+
+  /**
+   * Syncs onBreak / breakStartTime state from a breakData response object.
+   */
+  const syncBreakState = useCallback((breakData) => {
+    const lastBreak = breakData?.breaks?.slice(-1)[0];
+    if (!lastBreak) {
+      setOnBreak(false);
+      setBreakStartTime(null);
+      return;
+    }
+    const isOpen =
+      !lastBreak.end || lastBreak.end === "" || lastBreak.end === null;
+    setOnBreak(isOpen);
+    setBreakStartTime(isOpen ? new Date(lastBreak.start).getTime() : null);
+  }, []);
+
   useEffect(() => {
     const unsubscribe = navigation.addListener("focus", async () => {
-      if (employeeCode) {
-        const today = new Date();
-        const todayFormatted = today
-          .toLocaleDateString("en-GB")
-          .replace(/\//g, "-");
+      if (!employeeCode) return;
 
-        const month = today.getMonth() + 1;
-        const year = today.getFullYear();
-
-        const [todayWorked, monthlyWorked, breakData] = await Promise.all([
-          getDailyWorkedHours(employeeCode, todayFormatted),
-          getMonthlyWorkedHours(employeeCode, month, year),
-          getTodayBreaks(employeeCode, todayFormatted),
-        ]);
-
-        dispatch({
-          type: "attendance/setTodayHours",
-          payload: todayWorked ?? "00:00",
-        });
-
-        dispatch({
-          type: "attendance/setMonthlyHours",
-          payload: monthlyWorked ?? "00:00",
-        });
-
-        dispatch(setBreakMinutes(breakData?.total_break_minutes ?? 0));
-
-        const lastBreak = breakData?.breaks?.slice(-1)[0];
-        if (!lastBreak) {
-          setOnBreak(false);
-          setBreakStartTime(null);
-        } else {
-          const isBreakOpen =
-            !lastBreak.end || lastBreak.end === "" || lastBreak.end === null;
-
-          setOnBreak(isBreakOpen);
-
-          if (isBreakOpen) {
-            setBreakStartTime(new Date(lastBreak.start).getTime());
-          } else {
-            setBreakStartTime(null);
-          }
-        }
-      }
+      const breakData = await refreshAttendanceData();
+      if (!isMountedRef.current) return;
+      syncBreakState(breakData);
     });
 
     return unsubscribe;
-  }, [navigation, employeeCode]);
+  }, [navigation, employeeCode, refreshAttendanceData, syncBreakState]);
 
   useEffect(() => {
     if (!onBreak || !breakStartTime) return;
@@ -182,39 +205,30 @@ function AttendanceAction() {
     breakTriggeredRef.current = false;
 
     const interval = setInterval(async () => {
-      const now = Date.now();
-      const diff = now - breakStartTime;
+      const diff = Date.now() - breakStartTime;
 
-      if (diff >= BREAK_LIMIT && !breakTriggeredRef.current) {
+      if (diff >= BREAK_LIMIT_MS && !breakTriggeredRef.current) {
         breakTriggeredRef.current = true;
 
         try {
-          // ✅ CALL API
-          await employeeBreak({
-            employeeCode,
-            type: "OUT",
-          });
+          await employeeBreak({ employeeCode, type: "OUT" });
 
-          // ✅ UPDATE UI
+          if (!isMountedRef.current) return;
           setOnBreak(false);
           setBreakStartTime(null);
 
-          // ✅ REFRESH DATA
-          const today = new Date();
-          const todayFormatted = today
-            .toLocaleDateString("en-GB")
-            .replace(/\//g, "-");
-
-          const breakData = await getTodayBreaks(employeeCode, todayFormatted);
-
+          const breakData = await getTodayBreaks(
+            employeeCode,
+            getTodayString(),
+          );
+          if (!isMountedRef.current) return;
           dispatch(setBreakMinutes(breakData?.total_break_minutes ?? 0));
 
-          // ✅ SHOW POPUP
           Alert.alert(
             "Break Ended",
             "2-hour break limit reached. Break automatically stopped.",
           );
-        } catch (error) {
+        } catch {
           Alert.alert("Error", "Auto break end failed");
         }
 
@@ -223,127 +237,88 @@ function AttendanceAction() {
     }, 30000);
 
     return () => clearInterval(interval);
-  }, [onBreak, breakStartTime]);
+  }, [onBreak, breakStartTime, dispatch, employeeCode]);
 
-  // Check-in / Check-out handler
-  const handleDirectCheckInOut = async (type) => {
-    try {
-      setActionLoading(true);
-      const response = await userCheckIn({
-        employeeCode,
-        type,
-        locationData: distanceInfo,
-      });
+  const handleDirectCheckInOut = useCallback(
+    async (type) => {
+      try {
+        setActionLoading(true);
+        const response = await userCheckIn({
+          employeeCode,
+          type,
+          locationData: distanceInfo,
+        });
 
-      if (!response.allowed) {
+        if (!response.allowed) {
+          Toast.show({
+            type: "error",
+            text1: ":warning: Action blocked",
+            text2: response.message,
+          });
+          return;
+        }
+
+        if (type === "IN") {
+          dispatch({ type: "attendance/setSelectedLocation", payload: null });
+          dispatch(
+            setCheckin({
+              checkinTime: Date.now(),
+              location: restrictLocation === "1" ? response.location : null,
+            }),
+          );
+        } else {
+          if (onBreak) {
+            const breakRes = await employeeBreak({
+              employeeCode,
+              type: "OUT",
+            });
+            if (!breakRes?.allowed) {
+              console.log("Break already ended from backend");
+            }
+          }
+          dispatch(setCheckout({ checkoutTime: Date.now() }));
+          dispatch({ type: "attendance/setSelectedLocation", payload: null });
+        }
+
+        const breakData = await refreshAttendanceData();
+        syncBreakState(breakData);
+
+        Toast.show({
+          type: "success",
+          text1: type === "IN" ? "Checked in!" : "Checked out!",
+        });
+      } catch (error) {
+        console.log("AttendanceAction.handleDirectCheckInOut error:", {
+          errorMessage: error?.message,
+          status: error?.response?.status,
+          responseData: error?.response?.data,
+        });
+
         Toast.show({
           type: "error",
-          text1: ":warning: Action blocked",
-          text2: response.message,
+          text1: ":warning: Failed",
+          text2:
+            error?.response?.data?.message ||
+            error?.response?.data ||
+            error.message ||
+            "Request failed",
         });
-        return;
+      } finally {
+        setActionLoading(false);
       }
-      if (type === "IN") {
-        dispatch({ type: "attendance/setSelectedLocation", payload: null });
+    },
+    [
+      employeeCode,
+      distanceInfo,
+      restrictLocation,
+      onBreak,
+      dispatch,
+      refreshAttendanceData,
+      syncBreakState,
+    ],
+  );
 
-        dispatch(
-          setCheckin({
-            checkinTime: Date.now(),
-            location: restrictLocation === "1" ? response.location : null,
-          }),
-        );
-      } else {
-        if (onBreak) {
-          const breakRes = await employeeBreak({
-            employeeCode,
-            type: "OUT",
-          });
-
-          // If backend already ended break, ignore safely
-          if (!breakRes?.allowed) {
-            console.log("Break already ended from backend");
-          }
-        }
-
-        dispatch(
-          setCheckout({
-            checkoutTime: Date.now(),
-          }),
-        );
-
-        dispatch({ type: "attendance/setSelectedLocation", payload: null });
-
-        // Refresh break data
-        const today = new Date();
-        const todayFormatted = today
-          .toLocaleDateString("en-GB")
-          .replace(/\//g, "-");
-
-        const breakData = await getTodayBreaks(employeeCode, todayFormatted);
-
-        dispatch(setBreakMinutes(breakData?.total_break_minutes ?? 0));
-        const lastBreak = breakData?.breaks?.slice(-1)[0];
-
-        if (!lastBreak) {
-          setOnBreak(false);
-        } else {
-          const isBreakOpen =
-            !lastBreak.end || lastBreak.end === "" || lastBreak.end === null;
-
-          setOnBreak(isBreakOpen);
-        }
-      }
-
-      // Refresh totals
-      const today = new Date();
-      const todayFormatted = today
-        .toLocaleDateString("en-GB")
-        .replace(/\//g, "-");
-      const month = today.getMonth() + 1;
-      const year = today.getFullYear();
-      const [todayWorked, monthlyWorked, breakData] = await Promise.all([
-        getDailyWorkedHours(employeeCode, todayFormatted),
-        getMonthlyWorkedHours(employeeCode, month, year),
-        getTodayBreaks(employeeCode, todayFormatted),
-      ]);
-
-      dispatch({
-        type: "attendance/setTodayHours",
-        payload: todayWorked ?? "00:00",
-      });
-
-      dispatch({
-        type: "attendance/setMonthlyHours",
-        payload: monthlyWorked ?? "00:00",
-      });
-
-      dispatch(setBreakMinutes(breakData?.total_break_minutes ?? 0));
-      Toast.show({
-        type: "success",
-        text1: type === "IN" ? "Checked in!" : "Checked out!",
-      });
-    } catch (error) {
-      console.log("AttendanceAction.handleDirectCheckInOut error:", {
-        errorMessage: error?.message,
-        status: error?.response?.status,
-        responseData: error?.response?.data,
-      });
-
-      Toast.show({
-        type: "error",
-        text1: ":warning: Failed",
-        text2:
-          error?.response?.data?.message ||
-          error?.response?.data ||
-          error.message ||
-          "Request failed",
-      });
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const handleInvalidateAccessToken = async () => {
+  const handleInvalidateAccessToken = useCallback(async () => {
     try {
       const refreshToken = await AsyncStorage.getItem("refresh_token");
 
@@ -371,14 +346,11 @@ function AttendanceAction() {
         text2: error.message || "Unable to invalidate access token.",
       });
     }
-  };
+  }, []);
 
-  const handleBreak = async () => {
+  const handleBreak = useCallback(async () => {
     if (!checkin) {
-      Toast.show({
-        type: "error",
-        text1: "Please check-in first",
-      });
+      Toast.show({ type: "error", text1: "Please check-in first" });
       return;
     }
 
@@ -395,49 +367,18 @@ function AttendanceAction() {
     try {
       setActionLoading(true);
 
-      const response = await employeeBreak({
-        employeeCode,
-        type,
-      });
+      const response = await employeeBreak({ employeeCode, type });
 
       if (!response.allowed) {
-        Toast.show({
-          type: "error",
-          text1: response.message,
-        });
+        Toast.show({ type: "error", text1: response.message });
         return;
       }
 
-      const today = new Date();
-      const todayFormatted = today
-        .toLocaleDateString("en-GB")
-        .replace(/\//g, "-");
-
-      const breakData = await getTodayBreaks(employeeCode, todayFormatted);
-
+      const breakData = await getTodayBreaks(employeeCode, getTodayString());
       dispatch(setBreakMinutes(breakData?.total_break_minutes ?? 0));
+      syncBreakState(breakData);
 
-      const lastBreak = breakData?.breaks?.slice(-1)[0];
-
-      if (!lastBreak) {
-        setOnBreak(false);
-        setBreakStartTime(null);
-      } else {
-        const isBreakOpen =
-          !lastBreak.end || lastBreak.end === "" || lastBreak.end === null;
-
-        setOnBreak(isBreakOpen);
-
-        if (isBreakOpen) {
-          setBreakStartTime(new Date(lastBreak.start).getTime());
-        } else {
-          setBreakStartTime(null);
-        }
-      }
-      Toast.show({
-        type: "success",
-        text1: response.message,
-      });
+      Toast.show({ type: "success", text1: response.message });
     } catch (error) {
       Toast.show({
         type: "error",
@@ -447,7 +388,15 @@ function AttendanceAction() {
     } finally {
       setActionLoading(false);
     }
-  };
+  }, [
+    checkin,
+    restrictLocation,
+    inTarget,
+    onBreak,
+    employeeCode,
+    dispatch,
+    syncBreakState,
+  ]);
   // Temporary loading screen
   if (!restrictionLoaded) {
     return (
