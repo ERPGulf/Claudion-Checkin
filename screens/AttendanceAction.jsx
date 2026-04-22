@@ -201,7 +201,6 @@ function AttendanceAction() {
     return unsubscribe;
   }, [navigation, employeeCode, refreshAttendanceData, syncBreakState]);
 
- 
   useEffect(() => {
     if (!onBreak || !breakStartTime) {
       setLiveBreakTime("00:00:00");
