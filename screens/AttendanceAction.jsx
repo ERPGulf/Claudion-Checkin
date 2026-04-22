@@ -595,7 +595,6 @@ function AttendanceAction() {
                       {onBreak ? "END BREAK" : "TAKE BREAK"}
                     </Text>
                   </TouchableOpacity>
-
                 </View>
               )}
             </View>
