@@ -130,6 +130,35 @@ describe("API Client (Interceptors + Token Refresh)", () => {
 
       await expect(apiClient.get("data")).rejects.toThrow();
     });
+
+    it("expires the session immediately when refresh returns 401", async () => {
+      mock.onGet("https://example.com/api/data").reply(401);
+
+      refreshMock
+        .onPost(
+          "https://example.com/api/method/employee_app.gauth.create_refresh_token",
+        )
+        .reply(401, {
+          data: JSON.stringify({
+            exc_type: "PermissionError",
+            _error_message: "No permission for User",
+          }),
+        });
+
+      await expect(apiClient.get("data")).rejects.toThrow(
+        "Session expired. Please login again.",
+      );
+
+      expect(await AsyncStorage.getItem("access_token")).toBeNull();
+      expect(await AsyncStorage.getItem("refresh_token")).toBeNull();
+      expect(refreshMock.history.post).toHaveLength(1);
+
+      await expect(apiClient.get("data")).rejects.toThrow(
+        "Session expired. Please login again.",
+      );
+
+      expect(refreshMock.history.post).toHaveLength(1);
+    });
   });
 
   // ---------------------------------------------------------

@@ -1,6 +1,6 @@
 // src/services/api/auth.service.js
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import apiClient from "./apiClient";
+import apiClient, { saveTokens } from "./apiClient";
 import { cleanBaseUrl } from "./utils";
 
 export const generateToken = async ({ api_key, app_key, api_secret }) => {
@@ -30,11 +30,7 @@ export const generateToken = async ({ api_key, app_key, api_secret }) => {
 
     if (!accessToken) throw new Error("Token not returned from server");
 
-    // Save both tokens
-    await AsyncStorage.multiSet([
-      ["access_token", accessToken],
-      ["refresh_token", refreshToken || ""],
-    ]);
+    await saveTokens(accessToken, refreshToken || "");
 
     return {
       access_token: accessToken,

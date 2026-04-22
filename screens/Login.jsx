@@ -61,7 +61,7 @@ function Login() {
         return;
       }
 
-      const { access_token, refresh_token } = await generateToken({
+      const { access_token } = await generateToken({
         api_key,
         app_key,
         api_secret: password,
@@ -69,14 +69,8 @@ function Login() {
 
       if (!access_token) throw new Error("Token not returned from server");
 
-      await AsyncStorage.setItem("access_token", access_token);
-
       if (employeeCode) {
         await AsyncStorage.setItem("employee_id", employeeCode);
-      }
-
-      if (refresh_token) {
-        await AsyncStorage.setItem("refresh_token", refresh_token);
       }
 
       dispatch(setSignIn({ isLoggedIn: true, token: access_token }));
