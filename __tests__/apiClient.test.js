@@ -6,7 +6,9 @@
 import MockAdapter from "axios-mock-adapter";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import apiClient from "../services/api/apiClient";
+import { clearTokens } from "../services/api/apiClient";
 import { refreshAccessToken } from "../services/api/apiClient";
+import { plainAxios } from "../services/api/apiClient";
 import * as utils from "../services/api/utils";
 
 // mock base URL utilities
@@ -14,11 +16,15 @@ jest.spyOn(utils, "cleanBaseUrl").mockImplementation((url) => url.trim());
 
 describe("API Client (Interceptors + Token Refresh)", () => {
   let mock;
+  let refreshMock;
 
   beforeEach(async () => {
     mock = new MockAdapter(apiClient);
+    refreshMock = new MockAdapter(plainAxios);
     mock.reset();
+    refreshMock.reset();
 
+    await clearTokens();
     await AsyncStorage.clear();
     await AsyncStorage.setItem("baseUrl", "https://example.com");
     await AsyncStorage.setItem("access_token", "token-123");
@@ -27,6 +33,7 @@ describe("API Client (Interceptors + Token Refresh)", () => {
 
   afterEach(() => {
     mock.reset();
+    refreshMock.reset();
   });
 
   // ---------------------------------------------------------
@@ -68,8 +75,10 @@ describe("API Client (Interceptors + Token Refresh)", () => {
       mock.onGet("https://example.com/api/data").replyOnce(401);
 
       // refresh token call
-      mock
-        .onPost("https://example.com/api/method/employee_app.gauth.create_refresh_token")
+      refreshMock
+        .onPost(
+          "https://example.com/api/method/employee_app.gauth.create_refresh_token",
+        )
         .reply(200, {
           data: {
             access_token: "token-NEW",
@@ -78,9 +87,7 @@ describe("API Client (Interceptors + Token Refresh)", () => {
         });
 
       // retried call succeeds
-      mock
-        .onGet("https://example.com/api/data")
-        .replyOnce(200, { ok: true });
+      mock.onGet("https://example.com/api/data").replyOnce(200, { ok: true });
 
       const res = await apiClient.get("data");
 
@@ -89,11 +96,14 @@ describe("API Client (Interceptors + Token Refresh)", () => {
     });
 
     it("ensures refreshPromise is shared (only ONE refresh request happens)", async () => {
-      mock.onGet("https://example.com/api/data").reply(401);
+      mock.onGet("https://example.com/api/data").replyOnce(401);
+      mock.onGet("https://example.com/api/data").replyOnce(401);
+      mock.onGet("https://example.com/api/data").reply(200, { ok: true });
 
-      const refreshMock = new MockAdapter(require("axios"));
       refreshMock
-        .onPost("https://example.com/api/method/employee_app.gauth.create_refresh_token")
+        .onPost(
+          "https://example.com/api/method/employee_app.gauth.create_refresh_token",
+        )
         .reply(200, {
           data: {
             access_token: "new-TOKEN",
@@ -112,11 +122,42 @@ describe("API Client (Interceptors + Token Refresh)", () => {
     it("throws if token refresh fails", async () => {
       mock.onGet("https://example.com/api/data").replyOnce(401);
 
-      mock
-        .onPost("https://example.com/api/method/employee_app.gauth.create_refresh_token")
+      refreshMock
+        .onPost(
+          "https://example.com/api/method/employee_app.gauth.create_refresh_token",
+        )
         .reply(500);
 
       await expect(apiClient.get("data")).rejects.toThrow();
+    });
+
+    it("expires the session immediately when refresh returns 401", async () => {
+      mock.onGet("https://example.com/api/data").reply(401);
+
+      refreshMock
+        .onPost(
+          "https://example.com/api/method/employee_app.gauth.create_refresh_token",
+        )
+        .reply(401, {
+          data: JSON.stringify({
+            exc_type: "PermissionError",
+            _error_message: "No permission for User",
+          }),
+        });
+
+      await expect(apiClient.get("data")).rejects.toThrow(
+        "Session expired. Please login again.",
+      );
+
+      expect(await AsyncStorage.getItem("access_token")).toBeNull();
+      expect(await AsyncStorage.getItem("refresh_token")).toBeNull();
+      expect(refreshMock.history.post).toHaveLength(1);
+
+      await expect(apiClient.get("data")).rejects.toThrow(
+        "Session expired. Please login again.",
+      );
+
+      expect(refreshMock.history.post).toHaveLength(1);
     });
   });
 
@@ -125,10 +166,10 @@ describe("API Client (Interceptors + Token Refresh)", () => {
   // ---------------------------------------------------------
   describe("refreshAccessToken()", () => {
     it("stores new tokens", async () => {
-      const axiosMock = new MockAdapter(require("axios"));
-
-      axiosMock
-        .onPost("https://example.com/api/method/employee_app.gauth.create_refresh_token")
+      refreshMock
+        .onPost(
+          "https://example.com/api/method/employee_app.gauth.create_refresh_token",
+        )
         .reply(200, {
           data: {
             access_token: "AAA",
@@ -143,10 +184,49 @@ describe("API Client (Interceptors + Token Refresh)", () => {
       expect(await AsyncStorage.getItem("refresh_token")).toBe("BBB");
     });
 
+    it("preserves existing refresh token when refresh response omits it", async () => {
+      refreshMock
+        .onPost(
+          "https://example.com/api/method/employee_app.gauth.create_refresh_token",
+        )
+        .reply(200, {
+          data: {
+            access_token: "CCC",
+          },
+        });
+
+      const token = await refreshAccessToken();
+
+      expect(token).toBe("CCC");
+      expect(await AsyncStorage.getItem("access_token")).toBe("CCC");
+      expect(await AsyncStorage.getItem("refresh_token")).toBe("refresh-123");
+    });
+
+    it("accepts refresh tokens returned under message payload", async () => {
+      refreshMock
+        .onPost(
+          "https://example.com/api/method/employee_app.gauth.create_refresh_token",
+        )
+        .reply(200, {
+          message: {
+            access_token: "DDD",
+            refresh_token: "EEE",
+          },
+        });
+
+      const token = await refreshAccessToken();
+
+      expect(token).toBe("DDD");
+      expect(await AsyncStorage.getItem("access_token")).toBe("DDD");
+      expect(await AsyncStorage.getItem("refresh_token")).toBe("EEE");
+    });
+
     it("throws error when refresh token missing", async () => {
       await AsyncStorage.removeItem("refresh_token");
 
-      await expect(refreshAccessToken()).rejects.toThrow("Missing refresh token");
+      await expect(refreshAccessToken()).rejects.toThrow(
+        "Missing refresh token",
+      );
     });
   });
 });
