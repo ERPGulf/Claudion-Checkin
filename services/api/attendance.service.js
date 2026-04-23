@@ -253,23 +253,53 @@ export const getUserAttendance = async (
 /**
  * getAttendanceStatus() — returns { custom_in: 0 | 1 }
  */
+// export const getAttendanceStatus = async () => {
+//   try {
+//     const employee_id = await AsyncStorage.getItem("employee_id");
+//     if (!employee_id) {
+//       return { custom_in: 0 }; // default
+//     }
+//     // Get latest 1 record
+//     const list = await getUserAttendance(employee_id, 0, 1);
+//     if (!Array.isArray(list) || list.length === 0) {
+//       return { custom_in: 0 }; // never checked in before
+//     }
+//     // Latest record
+//     const latest = list[0];
+//     return {
+//       custom_in: latest?.custom_in === 1 ? 1 : 0,
+//     };
+//   } catch (e) {
+//     return { custom_in: 0 };
+//   }
+// };
+
 export const getAttendanceStatus = async () => {
   try {
     const employee_id = await AsyncStorage.getItem("employee_id");
-    if (!employee_id) {
-      return { custom_in: 0 }; // default
-    }
-    // Get latest 1 record
-    const list = await getUserAttendance(employee_id, 0, 1);
+    if (!employee_id) return { custom_in: 0 };
+
+    const list = await getUserAttendance(employee_id, 0, 10);
+
+    console.log("ATTENDANCE LIST:", list);
+
     if (!Array.isArray(list) || list.length === 0) {
-      return { custom_in: 0 }; // never checked in before
+      return { custom_in: 0 };
     }
-    // Latest record
-    const latest = list[0];
+
+    const latest = list.reduce((a, b) => {
+      const dateA = new Date(a.creation || a.timestamp || a.time || 0);
+      const dateB = new Date(b.creation || b.timestamp || b.time || 0);
+      return dateA > dateB ? a : b;
+    });
+
+    console.log("LATEST RECORD:", latest);
+
     return {
-      custom_in: latest?.custom_in === 1 ? 1 : 0,
+      custom_in: latest?.custom_in === 1 || latest?.log_type === "IN" ? 1 : 0,
     };
   } catch (e) {
+    console.log("STATUS ERROR:", e);
     return { custom_in: 0 };
   }
 };

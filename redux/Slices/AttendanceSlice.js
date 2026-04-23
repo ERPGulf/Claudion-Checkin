@@ -29,6 +29,12 @@ export const AttendanceSlice = createSlice({
     setOnlyCheckIn: (state, action) => {
       state.checkin = action.payload;
     },
+    resetCheckin: (state) => {
+      state.checkin = false;
+      state.checkinTime = null;
+      state.checkoutTime = null;
+      state.location = null;
+    },
     setTodayHours: (state, action) => {
       state.todayHours = action.payload;
     },
@@ -51,6 +57,7 @@ export const {
   setCheckin,
   setCheckout,
   setOnlyCheckIn,
+  resetCheckin,
   setTodayHours,
   setMonthlyHours,
   setLocations,

@@ -23,6 +23,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   setCheckin,
   setCheckout,
+  resetCheckin,
   setBreakMinutes,
   setTodayHours,
   setMonthlyHours,
@@ -34,6 +35,7 @@ import { saveTokens } from "../services/api/apiClient";
 import {
   getOfficeLocation,
   userCheckIn,
+  getAttendanceStatus,
   getDailyWorkedHours,
   getMonthlyWorkedHours,
   getServerTime,
@@ -108,6 +110,33 @@ function AttendanceAction() {
     };
     loadRestriction();
   }, []);
+  useEffect(() => {
+    const loadCheckinStatus = async () => {
+      try {
+        const res = await getAttendanceStatus();
+
+        if (!isMountedRef.current) return;
+
+        if (res.custom_in === 1) {
+          dispatch(
+            setCheckin({
+              checkinTime: Date.now(),
+              location: null,
+            }),
+          );
+        } else {
+          // dispatch(setCheckout({ checkoutTime: null }));
+          dispatch(resetCheckin());
+        }
+      } catch (e) {
+        console.log("Status sync error:", e);
+      }
+    };
+
+    if (employeeCode) {
+      loadCheckinStatus();
+    }
+  }, [employeeCode]);
 
   const fetchStatusAndLocation = useCallback(async () => {
     try {
@@ -183,7 +212,8 @@ function AttendanceAction() {
    * Syncs onBreak / breakStartTime state from a breakData response object.
    */
   const syncBreakState = useCallback((breakData) => {
-    const lastBreak = breakData?.breaks?.slice(-1)[0];
+    // const lastBreak = breakData?.breaks?.slice(-1)[0];
+    const lastBreak = breakData?.breaks?.find((b) => !b.end || b.end === null);
     if (!lastBreak) {
       setOnBreak(false);
       setBreakStartTime(null);
@@ -193,19 +223,60 @@ function AttendanceAction() {
       !lastBreak.end || lastBreak.end === "" || lastBreak.end === null;
     setOnBreak(isOpen);
     if (isOpen) breakTriggeredRef.current = false;
-    setBreakStartTime(isOpen ? new Date(lastBreak.start).getTime() : null);
+    // setBreakStartTime(isOpen ? new Date(lastBreak.start).getTime() : null);
+    setBreakStartTime((prev) => {
+      if (prev) return prev; // ✅ KEEP current running timer
+      // return new Date(activeBreak.start).getTime();
+      return new Date(lastBreak.start).getTime();
+    });
   }, []);
 
+  // useEffect(() => {
+  //   const unsubscribe = navigation.addListener("focus", async () => {
+  //     if (!employeeCode) return;
+  //     const breakData = await refreshAttendanceData();
+  //     if (!isMountedRef.current) return;
+  //     syncBreakState(breakData);
+  //   });
+
+  //   return unsubscribe;
+  // }, [navigation, employeeCode, refreshAttendanceData, syncBreakState]);
   useEffect(() => {
     const unsubscribe = navigation.addListener("focus", async () => {
-      if (!employeeCode) return;
-      const breakData = await refreshAttendanceData();
-      if (!isMountedRef.current) return;
-      syncBreakState(breakData);
+      try {
+        if (!employeeCode) return;
+
+        // ✅ 1. FIRST: sync attendance status
+        const res = await getAttendanceStatus();
+
+        console.log("FOCUS STATUS:", res.custom_in);
+
+        if (!isMountedRef.current) return;
+
+        if (res.custom_in === 1) {
+          dispatch(
+            setCheckin({
+              checkinTime: Date.now(),
+              location: null,
+            }),
+          );
+        } else {
+          dispatch(resetCheckin());
+        }
+
+        // ✅ 2. THEN: fetch totals
+        const breakData = await refreshAttendanceData();
+
+        if (!isMountedRef.current) return;
+
+        syncBreakState(breakData);
+      } catch (e) {
+        console.log("Focus sync error:", e);
+      }
     });
 
     return unsubscribe;
-  }, [navigation, employeeCode, refreshAttendanceData, syncBreakState]);
+  }, [navigation, employeeCode]);
 
   useEffect(() => {
     if (!onBreak || !breakStartTime) {
@@ -253,6 +324,9 @@ function AttendanceAction() {
         }
       }
     }, 1000);
+    console.log("BREAK START TIME:", breakStartTime);
+    console.log("NOW:", Date.now());
+    console.log("DIFF MIN:", (Date.now() - breakStartTime) / 60000);
 
     return () => clearInterval(interval);
   }, [onBreak, breakStartTime, dispatch, employeeCode]);
@@ -391,9 +465,20 @@ function AttendanceAction() {
         return;
       }
 
+      // 🔥 ADD THIS BLOCK
+      if (type === "IN") {
+        setOnBreak(true);
+        setBreakStartTime(Date.now());
+      } else {
+        setOnBreak(false);
+        setBreakStartTime(null);
+      }
+
       const breakData = await getTodayBreaks(employeeCode, getTodayString());
       dispatch(setBreakMinutes(breakData?.total_break_minutes ?? 0));
+
       syncBreakState(breakData);
+
       Toast.show({ type: "success", text1: response.message });
     } catch (error) {
       Toast.show({
@@ -404,15 +489,59 @@ function AttendanceAction() {
     } finally {
       setActionLoading(false);
     }
-  }, [
-    checkin,
-    restrictLocation,
-    inTarget,
-    onBreak,
-    employeeCode,
-    dispatch,
-    syncBreakState,
-  ]);
+  }, [checkin, restrictLocation, inTarget, onBreak]);
+
+  // const handleBreak = useCallback(async () => {
+  //   if (!checkin) {
+  //     Toast.show({ type: "error", text1: "Please check-in first" });
+  //     return;
+  //   }
+
+  //   if (restrictLocation === "1" && !inTarget) {
+  //     Toast.show({
+  //       type: "error",
+  //       text1: "You are out of allowed location",
+  //     });
+  //     return;
+  //   }
+
+  //   const type = onBreak ? "OUT" : "IN";
+
+  //   try {
+  //     setActionLoading(true);
+
+  //     const response = await employeeBreak({ employeeCode, type });
+
+  //     if (!response.allowed) {
+  //       Toast.show({ type: "error", text1: response.message });
+  //       return;
+  //     }
+
+  //     const breakData = await getTodayBreaks(employeeCode, getTodayString());
+  //     dispatch(setBreakMinutes(breakData?.total_break_minutes ?? 0));
+
+  //     console.log("BREAK API:", breakData);
+  //     console.log("TOTAL MINUTES:", breakData?.total_break_minutes);
+  //     syncBreakState(breakData);
+  //     Toast.show({ type: "success", text1: response.message });
+  //   } catch (error) {
+  //     Toast.show({
+  //       type: "error",
+  //       text1: "Break failed",
+  //       text2: error.message,
+  //     });
+  //   } finally {
+  //     setActionLoading(false);
+  //   }
+  // }, [
+  //   checkin,
+  //   restrictLocation,
+  //   inTarget,
+  //   onBreak,
+  //   employeeCode,
+  //   dispatch,
+  //   syncBreakState,
+  // ]);
   // Temporary loading screen
   if (!restrictionLoaded) {
     return (
@@ -472,12 +601,12 @@ function AttendanceAction() {
       >
         <View style={{ width: "100%" }} className="flex-1 px-3">
           {onBreak && (
-            <View className="mb-3 rounded-2xl bg-amber-500 px-4 py-3">
+            <View className="mb-3 rounded-2xl bg-amber-500 px-4 py-1">
               <Text className="text-center text-xs font-semibold tracking-widest text-amber-100">
                 BREAK IN PROGRESS
               </Text>
               <Text
-                className="mt-1 text-center text-3xl font-extrabold text-white"
+                className="mt-1 text-center text-2xl font-extrabold text-white"
                 style={{ fontVariant: ["tabular-nums"] }}
               >
                 {liveBreakTime || "00:00:00"}
