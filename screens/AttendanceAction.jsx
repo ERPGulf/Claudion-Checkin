@@ -74,6 +74,15 @@ function AttendanceAction() {
   const [breakStartTime, setBreakStartTime] = useState(null);
   const breakTriggeredRef = useRef(false);
   const isMountedRef = useRef(true);
+  const [breakCompleted, setBreakCompleted] = useState(false);
+  const isBreakCompleted = (breakData) => {
+    if (!breakData?.breaks?.length) return false;
+
+    const hasIn = breakData.breaks.some((b) => b.start);
+    const hasOut = breakData.breaks.some((b) => b.end);
+
+    return hasIn && hasOut;
+  };
   useEffect(() => {
     isMountedRef.current = true;
     return () => {
@@ -211,36 +220,36 @@ function AttendanceAction() {
   /**
    * Syncs onBreak / breakStartTime state from a breakData response object.
    */
-  const syncBreakState = useCallback((breakData) => {
-    // const lastBreak = breakData?.breaks?.slice(-1)[0];
+
+  const syncBreakState = useCallback(async (breakData) => {
     const lastBreak = breakData?.breaks?.find((b) => !b.end || b.end === null);
+
     if (!lastBreak) {
       setOnBreak(false);
       setBreakStartTime(null);
+      await AsyncStorage.removeItem("breakStartTime"); // ✅ keep storage clean
       return;
     }
+
     const isOpen =
       !lastBreak.end || lastBreak.end === "" || lastBreak.end === null;
+
     setOnBreak(isOpen);
+
     if (isOpen) breakTriggeredRef.current = false;
-    // setBreakStartTime(isOpen ? new Date(lastBreak.start).getTime() : null);
-    setBreakStartTime((prev) => {
-      if (prev) return prev; // ✅ KEEP current running timer
-      // return new Date(activeBreak.start).getTime();
-      return new Date(lastBreak.start).getTime();
-    });
+
+    const savedTime = await AsyncStorage.getItem("breakStartTime");
+
+    if (savedTime) {
+      setBreakStartTime(parseInt(savedTime));
+    } else {
+      const backendTime = new Date(lastBreak.start).getTime();
+      setBreakStartTime(backendTime);
+
+      await AsyncStorage.setItem("breakStartTime", backendTime.toString());
+    }
   }, []);
 
-  // useEffect(() => {
-  //   const unsubscribe = navigation.addListener("focus", async () => {
-  //     if (!employeeCode) return;
-  //     const breakData = await refreshAttendanceData();
-  //     if (!isMountedRef.current) return;
-  //     syncBreakState(breakData);
-  //   });
-
-  //   return unsubscribe;
-  // }, [navigation, employeeCode, refreshAttendanceData, syncBreakState]);
   useEffect(() => {
     const unsubscribe = navigation.addListener("focus", async () => {
       try {
@@ -268,6 +277,7 @@ function AttendanceAction() {
         const breakData = await refreshAttendanceData();
 
         if (!isMountedRef.current) return;
+        setBreakCompleted(isBreakCompleted(breakData));
 
         syncBreakState(breakData);
       } catch (e) {
@@ -277,6 +287,23 @@ function AttendanceAction() {
 
     return unsubscribe;
   }, [navigation, employeeCode]);
+
+  useEffect(() => {
+    const loadBreak = async () => {
+      const saved = await AsyncStorage.getItem("breakStartTime");
+      const breakData = await getTodayBreaks(employeeCode, getTodayString());
+      setBreakCompleted(isBreakCompleted(breakData));
+
+      if (saved) {
+        const parsedTime = parseInt(saved);
+
+        setBreakStartTime(parsedTime);
+        setOnBreak(true);
+      }
+    };
+
+    loadBreak();
+  }, []);
 
   useEffect(() => {
     if (!onBreak || !breakStartTime) {
@@ -303,10 +330,12 @@ function AttendanceAction() {
 
         try {
           await employeeBreak({ employeeCode, type: "OUT" });
+          await AsyncStorage.removeItem("breakStartTime");
 
           if (!isMountedRef.current) return;
           setOnBreak(false);
           setBreakStartTime(null);
+          setBreakCompleted(true);
 
           const breakData = await getTodayBreaks(
             employeeCode,
@@ -453,28 +482,58 @@ function AttendanceAction() {
       return;
     }
 
+    // ✅ FIRST check from backend (important)
+    const breakDataCheck = await getTodayBreaks(employeeCode, getTodayString());
+
+    if (isBreakCompleted(breakDataCheck)) {
+      Toast.show({
+        type: "error",
+        text1: "Break already completed for today",
+      });
+      return;
+    }
+
     const type = onBreak ? "OUT" : "IN";
 
     try {
       setActionLoading(true);
 
+      // const response = await employeeBreak({ employeeCode, type });
+
+      // if (!response.allowed) {
+      //   Toast.show({ type: "error", text1: response.message });
+      //   return;
+      // }
       const response = await employeeBreak({ employeeCode, type });
 
       if (!response.allowed) {
+        // ✅ Handle monthly limit from backend
+        if (response.message?.includes("Monthly break limit")) {
+          setBreakCompleted(true); // disable button
+        }
+
         Toast.show({ type: "error", text1: response.message });
         return;
       }
 
-      // 🔥 ADD THIS BLOCK
       if (type === "IN") {
+        const startTime = Date.now();
+
         setOnBreak(true);
-        setBreakStartTime(Date.now());
+        setBreakStartTime(startTime);
+
+        await AsyncStorage.setItem("breakStartTime", startTime.toString());
       } else {
         setOnBreak(false);
         setBreakStartTime(null);
+
+        await AsyncStorage.removeItem("breakStartTime");
       }
 
+      // ✅ Fetch latest break data
       const breakData = await getTodayBreaks(employeeCode, getTodayString());
+
+      setBreakCompleted(isBreakCompleted(breakData));
       dispatch(setBreakMinutes(breakData?.total_break_minutes ?? 0));
 
       syncBreakState(breakData);
@@ -491,57 +550,6 @@ function AttendanceAction() {
     }
   }, [checkin, restrictLocation, inTarget, onBreak]);
 
-  // const handleBreak = useCallback(async () => {
-  //   if (!checkin) {
-  //     Toast.show({ type: "error", text1: "Please check-in first" });
-  //     return;
-  //   }
-
-  //   if (restrictLocation === "1" && !inTarget) {
-  //     Toast.show({
-  //       type: "error",
-  //       text1: "You are out of allowed location",
-  //     });
-  //     return;
-  //   }
-
-  //   const type = onBreak ? "OUT" : "IN";
-
-  //   try {
-  //     setActionLoading(true);
-
-  //     const response = await employeeBreak({ employeeCode, type });
-
-  //     if (!response.allowed) {
-  //       Toast.show({ type: "error", text1: response.message });
-  //       return;
-  //     }
-
-  //     const breakData = await getTodayBreaks(employeeCode, getTodayString());
-  //     dispatch(setBreakMinutes(breakData?.total_break_minutes ?? 0));
-
-  //     console.log("BREAK API:", breakData);
-  //     console.log("TOTAL MINUTES:", breakData?.total_break_minutes);
-  //     syncBreakState(breakData);
-  //     Toast.show({ type: "success", text1: response.message });
-  //   } catch (error) {
-  //     Toast.show({
-  //       type: "error",
-  //       text1: "Break failed",
-  //       text2: error.message,
-  //     });
-  //   } finally {
-  //     setActionLoading(false);
-  //   }
-  // }, [
-  //   checkin,
-  //   restrictLocation,
-  //   inTarget,
-  //   onBreak,
-  //   employeeCode,
-  //   dispatch,
-  //   syncBreakState,
-  // ]);
   // Temporary loading screen
   if (!restrictionLoaded) {
     return (
@@ -713,15 +721,32 @@ function AttendanceAction() {
                 <View>
                   <TouchableOpacity
                     className={`justify-center items-center h-16 w-full mt-4 rounded-2xl ${
-                      onBreak ? "bg-slate-500" : "bg-blue-400"
-                    } ${restrictLocation === "1" && !inTarget ? "opacity-50" : ""}`}
+                      actionLoading ||
+                      (restrictLocation === "1" && !inTarget) ||
+                      breakCompleted ||
+                      breakMinutes >= 120
+                        ? "bg-gray-400" // ✅ disabled color
+                        : onBreak
+                          ? "bg-slate-500" // break running
+                          : "bg-blue-400" // normal
+                    }`}
                     disabled={
-                      actionLoading || (restrictLocation === "1" && !inTarget)
+                      actionLoading ||
+                      (restrictLocation === "1" && !inTarget) ||
+                      breakCompleted ||
+                      breakMinutes >= 120
                     }
                     onPress={handleBreak}
                   >
                     <Text className="text-xl font-bold text-white">
-                      {onBreak ? "END BREAK" : "TAKE BREAK"}
+                      {actionLoading ||
+                      (restrictLocation === "1" && !inTarget) ||
+                      breakCompleted ||
+                      breakMinutes >= 120
+                        ? "BREAK NOT ALLOWED"
+                        : onBreak
+                          ? "END BREAK"
+                          : "TAKE BREAK"}
                     </Text>
                   </TouchableOpacity>
                 </View>

@@ -9,6 +9,10 @@ const initialState = {
   todayHours: 0,
   monthlyHours: 0,
   breakMinutes: 0,
+  breakTakenToday: false,
+  onBreak: false,
+  breakStartTime: null,
+
 };
 
 export const AttendanceSlice = createSlice({
@@ -34,6 +38,11 @@ export const AttendanceSlice = createSlice({
       state.checkinTime = null;
       state.checkoutTime = null;
       state.location = null;
+
+      state.onBreak = false;
+      state.breakStartTime = null;
+      state.breakTakenToday = false;
+      state.breakMinutes = 0;
     },
     setTodayHours: (state, action) => {
       state.todayHours = action.payload;
@@ -50,6 +59,14 @@ export const AttendanceSlice = createSlice({
     setBreakMinutes: (state, action) => {
       state.breakMinutes = action.payload;
     },
+    setBreakStatus: (state, action) => {
+      state.onBreak = action.payload.onBreak;
+      state.breakStartTime = action.payload.breakStartTime;
+    },
+
+    setBreakTakenToday: (state, action) => {
+      state.breakTakenToday = action.payload;
+    },
   },
 });
 
@@ -63,6 +80,8 @@ export const {
   setLocations,
   setSelectedLocation,
   setBreakMinutes,
+  setBreakStatus,
+  setBreakTakenToday,
 } = AttendanceSlice.actions;
 
 // selectors
@@ -74,5 +93,9 @@ export const selectLocations = (state) => state.attendance.locations;
 export const selectTodayHours = (state) => state.attendance.todayHours;
 export const selectMonthlyHours = (state) => state.attendance.monthlyHours;
 export const selectBreakMinutes = (state) => state.attendance.breakMinutes;
+export const selectBreakTakenToday = (state) =>
+  state.attendance.breakTakenToday;
+export const selectOnBreak = (state) => state.attendance.onBreak;
+export const selectBreakStartTime = (state) => state.attendance.breakStartTime;
 
 export default AttendanceSlice.reducer;
