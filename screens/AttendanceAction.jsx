@@ -830,7 +830,7 @@ function AttendanceAction() {
               </View>
             </View>
           )}
-          <View className="h-72 mt-4">
+          <View className="h-72 mt-4 mb-24">
             <View className="p-3">
               {/* DATE & TIME */}
               <Text className="text-base text-gray-500 font-semibold">
