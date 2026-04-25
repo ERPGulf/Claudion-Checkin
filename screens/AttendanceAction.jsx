@@ -76,6 +76,7 @@ function AttendanceAction() {
   const breakTriggeredRef = useRef(false);
   const isMountedRef = useRef(true);
   const [breakCompleted, setBreakCompleted] = useState(false);
+  const [monthlyCapMessage, setMonthlyCapMessage] = useState("");
   const [devBreakMockMode, setDevBreakMockMode] = useState(false);
   const isBreakCompleted = (breakData) => {
     if (!breakData?.breaks?.length) return false;
@@ -477,6 +478,7 @@ function AttendanceAction() {
         setOnBreak(false);
         setBreakStartTime(null);
         setBreakCompleted(completed);
+        setMonthlyCapMessage("");
         breakTriggeredRef.current = false;
         dispatch(setBreakMinutes(minutes));
         dispatch(
@@ -527,6 +529,15 @@ function AttendanceAction() {
         await setIdleState(60, true);
       }
 
+      if (preset === "monthly-cap") {
+        await setIdleState(30, true);
+        setMonthlyCapMessage("Monthly break limit reached (8h)");
+        Toast.show({
+          type: "error",
+          text1: "Monthly break limit reached (8h)",
+        });
+      }
+
       if (__DEV__) {
         setDevBreakMockMode(true);
       }
@@ -562,6 +573,7 @@ function AttendanceAction() {
           setOnBreak(true);
           setBreakStartTime(startTime);
           setBreakCompleted(false);
+          setMonthlyCapMessage("");
           breakTriggeredRef.current = false;
 
           dispatch(
@@ -585,6 +597,7 @@ function AttendanceAction() {
         setOnBreak(false);
         setBreakStartTime(null);
         setBreakCompleted(true);
+        setMonthlyCapMessage("");
         dispatch(setBreakMinutes(nextTotal));
         dispatch(
           setBreakStatus({
@@ -632,6 +645,9 @@ function AttendanceAction() {
         // ✅ Handle monthly limit from backend
         if (response.message?.includes("Monthly break limit")) {
           setBreakCompleted(true); // disable button
+          setMonthlyCapMessage(response.message);
+        } else {
+          setMonthlyCapMessage("");
         }
 
         Toast.show({ type: "error", text1: response.message });
@@ -643,11 +659,13 @@ function AttendanceAction() {
 
         setOnBreak(true);
         setBreakStartTime(startTime);
+        setMonthlyCapMessage("");
 
         await AsyncStorage.setItem("breakStartTime", startTime.toString());
       } else {
         setOnBreak(false);
         setBreakStartTime(null);
+        setMonthlyCapMessage("");
 
         await AsyncStorage.removeItem("breakStartTime");
       }
@@ -827,6 +845,15 @@ function AttendanceAction() {
                     Completed 1/day
                   </Text>
                 </TouchableOpacity>
+
+                <TouchableOpacity
+                  className="mb-2 mr-2 rounded-xl bg-rose-700 px-3 py-2"
+                  onPress={() => applyDevBreakPreset("monthly-cap")}
+                >
+                  <Text className="text-xs font-semibold text-white">
+                    Monthly Cap 8h
+                  </Text>
+                </TouchableOpacity>
               </View>
             </View>
           )}
@@ -944,6 +971,14 @@ function AttendanceAction() {
                           : "TAKE BREAK"}
                     </Text>
                   </TouchableOpacity>
+
+                  {!!monthlyCapMessage && (
+                    <View className="mt-3 rounded-xl border border-rose-300 bg-rose-50 px-3 py-2">
+                      <Text className="text-xs font-semibold text-rose-700">
+                        {monthlyCapMessage}
+                      </Text>
+                    </View>
+                  )}
                 </View>
               )}
             </View>
