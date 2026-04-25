@@ -381,7 +381,11 @@ export const employeeBreak = async ({ employeeCode, type }) => {
     const token = await AsyncStorage.getItem("access_token");
     if (!token) throw new Error("Token missing");
 
-    const timestamp = await getServerTime();
+    // const rawTimestamp = await getServerTime();
+    // const timestamp = rawTimestamp.split(".")[0];
+
+    const timestamp = (await getServerTime()).split(".")[0];
+    console.log("TIMESTAMP SENT:", timestamp);
 
     const formData = new URLSearchParams();
     formData.append("employee_field_value", employeeCode);
@@ -400,14 +404,26 @@ export const employeeBreak = async ({ employeeCode, type }) => {
       },
     );
 
-    const breakId = response.data?.message?.name;
+    // const breakId = response.data?.message?.name;
+    // console.log("BREAK API RESPONSE:", JSON.stringify(response.data, null, 2));
+    // if (!breakId) {
+    //   return {
+    //     allowed: false,
+    //     message: "Failed to register break",
+    //   };
+    // }
+    const message = response.data?.message;
 
-    if (!breakId) {
+    // ✅ HANDLE backend string error (IMPORTANT)
+    if (typeof message === "string") {
       return {
         allowed: false,
-        message: "Failed to register break",
+        message: message,
       };
     }
+
+    // ✅ Normal success case
+    const breakId = message?.name;
 
     return {
       allowed: true,

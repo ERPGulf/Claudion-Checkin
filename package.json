@@ -70,6 +70,7 @@
   "devDependencies": {
     "@babel/core": "^7.20.0",
     "@testing-library/jest-native": "^5.4.3",
+    "@testing-library/react-native": "^13.3.3",
     "axios-mock-adapter": "^2.1.0",
     "babel-preset-expo": "~54.0.10",
     "eslint": "^8.57.1",

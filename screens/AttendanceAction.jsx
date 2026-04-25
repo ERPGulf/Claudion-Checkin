@@ -25,6 +25,7 @@ import {
   setCheckout,
   resetCheckin,
   setBreakMinutes,
+  setBreakStatus,
   setTodayHours,
   setMonthlyHours,
 } from "../redux/Slices/AttendanceSlice";
@@ -74,6 +75,17 @@ function AttendanceAction() {
   const [breakStartTime, setBreakStartTime] = useState(null);
   const breakTriggeredRef = useRef(false);
   const isMountedRef = useRef(true);
+  const [breakCompleted, setBreakCompleted] = useState(false);
+  const [monthlyCapMessage, setMonthlyCapMessage] = useState("");
+  const [devBreakMockMode, setDevBreakMockMode] = useState(false);
+  const isBreakCompleted = (breakData) => {
+    if (!breakData?.breaks?.length) return false;
+
+    const hasIn = breakData.breaks.some((b) => b.start);
+    const hasOut = breakData.breaks.some((b) => b.end);
+
+    return hasIn && hasOut;
+  };
   useEffect(() => {
     isMountedRef.current = true;
     return () => {
@@ -211,36 +223,36 @@ function AttendanceAction() {
   /**
    * Syncs onBreak / breakStartTime state from a breakData response object.
    */
-  const syncBreakState = useCallback((breakData) => {
-    // const lastBreak = breakData?.breaks?.slice(-1)[0];
+
+  const syncBreakState = useCallback(async (breakData) => {
     const lastBreak = breakData?.breaks?.find((b) => !b.end || b.end === null);
+
     if (!lastBreak) {
       setOnBreak(false);
       setBreakStartTime(null);
+      await AsyncStorage.removeItem("breakStartTime"); // ✅ keep storage clean
       return;
     }
+
     const isOpen =
       !lastBreak.end || lastBreak.end === "" || lastBreak.end === null;
+
     setOnBreak(isOpen);
+
     if (isOpen) breakTriggeredRef.current = false;
-    // setBreakStartTime(isOpen ? new Date(lastBreak.start).getTime() : null);
-    setBreakStartTime((prev) => {
-      if (prev) return prev; // ✅ KEEP current running timer
-      // return new Date(activeBreak.start).getTime();
-      return new Date(lastBreak.start).getTime();
-    });
+
+    const savedTime = await AsyncStorage.getItem("breakStartTime");
+
+    if (savedTime) {
+      setBreakStartTime(parseInt(savedTime));
+    } else {
+      const backendTime = new Date(lastBreak.start).getTime();
+      setBreakStartTime(backendTime);
+
+      await AsyncStorage.setItem("breakStartTime", backendTime.toString());
+    }
   }, []);
 
-  // useEffect(() => {
-  //   const unsubscribe = navigation.addListener("focus", async () => {
-  //     if (!employeeCode) return;
-  //     const breakData = await refreshAttendanceData();
-  //     if (!isMountedRef.current) return;
-  //     syncBreakState(breakData);
-  //   });
-
-  //   return unsubscribe;
-  // }, [navigation, employeeCode, refreshAttendanceData, syncBreakState]);
   useEffect(() => {
     const unsubscribe = navigation.addListener("focus", async () => {
       try {
@@ -268,6 +280,7 @@ function AttendanceAction() {
         const breakData = await refreshAttendanceData();
 
         if (!isMountedRef.current) return;
+        setBreakCompleted(isBreakCompleted(breakData));
 
         syncBreakState(breakData);
       } catch (e) {
@@ -277,6 +290,23 @@ function AttendanceAction() {
 
     return unsubscribe;
   }, [navigation, employeeCode]);
+
+  useEffect(() => {
+    const loadBreak = async () => {
+      const saved = await AsyncStorage.getItem("breakStartTime");
+      const breakData = await getTodayBreaks(employeeCode, getTodayString());
+      setBreakCompleted(isBreakCompleted(breakData));
+
+      if (saved) {
+        const parsedTime = parseInt(saved);
+
+        setBreakStartTime(parsedTime);
+        setOnBreak(true);
+      }
+    };
+
+    loadBreak();
+  }, []);
 
   useEffect(() => {
     if (!onBreak || !breakStartTime) {
@@ -303,10 +333,12 @@ function AttendanceAction() {
 
         try {
           await employeeBreak({ employeeCode, type: "OUT" });
+          await AsyncStorage.removeItem("breakStartTime");
 
           if (!isMountedRef.current) return;
           setOnBreak(false);
           setBreakStartTime(null);
+          setBreakCompleted(true);
 
           const breakData = await getTodayBreaks(
             employeeCode,
@@ -439,6 +471,85 @@ function AttendanceAction() {
     }
   }, []);
 
+  const applyDevBreakPreset = useCallback(
+    async (preset) => {
+      const now = Date.now();
+      const setIdleState = async (minutes, completed = false) => {
+        setOnBreak(false);
+        setBreakStartTime(null);
+        setBreakCompleted(completed);
+        setMonthlyCapMessage("");
+        breakTriggeredRef.current = false;
+        dispatch(setBreakMinutes(minutes));
+        dispatch(
+          setBreakStatus({
+            onBreak: false,
+            breakStartTime: null,
+          }),
+        );
+        await AsyncStorage.removeItem("breakStartTime");
+      };
+
+      dispatch(
+        setCheckin({
+          checkinTime: now,
+          location: null,
+        }),
+      );
+
+      if (preset === "idle-0") {
+        await setIdleState(0, false);
+      }
+
+      if (preset === "idle-45") {
+        await setIdleState(45, false);
+      }
+
+      if (preset === "running-30") {
+        const startTime = now - 30 * 60 * 1000;
+        setOnBreak(true);
+        setBreakStartTime(startTime);
+        setBreakCompleted(false);
+        breakTriggeredRef.current = false;
+        dispatch(setBreakMinutes(45));
+        dispatch(
+          setBreakStatus({
+            onBreak: true,
+            breakStartTime: startTime,
+          }),
+        );
+        await AsyncStorage.setItem("breakStartTime", String(startTime));
+      }
+
+      if (preset === "cap-120") {
+        await setIdleState(120, false);
+      }
+
+      if (preset === "completed") {
+        await setIdleState(60, true);
+      }
+
+      if (preset === "monthly-cap") {
+        await setIdleState(30, true);
+        setMonthlyCapMessage("Monthly break limit reached (8h)");
+        Toast.show({
+          type: "error",
+          text1: "Monthly break limit reached (8h)",
+        });
+      }
+
+      if (__DEV__) {
+        setDevBreakMockMode(true);
+      }
+
+      Toast.show({
+        type: "success",
+        text1: `DEV preset applied: ${preset}`,
+      });
+    },
+    [dispatch],
+  );
+
   const handleBreak = useCallback(async () => {
     if (!checkin) {
       Toast.show({ type: "error", text1: "Please check-in first" });
@@ -453,28 +564,116 @@ function AttendanceAction() {
       return;
     }
 
+    if (__DEV__ && devBreakMockMode) {
+      try {
+        setActionLoading(true);
+
+        if (!onBreak) {
+          const startTime = Date.now();
+          setOnBreak(true);
+          setBreakStartTime(startTime);
+          setBreakCompleted(false);
+          setMonthlyCapMessage("");
+          breakTriggeredRef.current = false;
+
+          dispatch(
+            setBreakStatus({
+              onBreak: true,
+              breakStartTime: startTime,
+            }),
+          );
+          await AsyncStorage.setItem("breakStartTime", String(startTime));
+
+          Toast.show({ type: "success", text1: "DEV break started (local)" });
+          return;
+        }
+
+        const elapsedMinutes = Math.max(
+          0,
+          Math.floor((Date.now() - breakStartTime) / 60000),
+        );
+        const nextTotal = Math.min(120, (breakMinutes ?? 0) + elapsedMinutes);
+
+        setOnBreak(false);
+        setBreakStartTime(null);
+        setBreakCompleted(true);
+        setMonthlyCapMessage("");
+        dispatch(setBreakMinutes(nextTotal));
+        dispatch(
+          setBreakStatus({
+            onBreak: false,
+            breakStartTime: null,
+          }),
+        );
+        await AsyncStorage.removeItem("breakStartTime");
+
+        Toast.show({
+          type: "success",
+          text1: `DEV break ended (total: ${nextTotal}m)`,
+        });
+        return;
+      } finally {
+        setActionLoading(false);
+      }
+    }
+
+    // ✅ FIRST check from backend (important)
+    const breakDataCheck = await getTodayBreaks(employeeCode, getTodayString());
+
+    if (isBreakCompleted(breakDataCheck)) {
+      Toast.show({
+        type: "error",
+        text1: "Break already completed for today",
+      });
+      return;
+    }
+
     const type = onBreak ? "OUT" : "IN";
 
     try {
       setActionLoading(true);
 
+      // const response = await employeeBreak({ employeeCode, type });
+
+      // if (!response.allowed) {
+      //   Toast.show({ type: "error", text1: response.message });
+      //   return;
+      // }
       const response = await employeeBreak({ employeeCode, type });
 
       if (!response.allowed) {
+        // ✅ Handle monthly limit from backend
+        if (response.message?.includes("Monthly break limit")) {
+          setBreakCompleted(true); // disable button
+          setMonthlyCapMessage(response.message);
+        } else {
+          setMonthlyCapMessage("");
+        }
+
         Toast.show({ type: "error", text1: response.message });
         return;
       }
 
-      // 🔥 ADD THIS BLOCK
       if (type === "IN") {
+        const startTime = Date.now();
+
         setOnBreak(true);
-        setBreakStartTime(Date.now());
+        setBreakStartTime(startTime);
+        setMonthlyCapMessage("");
+
+        await AsyncStorage.setItem("breakStartTime", startTime.toString());
       } else {
         setOnBreak(false);
         setBreakStartTime(null);
+        setMonthlyCapMessage("");
+
+        await AsyncStorage.removeItem("breakStartTime");
       }
 
+      // ✅ Fetch latest break data
       const breakData = await getTodayBreaks(employeeCode, getTodayString());
+
+      setBreakCompleted(isBreakCompleted(breakData));
       dispatch(setBreakMinutes(breakData?.total_break_minutes ?? 0));
 
       syncBreakState(breakData);
@@ -489,59 +688,17 @@ function AttendanceAction() {
     } finally {
       setActionLoading(false);
     }
-  }, [checkin, restrictLocation, inTarget, onBreak]);
+  }, [
+    checkin,
+    restrictLocation,
+    inTarget,
+    onBreak,
+    devBreakMockMode,
+    breakMinutes,
+    breakStartTime,
+    dispatch,
+  ]);
 
-  // const handleBreak = useCallback(async () => {
-  //   if (!checkin) {
-  //     Toast.show({ type: "error", text1: "Please check-in first" });
-  //     return;
-  //   }
-
-  //   if (restrictLocation === "1" && !inTarget) {
-  //     Toast.show({
-  //       type: "error",
-  //       text1: "You are out of allowed location",
-  //     });
-  //     return;
-  //   }
-
-  //   const type = onBreak ? "OUT" : "IN";
-
-  //   try {
-  //     setActionLoading(true);
-
-  //     const response = await employeeBreak({ employeeCode, type });
-
-  //     if (!response.allowed) {
-  //       Toast.show({ type: "error", text1: response.message });
-  //       return;
-  //     }
-
-  //     const breakData = await getTodayBreaks(employeeCode, getTodayString());
-  //     dispatch(setBreakMinutes(breakData?.total_break_minutes ?? 0));
-
-  //     console.log("BREAK API:", breakData);
-  //     console.log("TOTAL MINUTES:", breakData?.total_break_minutes);
-  //     syncBreakState(breakData);
-  //     Toast.show({ type: "success", text1: response.message });
-  //   } catch (error) {
-  //     Toast.show({
-  //       type: "error",
-  //       text1: "Break failed",
-  //       text2: error.message,
-  //     });
-  //   } finally {
-  //     setActionLoading(false);
-  //   }
-  // }, [
-  //   checkin,
-  //   restrictLocation,
-  //   inTarget,
-  //   onBreak,
-  //   employeeCode,
-  //   dispatch,
-  //   syncBreakState,
-  // ]);
   // Temporary loading screen
   if (!restrictionLoaded) {
     return (
@@ -618,16 +775,89 @@ function AttendanceAction() {
           )}
           <WelcomeCard />
           {__DEV__ && (
-            <TouchableOpacity
-              className="mt-4 rounded-2xl bg-red-600 px-4 py-3 items-center"
-              onPress={handleInvalidateAccessToken}
-            >
-              <Text className="text-white font-bold">
-                DEV: Invalidate access token
+            <View className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-3">
+              <TouchableOpacity
+                className="rounded-2xl bg-red-600 px-4 py-3 items-center"
+                onPress={handleInvalidateAccessToken}
+              >
+                <Text className="text-white font-bold">
+                  DEV: Invalidate access token
+                </Text>
+              </TouchableOpacity>
+
+              <Text className="mt-3 text-xs font-bold uppercase tracking-wide text-red-700">
+                DEV: Break UI presets
               </Text>
-            </TouchableOpacity>
+
+              <TouchableOpacity
+                className={`mt-2 rounded-xl px-3 py-2 ${
+                  devBreakMockMode ? "bg-emerald-700" : "bg-slate-700"
+                }`}
+                onPress={() => setDevBreakMockMode((prev) => !prev)}
+              >
+                <Text className="text-xs font-semibold text-white">
+                  DEV local break flow: {devBreakMockMode ? "ON" : "OFF"}
+                </Text>
+              </TouchableOpacity>
+
+              <View className="mt-2 flex-row flex-wrap">
+                <TouchableOpacity
+                  className="mb-2 mr-2 rounded-xl bg-slate-700 px-3 py-2"
+                  onPress={() => applyDevBreakPreset("idle-0")}
+                >
+                  <Text className="text-xs font-semibold text-white">
+                    Idle 00:00
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  className="mb-2 mr-2 rounded-xl bg-slate-700 px-3 py-2"
+                  onPress={() => applyDevBreakPreset("idle-45")}
+                >
+                  <Text className="text-xs font-semibold text-white">
+                    Idle 00:45
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  className="mb-2 mr-2 rounded-xl bg-amber-700 px-3 py-2"
+                  onPress={() => applyDevBreakPreset("running-30")}
+                >
+                  <Text className="text-xs font-semibold text-white">
+                    Running +30m
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  className="mb-2 mr-2 rounded-xl bg-gray-700 px-3 py-2"
+                  onPress={() => applyDevBreakPreset("cap-120")}
+                >
+                  <Text className="text-xs font-semibold text-white">
+                    Cap 02:00
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  className="mb-2 mr-2 rounded-xl bg-indigo-700 px-3 py-2"
+                  onPress={() => applyDevBreakPreset("completed")}
+                >
+                  <Text className="text-xs font-semibold text-white">
+                    Completed 1/day
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  className="mb-2 mr-2 rounded-xl bg-rose-700 px-3 py-2"
+                  onPress={() => applyDevBreakPreset("monthly-cap")}
+                >
+                  <Text className="text-xs font-semibold text-white">
+                    Monthly Cap 8h
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
           )}
-          <View className="h-72 mt-4">
+          <View className="h-72 mt-4 mb-24">
             <View className="p-3">
               {/* DATE & TIME */}
               <Text className="text-base text-gray-500 font-semibold">
@@ -713,17 +943,42 @@ function AttendanceAction() {
                 <View>
                   <TouchableOpacity
                     className={`justify-center items-center h-16 w-full mt-4 rounded-2xl ${
-                      onBreak ? "bg-slate-500" : "bg-blue-400"
-                    } ${restrictLocation === "1" && !inTarget ? "opacity-50" : ""}`}
+                      actionLoading ||
+                      (restrictLocation === "1" && !inTarget) ||
+                      breakCompleted ||
+                      breakMinutes >= 120
+                        ? "bg-gray-400" // ✅ disabled color
+                        : onBreak
+                          ? "bg-slate-500" // break running
+                          : "bg-blue-400" // normal
+                    }`}
                     disabled={
-                      actionLoading || (restrictLocation === "1" && !inTarget)
+                      actionLoading ||
+                      (restrictLocation === "1" && !inTarget) ||
+                      breakCompleted ||
+                      breakMinutes >= 120
                     }
                     onPress={handleBreak}
                   >
                     <Text className="text-xl font-bold text-white">
-                      {onBreak ? "END BREAK" : "TAKE BREAK"}
+                      {actionLoading ||
+                      (restrictLocation === "1" && !inTarget) ||
+                      breakCompleted ||
+                      breakMinutes >= 120
+                        ? "BREAK NOT ALLOWED"
+                        : onBreak
+                          ? "END BREAK"
+                          : "TAKE BREAK"}
                     </Text>
                   </TouchableOpacity>
+
+                  {!!monthlyCapMessage && (
+                    <View className="mt-3 rounded-xl border border-rose-300 bg-rose-50 px-3 py-2">
+                      <Text className="text-xs font-semibold text-rose-700">
+                        {monthlyCapMessage}
+                      </Text>
+                    </View>
+                  )}
                 </View>
               )}
             </View>
