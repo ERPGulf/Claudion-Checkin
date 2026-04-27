@@ -338,7 +338,9 @@ function LavaMenu() {
           <View style={styles.sectionIconBubble}>
             <Octicons name="people" size={SIZES.xxLarge} color={COLORS.white} />
           </View>
-          <Text style={[styles.sectionTitle, isTablet && styles.sectionTitleTablet]}>
+          <Text
+            style={[styles.sectionTitle, isTablet && styles.sectionTitleTablet]}
+          >
             Human Resources
           </Text>
           <View style={styles.sectionIconBubble}>
@@ -376,7 +378,9 @@ function LavaMenu() {
               color={COLORS.white}
             />
           </View>
-          <Text style={[styles.sectionTitle, isTablet && styles.sectionTitleTablet]}>
+          <Text
+            style={[styles.sectionTitle, isTablet && styles.sectionTitleTablet]}
+          >
             Your Records In The Company
           </Text>
           <View style={styles.sectionIconBubble}>
@@ -460,7 +464,11 @@ function LavaMenu() {
         ]}
       >
         <View style={styles.footerIconBubble}>
-          <Ionicons name="globe-outline" size={SIZES.xxLarge - 2} color="#fff" />
+          <Ionicons
+            name="globe-outline"
+            size={SIZES.xxLarge - 2}
+            color="#fff"
+          />
         </View>
 
         <View style={styles.footerContent}>
