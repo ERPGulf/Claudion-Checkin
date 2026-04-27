@@ -21,7 +21,7 @@ import { hapticsMessage } from "../utils/HapticsMessage";
 import { clearTokens, clearStore } from "../services/api/apiClient";
 import apiClient from "../services/api/apiClient";
 import { clearAuthCache } from "../services/api/authHelper";
-
+import * as Device from "expo-device";
 const formatUpdateId = (updateId) => {
   if (!updateId) {
     return "embedded";
@@ -55,7 +55,8 @@ function Profile() {
   const runtimeVersion = Updates.runtimeVersion ?? "unknown";
   const updateId = formatUpdateId(Updates.updateId);
   const isProductionChannel = updateChannel === "production";
-
+  const deviceName = Device.deviceName || Device.modelName || "Unknown Device";
+  const osInfo = `${Device.osName || ""} ${Device.osVersion || ""}`;
   const getStatusTone = () => {
     if (isCheckingUpdate) {
       return {
@@ -297,10 +298,12 @@ function Profile() {
                 <Text className="mt-3 text-sm font-medium text-gray-200">
                   Version {appVersion}aa
                 </Text>
+
+                <Text className="text-sm text-gray-300 mt-1">{deviceName}</Text>
+
+                <Text className="text-xs text-gray-400">{osInfo}</Text>
               </View>
             </View>
-
-           
           </View>
 
           <View
@@ -326,7 +329,6 @@ function Profile() {
                 <Text className="text-xl font-semibold text-black">
                   Over-the-air updates
                 </Text>
-                
               </View>
 
               <View
