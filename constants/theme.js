@@ -1,22 +1,23 @@
-import { Dimensions, StatusBar } from 'react-native';
+import { Dimensions, StatusBar } from "react-native";
 
-const { height, width } = Dimensions.get('window');
+const { height, width } = Dimensions.get("window");
 
 const COLORS = {
-  primary: '#110E11',
-  primary2: '#F87627',
-  secondary: '#DDF0FF',
-  tertiary: '#E9BD21',
+  primary: "#110E11",
+  primary2: "#F87627",
+  secondary: "#DDF0FF",
+  tertiary: "#E9BD21",
 
-  gray: '#83829A',
-  gray2: '#C1C0C8',
+  gray: "#83829A",
+  gray2: "#C1C0C8",
 
-  offwhite: '#F3F4F8',
-  white: '#FFFFFF',
-  black: '#000000',
-  red: '#D21212',
-  green: ' #00C135',
-  lightWhite: '#FAFAFC',
+  offwhite: "#F3F4F8",
+  white: "#FFFFFF",
+  black: "#000000",
+  red: "#D21212",
+  green: " #00C135",
+  lightWhite: "#FAFAFC",
+  brandPrimary: "hsl(188, 84%, 14%)",
 };
 
 const SIZES = {
@@ -34,7 +35,7 @@ const SIZES = {
 
 const SHADOWS = {
   small: {
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: {
       width: 0,
       height: 2,
@@ -44,7 +45,7 @@ const SHADOWS = {
     elevation: 2,
   },
   medium: {
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: {
       width: 0,
       height: 2,

@@ -7,9 +7,11 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  Pressable,
   ActivityIndicator,
   Platform,
   KeyboardAvoidingView,
+  StyleSheet,
 } from "react-native";
 import Constants from "expo-constants";
 import { Ionicons } from "@expo/vector-icons";
@@ -22,7 +24,7 @@ import { useNavigation } from "@react-navigation/native";
 import { setSignIn } from "../redux/Slices/AuthSlice";
 import { COLORS, SIZES } from "../constants";
 import { WelcomeCard } from "../components/Login";
-import { selectEmployeeCode, selectName } from "../redux/Slices/UserSlice";
+import { selectEmployeeCode } from "../redux/Slices/UserSlice";
 import { generateToken } from "../services/api";
 
 function Login() {
@@ -31,7 +33,6 @@ function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const employeeCode = useSelector(selectEmployeeCode);
-  const fullName = useSelector(selectName);
 
   // Form validation schema
   const loginSchema = Yup.object().shape({
@@ -138,125 +139,197 @@ function Login() {
           handleSubmit,
           setFieldTouched,
           isValid,
-        }) => (
-          <View style={{ flex: 1, justifyContent: "space-between" }}>
-            {/* Top Section */}
-            <View style={{ marginTop: 20 }}>
-              <Text
-                style={{
-                  color: COLORS.grayText,
-                  fontSize: 16,
-                  marginBottom: 5,
-                }}
-              >
-                Password
-              </Text>
+        }) => {
+          const isSubmitDisabled = !isValid || isLoading;
 
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  backgroundColor: COLORS.white,
-                  borderWidth: 1,
-                  borderColor: COLORS.borderGray,
-                  borderRadius: 12,
-                  paddingHorizontal: 12,
-                  height: 56,
-                  marginBottom: 10,
-                }}
-              >
-                <TextInput
-                  secureTextEntry={!showPassword}
-                  value={values.password}
-                  onChangeText={handleChange("password")}
-                  placeholder="Enter password"
-                  placeholderTextColor={COLORS.gray2}
-                  onBlur={() => setFieldTouched("password")}
-                  style={{
-                    flex: 1,
-                    fontSize: 16,
-                    height: "100%",
-                    color: COLORS.black,
-                  }}
-                />
-                <TouchableOpacity
-                  onPress={() => setShowPassword((prev) => !prev)}
-                >
-                  <Ionicons
-                    name={showPassword ? "eye" : "eye-off"}
-                    size={SIZES.xLarge}
-                    color={COLORS.gray2}
-                  />
-                </TouchableOpacity>
-              </View>
-
-              {touched.password && errors.password && (
+          return (
+            <View style={{ flex: 1, justifyContent: "space-between" }}>
+              {/* Top Section */}
+              <View style={{ marginTop: 20 }}>
                 <Text
-                  style={{ color: COLORS.red, fontSize: 14, marginBottom: 10 }}
+                  style={{
+                    color: COLORS.grayText,
+                    fontSize: 16,
+                    marginBottom: 5,
+                  }}
                 >
-                  {errors.password}
+                  Password
                 </Text>
-              )}
-            </View>
 
-            {/* Bottom Section */}
-            <View style={{ marginBottom: 20 }}>
-              <TouchableOpacity
-                disabled={!isValid || isLoading}
-                onPress={handleSubmit}
-                style={{
-                  backgroundColor: COLORS.primary,
-                  height: 56,
-                  borderRadius: 12,
-                  justifyContent: "center",
-                  alignItems: "center",
-                  opacity: !isValid ? 0.7 : 1,
-                  marginBottom: 12,
-                }}
-              >
-                {isLoading ? (
-                  <ActivityIndicator size="large" color={COLORS.white} />
-                ) : (
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    backgroundColor: COLORS.white,
+                    borderWidth: 1,
+                    borderColor: COLORS.borderGray,
+                    borderRadius: 12,
+                    paddingHorizontal: 12,
+                    height: 56,
+                    marginBottom: 10,
+                  }}
+                >
+                  <TextInput
+                    secureTextEntry={!showPassword}
+                    value={values.password}
+                    onChangeText={handleChange("password")}
+                    placeholder="Enter password"
+                    placeholderTextColor={COLORS.gray2}
+                    onBlur={() => setFieldTouched("password")}
+                    style={{
+                      flex: 1,
+                      fontSize: 16,
+                      height: "100%",
+                      color: COLORS.black,
+                    }}
+                  />
+                  <TouchableOpacity
+                    onPress={() => setShowPassword((prev) => !prev)}
+                  >
+                    <Ionicons
+                      name={showPassword ? "eye" : "eye-off"}
+                      size={SIZES.xLarge}
+                      color={COLORS.gray2}
+                    />
+                  </TouchableOpacity>
+                </View>
+
+                {touched.password && errors.password && (
                   <Text
                     style={{
-                      color: COLORS.white,
-                      fontSize: 18,
-                      fontWeight: "bold",
+                      color: COLORS.red,
+                      fontSize: 14,
+                      marginBottom: 10,
                     }}
                   >
-                    Login
+                    {errors.password}
                   </Text>
                 )}
-              </TouchableOpacity>
+              </View>
 
-              <TouchableOpacity
-                onPress={() => navigation.navigate("Qrscan")}
-                style={{
-                  borderColor: COLORS.primary,
-                  borderWidth: 1,
-                  backgroundColor: COLORS.white,
-                  height: 56,
-                  borderRadius: 12,
-                  justifyContent: "center",
-                  alignItems: "center",
-                }}
-              >
-                <Text
-                  style={{
-                    color: COLORS.primary,
-                    fontSize: 18,
-                    fontWeight: "600",
-                  }}
+              {/* Bottom Section */}
+              <View style={styles.bottomActions}>
+                <Pressable
+                  disabled={isSubmitDisabled}
+                  onPress={handleSubmit}
+                  style={({ pressed }) => [
+                    styles.primaryButton,
+                    isSubmitDisabled && styles.primaryButtonDisabled,
+                    pressed && !isSubmitDisabled && styles.buttonPressed,
+                  ]}
                 >
-                  Rescan QR Code
-                </Text>
-              </TouchableOpacity>
+                  {isLoading ? (
+                    <ActivityIndicator size="large" color={COLORS.white} />
+                  ) : (
+                    <View style={styles.buttonContent}>
+                      <Ionicons
+                        name="log-in-outline"
+                        size={20}
+                        color={COLORS.white}
+                        style={styles.buttonIcon}
+                      />
+                      <Text style={styles.primaryButtonText}>Login</Text>
+                    </View>
+                  )}
+                </Pressable>
+
+                <Pressable
+                  onPress={() => navigation.navigate("Qrscan")}
+                  style={({ pressed }) => [
+                    styles.secondaryButton,
+                    pressed && styles.buttonPressed,
+                  ]}
+                >
+                  <View style={styles.buttonContent}>
+                    <Ionicons
+                      name="qr-code-outline"
+                      size={20}
+                      color={COLORS.primary}
+                      style={styles.buttonIcon}
+                    />
+                    <Text style={styles.secondaryButtonText}>
+                      Rescan QR Code
+                    </Text>
+                  </View>
+                </Pressable>
+              </View>
             </View>
-          </View>
-        )}
+          );
+        }}
       </Formik>
     </KeyboardAvoidingView>
   );
 }
+
+const styles = StyleSheet.create({
+  bottomActions: {
+    marginBottom: 20,
+    padding: 12,
+    borderRadius: 16,
+    backgroundColor: "#F3F2F6",
+    borderWidth: 1,
+    borderColor: "#E7E5EC",
+    shadowColor: COLORS.primary,
+    shadowOffset: {
+      width: 0,
+      height: 8,
+    },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 6,
+  },
+  primaryButton: {
+    backgroundColor: COLORS.brandPrimary,
+    height: 56,
+    borderRadius: 14,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 10,
+    shadowColor: COLORS.brandPrimary,
+    shadowOffset: {
+      width: 0,
+      height: 6,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 5,
+  },
+  primaryButtonDisabled: {
+    opacity: 0.6,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  secondaryButton: {
+    borderColor: "#D0CCD8",
+    borderWidth: 1,
+    backgroundColor: COLORS.white,
+    height: 56,
+    borderRadius: 14,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  buttonPressed: {
+    transform: [{ scale: 0.98 }],
+  },
+  buttonContent: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  buttonIcon: {
+    marginRight: 8,
+  },
+  primaryButtonText: {
+    color: COLORS.white,
+    fontSize: 18,
+    fontWeight: "700",
+    letterSpacing: 0.2,
+  },
+  secondaryButtonText: {
+    color: COLORS.primary,
+    fontSize: 17,
+    fontWeight: "600",
+    letterSpacing: 0.2,
+  },
+});
 
 export default Login;
