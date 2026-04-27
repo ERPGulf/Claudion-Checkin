@@ -63,7 +63,8 @@
     "react-test-renderer": "19.1.0",
     "redux-persist": "^6.0.0",
     "utf8": "^3.0.0",
-    "yup": "^1.2.0"
+    "yup": "^1.2.0",
+    "expo-device": "~8.0.10"
   },
   "devDependencies": {
     "@babel/core": "^7.20.0",

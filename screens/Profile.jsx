@@ -13,6 +13,7 @@ import { selectUserDetails } from "../redux/Slices/UserSlice";
 import { clearTokens, clearStore } from "../services/api/apiClient";
 import apiClient from "../services/api/apiClient";
 import { clearAuthCache } from "../services/api/authHelper";
+import * as Device from "expo-device";
 
 const VERSION_CODE = "1.1.2";
 function Profile() {
@@ -27,6 +28,10 @@ function Profile() {
     });
   }, []);
   const fullname = useSelector((state) => state.user.fullname);
+  const deviceName = Device.deviceName;
+  const osName = Device.osName;
+  const osVersion = Device.osVersion;
+  const modelName = Device.modelName;
   const handleLogout = async () => {
     try {
       hapticsMessage("success");
@@ -95,6 +100,12 @@ function Profile() {
               </Text>
               <Text className="text-sm font-semibold text-white">
                 {VERSION_CODE}
+              </Text>
+              <Text className="text-sm text-gray-300">
+                {deviceName || modelName}
+              </Text>
+              <Text className="text-sm text-gray-300">
+                {osName} {osVersion}
               </Text>
             </View>
           </View>
