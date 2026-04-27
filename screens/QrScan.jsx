@@ -1,5 +1,12 @@
 // NOSONAR
-import { View, Text, TouchableOpacity, ActivityIndicator } from "react-native";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  ActivityIndicator,
+  StyleSheet,
+  Alert,
+} from "react-native";
 import { useEffect, useLayoutEffect, useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import base64 from "base-64";
@@ -17,14 +24,20 @@ import {
   setEmployeeCode,
 } from "../redux/Slices/UserSlice";
 import { COLORS, SIZES } from "../constants";
+
+const BRAND_PRIMARY = "hsl(188, 84%, 14%)";
+
 function QrScan() {
   const navigation = useNavigation();
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const dispatch = useDispatch();
+
   useEffect(() => {
     if (!permission?.granted) requestPermission();
-  }, [permission]);
+  }, [permission, requestPermission]);
+
   useLayoutEffect(() => {
     navigation.setOptions({
       headerShadowVisible: false,
@@ -42,6 +55,7 @@ function QrScan() {
       ),
     });
   }, [navigation]);
+
   const handleQRCodeData = async (data) => {
     try {
       const KEYS = [
@@ -49,28 +63,27 @@ function QrScan() {
         "Employee_Code",
         "Full_Name",
         "Photo",
-        "Restrict Location",   // :point_left: NEW FIELD
+        "Restrict Location",
         "User_id",
         "API",
         "App_key",
       ];
-      // :one: Decode Base64
+
       let value = utf8.decode(base64.decode(data));
-      // :two: Clean up weird characters
       value = value
         .replace(/[\u0000-\u001F\u00A0]+/g, " ")
         .replace(
           /[%#;]+(?:\s+)?(Company|Employee_Code|Full_Name|Photo|Restrict Location|User_id|API|App_key)(?:\s*[:=])/g,
-          (_, key) => `${key}:`
+          (_, key) => `${key}:`,
         )
         .replace(/[^\S\r\n]+/g, " ")
         .trim();
-      // :three: Dynamic extraction
+
       const qrData = {};
       const keyAlt = KEYS.join("|");
       const pairRE = new RegExp(
         `\\b(${keyAlt})\\s*[:=]\\s*([\\s\\S]*?)(?=\\s*(?:${keyAlt})\\s*[:=]|$)`,
-        "gi"
+        "gi",
       );
       let m;
       while ((m = pairRE.exec(value))) {
@@ -78,11 +91,11 @@ function QrScan() {
         const v = m[2].trim();
         qrData[k] = v;
       }
-      // :four: Trailing cleanup
+
       Object.keys(qrData).forEach((k) => {
         qrData[k] = qrData[k].replace(/[%#;]+$/, "").trim();
       });
-      // :five: App_key fix
+
       let appKey = qrData["App_key"]?.trim() || "";
       const missingPadding = appKey.length % 4;
       if (missingPadding) {
@@ -92,11 +105,11 @@ function QrScan() {
         if (appKey.endsWith("=")) appKey = appKey.slice(0, -1) + "==";
         else appKey += "==";
       }
-      // :six: Photo default=1
+
       const photoFlag = qrData["Photo"]
         ? Number.parseInt(qrData["Photo"], 10)
         : 1;
-      // :seven: Build final object
+
       const cleanedData = {
         company: qrData["Company"],
         employee_code: qrData["Employee_Code"],
@@ -105,9 +118,9 @@ function QrScan() {
         baseUrl: qrData["API"]?.trim(),
         app_key: appKey,
         photo: photoFlag,
-        restrict_location: qrData["Restrict Location"]?.trim() ?? "0", // :point_left: NEW
+        restrict_location: qrData["Restrict Location"]?.trim() ?? "0",
       };
-      // :eight: Validate required fields
+
       if (
         cleanedData.company &&
         cleanedData.employee_code &&
@@ -121,117 +134,307 @@ function QrScan() {
           ["app_key", cleanedData.app_key],
           ["baseUrl", cleanedData.baseUrl],
           ["photo", String(cleanedData.photo)],
-          ["restrict_location", cleanedData.restrict_location], // :point_left: NEW
+          ["restrict_location", cleanedData.restrict_location],
         ]);
-        // Redux dispatch (NO restrict_location)
+
         dispatch(setUsername(cleanedData.api_key));
         dispatch(setFullname(cleanedData.full_name));
         dispatch(setBaseUrl(cleanedData.baseUrl));
         dispatch(setEmployeeCode(cleanedData.employee_code));
         navigation.navigate("login");
+        return true;
       } else {
-        alert("Invalid QR code. Please try again.");
+        Alert.alert("Invalid QR", "Please scan a valid Claudion QR code.");
+        return false;
       }
-    } catch (err) {
-      alert("Invalid QR code");
+    } catch {
+      Alert.alert("Invalid QR", "Please scan a valid Claudion QR code.");
+      return false;
     }
   };
-  const handleBarCodeScanned = async ({ type, data }) => {
+
+  const handleBarCodeScanned = async ({ data }) => {
+    if (scanned || isProcessing) return;
+
     setScanned(true);
-    await handleQRCodeData(data);
+    setIsProcessing(true);
+    const isValid = await handleQRCodeData(data);
+    setIsProcessing(false);
+    if (!isValid) setScanned(false);
   };
+
   const pickImage = async () => {
     try {
+      setIsProcessing(true);
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ["images"],
         allowsEditing: true,
         aspect: [1, 1],
         quality: 1,
       });
-      if (result?.canceled) return;
-      if (result.assets[0]?.uri) {
+      if (result?.canceled) {
+        setIsProcessing(false);
+        return;
+      }
+
+      if (result?.assets?.[0]?.uri) {
+        setScanned(true);
         const scannedResults = await Camera.scanFromURLAsync(
-          result.assets[0].uri
+          result.assets[0].uri,
         );
+        if (!scannedResults?.length || !scannedResults[0]?.data) {
+          Alert.alert(
+            "No QR Found",
+            "Please choose an image with a visible QR code.",
+          );
+          setScanned(false);
+          setIsProcessing(false);
+          return;
+        }
         const { data } = scannedResults[0];
-        await handleQRCodeData(data);
+        const isValid = await handleQRCodeData(data);
+        if (!isValid) setScanned(false);
       }
     } catch {
-      alert("No QR-CODE Found");
+      Alert.alert(
+        "No QR Found",
+        "Please choose an image with a visible QR code.",
+      );
+      setScanned(false);
+    } finally {
+      setIsProcessing(false);
     }
   };
+
   if (!permission || permission.status === "undetermined") {
     return (
-      <SafeAreaView className="flex-1 items-center justify-center px-3 bg-white">
-        <ActivityIndicator size="large" />
+      <SafeAreaView style={styles.stateContainer}>
+        <ActivityIndicator size="large" color={BRAND_PRIMARY} />
+        <Text style={styles.stateText}>Preparing camera...</Text>
       </SafeAreaView>
     );
   }
+
   if (!permission.granted) {
     return (
-      <SafeAreaView className="flex-1 items-center justify-center px-3 bg-white">
-        <Text>No access to camera</Text>
+      <SafeAreaView style={styles.stateContainer}>
+        <Ionicons name="camera-outline" size={50} color={COLORS.gray} />
+        <Text style={styles.stateTitle}>Camera access required</Text>
+        <Text style={styles.stateText}>
+          Allow camera permission to scan your Claudion QR code.
+        </Text>
+        <TouchableOpacity
+          style={styles.primaryButton}
+          onPress={requestPermission}
+          activeOpacity={0.88}
+        >
+          <Text style={styles.primaryButtonText}>ALLOW CAMERA</Text>
+        </TouchableOpacity>
       </SafeAreaView>
     );
   }
+
   return (
     <CameraView
       barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
-      onBarcodeScanned={handleBarCodeScanned}
-      style={{ flex: 1, width: "100%", height: "100%" }}
+      onBarcodeScanned={
+        scanned || isProcessing ? undefined : handleBarCodeScanned
+      }
+      style={styles.camera}
       type="back"
-      className="flex-1 items-center px-3 py-1 bg-white justify-end"
+      className="flex-1 items-center justify-end"
     >
-      <View
-        style={{ position: "absolute", top: 100, height: SIZES.width * 0.9 }}
-        className="w-full bg-transparent border-4 border-white/50 rounded-2xl justify-center items-center"
-      >
-        <Ionicons
-          name="qr-code-outline"
-          size={SIZES.width * 0.6}
-          color="rgba(255,255,255,0.1)"
-        />
+      <View style={styles.cameraOverlay} />
+
+      <View style={styles.scanFrameContainer}>
+        <View style={styles.scanFrame}>
+          <View style={[styles.corner, styles.cornerTopLeft]} />
+          <View style={[styles.corner, styles.cornerTopRight]} />
+          <View style={[styles.corner, styles.cornerBottomLeft]} />
+          <View style={[styles.corner, styles.cornerBottomRight]} />
+          <Ionicons
+            name="qr-code-outline"
+            size={SIZES.width * 0.48}
+            color="rgba(17,14,17,0.12)"
+          />
+        </View>
       </View>
-      <View
-        style={{
-          width: "100%",
-          flex: 0.2,
-          justifyContent: "flex-end",
-          paddingVertical: 20,
-        }}
-      >
-        {scanned ? (
-          <TouchableOpacity
-            style={{ backgroundColor: COLORS.primary }}
-            className="mt-2 h-16 justify-center rounded-xl items-center flex-row"
-            onPress={() => setScanned(false)}
-          >
-            <Ionicons name="scan-outline" size={SIZES.xxxLarge} color="white" />
-            <Text className="text-base font-semibold text-white ml-2">
-              TAP TO SCAN AGAIN
-            </Text>
-          </TouchableOpacity>
-        ) : (
-          <View className="h-16 justify-center rounded-xl bg-white border-2 items-center mt-4">
-            <Ionicons
-              name="qr-code-outline"
-              size={SIZES.xxxLarge}
-              color={COLORS.primary}
-            />
-          </View>
-        )}
+
+      <View style={styles.bottomSheet}>
+        <Text style={styles.sheetTitle}>Align QR inside frame</Text>
+        <Text style={styles.sheetSubtitle}>
+          We will detect and continue automatically.
+        </Text>
+
         <TouchableOpacity
-          style={{ backgroundColor: COLORS.primary }}
-          className="mt-2 h-16 justify-center flex-row items-center rounded-xl"
-          onPress={pickImage}
+          style={styles.actionButton}
+          onPress={scanned ? () => setScanned(false) : pickImage}
+          activeOpacity={0.88}
+          disabled={isProcessing}
         >
-          <Ionicons name="image" size={SIZES.xxxLarge} color="white" />
-          <Text className="text-base font-semibold text-white ml-2">
-            SELECT FROM PHOTOS
+          {isProcessing ? (
+            <ActivityIndicator size="small" color={COLORS.white} />
+          ) : (
+            <Ionicons
+              name={scanned ? "scan-outline" : "image-outline"}
+              size={SIZES.xxxLarge - 2}
+              color={COLORS.white}
+            />
+          )}
+          <Text style={styles.actionButtonText}>
+            {isProcessing
+              ? "PROCESSING..."
+              : scanned
+                ? "TAP TO SCAN AGAIN"
+                : "SELECT FROM PHOTOS"}
           </Text>
         </TouchableOpacity>
       </View>
     </CameraView>
   );
 }
+
+const styles = StyleSheet.create({
+  camera: {
+    flex: 1,
+    width: "100%",
+    height: "100%",
+    backgroundColor: COLORS.white,
+  },
+  cameraOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(255,255,255,0.22)",
+  },
+  scanFrameContainer: {
+    position: "absolute",
+    top: 95,
+    width: "100%",
+    alignItems: "center",
+  },
+  scanFrame: {
+    width: SIZES.width * 0.82,
+    height: SIZES.width * 0.82,
+    borderRadius: 24,
+    borderWidth: 2,
+    borderColor: "rgba(17,14,17,0.22)",
+    justifyContent: "center",
+    alignItems: "center",
+    overflow: "hidden",
+    backgroundColor: "rgba(255,255,255,0.36)",
+  },
+  corner: {
+    position: "absolute",
+    width: 34,
+    height: 34,
+    borderColor: BRAND_PRIMARY,
+  },
+  cornerTopLeft: {
+    top: 12,
+    left: 12,
+    borderTopWidth: 4,
+    borderLeftWidth: 4,
+    borderTopLeftRadius: 10,
+  },
+  cornerTopRight: {
+    top: 12,
+    right: 12,
+    borderTopWidth: 4,
+    borderRightWidth: 4,
+    borderTopRightRadius: 10,
+  },
+  cornerBottomLeft: {
+    bottom: 12,
+    left: 12,
+    borderBottomWidth: 4,
+    borderLeftWidth: 4,
+    borderBottomLeftRadius: 10,
+  },
+  cornerBottomRight: {
+    bottom: 12,
+    right: 12,
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomRightRadius: 10,
+  },
+  bottomSheet: {
+    width: "100%",
+    backgroundColor: "rgba(255,255,255,0.96)",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderTopWidth: 1,
+    borderColor: "rgba(17,14,17,0.08)",
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 22,
+  },
+  sheetTitle: {
+    color: COLORS.primary,
+    fontSize: 20,
+    fontWeight: "700",
+    textAlign: "center",
+  },
+  sheetSubtitle: {
+    marginTop: 4,
+    color: "#5A5760",
+    fontSize: 13,
+    textAlign: "center",
+    marginBottom: 14,
+  },
+  actionButton: {
+    height: 58,
+    borderRadius: 14,
+    backgroundColor: BRAND_PRIMARY,
+    shadowColor: BRAND_PRIMARY,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 4,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 8,
+  },
+  actionButtonText: {
+    color: COLORS.white,
+    fontSize: 15,
+    fontWeight: "700",
+    letterSpacing: 0.2,
+  },
+  stateContainer: {
+    flex: 1,
+    backgroundColor: COLORS.white,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 20,
+  },
+  stateTitle: {
+    marginTop: 12,
+    color: COLORS.primary,
+    fontSize: 20,
+    fontWeight: "700",
+  },
+  stateText: {
+    marginTop: 8,
+    color: COLORS.gray,
+    fontSize: 14,
+    textAlign: "center",
+    lineHeight: 21,
+  },
+  primaryButton: {
+    marginTop: 18,
+    height: 50,
+    minWidth: 180,
+    borderRadius: 12,
+    backgroundColor: BRAND_PRIMARY,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  primaryButtonText: {
+    color: COLORS.white,
+    fontSize: 14,
+    fontWeight: "700",
+    letterSpacing: 0.4,
+  },
+});
+
 export default QrScan;
