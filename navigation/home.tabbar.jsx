@@ -10,7 +10,7 @@ function HomeTabGroup() {
   return (
     <TabStack.Navigator
       screenOptions={() => ({
-        tabBarActiveTintColor: COLORS.primary,
+        tabBarActiveTintColor: COLORS.brandPrimary,
         headerShown: false,
         tabBarShowLabel: false,
         tabBarStyle: {
