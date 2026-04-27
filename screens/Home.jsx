@@ -1,7 +1,7 @@
 import { ScrollView, View, useWindowDimensions } from "react-native";
-import { useNavigation } from '@react-navigation/native';
-import Constants from 'expo-constants';
-import { LavaMenu, QuickAccess, WelcomeCard } from '../components/Home';
+import { useNavigation } from "@react-navigation/native";
+import Constants from "expo-constants";
+import { LavaMenu, QuickAccess, WelcomeCard } from "../components/Home";
 
 function Home() {
   const { width } = useWindowDimensions();

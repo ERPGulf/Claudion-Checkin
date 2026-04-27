@@ -89,8 +89,12 @@ function WelcomeCard() {
             size={isTablet ? 28 : 24}
           />
           {unreadCount > 0 && (
-            <View style={[styles.badgeWrap, isTablet && styles.badgeWrapTablet]}>
-              <Text style={[styles.badgeText, isTablet && styles.badgeTextTablet]}>
+            <View
+              style={[styles.badgeWrap, isTablet && styles.badgeWrapTablet]}
+            >
+              <Text
+                style={[styles.badgeText, isTablet && styles.badgeTextTablet]}
+              >
                 {badgeLabel}
               </Text>
             </View>
@@ -99,7 +103,9 @@ function WelcomeCard() {
       </View>
 
       <View>
-        <Text style={[styles.welcomeLabel, isTablet && styles.welcomeLabelTablet]}>
+        <Text
+          style={[styles.welcomeLabel, isTablet && styles.welcomeLabelTablet]}
+        >
           Welcome back,
         </Text>
         <View style={styles.nameRow}>
