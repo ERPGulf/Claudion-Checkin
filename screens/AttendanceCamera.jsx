@@ -137,9 +137,11 @@ function AttendanceCamera() {
       await uploadPicture(docname);
       // Redux update
       if (custom_in === 1) {
+        const checkinStartedAt = Date.now();
+        await AsyncStorage.setItem("checkinStartTime", String(checkinStartedAt));
         dispatch(
           setCheckin({
-            checkinTime: new Date().toISOString(),
+            checkinTime: checkinStartedAt,
             location: {
               locationName: locationData?.locationName || "Office",
               latitude: locationData?.latitude,
@@ -149,6 +151,7 @@ function AttendanceCamera() {
           })
         );
       } else {
+        await AsyncStorage.removeItem("checkinStartTime");
         dispatch(setCheckout({ checkoutTime: new Date().toISOString() }));
       }
 

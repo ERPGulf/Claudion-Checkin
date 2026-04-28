@@ -49,6 +49,33 @@ import {
 } from "react-native-safe-area-context";
 
 const BREAK_LIMIT_MS = 2 * 60 * 60 * 1000; // 2 hours
+const CHECKIN_START_TIME_KEY = "checkinStartTime";
+
+const parseAttendanceTimestamp = (value) => {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const numeric = Number(value);
+    if (Number.isFinite(numeric) && numeric > 0) {
+      return numeric;
+    }
+
+    const normalized = value.includes("T") ? value : value.replace(" ", "T");
+    const parsed = Date.parse(normalized);
+    if (!Number.isNaN(parsed)) {
+      return parsed;
+    }
+  }
+
+  const fallback = new Date(value).getTime();
+  return Number.isNaN(fallback) ? null : fallback;
+};
 
 /** Returns today's date formatted as DD-MM-YYYY */
 const getTodayString = () =>
@@ -122,6 +149,36 @@ function AttendanceAction() {
     };
     loadRestriction();
   }, []);
+
+  const resolveStableCheckinTime = useCallback(
+    async (statusCheckinTime) => {
+      const statusTimeMs = parseAttendanceTimestamp(statusCheckinTime);
+      if (statusTimeMs) {
+        await AsyncStorage.setItem(
+          CHECKIN_START_TIME_KEY,
+          String(statusTimeMs),
+        );
+        return statusTimeMs;
+      }
+
+      const storedTimeMs = parseAttendanceTimestamp(
+        await AsyncStorage.getItem(CHECKIN_START_TIME_KEY),
+      );
+      if (storedTimeMs) {
+        return storedTimeMs;
+      }
+
+      const fallbackNow = Date.now();
+      await AsyncStorage.setItem(CHECKIN_START_TIME_KEY, String(fallbackNow));
+      return fallbackNow;
+    },
+    [],
+  );
+
+  const clearPersistedCheckinTime = useCallback(async () => {
+    await AsyncStorage.removeItem(CHECKIN_START_TIME_KEY);
+  }, []);
+
   useEffect(() => {
     const loadCheckinStatus = async () => {
       try {
@@ -130,14 +187,17 @@ function AttendanceAction() {
         if (!isMountedRef.current) return;
 
         if (res.custom_in === 1) {
+          const stableCheckinTime = await resolveStableCheckinTime(
+            res.checkin_time,
+          );
           dispatch(
             setCheckin({
-              checkinTime: Date.now(),
+              checkinTime: stableCheckinTime,
               location: null,
             }),
           );
         } else {
-          // dispatch(setCheckout({ checkoutTime: null }));
+          await clearPersistedCheckinTime();
           dispatch(resetCheckin());
         }
       } catch (e) {
@@ -148,7 +208,12 @@ function AttendanceAction() {
     if (employeeCode) {
       loadCheckinStatus();
     }
-  }, [employeeCode]);
+  }, [
+    employeeCode,
+    dispatch,
+    resolveStableCheckinTime,
+    clearPersistedCheckinTime,
+  ]);
 
   const fetchStatusAndLocation = useCallback(async () => {
     try {
@@ -266,13 +331,17 @@ function AttendanceAction() {
         if (!isMountedRef.current) return;
 
         if (res.custom_in === 1) {
+          const stableCheckinTime = await resolveStableCheckinTime(
+            res.checkin_time,
+          );
           dispatch(
             setCheckin({
-              checkinTime: Date.now(),
+              checkinTime: stableCheckinTime,
               location: null,
             }),
           );
         } else {
+          await clearPersistedCheckinTime();
           dispatch(resetCheckin());
         }
 
@@ -289,7 +358,15 @@ function AttendanceAction() {
     });
 
     return unsubscribe;
-  }, [navigation, employeeCode]);
+  }, [
+    navigation,
+    employeeCode,
+    dispatch,
+    refreshAttendanceData,
+    syncBreakState,
+    resolveStableCheckinTime,
+    clearPersistedCheckinTime,
+  ]);
 
   useEffect(() => {
     const loadBreak = async () => {
@@ -383,12 +460,17 @@ function AttendanceAction() {
         }
 
         if (type === "IN") {
+          const checkinStartedAt = Date.now();
           dispatch({ type: "attendance/setSelectedLocation", payload: null });
           dispatch(
             setCheckin({
-              checkinTime: Date.now(),
+              checkinTime: checkinStartedAt,
               location: restrictLocation === "1" ? response.location : null,
             }),
+          );
+          await AsyncStorage.setItem(
+            CHECKIN_START_TIME_KEY,
+            String(checkinStartedAt),
           );
         } else {
           if (onBreak) {
@@ -402,6 +484,7 @@ function AttendanceAction() {
           }
           dispatch(setCheckout({ checkoutTime: Date.now() }));
           dispatch({ type: "attendance/setSelectedLocation", payload: null });
+          await clearPersistedCheckinTime();
         }
 
         const breakData = await refreshAttendanceData();
@@ -439,6 +522,7 @@ function AttendanceAction() {
       dispatch,
       refreshAttendanceData,
       syncBreakState,
+      clearPersistedCheckinTime,
     ],
   );
 
@@ -496,6 +580,7 @@ function AttendanceAction() {
           location: null,
         }),
       );
+      await AsyncStorage.setItem(CHECKIN_START_TIME_KEY, String(now));
 
       if (preset === "idle-0") {
         await setIdleState(0, false);
