@@ -296,7 +296,7 @@ function Profile() {
                   Employee account
                 </Text>
                 <Text className="mt-3 text-sm font-medium text-gray-200">
-                  Version {appVersion}aa
+                  Version {appVersion}-APR-28
                 </Text>
 
                 <Text className="text-sm text-gray-300 mt-1">{deviceName}</Text>
