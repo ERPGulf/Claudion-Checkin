@@ -138,7 +138,10 @@ function AttendanceCamera() {
       // Redux update
       if (custom_in === 1) {
         const checkinStartedAt = Date.now();
-        await AsyncStorage.setItem("checkinStartTime", String(checkinStartedAt));
+        await AsyncStorage.setItem(
+          "checkinStartTime",
+          String(checkinStartedAt),
+        );
         dispatch(
           setCheckin({
             checkinTime: checkinStartedAt,
@@ -148,7 +151,7 @@ function AttendanceCamera() {
               longitude: locationData?.longitude,
               radius: locationData?.radius,
             },
-          })
+          }),
         );
       } else {
         await AsyncStorage.removeItem("checkinStartTime");

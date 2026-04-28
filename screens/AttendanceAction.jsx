@@ -150,30 +150,24 @@ function AttendanceAction() {
     loadRestriction();
   }, []);
 
-  const resolveStableCheckinTime = useCallback(
-    async (statusCheckinTime) => {
-      const statusTimeMs = parseAttendanceTimestamp(statusCheckinTime);
-      if (statusTimeMs) {
-        await AsyncStorage.setItem(
-          CHECKIN_START_TIME_KEY,
-          String(statusTimeMs),
-        );
-        return statusTimeMs;
-      }
+  const resolveStableCheckinTime = useCallback(async (statusCheckinTime) => {
+    const statusTimeMs = parseAttendanceTimestamp(statusCheckinTime);
+    if (statusTimeMs) {
+      await AsyncStorage.setItem(CHECKIN_START_TIME_KEY, String(statusTimeMs));
+      return statusTimeMs;
+    }
 
-      const storedTimeMs = parseAttendanceTimestamp(
-        await AsyncStorage.getItem(CHECKIN_START_TIME_KEY),
-      );
-      if (storedTimeMs) {
-        return storedTimeMs;
-      }
+    const storedTimeMs = parseAttendanceTimestamp(
+      await AsyncStorage.getItem(CHECKIN_START_TIME_KEY),
+    );
+    if (storedTimeMs) {
+      return storedTimeMs;
+    }
 
-      const fallbackNow = Date.now();
-      await AsyncStorage.setItem(CHECKIN_START_TIME_KEY, String(fallbackNow));
-      return fallbackNow;
-    },
-    [],
-  );
+    const fallbackNow = Date.now();
+    await AsyncStorage.setItem(CHECKIN_START_TIME_KEY, String(fallbackNow));
+    return fallbackNow;
+  }, []);
 
   const clearPersistedCheckinTime = useCallback(async () => {
     await AsyncStorage.removeItem(CHECKIN_START_TIME_KEY);

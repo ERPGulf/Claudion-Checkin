@@ -295,8 +295,7 @@ export const getAttendanceStatus = async () => {
 
     console.log("LATEST RECORD:", latest);
 
-    const isCheckedIn =
-      latest?.custom_in === 1 || latest?.log_type === "IN";
+    const isCheckedIn = latest?.custom_in === 1 || latest?.log_type === "IN";
 
     const latestCheckinTime =
       latest?.timestamp ||
