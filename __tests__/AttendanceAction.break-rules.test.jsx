@@ -145,6 +145,33 @@ describe("AttendanceAction break rules", () => {
     });
   });
 
+  it("keeps check-in start time from status sync", async () => {
+    const statusTime = "2026-04-25T08:30:00.000Z";
+    const expectedTime = new Date(statusTime).getTime();
+
+    attendanceService.getAttendanceStatus.mockResolvedValue({
+      custom_in: 1,
+      checkin_time: statusTime,
+    });
+
+    const store = createStore({ checkin: false, checkinTime: null });
+
+    render(
+      <Provider store={store}>
+        <AttendanceAction />
+      </Provider>,
+    );
+
+    await waitFor(() => {
+      expect(store.getState().attendance.checkin).toBe(true);
+      expect(store.getState().attendance.checkinTime).toBe(expectedTime);
+    });
+
+    expect(await AsyncStorage.getItem("checkinStartTime")).toBe(
+      String(expectedTime),
+    );
+  });
+
   it("disables break after a completed break for the day", async () => {
     attendanceService.getTodayBreaks.mockResolvedValue({
       total_break_minutes: 25,
