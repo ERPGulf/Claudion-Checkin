@@ -67,6 +67,7 @@ function AttendanceAction() {
   const dispatch = useDispatch();
   const checkin = useSelector((state) => state.attendance.checkin);
   const checkinTime = useSelector((state) => state.attendance.checkinTime);
+  const checkinLocation = useSelector((state) => state.attendance.location);
   const userDetails = useSelector((state) => state.user.userDetails);
   const breakMinutes = useSelector((state) => state.attendance.breakMinutes);
   const employeeCode = userDetails?.employeeCode;
@@ -149,7 +150,7 @@ function AttendanceAction() {
         dispatch(
           setCheckin({
             checkinTime: persistedStart,
-            location: null,
+            location: checkinLocation,
           }),
         );
         return;
@@ -158,7 +159,7 @@ function AttendanceAction() {
       await clearPersistedCheckinStartTime();
       dispatch(resetCheckin());
     },
-    [checkinTime, dispatch],
+    [checkinLocation, checkinTime, dispatch],
   );
 
   useEffect(() => {

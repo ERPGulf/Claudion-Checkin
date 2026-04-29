@@ -191,6 +191,46 @@ describe("AttendanceAction session timer behavior", () => {
     });
   });
 
+  it("preserves checked-in location after focus sync", async () => {
+    const persistedStart = new Date("2026-04-29T09:45:00.000Z").getTime();
+    const savedLocation = {
+      locationName: "Main Gate",
+      latitude: 25.2,
+      longitude: 51.4,
+    };
+
+    await AsyncStorage.setItem("checkinStartTime", String(persistedStart));
+
+    attendanceService.getAttendanceStatus.mockResolvedValue({
+      custom_in: 1,
+      checkin_time: persistedStart,
+    });
+
+    const screen = renderScreen({
+      checkin: true,
+      checkinTime: persistedStart,
+      location: savedLocation,
+    });
+
+    await waitFor(() => {
+      const attendance = screen.store.getState().attendance;
+      expect(attendance.checkin).toBe(true);
+      expect(attendance.location).toEqual(savedLocation);
+    });
+
+    await act(async () => {
+      if (focusListener) {
+        await focusListener();
+      }
+    });
+
+    await waitFor(() => {
+      const attendance = screen.store.getState().attendance;
+      expect(attendance.checkin).toBe(true);
+      expect(attendance.location).toEqual(savedLocation);
+    });
+  });
+
   it("resets timer session on checkout", async () => {
     const checkinStart = new Date("2026-04-29T09:55:00.000Z").getTime();
 
