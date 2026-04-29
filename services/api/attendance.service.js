@@ -251,7 +251,7 @@ export const getUserAttendance = async (
   }
 };
 /**
- * getAttendanceStatus() — returns { custom_in: 0 | 1, checkin_time: string | null }
+ * getAttendanceStatus() — returns { custom_in: 0 | 1 }
  */
 // export const getAttendanceStatus = async () => {
 //   try {
@@ -277,14 +277,14 @@ export const getUserAttendance = async (
 export const getAttendanceStatus = async () => {
   try {
     const employee_id = await AsyncStorage.getItem("employee_id");
-    if (!employee_id) return { custom_in: 0, checkin_time: null };
+    if (!employee_id) return { custom_in: 0 };
 
     const list = await getUserAttendance(employee_id, 0, 10);
 
     console.log("ATTENDANCE LIST:", list);
 
     if (!Array.isArray(list) || list.length === 0) {
-      return { custom_in: 0, checkin_time: null };
+      return { custom_in: 0 };
     }
 
     const latest = list.reduce((a, b) => {
@@ -295,22 +295,12 @@ export const getAttendanceStatus = async () => {
 
     console.log("LATEST RECORD:", latest);
 
-    const isCheckedIn = latest?.custom_in === 1 || latest?.log_type === "IN";
-
-    const latestCheckinTime =
-      latest?.timestamp ||
-      latest?.time ||
-      latest?.creation ||
-      latest?.employee_time ||
-      null;
-
     return {
-      custom_in: isCheckedIn ? 1 : 0,
-      checkin_time: isCheckedIn ? latestCheckinTime : null,
+      custom_in: latest?.custom_in === 1 || latest?.log_type === "IN" ? 1 : 0,
     };
   } catch (e) {
     console.log("STATUS ERROR:", e);
-    return { custom_in: 0, checkin_time: null };
+    return { custom_in: 0 };
   }
 };
 // Get daily worked hours
