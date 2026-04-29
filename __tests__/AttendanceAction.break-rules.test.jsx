@@ -187,7 +187,9 @@ describe("AttendanceAction break rules", () => {
     const staleBackendCheckinTime = new Date(
       "2026-04-25T08:30:00.000Z",
     ).getTime();
-    const freshLocalCheckinTime = new Date("2026-04-25T10:00:00.000Z").getTime();
+    const freshLocalCheckinTime = new Date(
+      "2026-04-25T10:00:00.000Z",
+    ).getTime();
 
     await AsyncStorage.setItem(
       "checkinStartTime",
