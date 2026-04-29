@@ -12,7 +12,6 @@ const initialState = {
   breakTakenToday: false,
   onBreak: false,
   breakStartTime: null,
-
 };
 
 export const AttendanceSlice = createSlice({
@@ -27,6 +26,7 @@ export const AttendanceSlice = createSlice({
     },
     setCheckout: (state, action) => {
       state.checkin = false;
+      state.checkinTime = null;
       state.checkoutTime = action.payload.checkoutTime;
       state.location = null; // clear location on checkout
     },

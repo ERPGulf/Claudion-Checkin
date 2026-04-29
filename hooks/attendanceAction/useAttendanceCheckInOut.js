@@ -8,6 +8,9 @@ import {
   employeeBreak,
 } from "../../services/api/attendance.service";
 
+const CHECKIN_START_STORAGE_KEY = "checkinStartTime";
+const CHECKOUT_TIME_STORAGE_KEY = "lastCheckoutTime";
+
 function useAttendanceCheckInOut({
   navigation,
   checkin,
@@ -41,14 +44,23 @@ function useAttendanceCheckInOut({
         }
 
         if (type === "IN") {
+          const checkinStartTime = Date.now();
+          await AsyncStorage.removeItem(CHECKOUT_TIME_STORAGE_KEY);
+          await AsyncStorage.setItem(
+            CHECKIN_START_STORAGE_KEY,
+            String(checkinStartTime),
+          );
+
           dispatch({ type: "attendance/setSelectedLocation", payload: null });
           dispatch(
             setCheckin({
-              checkinTime: Date.now(),
+              checkinTime: checkinStartTime,
               location: restrictLocation === "1" ? response.location : null,
             }),
           );
         } else {
+          const checkoutTime = Date.now();
+
           if (onBreak) {
             const breakRes = await employeeBreak({
               employeeCode,
@@ -59,7 +71,12 @@ function useAttendanceCheckInOut({
             }
           }
 
-          dispatch(setCheckout({ checkoutTime: Date.now() }));
+          await AsyncStorage.removeItem(CHECKIN_START_STORAGE_KEY);
+          await AsyncStorage.setItem(
+            CHECKOUT_TIME_STORAGE_KEY,
+            String(checkoutTime),
+          );
+          dispatch(setCheckout({ checkoutTime }));
           dispatch({ type: "attendance/setSelectedLocation", payload: null });
         }
 

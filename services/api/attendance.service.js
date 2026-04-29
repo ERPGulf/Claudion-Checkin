@@ -295,8 +295,22 @@ export const getAttendanceStatus = async () => {
 
     console.log("LATEST RECORD:", latest);
 
+    const isCustomIn =
+      latest?.custom_in === 1 ||
+      latest?.custom_in === "1" ||
+      latest?.custom_in === true;
+    const isLogIn = `${latest?.log_type || ""}`.toUpperCase() === "IN";
+    const isCheckedIn = isCustomIn || isLogIn;
+
     return {
-      custom_in: latest?.custom_in === 1 || latest?.log_type === "IN" ? 1 : 0,
+      custom_in: isCheckedIn ? 1 : 0,
+      checkin_time: isCheckedIn
+        ? (latest?.checkin_time ??
+          latest?.timestamp ??
+          latest?.time ??
+          latest?.creation ??
+          null)
+        : null,
     };
   } catch (e) {
     console.log("STATUS ERROR:", e);

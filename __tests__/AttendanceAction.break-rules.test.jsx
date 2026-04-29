@@ -59,13 +59,15 @@ jest.mock("@expo/vector-icons", () => {
   };
 });
 
+let focusListener = null;
+
 const mockNavigation = {
   setOptions: jest.fn(),
   goBack: jest.fn(),
   navigate: jest.fn(),
   addListener: jest.fn((event, cb) => {
     if (event === "focus" && typeof cb === "function") {
-      // Keep tests deterministic: do not auto-trigger focus callback.
+      focusListener = cb;
     }
 
     return jest.fn();
@@ -109,17 +111,23 @@ const createStore = (attendanceOverrides = {}) =>
 const renderScreen = (attendanceOverrides = {}) => {
   const store = createStore(attendanceOverrides);
 
-  return render(
+  const utils = render(
     <Provider store={store}>
       <AttendanceAction />
     </Provider>,
   );
+
+  return {
+    ...utils,
+    store,
+  };
 };
 
 describe("AttendanceAction break rules", () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     jest.useRealTimers();
+    focusListener = null;
     await AsyncStorage.clear();
 
     await AsyncStorage.setItem("restrict_location", "0");
@@ -142,6 +150,111 @@ describe("AttendanceAction break rules", () => {
     attendanceService.getTodayBreaks.mockResolvedValue({
       total_break_minutes: 0,
       breaks: [],
+    });
+  });
+
+  it("keeps checkin start time stable after focus refresh", async () => {
+    const stableCheckinTime = new Date("2026-04-25T08:30:00.000Z").getTime();
+
+    await AsyncStorage.setItem("checkinStartTime", String(stableCheckinTime));
+
+    attendanceService.getAttendanceStatus.mockResolvedValue({
+      custom_in: 1,
+      checkin_time: String(stableCheckinTime),
+    });
+
+    const screen = renderScreen({
+      checkin: true,
+      checkinTime: stableCheckinTime,
+    });
+
+    await waitFor(() => {
+      expect(focusListener).toEqual(expect.any(Function));
+    });
+
+    await act(async () => {
+      await focusListener();
+    });
+
+    await waitFor(() => {
+      expect(screen.store.getState().attendance.checkinTime).toBe(
+        stableCheckinTime,
+      );
+    });
+  });
+
+  it("keeps newer local checkin start when backend timestamp is stale", async () => {
+    const staleBackendCheckinTime = new Date(
+      "2026-04-25T08:30:00.000Z",
+    ).getTime();
+    const freshLocalCheckinTime = new Date("2026-04-25T10:00:00.000Z").getTime();
+
+    await AsyncStorage.setItem(
+      "checkinStartTime",
+      String(freshLocalCheckinTime),
+    );
+
+    attendanceService.getAttendanceStatus.mockResolvedValue({
+      custom_in: 1,
+      checkin_time: String(staleBackendCheckinTime),
+    });
+
+    const screen = renderScreen({
+      checkin: true,
+      checkinTime: freshLocalCheckinTime,
+    });
+
+    await waitFor(() => {
+      expect(focusListener).toEqual(expect.any(Function));
+    });
+
+    await act(async () => {
+      await focusListener();
+    });
+
+    await waitFor(() => {
+      expect(screen.store.getState().attendance.checkinTime).toBe(
+        freshLocalCheckinTime,
+      );
+    });
+  });
+
+  it("ignores status checkin time older than last local checkout", async () => {
+    jest.useFakeTimers();
+
+    const now = new Date("2026-04-25T10:00:00.000Z");
+    jest.setSystemTime(now);
+
+    const staleBackendCheckinTime = new Date(
+      "2026-04-25T08:30:00.000Z",
+    ).getTime();
+    const lastCheckoutTime = new Date("2026-04-25T09:45:00.000Z").getTime();
+
+    await AsyncStorage.removeItem("checkinStartTime");
+    await AsyncStorage.setItem("lastCheckoutTime", String(lastCheckoutTime));
+
+    attendanceService.getAttendanceStatus.mockResolvedValue({
+      custom_in: 1,
+      checkin_time: String(staleBackendCheckinTime),
+    });
+
+    const screen = renderScreen({
+      checkin: false,
+      checkinTime: null,
+    });
+
+    await waitFor(() => {
+      expect(focusListener).toEqual(expect.any(Function));
+    });
+
+    await act(async () => {
+      await focusListener();
+    });
+
+    await waitFor(() => {
+      expect(screen.store.getState().attendance.checkinTime).toBe(
+        now.getTime(),
+      );
     });
   });
 

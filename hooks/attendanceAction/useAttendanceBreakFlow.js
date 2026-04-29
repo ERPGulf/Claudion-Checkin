@@ -78,7 +78,7 @@ function useAttendanceBreakFlow({
         const status = await getAttendanceStatus();
 
         if (!isMountedRef.current) return;
-        syncCheckinFromStatus(status);
+        await syncCheckinFromStatus(status);
 
         const breakData = await refreshAttendanceData();
 
