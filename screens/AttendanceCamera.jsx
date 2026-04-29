@@ -31,6 +31,10 @@ import {
   userStatusPut,
   getOfficeLocation,
 } from "../services/api";
+import {
+  persistCheckinStartTime,
+  persistCheckoutTime,
+} from "../utils/attendanceSession";
 
 function AttendanceCamera() {
   const navigation = useNavigation();
@@ -137,19 +141,22 @@ function AttendanceCamera() {
       await uploadPicture(docname);
       // Redux update
       if (custom_in === 1) {
+        const startedAt = await persistCheckinStartTime(Date.now());
+
         dispatch(
           setCheckin({
-            checkinTime: new Date().toISOString(),
+            checkinTime: startedAt,
             location: {
               locationName: locationData?.locationName || "Office",
               latitude: locationData?.latitude,
               longitude: locationData?.longitude,
               radius: locationData?.radius,
             },
-          })
+          }),
         );
       } else {
-        dispatch(setCheckout({ checkoutTime: new Date().toISOString() }));
+        const checkedOutAt = await persistCheckoutTime(Date.now());
+        dispatch(setCheckout({ checkoutTime: checkedOutAt }));
       }
 
       hapticsMessage("success");

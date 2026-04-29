@@ -6,6 +6,10 @@ import { format } from "date-fns";
 import apiClient from "./apiClient";
 import { cleanBaseUrl } from "./utils";
 import { get } from "react-native/Libraries/TurboModule/TurboModuleRegistry";
+import {
+  normalizeCustomIn,
+  toTimestampMs,
+} from "../../utils/attendanceSession";
 
 export const getServerTime = async () => {
   const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
@@ -27,7 +31,11 @@ export const getServerTime = async () => {
 // getOfficeLocation(employeeCode) — returns nearest location object or null
 
 export const getOfficeLocation = async (employeeCode) => {
+  const logPrefix = "[attendance.service/getOfficeLocation]";
+
   if (!employeeCode) throw new Error("Employee ID is required");
+
+  console.log(`${logPrefix} Start`, { employeeCode });
 
   const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
   const baseUrl = cleanBaseUrl(rawBaseUrl);
@@ -49,14 +57,22 @@ export const getOfficeLocation = async (employeeCode) => {
 
   const employee = data?.message;
   const locations = employee?.employee_locations || [];
+  console.log(`${logPrefix} Employee locations`, locations);
+  console.log(`${logPrefix} Locations fetched`, {
+    totalLocations: locations.length,
+  });
 
   // Instead of throwing immediately, return null safely
   if (!locations.length) {
+    console.warn(`${logPrefix} No reporting locations configured`, {
+      employeeCode,
+    });
     return null;
   }
 
   // Request location permission
   const { status } = await Location.requestForegroundPermissionsAsync();
+  console.log(`${logPrefix} Foreground permission`, { status });
   if (status !== "granted") throw new Error("Location permission denied");
 
   // Get current GPS coordinates
@@ -67,40 +83,104 @@ export const getOfficeLocation = async (employeeCode) => {
   const userLat = gps.coords.latitude;
   const userLng = gps.coords.longitude;
 
-  // Find nearest location
-  let nearest = null;
-
-  locations.forEach((loc) => {
-    try {
-      const parsed = JSON.parse(loc.reporting_location);
-      const coords = parsed?.features?.[0]?.geometry?.coordinates;
-
-      if (coords?.length === 2) {
-        const [lng, lat] = coords;
-
-        const dist = getPreciseDistance(
-          { latitude: userLat, longitude: userLng },
-          { latitude: lat, longitude: lng },
-        );
-
-        if (!nearest || dist < nearest.distance) {
-          nearest = {
-            locationName: loc.location,
-            latitude: lat,
-            longitude: lng,
-            distance: dist,
-            radius: Number(loc.reporting_radius) || 0,
-            withinRadius: dist <= Number(loc.reporting_radius),
-          };
-        }
-      }
-    } catch (err) {}
+  console.log(`${logPrefix} Current GPS`, {
+    latitude: userLat,
+    longitude: userLng,
   });
 
-  if (!nearest) {
+  const parseCoordinateValue = (value) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+
+  const resolveCoordinates = (loc) => {
+    try {
+      const parsed = JSON.parse(loc?.reporting_location || "{}");
+      const coords = parsed?.features?.[0]?.geometry?.coordinates;
+
+      if (Array.isArray(coords) && coords.length === 2) {
+        const [lng, lat] = coords;
+        const longitude = parseCoordinateValue(lng);
+        const latitude = parseCoordinateValue(lat);
+
+        if (latitude !== null && longitude !== null) {
+          return { latitude, longitude, source: "reporting_location" };
+        }
+      }
+    } catch (err) {
+      console.warn(`${logPrefix} Failed to parse reporting_location JSON`, {
+        locationName: loc?.location,
+        error: err?.message,
+      });
+    }
+
+    const latitude = parseCoordinateValue(loc?.latitude);
+    const longitude = parseCoordinateValue(loc?.longitude);
+
+    if (latitude !== null && longitude !== null) {
+      return { latitude, longitude, source: "lat_lng_fields" };
+    }
+
+    return null;
+  };
+
+  const candidates = locations
+    .map((loc, index) => {
+      const resolvedCoords = resolveCoordinates(loc);
+
+      if (!resolvedCoords) {
+        console.warn(`${logPrefix} Invalid coordinates for location`, {
+          index,
+          locationName: loc?.location,
+        });
+        return null;
+      }
+
+      const distance = getPreciseDistance(
+        { latitude: userLat, longitude: userLng },
+        {
+          latitude: resolvedCoords.latitude,
+          longitude: resolvedCoords.longitude,
+        },
+      );
+
+      const radius = Number(loc?.reporting_radius) || 0;
+
+      const candidate = {
+        locationName: loc?.location || `location-${index + 1}`,
+        latitude: resolvedCoords.latitude,
+        longitude: resolvedCoords.longitude,
+        distance,
+        radius,
+        withinRadius: radius > 0 ? distance <= radius : false,
+      };
+
+      console.log(`${logPrefix} Candidate distance`, {
+        index,
+        locationName: candidate.locationName,
+        source: resolvedCoords.source,
+        distance: candidate.distance,
+        radius: candidate.radius,
+        withinRadius: candidate.withinRadius,
+      });
+
+      return candidate;
+    })
+    .filter(Boolean);
+
+  if (!candidates.length) {
+    console.warn(`${logPrefix} No valid nearest location found`, {
+      employeeCode,
+    });
     return null;
   }
-  console.log(nearest);
+
+  const nearest = candidates.reduce((picked, current) => {
+    if (!picked) return current;
+    return current.distance < picked.distance ? current : picked;
+  }, null);
+
+  console.log(`${logPrefix} Nearest location resolved`, nearest);
   return nearest;
 };
 
@@ -276,7 +356,9 @@ export const getUserAttendance = async (
 
 export const getAttendanceStatus = async () => {
   try {
-    const employee_id = await AsyncStorage.getItem("employee_id");
+    const employee_id =
+      (await AsyncStorage.getItem("employee_id")) ||
+      (await AsyncStorage.getItem("employee_code"));
     if (!employee_id) return { custom_in: 0 };
 
     const list = await getUserAttendance(employee_id, 0, 10);
@@ -287,16 +369,42 @@ export const getAttendanceStatus = async () => {
       return { custom_in: 0 };
     }
 
+    const getRecordTime = (entry) =>
+      toTimestampMs(
+        entry?.checkin_time ||
+          entry?.latest_checkin_time ||
+          entry?.timestamp ||
+          entry?.time ||
+          entry?.creation,
+      ) || 0;
+
     const latest = list.reduce((a, b) => {
-      const dateA = new Date(a.creation || a.timestamp || a.time || 0);
-      const dateB = new Date(b.creation || b.timestamp || b.time || 0);
-      return dateA > dateB ? a : b;
+      return getRecordTime(a) > getRecordTime(b) ? a : b;
     });
+
+    const latestCheckin = list
+      .filter((entry) => {
+        const logType = String(entry?.log_type || "").toUpperCase();
+        return normalizeCustomIn(entry?.custom_in) === 1 || logType === "IN";
+      })
+      .reduce((picked, current) => {
+        if (!picked) return current;
+        return getRecordTime(picked) > getRecordTime(current)
+          ? picked
+          : current;
+      }, null);
+
+    const latestLogType = String(latest?.log_type || "").toUpperCase();
 
     console.log("LATEST RECORD:", latest);
 
     return {
-      custom_in: latest?.custom_in === 1 || latest?.log_type === "IN" ? 1 : 0,
+      custom_in:
+        normalizeCustomIn(latest?.custom_in) === 1 || latestLogType === "IN"
+          ? 1
+          : 0,
+      checkin_time: latestCheckin ? getRecordTime(latestCheckin) : null,
+      log_type: latest?.log_type || null,
     };
   } catch (e) {
     console.log("STATUS ERROR:", e);

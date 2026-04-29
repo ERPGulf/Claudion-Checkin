@@ -4,7 +4,6 @@ import { Provider } from "react-redux";
 import { configureStore } from "@reduxjs/toolkit";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { render, fireEvent, waitFor, act } from "@testing-library/react-native";
-import Toast from "react-native-toast-message";
 import AttendanceAction from "../screens/AttendanceAction";
 import attendanceReducer from "../redux/Slices/AttendanceSlice";
 import * as attendanceService from "../services/api/attendance.service";
@@ -29,7 +28,7 @@ jest.mock("../services/api/apiClient", () => ({
 }));
 
 jest.mock("../utils/TimeServices", () => ({
-  updateDateTime: jest.fn(() => "25-04-2026 12:00:00"),
+  updateDateTime: jest.fn(() => "29-04-2026 10:00:00"),
 }));
 
 jest.mock("../components/AttendanceAction/WelcomeCard", () => {
@@ -59,13 +58,15 @@ jest.mock("@expo/vector-icons", () => {
   };
 });
 
+let focusListener = null;
+
 const mockNavigation = {
   setOptions: jest.fn(),
   goBack: jest.fn(),
   navigate: jest.fn(),
   addListener: jest.fn((event, cb) => {
-    if (event === "focus" && typeof cb === "function") {
-      // Keep tests deterministic: do not auto-trigger focus callback.
+    if (event === "focus") {
+      focusListener = cb;
     }
 
     return jest.fn();
@@ -108,33 +109,32 @@ const createStore = (attendanceOverrides = {}) =>
 
 const renderScreen = (attendanceOverrides = {}) => {
   const store = createStore(attendanceOverrides);
-
-  return render(
+  const screen = render(
     <Provider store={store}>
       <AttendanceAction />
     </Provider>,
   );
+
+  return {
+    ...screen,
+    store,
+  };
 };
 
-describe("AttendanceAction break rules", () => {
+describe("AttendanceAction session timer behavior", () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     jest.useRealTimers();
+    focusListener = null;
+
     await AsyncStorage.clear();
-
-    const activeCheckinTime = new Date("2026-04-25T11:00:00.000Z").getTime();
-
     await AsyncStorage.setItem("restrict_location", "0");
     await AsyncStorage.setItem("photo", "0");
-    await AsyncStorage.setItem("checkinStartTime", String(activeCheckinTime));
 
-    attendanceService.getAttendanceStatus.mockResolvedValue({
-      custom_in: 1,
-      checkin_time: activeCheckinTime,
-    });
-    attendanceService.getServerTime.mockResolvedValue("2026-04-25 12:00:00");
-    attendanceService.getDailyWorkedHours.mockResolvedValue("04:00");
-    attendanceService.getMonthlyWorkedHours.mockResolvedValue("90:00");
+    attendanceService.getAttendanceStatus.mockResolvedValue({ custom_in: 0 });
+    attendanceService.getServerTime.mockResolvedValue("2026-04-29 10:00:00");
+    attendanceService.getDailyWorkedHours.mockResolvedValue("03:00");
+    attendanceService.getMonthlyWorkedHours.mockResolvedValue("70:00");
     attendanceService.getOfficeLocation.mockResolvedValue({
       withinRadius: true,
       distance: 0,
@@ -151,99 +151,102 @@ describe("AttendanceAction break rules", () => {
     });
   });
 
-  it("disables break after a completed break for the day", async () => {
-    attendanceService.getTodayBreaks.mockResolvedValue({
-      total_break_minutes: 25,
-      breaks: [
-        {
-          start: "2026-04-25 10:00:00",
-          end: "2026-04-25 10:25:00",
-        },
-      ],
+  it("continues existing timer after focus and remount while checked in", async () => {
+    const persistedStart = new Date("2026-04-29T09:45:00.000Z").getTime();
+
+    await AsyncStorage.setItem("checkinStartTime", String(persistedStart));
+
+    attendanceService.getAttendanceStatus.mockResolvedValue({
+      custom_in: 1,
+      checkin_time: persistedStart,
     });
 
-    const screen = renderScreen({ checkin: true });
+    const first = renderScreen();
 
     await waitFor(() => {
-      expect(screen.getByText("BREAK NOT ALLOWED")).toBeTruthy();
+      const attendance = first.store.getState().attendance;
+      expect(attendance.checkin).toBe(true);
+      expect(attendance.checkinTime).toBe(persistedStart);
+    });
+
+    await act(async () => {
+      if (focusListener) {
+        await focusListener();
+      }
+    });
+
+    await waitFor(() => {
+      const attendance = first.store.getState().attendance;
+      expect(attendance.checkinTime).toBe(persistedStart);
+    });
+
+    first.unmount();
+
+    const second = renderScreen();
+
+    await waitFor(() => {
+      const attendance = second.store.getState().attendance;
+      expect(attendance.checkin).toBe(true);
+      expect(attendance.checkinTime).toBe(persistedStart);
     });
   });
 
-  it("disables break button at 2-hour daily cap", async () => {
+  it("resets timer session on checkout", async () => {
+    const checkinStart = new Date("2026-04-29T09:55:00.000Z").getTime();
+
+    await AsyncStorage.setItem("checkinStartTime", String(checkinStart));
+
+    attendanceService.getAttendanceStatus.mockResolvedValue({
+      custom_in: 1,
+      checkin_time: checkinStart,
+    });
+
     const screen = renderScreen({
       checkin: true,
-      breakMinutes: 120,
+      checkinTime: checkinStart,
     });
 
     await waitFor(() => {
-      expect(screen.getByText("BREAK NOT ALLOWED")).toBeTruthy();
+      expect(screen.getByText("CHECK-OUT")).toBeTruthy();
     });
+
+    fireEvent.press(screen.getByText("CHECK-OUT"));
+
+    await waitFor(() => {
+      const attendance = screen.store.getState().attendance;
+      expect(attendance.checkin).toBe(false);
+      expect(attendance.checkinTime).toBeNull();
+    });
+
+    const storedStart = await AsyncStorage.getItem("checkinStartTime");
+    const lastCheckout = await AsyncStorage.getItem("lastCheckoutTime");
+
+    expect(storedStart).toBeNull();
+    expect(lastCheckout).toBeTruthy();
   });
 
-  it("shows monthly-limit notification and disables break button", async () => {
-    attendanceService.getTodayBreaks.mockResolvedValue({
-      total_break_minutes: 45,
-      breaks: [],
+  it("ignores stale backend checkin older than last checkout", async () => {
+    const staleCheckin = new Date("2026-04-29T09:00:00.000Z").getTime();
+    const lastCheckout = new Date("2026-04-29T09:30:00.000Z").getTime();
+
+    await AsyncStorage.setItem("checkinStartTime", String(staleCheckin));
+    await AsyncStorage.setItem("lastCheckoutTime", String(lastCheckout));
+
+    attendanceService.getAttendanceStatus.mockResolvedValue({
+      custom_in: 1,
+      checkin_time: staleCheckin,
     });
 
-    attendanceService.employeeBreak.mockResolvedValue({
-      allowed: false,
-      message: "Monthly break limit reached (8h)",
-    });
-
-    const screen = renderScreen({ checkin: true, breakMinutes: 45 });
+    const screen = renderScreen();
 
     await waitFor(() => {
-      expect(screen.getByText("TAKE BREAK")).toBeTruthy();
+      const attendance = screen.store.getState().attendance;
+      expect(attendance.checkin).toBe(false);
+      expect(attendance.checkinTime).toBeNull();
+      expect(screen.getByText("CHECK-IN")).toBeTruthy();
     });
 
-    fireEvent.press(screen.getByText("TAKE BREAK"));
-
-    await waitFor(() => {
-      expect(Toast.show).toHaveBeenCalledWith(
-        expect.objectContaining({
-          type: "error",
-          text1: "Monthly break limit reached (8h)",
-        }),
-      );
-    });
-
-    await waitFor(() => {
-      expect(screen.getByText("BREAK NOT ALLOWED")).toBeTruthy();
-    });
-  });
-
-  it("continues break timer after screen remount using saved breakStartTime", async () => {
-    jest.useFakeTimers();
-
-    const now = new Date("2026-04-25T12:00:00.000Z");
-    jest.setSystemTime(now);
-
-    await AsyncStorage.setItem(
-      "breakStartTime",
-      String(now.getTime() - 65 * 1000),
-    );
-
-    attendanceService.getTodayBreaks.mockResolvedValue({
-      total_break_minutes: 0,
-      breaks: [
-        {
-          start: "2026-04-25 11:58:55",
-          end: null,
-        },
-      ],
-    });
-
-    const screen = renderScreen({ checkin: true });
-
-    await waitFor(() => {
-      expect(screen.getByText("BREAK IN PROGRESS")).toBeTruthy();
-    });
-
-    act(() => {
-      jest.advanceTimersByTime(2000);
-    });
-
-    expect(screen.getByText(/00:01:/)).toBeTruthy();
+    const storedStart = await AsyncStorage.getItem("checkinStartTime");
+    expect(storedStart).toBeNull();
   });
 });

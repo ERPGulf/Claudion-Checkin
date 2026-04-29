@@ -44,6 +44,13 @@ import {
   getTodayBreaks,
 } from "../services/api/attendance.service";
 import {
+  clearPersistedCheckinStartTime,
+  getPersistedSessionTimes,
+  persistCheckinStartTime,
+  persistCheckoutTime,
+  resolveActiveSessionStart,
+} from "../utils/attendanceSession";
+import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
@@ -59,6 +66,7 @@ function AttendanceAction() {
   const navigation = useNavigation();
   const dispatch = useDispatch();
   const checkin = useSelector((state) => state.attendance.checkin);
+  const checkinTime = useSelector((state) => state.attendance.checkinTime);
   const userDetails = useSelector((state) => state.user.userDetails);
   const breakMinutes = useSelector((state) => state.attendance.breakMinutes);
   const employeeCode = userDetails?.employeeCode;
@@ -122,6 +130,37 @@ function AttendanceAction() {
     };
     loadRestriction();
   }, []);
+
+  const syncCheckinFromStatus = useCallback(
+    async (status) => {
+      const { checkinStartTime, lastCheckoutTime } =
+        await getPersistedSessionTimes();
+
+      const resolvedStart = resolveActiveSessionStart({
+        status,
+        storedCheckinStartTime: checkinStartTime,
+        reduxCheckinTime: checkinTime,
+        lastCheckoutTime,
+      });
+
+      if (resolvedStart) {
+        const persistedStart = await persistCheckinStartTime(resolvedStart);
+
+        dispatch(
+          setCheckin({
+            checkinTime: persistedStart,
+            location: null,
+          }),
+        );
+        return;
+      }
+
+      await clearPersistedCheckinStartTime();
+      dispatch(resetCheckin());
+    },
+    [checkinTime, dispatch],
+  );
+
   useEffect(() => {
     const loadCheckinStatus = async () => {
       try {
@@ -129,17 +168,7 @@ function AttendanceAction() {
 
         if (!isMountedRef.current) return;
 
-        if (res.custom_in === 1) {
-          dispatch(
-            setCheckin({
-              checkinTime: Date.now(),
-              location: null,
-            }),
-          );
-        } else {
-          // dispatch(setCheckout({ checkoutTime: null }));
-          dispatch(resetCheckin());
-        }
+        await syncCheckinFromStatus(res);
       } catch (e) {
         console.log("Status sync error:", e);
       }
@@ -148,7 +177,7 @@ function AttendanceAction() {
     if (employeeCode) {
       loadCheckinStatus();
     }
-  }, [employeeCode]);
+  }, [employeeCode, syncCheckinFromStatus]);
 
   const fetchStatusAndLocation = useCallback(async () => {
     try {
@@ -265,16 +294,7 @@ function AttendanceAction() {
 
         if (!isMountedRef.current) return;
 
-        if (res.custom_in === 1) {
-          dispatch(
-            setCheckin({
-              checkinTime: Date.now(),
-              location: null,
-            }),
-          );
-        } else {
-          dispatch(resetCheckin());
-        }
+        await syncCheckinFromStatus(res);
 
         // ✅ 2. THEN: fetch totals
         const breakData = await refreshAttendanceData();
@@ -289,7 +309,13 @@ function AttendanceAction() {
     });
 
     return unsubscribe;
-  }, [navigation, employeeCode]);
+  }, [
+    navigation,
+    employeeCode,
+    refreshAttendanceData,
+    syncBreakState,
+    syncCheckinFromStatus,
+  ]);
 
   useEffect(() => {
     const loadBreak = async () => {
@@ -383,10 +409,12 @@ function AttendanceAction() {
         }
 
         if (type === "IN") {
+          const startedAt = await persistCheckinStartTime(Date.now());
+
           dispatch({ type: "attendance/setSelectedLocation", payload: null });
           dispatch(
             setCheckin({
-              checkinTime: Date.now(),
+              checkinTime: startedAt,
               location: restrictLocation === "1" ? response.location : null,
             }),
           );
@@ -400,7 +428,10 @@ function AttendanceAction() {
               console.log("Break already ended from backend");
             }
           }
-          dispatch(setCheckout({ checkoutTime: Date.now() }));
+
+          const checkedOutAt = await persistCheckoutTime(Date.now());
+
+          dispatch(setCheckout({ checkoutTime: checkedOutAt }));
           dispatch({ type: "attendance/setSelectedLocation", payload: null });
         }
 
