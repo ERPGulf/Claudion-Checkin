@@ -100,7 +100,7 @@ export const getOfficeLocation = async (employeeCode) => {
   if (!nearest) {
     return null;
   }
-
+  console.log(nearest);
   return nearest;
 };
 
