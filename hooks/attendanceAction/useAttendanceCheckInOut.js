@@ -3,7 +3,10 @@ import { useDispatch } from "react-redux";
 import Toast from "react-native-toast-message";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { setCheckin, setCheckout } from "../../redux/Slices/AttendanceSlice";
-import { userCheckIn, employeeBreak } from "../../services/api/attendance.service";
+import {
+  userCheckIn,
+  employeeBreak,
+} from "../../services/api/attendance.service";
 
 function useAttendanceCheckInOut({
   navigation,
