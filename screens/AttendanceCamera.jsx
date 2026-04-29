@@ -32,6 +32,9 @@ import {
   getOfficeLocation,
 } from "../services/api";
 
+const CHECKIN_START_STORAGE_KEY = "checkinStartTime";
+const CHECKOUT_TIME_STORAGE_KEY = "lastCheckoutTime";
+
 function AttendanceCamera() {
   const navigation = useNavigation();
   const dispatch = useDispatch();
@@ -137,18 +140,31 @@ function AttendanceCamera() {
       await uploadPicture(docname);
       // Redux update
       if (custom_in === 1) {
+        const checkinStartTime = Date.now();
+        await AsyncStorage.removeItem(CHECKOUT_TIME_STORAGE_KEY);
+        await AsyncStorage.setItem(
+          CHECKIN_START_STORAGE_KEY,
+          String(checkinStartTime),
+        );
+
         dispatch(
           setCheckin({
-            checkinTime: new Date().toISOString(),
+            checkinTime: checkinStartTime,
             location: {
               locationName: locationData?.locationName || "Office",
               latitude: locationData?.latitude,
               longitude: locationData?.longitude,
               radius: locationData?.radius,
             },
-          })
+          }),
         );
       } else {
+        const checkoutTime = Date.now();
+        await AsyncStorage.removeItem(CHECKIN_START_STORAGE_KEY);
+        await AsyncStorage.setItem(
+          CHECKOUT_TIME_STORAGE_KEY,
+          String(checkoutTime),
+        );
         dispatch(setCheckout({ checkoutTime: new Date().toISOString() }));
       }
 
