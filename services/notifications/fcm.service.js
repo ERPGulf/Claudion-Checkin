@@ -1,6 +1,18 @@
 import { PermissionsAndroid, Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import messaging from "@react-native-firebase/messaging";
+import { getApp, getApps } from "@react-native-firebase/app";
+import {
+  AuthorizationStatus,
+  deleteToken,
+  getInitialNotification,
+  getMessaging,
+  getToken,
+  onMessage,
+  onNotificationOpenedApp,
+  onTokenRefresh,
+  requestPermission,
+  setBackgroundMessageHandler,
+} from "@react-native-firebase/messaging";
 import Constants from "expo-constants";
 import { plainAxios } from "../api/apiClient";
 import { cleanBaseUrl, setCommonHeaders } from "../api/utils";
@@ -13,6 +25,42 @@ const FCM_LAST_MESSAGE_AT_KEY = "fcm_last_message_at";
 const DEFAULT_NOTIFICATION_ROUTE = "Notifications";
 
 let backgroundHandlerRegistered = false;
+
+const wait = (durationMs) =>
+  new Promise((resolve) => {
+    setTimeout(resolve, durationMs);
+  });
+
+const getMessagingInstanceWithRetry = async ({
+  maxAttempts = 8,
+  retryDelayMs = 250,
+} = {}) => {
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const instance = getMessagingInstance();
+
+    if (instance) {
+      return instance;
+    }
+
+    if (attempt < maxAttempts - 1) {
+      await wait(retryDelayMs);
+    }
+  }
+
+  return null;
+};
+
+const getMessagingInstance = () => {
+  try {
+    if (getApps().length === 0) {
+      return null;
+    }
+
+    return getMessaging(getApp());
+  } catch {
+    return null;
+  }
+};
 
 const getExpoExtra = () => {
   return Constants.expoConfig?.extra ?? Constants.manifest?.extra ?? {};
@@ -187,13 +235,24 @@ export const requestFcmPermission = async () => {
     return false;
   }
 
+  const messagingInstance = await getMessagingInstanceWithRetry();
+
+  if (!messagingInstance) {
+    return false;
+  }
+
   try {
-    await messaging().registerDeviceForRemoteMessages();
-    const authStatus = await messaging().requestPermission();
+    const authStatus = await requestPermission(messagingInstance, {
+      alert: true,
+      badge: true,
+      sound: true,
+      provisional: false,
+    });
 
     return (
-      authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
-      authStatus === messaging.AuthorizationStatus.PROVISIONAL
+      authStatus === AuthorizationStatus.AUTHORIZED ||
+      authStatus === AuthorizationStatus.PROVISIONAL ||
+      authStatus === AuthorizationStatus.EPHEMERAL
     );
   } catch {
     return false;
@@ -245,7 +304,13 @@ export const registerBackgroundMessageHandler = () => {
     return;
   }
 
-  messaging().setBackgroundMessageHandler(async () => {
+  const messagingInstance = getMessagingInstance();
+
+  if (!messagingInstance) {
+    return;
+  }
+
+  setBackgroundMessageHandler(messagingInstance, async () => {
     await AsyncStorage.setItem(FCM_LAST_MESSAGE_AT_KEY, String(Date.now()));
   });
 
@@ -256,6 +321,12 @@ export const initializeFcm = async ({
   dispatch,
   onForegroundNotification,
 } = {}) => {
+  const messagingInstance = await getMessagingInstanceWithRetry();
+
+  if (!messagingInstance) {
+    return () => {};
+  }
+
   const hasPermission = await requestFcmPermission();
 
   if (!hasPermission) {
@@ -263,7 +334,7 @@ export const initializeFcm = async ({
   }
 
   try {
-    const token = await messaging().getToken();
+    const token = await getToken(messagingInstance);
     await persistFcmToken(token);
   } catch {
     // Do not block app startup if token retrieval fails.
@@ -271,31 +342,38 @@ export const initializeFcm = async ({
 
   await syncUnreadCountFromServer(dispatch);
 
-  const unsubscribeTokenRefresh = messaging().onTokenRefresh(async (token) => {
-    await persistFcmToken(token);
-  });
+  const unsubscribeTokenRefresh = onTokenRefresh(
+    messagingInstance,
+    async (token) => {
+      await persistFcmToken(token);
+    },
+  );
 
-  const unsubscribeForeground = messaging().onMessage(async (remoteMessage) => {
-    await AsyncStorage.setItem(FCM_LAST_MESSAGE_AT_KEY, String(Date.now()));
-    await syncUnreadCountFromServer(dispatch);
+  const unsubscribeForeground = onMessage(
+    messagingInstance,
+    async (remoteMessage) => {
+      await AsyncStorage.setItem(FCM_LAST_MESSAGE_AT_KEY, String(Date.now()));
+      await syncUnreadCountFromServer(dispatch);
 
-    if (typeof onForegroundNotification === "function") {
-      onForegroundNotification({
-        remoteMessage,
-        title: getMessageTitle(remoteMessage),
-        body: getMessageBody(remoteMessage),
-      });
-    }
-  });
+      if (typeof onForegroundNotification === "function") {
+        onForegroundNotification({
+          remoteMessage,
+          title: getMessageTitle(remoteMessage),
+          body: getMessageBody(remoteMessage),
+        });
+      }
+    },
+  );
 
-  const unsubscribeNotificationOpen = messaging().onNotificationOpenedApp(
+  const unsubscribeNotificationOpen = onNotificationOpenedApp(
+    messagingInstance,
     async (remoteMessage) => {
       await handleNotificationOpen(remoteMessage, dispatch);
     },
   );
 
   try {
-    const initialMessage = await messaging().getInitialNotification();
+    const initialMessage = await getInitialNotification(messagingInstance);
 
     if (initialMessage) {
       await handleNotificationOpen(initialMessage, dispatch);
@@ -318,6 +396,12 @@ export const getClientFcmToken = async () => {
     return cachedToken;
   }
 
+  const messagingInstance = await getMessagingInstanceWithRetry();
+
+  if (!messagingInstance) {
+    return null;
+  }
+
   const hasPermission = await requestFcmPermission();
 
   if (!hasPermission) {
@@ -325,7 +409,7 @@ export const getClientFcmToken = async () => {
   }
 
   try {
-    const token = await messaging().getToken();
+    const token = await getToken(messagingInstance);
 
     if (!token) {
       return null;
@@ -339,8 +423,12 @@ export const getClientFcmToken = async () => {
 };
 
 export const clearFcmRegistration = async () => {
+  const messagingInstance = getMessagingInstance();
+
   try {
-    await messaging().deleteToken();
+    if (messagingInstance) {
+      await deleteToken(messagingInstance);
+    }
   } catch {
     // Token deletion can fail if Firebase is not fully initialized.
   }
