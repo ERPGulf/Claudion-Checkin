@@ -21,7 +21,7 @@ module.exports = {
       "|expo-splash-screen" +
       "|expo-linking" +
       "|expo-router" +
-      ")/)"
+      ")/)",
   ],
 
   moduleNameMapper: {

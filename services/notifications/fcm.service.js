@@ -213,7 +213,9 @@ export const syncUnreadCountFromServer = async (dispatch) => {
     }
 
     const notifications = await getNotifications(employeeId);
-    const unreadCount = notifications.filter((item) => Number(item.read) === 0).length;
+    const unreadCount = notifications.filter(
+      (item) => Number(item.read) === 0,
+    ).length;
 
     dispatch(setUnreadCount(unreadCount));
   } catch {
