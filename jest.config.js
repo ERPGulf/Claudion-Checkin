@@ -7,6 +7,7 @@ module.exports = {
     "node_modules/(?!(" +
       "react-native" +
       "|@react-native" +
+      "|@react-native-firebase" +
       "|@react-navigation" +
       "|expo" +
       "|expo-asset" +

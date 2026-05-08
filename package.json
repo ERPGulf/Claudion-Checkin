@@ -22,6 +22,8 @@
     "@expo/vector-icons": "^15.0.3",
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@react-native-community/datetimepicker": "8.4.4",
+    "@react-native-firebase/app": "^24.0.0",
+    "@react-native-firebase/messaging": "^24.0.0",
     "@react-native-picker/picker": "2.11.1",
     "@react-navigation/bottom-tabs": "^7.4.2",
     "@react-navigation/native": "^7.1.14",
@@ -38,6 +40,7 @@
     "expo-camera": "~17.0.10",
     "expo-checkbox": "~5.0.8",
     "expo-constants": "~18.0.13",
+    "expo-device": "~8.0.10",
     "expo-document-picker": "~14.0.8",
     "expo-font": "~14.0.11",
     "expo-haptics": "~15.0.8",
@@ -65,8 +68,7 @@
     "react-test-renderer": "19.1.0",
     "redux-persist": "^6.0.0",
     "utf8": "^3.0.0",
-    "yup": "^1.2.0",
-    "expo-device": "~8.0.10"
+    "yup": "^1.2.0"
   },
   "devDependencies": {
     "@babel/core": "^7.20.0",

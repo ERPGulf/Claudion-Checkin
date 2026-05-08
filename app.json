@@ -31,13 +31,15 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.bazim.claudioncheckin",
+      "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
         "NSCameraUsageDescription": "Allow $(PRODUCT_NAME) to access your camera to enable essential functionality, such as scanning QR codes and capturing photos for employee activity tracking and verification.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Allow $(PRODUCT_NAME) to use your location for tracking check-ins, check-outs, and real-time location updates for drivers during trips, enhancing user experiences.",
         "NSLocationWhenInUseUsageDescription": "Allow $(PRODUCT_NAME) to use your location for tracking check-ins, check-outs, and real-time location updates for drivers during trips, enhancing user experiences.",
         "NSBarcodeScannerUsageDescription": "Allow $(PRODUCT_NAME) to access your camera to enable essential functionality, such as scanning QR codes and capturing photos for employee activity tracking and verification.",
         "NSMicrophoneUsageDescription": "Allow $(PRODUCT_NAME) to access your microphone",
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "UIBackgroundModes": ["remote-notification"]
       },
       "buildNumber": "3"
     },
@@ -49,6 +51,7 @@
       },
       "package": "com.bazim.claudioncheckin",
       "versionCode": 14,
+      "googleServicesFile": "./google-services.json",
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.ACCESS_COARSE_LOCATION",
@@ -56,12 +59,7 @@
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.RECORD_AUDIO",
         "android.permission.DETECT_SCREEN_CAPTURE",
-        "android.permission.CAMERA",
-        "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION",
-        "android.permission.FOREGROUND_SERVICE",
-        "android.permission.RECORD_AUDIO",
-        "android.permission.DETECT_SCREEN_CAPTURE"
+        "android.permission.POST_NOTIFICATIONS"
       ]
     },
     "web": {

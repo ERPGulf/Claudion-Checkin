@@ -21,6 +21,7 @@ import { hapticsMessage } from "../utils/HapticsMessage";
 import { clearTokens, clearStore } from "../services/api/apiClient";
 import apiClient from "../services/api/apiClient";
 import { clearAuthCache } from "../services/api/authHelper";
+import { clearFcmRegistration } from "../services/notifications/fcm.service";
 import * as Device from "expo-device";
 const formatUpdateId = (updateId) => {
   if (!updateId) {
@@ -174,16 +175,19 @@ function Profile() {
     try {
       hapticsMessage("success");
 
-      // 1. Clear tokens from storage
+      // 1. Remove FCM registration to avoid cross-user push delivery.
+      await clearFcmRegistration();
+
+      // 2. Clear tokens from storage
       await clearTokens();
 
-      // 2. Clear cached auth data
+      // 3. Clear cached auth data
       clearAuthCache();
 
-      // 3. Clear redux store
+      // 4. Clear redux store
       clearStore();
 
-      // 4. Remove axios authorization header
+      // 5. Remove axios authorization header
       delete apiClient.defaults.headers.common.Authorization;
     } catch (error) {
       hapticsMessage("error");

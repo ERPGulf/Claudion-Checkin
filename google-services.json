@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "421100405620",
+    "project_id": "tdi-checkin-app",
+    "storage_bucket": "tdi-checkin-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:421100405620:android:7fd54078697dd7a2692221",
+        "android_client_info": {
+          "package_name": "com.bazim.claudioncheckin"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAKtIFHGdHQuPwW-zX37lVhvxiexvb0EAk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
