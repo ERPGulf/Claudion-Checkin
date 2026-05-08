@@ -75,6 +75,10 @@ function Profile() {
   const runtimeVersion = Updates.runtimeVersion ?? "unknown";
   const updateId = formatUpdateId(Updates.updateId);
   const isProductionChannel = updateChannel === "production";
+  const isIosSimulator = Platform.OS === "ios" && !Device.isDevice;
+  const tokenDisplayText = isIosSimulator
+    ? "Unavailable on iOS Simulator. Use a physical iPhone to generate an FCM token."
+    : maskToken(clientToken);
   const deviceName = Device.deviceName || Device.modelName || "Unknown Device";
   const osInfo = `${Device.osName || ""} ${Device.osVersion || ""}`;
   const getStatusTone = () => {
@@ -128,6 +132,13 @@ function Profile() {
     let isMounted = true;
 
     const loadClientToken = async () => {
+      if (isIosSimulator) {
+        if (isMounted) {
+          setClientToken(null);
+        }
+        return;
+      }
+
       const token = await getClientFcmToken();
 
       if (!isMounted) {
@@ -142,9 +153,21 @@ function Profile() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [isIosSimulator]);
 
   const handleShareClientToken = async () => {
+    if (isIosSimulator) {
+      Toast.show({
+        type: "info",
+        text1: "FCM token unavailable on Simulator",
+        text2:
+          "Run this build on a physical iPhone to generate and share the client token.",
+        visibilityTime: 4200,
+        autoHide: true,
+      });
+      return;
+    }
+
     setIsSharingClientToken(true);
 
     try {
@@ -525,7 +548,7 @@ function Profile() {
               </View>
 
               <Text className="mt-2 text-xs leading-5 text-slate-600">
-                {maskToken(clientToken)}
+                {tokenDisplayText}
               </Text>
 
               <TouchableOpacity
