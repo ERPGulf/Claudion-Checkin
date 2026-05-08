@@ -311,6 +311,33 @@ export const initializeFcm = async ({
   };
 };
 
+export const getClientFcmToken = async () => {
+  const cachedToken = await AsyncStorage.getItem(FCM_TOKEN_KEY);
+
+  if (cachedToken) {
+    return cachedToken;
+  }
+
+  const hasPermission = await requestFcmPermission();
+
+  if (!hasPermission) {
+    return null;
+  }
+
+  try {
+    const token = await messaging().getToken();
+
+    if (!token) {
+      return null;
+    }
+
+    await persistFcmToken(token);
+    return token;
+  } catch {
+    return null;
+  }
+};
+
 export const clearFcmRegistration = async () => {
   try {
     await messaging().deleteToken();
