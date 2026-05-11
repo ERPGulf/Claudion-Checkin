@@ -5,7 +5,8 @@ import Login from './Login';
 import WelcomeScreen from './WelcomeScreen';
 import AttendanceHistory from './AttendanceHistory';
 import SelectQuickAccess from './SelectQuickAccess';
-import ExpenseClaim from './ExpenseClaim';
+import ClaimForm from './ClaimForm';
+import ExpenseCard from './ExpenseCard';
 import LeaveRequest from './LeaveRequest';
 import Complaints from './Complaints';
 import AttendanceCamera from './AttendanceCamera';
@@ -27,7 +28,8 @@ export {
   SelectQuickAccess,
   LeaveRequest,
   Complaints,
-  ExpenseClaim,
+  ClaimForm,
+  ExpenseCard,
   AttendanceCamera,
   Profile,
   Chat,

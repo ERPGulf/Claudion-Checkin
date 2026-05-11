@@ -48,7 +48,7 @@ const items = [
   {
     title: "Expense\nClaim",
     component: ExpenseIcon,
-    nav: "Expense claim",
+    nav: "Expense card",
   },
   {
     title: "Complaint",
