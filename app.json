@@ -66,6 +66,7 @@
       "favicon": "./assets/favicon.ico"
     },
     "extra": {
+      "fcmRegistrationMethod": "whatsapp_saudi.whatsapp_saudi.doctype.whatsapp_saudi.whatsapp_saudi.get_or_update_employee_token",
       "eas": {
         "projectId": "ee37c3a6-1da3-43ae-ad14-6b34a26c92ac"
       }

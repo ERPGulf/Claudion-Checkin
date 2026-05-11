@@ -12,6 +12,8 @@ import {
   onTokenRefresh,
   requestPermission,
   setBackgroundMessageHandler,
+  subscribeToTopic,
+  unsubscribeFromTopic,
 } from "@react-native-firebase/messaging";
 import Constants from "expo-constants";
 import { plainAxios } from "../api/apiClient";
@@ -22,6 +24,7 @@ import { navigateSafely } from "../../navigation/rootNavigation";
 
 const FCM_TOKEN_KEY = "fcm_token";
 const FCM_LAST_MESSAGE_AT_KEY = "fcm_last_message_at";
+const FCM_TOPICS_KEY = "fcm_topics";
 const DEFAULT_NOTIFICATION_ROUTE = "Notifications";
 
 let backgroundHandlerRegistered = false;
@@ -153,6 +156,107 @@ const getTargetRoute = (remoteMessage) => {
   return routeFromPayload.trim() || DEFAULT_NOTIFICATION_ROUTE;
 };
 
+const extractTopicSyncData = (payload) => {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  if (payload.data && typeof payload.data === "object") {
+    return payload.data;
+  }
+
+  if (payload.message && typeof payload.message === "object") {
+    return payload.message;
+  }
+
+  return payload;
+};
+
+const getSanitizedTopics = (topics) => {
+  if (!Array.isArray(topics)) {
+    return [];
+  }
+
+  return topics
+    .filter((topic) => typeof topic === "string")
+    .map((topic) => topic.trim())
+    .filter(Boolean);
+};
+
+const getStoredTopics = async () => {
+  try {
+    const serializedTopics = await AsyncStorage.getItem(FCM_TOPICS_KEY);
+
+    if (!serializedTopics) {
+      return [];
+    }
+
+    const parsedTopics = JSON.parse(serializedTopics);
+    return getSanitizedTopics(parsedTopics);
+  } catch {
+    return [];
+  }
+};
+
+const syncTopicsFromBackend = async (messagingInstance, topics) => {
+  if (!messagingInstance) {
+    return;
+  }
+
+  const nextTopics = getSanitizedTopics(topics);
+  const currentTopics = await getStoredTopics();
+
+  console.log("[FCM] syncTopicsFromBackend: next topics", nextTopics);
+  console.log("[FCM] syncTopicsFromBackend: current topics", currentTopics);
+
+  const nextSet = new Set(nextTopics);
+  const currentSet = new Set(currentTopics);
+
+  const topicsToSubscribe = nextTopics.filter(
+    (topic) => !currentSet.has(topic),
+  );
+  const topicsToUnsubscribe = currentTopics.filter(
+    (topic) => !nextSet.has(topic),
+  );
+
+  console.log("[FCM] topics to subscribe:", topicsToSubscribe);
+  console.log("[FCM] topics to unsubscribe:", topicsToUnsubscribe);
+
+  await Promise.all(
+    topicsToSubscribe.map(async (topic) => {
+      try {
+        await subscribeToTopic(messagingInstance, topic);
+        console.log("[FCM] subscribed to topic:", topic);
+      } catch (err) {
+        // Ignore per-topic subscription failures to keep bootstrap resilient.
+        console.log("[FCM] failed to subscribe to topic:", topic, err?.message);
+      }
+    }),
+  );
+
+  await Promise.all(
+    topicsToUnsubscribe.map(async (topic) => {
+      try {
+        await unsubscribeFromTopic(messagingInstance, topic);
+        console.log("[FCM] unsubscribed from topic:", topic);
+      } catch (err) {
+        // Ignore per-topic unsubscription failures to keep bootstrap resilient.
+        console.log(
+          "[FCM] failed to unsubscribe from topic:",
+          topic,
+          err?.message,
+        );
+      }
+    }),
+  );
+
+  try {
+    await AsyncStorage.setItem(FCM_TOPICS_KEY, JSON.stringify(nextTopics));
+  } catch {
+    // Ignore storage issues and continue app startup.
+  }
+};
+
 const syncTokenToBackend = async (token) => {
   const registrationMethod = getRegistrationMethod();
 
@@ -166,6 +270,8 @@ const syncTokenToBackend = async (token) => {
     AsyncStorage.getItem("employee_id"),
   ]);
 
+  console.log("[FCM] baseUrl for token sync:", baseUrl);
+
   if (!baseUrl || !authToken) {
     return;
   }
@@ -176,7 +282,11 @@ const syncTokenToBackend = async (token) => {
     return;
   }
 
+  console.log("[FCM] registration method:", registrationMethod);
+  console.log("[FCM] full registration url:", registrationUrl);
+
   const body = new URLSearchParams();
+  body.append("token", token);
   body.append("fcm_token", token);
   body.append("platform", Platform.OS);
 
@@ -185,31 +295,63 @@ const syncTokenToBackend = async (token) => {
   }
 
   try {
-    await plainAxios.post(registrationUrl, body.toString(), {
+    const response = await plainAxios.post(registrationUrl, body.toString(), {
       headers: {
         ...setCommonHeaders(),
         Authorization: `Bearer ${authToken}`,
       },
       timeout: 10000,
     });
-  } catch {
+
+    console.log("[FCM] token sync status:", response?.status);
+
+    const topicData = extractTopicSyncData(response?.data);
+    console.log("[FCM] topics from server:", topicData?.topics);
+
+    const messagingInstance = await getMessagingInstanceWithRetry();
+
+    if (!messagingInstance) {
+      console.log(
+        "[FCM] messaging instance unavailable, skipping topic subscribe",
+      );
+      return;
+    }
+
+    if (Array.isArray(topicData?.topics)) {
+      console.log("[FCM] starting topic sync after login");
+      await syncTopicsFromBackend(messagingInstance, topicData.topics);
+      console.log("[FCM] topic sync complete");
+    }
+  } catch (error) {
+    console.log("[FCM] token sync failed:", error?.message);
+    console.log("[FCM] token sync error status:", error?.response?.status);
+    console.log("[FCM] token sync error data:", error?.response?.data);
     // Keep FCM bootstrap resilient even when registration API is unavailable.
   }
 };
 
 const persistFcmToken = async (token) => {
   if (!token) {
+    console.log("[FCM] persistFcmToken: token is empty");
     return;
   }
+
+  console.log(
+    "[FCM] persistFcmToken: storing token",
+    token.substring(0, 20) + "...",
+  );
 
   const previousToken = await AsyncStorage.getItem(FCM_TOKEN_KEY);
 
   if (previousToken === token) {
+    console.log("[FCM] persistFcmToken: token unchanged");
+    // Token unchanged; store locally but don't sync until after login.
     return;
   }
 
+  // Store new token locally but don't send to backend until user logs in.
   await AsyncStorage.setItem(FCM_TOKEN_KEY, token);
-  await syncTokenToBackend(token);
+  console.log("[FCM] persistFcmToken: token saved to AsyncStorage");
 };
 
 const requestAndroidNotificationPermission = async () => {
@@ -334,9 +476,15 @@ export const initializeFcm = async ({
   }
 
   try {
+    console.log("[FCM] initializeFcm: requesting token");
     const token = await getToken(messagingInstance);
+    console.log(
+      "[FCM] initializeFcm: token received",
+      token ? token.substring(0, 20) + "..." : "null",
+    );
     await persistFcmToken(token);
-  } catch {
+  } catch (error) {
+    console.log("[FCM] initializeFcm: token fetch failed", error?.message);
     // Do not block app startup if token retrieval fails.
   }
 
@@ -422,6 +570,27 @@ export const getClientFcmToken = async () => {
   }
 };
 
+export const syncFcmTokenAfterLogin = async () => {
+  console.log("[FCM] syncFcmTokenAfterLogin called");
+
+  const token = await AsyncStorage.getItem(FCM_TOKEN_KEY);
+  console.log(
+    "[FCM] syncFcmTokenAfterLogin: token from AsyncStorage",
+    token ? token.substring(0, 20) + "..." : "null",
+  );
+
+  if (!token) {
+    console.log("[FCM] No token stored, skipping sync");
+    return;
+  }
+
+  console.log(
+    "[FCM] syncFcmTokenAfterLogin: sending token and subscribing to topics",
+  );
+  await syncTokenToBackend(token);
+  console.log("[FCM] syncFcmTokenAfterLogin: complete");
+};
+
 export const clearFcmRegistration = async () => {
   const messagingInstance = getMessagingInstance();
 
@@ -433,5 +602,23 @@ export const clearFcmRegistration = async () => {
     // Token deletion can fail if Firebase is not fully initialized.
   }
 
-  await AsyncStorage.multiRemove([FCM_TOKEN_KEY, FCM_LAST_MESSAGE_AT_KEY]);
+  if (messagingInstance) {
+    const storedTopics = await getStoredTopics();
+
+    await Promise.all(
+      storedTopics.map(async (topic) => {
+        try {
+          await unsubscribeFromTopic(messagingInstance, topic);
+        } catch {
+          // Ignore topic cleanup failures during logout/reset.
+        }
+      }),
+    );
+  }
+
+  await AsyncStorage.multiRemove([
+    FCM_TOKEN_KEY,
+    FCM_LAST_MESSAGE_AT_KEY,
+    FCM_TOPICS_KEY,
+  ]);
 };
