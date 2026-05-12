@@ -5,7 +5,6 @@ import * as Location from "expo-location";
 import { format } from "date-fns";
 import apiClient from "./apiClient";
 import { cleanBaseUrl } from "./utils";
-import { get } from "react-native/Libraries/TurboModule/TurboModuleRegistry";
 import {
   normalizeCustomIn,
   toTimestampMs,

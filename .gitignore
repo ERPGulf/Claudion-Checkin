@@ -36,3 +36,8 @@ yarn-error.*
 
 # android local files
 android
+
+# build artifacts
+build/
+*.apk
+*.aab

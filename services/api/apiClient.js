@@ -143,7 +143,12 @@ export async function clearTokens() {
   memoryRefreshToken = null;
   hasTerminalSessionFailure = false;
   delete apiClient.defaults.headers.common.Authorization;
-  await AsyncStorage.multiRemove(["access_token", "refresh_token"]);
+  await AsyncStorage.multiRemove([
+    "access_token",
+    "refresh_token",
+    "fcm_token",
+    "fcm_last_message_at",
+  ]);
 }
 
 // ----------------------
@@ -199,7 +204,12 @@ const expireSession = async () => {
   memoryAccessToken = null;
   memoryRefreshToken = null;
   delete apiClient.defaults.headers.common.Authorization;
-  await AsyncStorage.multiRemove(["access_token", "refresh_token"]);
+  await AsyncStorage.multiRemove([
+    "access_token",
+    "refresh_token",
+    "fcm_token",
+    "fcm_last_message_at",
+  ]);
   clearStore();
 };
 

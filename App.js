@@ -4,22 +4,78 @@ import "react-native-gesture-handler";
 import { StatusBar } from "expo-status-bar";
 import Toast from "react-native-toast-message";
 import { PersistGate } from "redux-persist/integration/react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import * as Font from "expo-font";
 import * as SplashScreen from "expo-splash-screen";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Platform } from "react-native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useDispatch, useSelector } from "react-redux";
 import { SIZES } from "./constants";
 import { toastConfig } from "./Toast/Config";
 import Navigator from "./navigation/navigator";
 import * as Updates from "expo-updates";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { selectIsLoggedIn } from "./redux/Slices/AuthSlice";
+import {
+  initializeFcm,
+  registerBackgroundMessageHandler,
+} from "./services/notifications/fcm.service";
 
 function cacheFonts(fonts) {
   return fonts.map((font) => Font.loadAsync(font));
 }
 const queryClient = new QueryClient();
+registerBackgroundMessageHandler();
+
+function FcmBootstrap() {
+  const dispatch = useDispatch();
+  const isLoggedIn = useSelector(selectIsLoggedIn);
+  const teardownRef = useRef(() => {});
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const setupFcm = async () => {
+      teardownRef.current();
+      teardownRef.current = () => {};
+
+      if (!isLoggedIn) {
+        return;
+      }
+
+      const teardown = await initializeFcm({
+        dispatch,
+        onForegroundNotification: ({ title, body }) => {
+          Toast.show({
+            type: "info",
+            text1: title,
+            text2: body,
+            autoHide: true,
+            visibilityTime: 3500,
+          });
+        },
+      });
+
+      if (cancelled) {
+        teardown();
+        return;
+      }
+
+      teardownRef.current = teardown;
+    };
+
+    setupFcm();
+
+    return () => {
+      cancelled = true;
+      teardownRef.current();
+      teardownRef.current = () => {};
+    };
+  }, [dispatch, isLoggedIn]);
+
+  return null;
+}
 
 export default function App() {
   const [appReady, setAppReady] = useState(false);
@@ -64,6 +120,7 @@ export default function App() {
       <Provider store={store}>
         <PersistGate persistor={persistor} loading={null}>
           <QueryClientProvider client={queryClient}>
+            <FcmBootstrap />
             <Navigator />
             <StatusBar style="auto" />
             <Toast

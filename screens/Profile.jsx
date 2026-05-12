@@ -5,9 +5,10 @@ import {
   Alert,
   Platform,
   ScrollView,
+  Share,
 } from "react-native";
 import { Image } from "expo-image";
-import React, { useLayoutEffect, useState } from "react";
+import React, { useLayoutEffect, useState, useEffect } from "react";
 import { useNavigation } from "@react-navigation/native";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useSelector } from "react-redux";
@@ -21,7 +22,24 @@ import { hapticsMessage } from "../utils/HapticsMessage";
 import { clearTokens, clearStore } from "../services/api/apiClient";
 import apiClient from "../services/api/apiClient";
 import { clearAuthCache } from "../services/api/authHelper";
+import {
+  clearFcmRegistration,
+  getClientFcmToken,
+} from "../services/notifications/fcm.service";
 import * as Device from "expo-device";
+
+const maskToken = (token) => {
+  if (!token) {
+    return "Not generated yet";
+  }
+
+  if (token.length <= 20) {
+    return token;
+  }
+
+  return `${token.slice(0, 12)}...${token.slice(-8)}`;
+};
+
 const formatUpdateId = (updateId) => {
   if (!updateId) {
     return "embedded";
@@ -37,6 +55,8 @@ function Profile() {
   const [updateStatus, setUpdateStatus] = useState(
     "Ready to check for an OTA update.",
   );
+  const [clientToken, setClientToken] = useState(null);
+  const [isSharingClientToken, setIsSharingClientToken] = useState(false);
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -55,6 +75,10 @@ function Profile() {
   const runtimeVersion = Updates.runtimeVersion ?? "unknown";
   const updateId = formatUpdateId(Updates.updateId);
   const isProductionChannel = updateChannel === "production";
+  const isIosSimulator = Platform.OS === "ios" && !Device.isDevice;
+  const tokenDisplayText = isIosSimulator
+    ? "Unavailable on iOS Simulator. Use a physical iPhone to generate an FCM token."
+    : maskToken(clientToken);
   const deviceName = Device.deviceName || Device.modelName || "Unknown Device";
   const osInfo = `${Device.osName || ""} ${Device.osVersion || ""}`;
   const getStatusTone = () => {
@@ -103,6 +127,80 @@ function Profile() {
   };
 
   const statusTone = getStatusTone();
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadClientToken = async () => {
+      if (isIosSimulator) {
+        if (isMounted) {
+          setClientToken(null);
+        }
+        return;
+      }
+
+      const token = await getClientFcmToken();
+
+      if (!isMounted) {
+        return;
+      }
+
+      setClientToken(token);
+    };
+
+    loadClientToken();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isIosSimulator]);
+
+  const handleShareClientToken = async () => {
+    if (isIosSimulator) {
+      Toast.show({
+        type: "info",
+        text1: "FCM token unavailable on Simulator",
+        text2:
+          "Run this build on a physical iPhone to generate and share the client token.",
+        visibilityTime: 4200,
+        autoHide: true,
+      });
+      return;
+    }
+
+    setIsSharingClientToken(true);
+
+    try {
+      const token = await getClientFcmToken();
+
+      if (!token) {
+        Toast.show({
+          type: "error",
+          text1: "Client token unavailable",
+          text2: "Enable notification permission and try again.",
+          visibilityTime: 3500,
+          autoHide: true,
+        });
+        return;
+      }
+
+      setClientToken(token);
+
+      await Share.share({
+        title: "FCM Client Token",
+        message: `FCM client token (${Platform.OS}):\n${token}`,
+      });
+    } catch {
+      Toast.show({
+        type: "error",
+        text1: "Unable to share token",
+        visibilityTime: 3000,
+        autoHide: true,
+      });
+    } finally {
+      setIsSharingClientToken(false);
+    }
+  };
 
   const handleCheckForUpdates = async () => {
     if (__DEV__ || !Updates.isEnabled) {
@@ -174,16 +272,19 @@ function Profile() {
     try {
       hapticsMessage("success");
 
-      // 1. Clear tokens from storage
+      // 1. Remove FCM registration to avoid cross-user push delivery.
+      await clearFcmRegistration();
+
+      // 2. Clear tokens from storage
       await clearTokens();
 
-      // 2. Clear cached auth data
+      // 3. Clear cached auth data
       clearAuthCache();
 
-      // 3. Clear redux store
+      // 4. Clear redux store
       clearStore();
 
-      // 4. Remove axios authorization header
+      // 5. Remove axios authorization header
       delete apiClient.defaults.headers.common.Authorization;
     } catch (error) {
       hapticsMessage("error");
@@ -424,6 +525,60 @@ function Profile() {
               Manage your authenticated session and sign out securely from this
               device.
             </Text>
+
+            <View
+              style={{
+                marginTop: 16,
+                borderRadius: 18,
+                borderWidth: 1,
+                borderColor: "#D8E5FF",
+                backgroundColor: "#F5F9FF",
+                padding: 14,
+              }}
+            >
+              <View className="flex-row items-center justify-between">
+                <Text className="text-sm font-semibold text-slate-900">
+                  Client token
+                </Text>
+                <Ionicons
+                  name="notifications-outline"
+                  size={18}
+                  color="#2457D6"
+                />
+              </View>
+
+              <Text className="mt-2 text-xs leading-5 text-slate-600">
+                {tokenDisplayText}
+              </Text>
+
+              <TouchableOpacity
+                onPress={handleShareClientToken}
+                disabled={isSharingClientToken}
+                activeOpacity={0.9}
+                style={{
+                  marginTop: 12,
+                  borderRadius: 14,
+                  backgroundColor: isSharingClientToken
+                    ? COLORS.gray2
+                    : COLORS.primary,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  paddingVertical: 10,
+                }}
+              >
+                <Ionicons
+                  name="share-social-outline"
+                  size={16}
+                  color={COLORS.white}
+                />
+                <Text className="ml-2 text-sm font-semibold text-white">
+                  {isSharingClientToken
+                    ? "Preparing token"
+                    : "Share client token"}
+                </Text>
+              </TouchableOpacity>
+            </View>
 
             <TouchableOpacity
               onPress={() => {

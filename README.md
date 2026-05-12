@@ -1,5 +1,48 @@
 # Claudion-Checkin
 
+## Firebase Cloud Messaging (FCM)
+
+This app now includes production-ready FCM client wiring for Android and iOS:
+
+- Native Firebase app config files:
+  - `google-services.json` (Android)
+  - `GoogleService-Info.plist` (iOS)
+- Android native setup:
+  - Google services Gradle plugin enabled.
+  - Default notification channel (`checkin_alerts`) created on startup.
+  - Android 13 runtime notification permission support.
+- JavaScript runtime setup:
+  - Background message handler registration.
+  - Foreground message listener with in-app toast.
+  - Notification tap handling (`background` + `quit` state) with safe navigation.
+  - Token refresh handling and local token cache.
+
+### Optional backend token registration
+
+If your backend supports registering device tokens, add this key to `expo.extra` in `app.json`:
+
+```json
+{
+  "expo": {
+    "extra": {
+      "fcmRegistrationMethod": "employee_app.attendance_api.register_fcm_token"
+    }
+  }
+}
+```
+
+You can also provide a full URL instead of a method path.
+
+### iOS note
+
+If your local `ios/` native project is not fully generated, run:
+
+```bash
+npx expo prebuild --platform ios
+```
+
+Then open Xcode and ensure Push Notifications + Background Modes (Remote notifications) are enabled on the app target.
+
 ## Testing EAS OTA updates on Android and iOS
 
 This project is already configured for EAS Update:

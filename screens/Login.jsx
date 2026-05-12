@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { getNotifications } from "../services/api/notification.service";
+import { syncFcmTokenAfterLogin } from "../services/notifications/fcm.service";
 import { setUnreadCount } from "../redux/Slices/notificationSlice";
 
 import {
@@ -74,6 +75,13 @@ function Login() {
       }
 
       dispatch(setSignIn({ isLoggedIn: true, token: access_token }));
+
+      // 🔔 Send FCM token to backend after successful login
+      try {
+        await syncFcmTokenAfterLogin();
+      } catch (err) {
+        console.log("[FCM] Failed to sync token after login:", err?.message);
+      }
 
       // 🔔 NEW: fetch notifications at login
       try {
