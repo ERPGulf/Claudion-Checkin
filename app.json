@@ -79,22 +79,22 @@
       "url": "https://u.expo.dev/ee37c3a6-1da3-43ae-ad14-6b34a26c92ac",
       "enabled": true,
       "checkAutomatically": "ON_LOAD"
+    },
+    "build": {
+      "preview": {
+        "android": {
+          "buildType": "apk"
+        }
+      },
+      "preview2": {
+        "android": {
+          "gradleCommand": ":app:assembleRelease"
+        }
+      },
+      "preview3": {
+        "developmentClient": true
+      },
+      "production": {}
     }
-  },
-  "build": {
-    "preview": {
-      "android": {
-        "buildType": "apk"
-      }
-    },
-    "preview2": {
-      "android": {
-        "gradleCommand": ":app:assembleRelease"
-      }
-    },
-    "preview3": {
-      "developmentClient": true
-    },
-    "production": {}
   }
 }
