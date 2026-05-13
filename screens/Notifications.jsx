@@ -289,7 +289,7 @@ function Notifications() {
         )}
       />
       {/* ---------- MODAL ---------- */}
-      <Modal visible={!!selected} transparent animationType="fade">
+      <Modal visible={!!selected} transparent animationType="fade" >
         <TouchableOpacity
           style={{
             height: "100%",
@@ -311,7 +311,7 @@ function Notifications() {
               paddingTop: 16,
               paddingBottom: 32,
               maxHeight: "70%",
-              minHeight: 300,
+              minHeight: 400,
               shadowColor: "#000",
               shadowOffset: { width: 0, height: -2 },
               shadowOpacity: 0.15,
@@ -389,7 +389,7 @@ function Notifications() {
             />
 
             {/* Content */}
-            <ScrollView 
+            <ScrollView
               showsVerticalScrollIndicator={true}
               nestedScrollEnabled={true}
               scrollEventThrottle={16}
