@@ -304,9 +304,23 @@ const syncTokenToBackend = async (token) => {
     });
 
     console.log("[FCM] token sync status:", response?.status);
+    console.log("[FCM] POST API response:", response?.data);
 
-    const topicData = extractTopicSyncData(response?.data);
+    // Fetch topics from a GET request
+    const topicsUrl = buildFcmRegistrationUrl(registrationMethod, baseUrl);
+    const topicsResponse = await plainAxios.get(topicsUrl, {
+      headers: {
+        ...setCommonHeaders(),
+        Authorization: `Bearer ${authToken}`,
+      },
+      timeout: 10000,
+    });
+
+    console.log("[FCM] GET topics response:", topicsResponse?.data);
+
+    const topicData = extractTopicSyncData(topicsResponse?.data);
     console.log("[FCM] topics from server:", topicData?.topics);
+    console.log("[FCM] topicData before sync:", topicData);
 
     const messagingInstance = await getMessagingInstanceWithRetry();
 
@@ -589,6 +603,162 @@ export const syncFcmTokenAfterLogin = async () => {
   );
   await syncTokenToBackend(token);
   console.log("[FCM] syncFcmTokenAfterLogin: complete");
+};
+
+export const fetchTopicsFromServer = async () => {
+  console.log("[FCM] fetchTopicsFromServer called");
+  const startTime = Date.now();
+
+  try {
+    const registrationMethod = getRegistrationMethod();
+    console.log(
+      "[FCM] fetchTopicsFromServer: registrationMethod =",
+      registrationMethod,
+    );
+
+    const baseUrl = await AsyncStorage.getItem("baseUrl");
+    console.log("[FCM] fetchTopicsFromServer: baseUrl =", baseUrl);
+
+    const authToken = await AsyncStorage.getItem("access_token");
+    console.log("[FCM] fetchTopicsFromServer: authToken exists =", !!authToken);
+
+    if (!registrationMethod || !baseUrl || !authToken) {
+      console.log(
+        "[FCM] fetchTopicsFromServer: missing config - method:",
+        !!registrationMethod,
+        "baseUrl:",
+        !!baseUrl,
+        "authToken:",
+        !!authToken,
+      );
+      return null;
+    }
+
+    const topicsUrl = buildFcmRegistrationUrl(registrationMethod, baseUrl);
+    console.log("[FCM] fetchTopicsFromServer: built topicsUrl =", topicsUrl);
+
+    if (!topicsUrl) {
+      console.log(
+        "[FCM] fetchTopicsFromServer: invalid topics URL after build",
+      );
+      return null;
+    }
+
+    console.log(
+      "[FCM] fetchTopicsFromServer: starting GET request to",
+      topicsUrl,
+    );
+    const requestStartTime = Date.now();
+
+    const response = await plainAxios.get(topicsUrl, {
+      headers: {
+        ...setCommonHeaders(),
+        Authorization: `Bearer ${authToken}`,
+      },
+      timeout: 10000,
+    });
+
+    const requestDuration = Date.now() - requestStartTime;
+    console.log(
+      "[FCM] fetchTopicsFromServer: GET request completed in",
+      requestDuration,
+      "ms",
+    );
+    console.log(
+      "[FCM] fetchTopicsFromServer: response status =",
+      response?.status,
+    );
+    console.log(
+      "[FCM] fetchTopicsFromServer: response headers =",
+      response?.headers,
+    );
+    console.log(
+      "[FCM] fetchTopicsFromServer: response data =",
+      JSON.stringify(response?.data),
+    );
+
+    const topicData = extractTopicSyncData(response?.data);
+    console.log(
+      "[FCM] fetchTopicsFromServer: extracted topicData =",
+      JSON.stringify(topicData),
+    );
+    console.log(
+      "[FCM] fetchTopicsFromServer: topics array =",
+      Array.isArray(topicData?.topics)
+        ? JSON.stringify(topicData.topics)
+        : "not an array",
+    );
+    console.log(
+      "[FCM] fetchTopicsFromServer: topics count =",
+      topicData?.topics?.length || 0,
+    );
+
+    const messagingInstance = await getMessagingInstanceWithRetry();
+    console.log(
+      "[FCM] fetchTopicsFromServer: messagingInstance available =",
+      !!messagingInstance,
+    );
+
+    if (!messagingInstance) {
+      console.log(
+        "[FCM] fetchTopicsFromServer: messaging instance unavailable, returning topics only",
+      );
+      return topicData?.topics || null;
+    }
+
+    if (Array.isArray(topicData?.topics)) {
+      console.log(
+        "[FCM] fetchTopicsFromServer: syncing",
+        topicData.topics.length,
+        "topics",
+      );
+      const syncStartTime = Date.now();
+
+      await syncTopicsFromBackend(messagingInstance, topicData.topics);
+
+      const syncDuration = Date.now() - syncStartTime;
+      console.log(
+        "[FCM] fetchTopicsFromServer: topic sync completed in",
+        syncDuration,
+        "ms",
+      );
+    } else {
+      console.log(
+        "[FCM] fetchTopicsFromServer: topicData.topics is not an array, skipping sync",
+      );
+    }
+
+    const totalDuration = Date.now() - startTime;
+    console.log(
+      "[FCM] fetchTopicsFromServer: completed successfully in",
+      totalDuration,
+      "ms",
+    );
+    return topicData?.topics || null;
+  } catch (error) {
+    const totalDuration = Date.now() - startTime;
+    console.log(
+      "[FCM] fetchTopicsFromServer: ERROR after",
+      totalDuration,
+      "ms",
+    );
+    console.log("[FCM] fetchTopicsFromServer: error message =", error?.message);
+    console.log("[FCM] fetchTopicsFromServer: error code =", error?.code);
+    console.log(
+      "[FCM] fetchTopicsFromServer: error status =",
+      error?.response?.status,
+    );
+    console.log(
+      "[FCM] fetchTopicsFromServer: error response data =",
+      JSON.stringify(error?.response?.data),
+    );
+    console.log(
+      "[FCM] fetchTopicsFromServer: error config url =",
+      error?.config?.url,
+    );
+    console.log("[FCM] fetchTopicsFromServer: error stack =", error?.stack);
+    return null;
+  }
 };
 
 export const clearFcmRegistration = async () => {
