@@ -114,6 +114,26 @@ const getMessageBody = (remoteMessage) => {
   return notificationBody || dataBody || "You have a new notification.";
 };
 
+const logNotificationPayload = (source, remoteMessage) => {
+  try {
+    console.log(
+      `[FCM] ${source}: messageId`,
+      remoteMessage?.messageId || "n/a",
+    );
+    console.log(`[FCM] ${source}: from`, remoteMessage?.from || "n/a");
+    console.log(
+      `[FCM] ${source}: data`,
+      JSON.stringify(remoteMessage?.data || {}),
+    );
+    console.log(
+      `[FCM] ${source}: notification`,
+      JSON.stringify(remoteMessage?.notification || {}),
+    );
+  } catch {
+    // Logging should never interrupt notification handling.
+  }
+};
+
 const parseRouteParams = (data = {}) => {
   const rawParams = data.params ?? data.routeParams;
   let parsedParams = {};
@@ -209,30 +229,11 @@ const syncTopicsFromBackend = async (messagingInstance, topics) => {
   console.log("[FCM] syncTopicsFromBackend: next topics", nextTopics);
   console.log("[FCM] syncTopicsFromBackend: current topics", currentTopics);
 
-  const nextSet = new Set(nextTopics);
-  const currentSet = new Set(currentTopics);
-
-  const topicsToSubscribe = nextTopics.filter(
-    (topic) => !currentSet.has(topic),
-  );
-  const topicsToUnsubscribe = currentTopics.filter(
-    (topic) => !nextSet.has(topic),
-  );
+  const topicsToUnsubscribe = currentTopics;
+  const topicsToSubscribe = [...new Set(nextTopics)];
 
   console.log("[FCM] topics to subscribe:", topicsToSubscribe);
   console.log("[FCM] topics to unsubscribe:", topicsToUnsubscribe);
-
-  await Promise.all(
-    topicsToSubscribe.map(async (topic) => {
-      try {
-        await subscribeToTopic(messagingInstance, topic);
-        console.log("[FCM] subscribed to topic:", topic);
-      } catch (err) {
-        // Ignore per-topic subscription failures to keep bootstrap resilient.
-        console.log("[FCM] failed to subscribe to topic:", topic, err?.message);
-      }
-    }),
-  );
 
   await Promise.all(
     topicsToUnsubscribe.map(async (topic) => {
@@ -250,8 +251,23 @@ const syncTopicsFromBackend = async (messagingInstance, topics) => {
     }),
   );
 
+  await Promise.all(
+    topicsToSubscribe.map(async (topic) => {
+      try {
+        await subscribeToTopic(messagingInstance, topic);
+        console.log("[FCM] subscribed to topic:", topic);
+      } catch (err) {
+        // Ignore per-topic subscription failures to keep bootstrap resilient.
+        console.log("[FCM] failed to subscribe to topic:", topic, err?.message);
+      }
+    }),
+  );
+
   try {
-    await AsyncStorage.setItem(FCM_TOPICS_KEY, JSON.stringify(nextTopics));
+    await AsyncStorage.setItem(
+      FCM_TOPICS_KEY,
+      JSON.stringify(topicsToSubscribe),
+    );
   } catch {
     // Ignore storage issues and continue app startup.
   }
@@ -261,7 +277,7 @@ const syncTokenToBackend = async (token) => {
   const registrationMethod = getRegistrationMethod();
 
   if (!registrationMethod || !token) {
-    return;
+    return null;
   }
 
   const [baseUrl, authToken, employeeId] = await Promise.all([
@@ -273,13 +289,13 @@ const syncTokenToBackend = async (token) => {
   console.log("[FCM] baseUrl for token sync:", baseUrl);
 
   if (!baseUrl || !authToken) {
-    return;
+    return null;
   }
 
   const registrationUrl = buildFcmRegistrationUrl(registrationMethod, baseUrl);
 
   if (!registrationUrl) {
-    return;
+    return null;
   }
 
   console.log("[FCM] registration method:", registrationMethod);
@@ -328,7 +344,7 @@ const syncTokenToBackend = async (token) => {
       console.log(
         "[FCM] messaging instance unavailable, skipping topic subscribe",
       );
-      return;
+      return topicData?.topics || null;
     }
 
     if (Array.isArray(topicData?.topics)) {
@@ -336,11 +352,14 @@ const syncTokenToBackend = async (token) => {
       await syncTopicsFromBackend(messagingInstance, topicData.topics);
       console.log("[FCM] topic sync complete");
     }
+
+    return topicData?.topics || null;
   } catch (error) {
     console.log("[FCM] token sync failed:", error?.message);
     console.log("[FCM] token sync error status:", error?.response?.status);
     console.log("[FCM] token sync error data:", error?.response?.data);
     // Keep FCM bootstrap resilient even when registration API is unavailable.
+    return null;
   }
 };
 
@@ -443,6 +462,8 @@ export const handleNotificationOpen = async (remoteMessage, dispatch) => {
     return;
   }
 
+  logNotificationPayload("handleNotificationOpen", remoteMessage);
+
   await syncUnreadCountFromServer(dispatch);
 
   const routeName = getTargetRoute(remoteMessage);
@@ -466,7 +487,8 @@ export const registerBackgroundMessageHandler = () => {
     return;
   }
 
-  setBackgroundMessageHandler(messagingInstance, async () => {
+  setBackgroundMessageHandler(messagingInstance, async (remoteMessage) => {
+    logNotificationPayload("backgroundMessage", remoteMessage);
     await AsyncStorage.setItem(FCM_LAST_MESSAGE_AT_KEY, String(Date.now()));
   });
 
@@ -514,6 +536,7 @@ export const initializeFcm = async ({
   const unsubscribeForeground = onMessage(
     messagingInstance,
     async (remoteMessage) => {
+      logNotificationPayload("foregroundMessage", remoteMessage);
       await AsyncStorage.setItem(FCM_LAST_MESSAGE_AT_KEY, String(Date.now()));
       await syncUnreadCountFromServer(dispatch);
 
@@ -530,6 +553,7 @@ export const initializeFcm = async ({
   const unsubscribeNotificationOpen = onNotificationOpenedApp(
     messagingInstance,
     async (remoteMessage) => {
+      logNotificationPayload("notificationOpenedApp", remoteMessage);
       await handleNotificationOpen(remoteMessage, dispatch);
     },
   );
@@ -538,6 +562,7 @@ export const initializeFcm = async ({
     const initialMessage = await getInitialNotification(messagingInstance);
 
     if (initialMessage) {
+      logNotificationPayload("initialNotification", initialMessage);
       await handleNotificationOpen(initialMessage, dispatch);
     }
   } catch {
@@ -692,6 +717,29 @@ export const fetchTopicsFromServer = async () => {
       "[FCM] fetchTopicsFromServer: topics count =",
       topicData?.topics?.length || 0,
     );
+
+    if (topicData?.token_updated === false) {
+      console.log(
+        "[FCM] fetchTopicsFromServer: server token not updated, syncing current FCM token",
+      );
+
+      const currentToken = await getClientFcmToken();
+
+      if (currentToken) {
+        const refreshedTopics = await syncTokenToBackend(currentToken);
+
+        if (Array.isArray(refreshedTopics)) {
+          console.log(
+            "[FCM] fetchTopicsFromServer: token refreshed and topics synced via token update",
+          );
+          return refreshedTopics;
+        }
+      } else {
+        console.log(
+          "[FCM] fetchTopicsFromServer: no client FCM token available for refresh",
+        );
+      }
+    }
 
     const messagingInstance = await getMessagingInstanceWithRetry();
     console.log(
