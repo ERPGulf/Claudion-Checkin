@@ -164,11 +164,13 @@ function Notifications() {
             {/* DATE HEADER */}
             <Text
               style={{
-                fontSize: 14,
-                fontWeight: "600",
-                color: "#6B7280",
-                marginBottom: 8,
-                marginTop: 12,
+                fontSize: 12,
+                fontWeight: "700",
+                color: "#9CA3AF",
+                marginBottom: 12,
+                marginTop: 16,
+                textTransform: "uppercase",
+                letterSpacing: 0.5,
               }}
             >
               {item.date}
@@ -201,42 +203,52 @@ function Notifications() {
                 <TouchableOpacity
                   key={notification.name}
                   onPress={handlePress}
-                  activeOpacity={0.7}
+                  activeOpacity={0.65}
+                  style={{
+                    marginBottom: 10,
+                  }}
                 >
                   <View
                     style={{
                       flexDirection: "row",
-                      padding: 14,
-                      marginBottom: 10,
-                      borderRadius: 10,
-                      backgroundColor: isUnread ? "#2E2E2E" : "#F2F2F2",
+                      padding: 16,
+                      borderRadius: 12,
+                      backgroundColor: isUnread ? "#1F2937" : "#F9FAFB",
+                      borderLeftWidth: isUnread ? 4 : 0,
+                      borderLeftColor: isUnread ? bg : "transparent",
+                      shadowColor: isUnread ? "#000" : "transparent",
+                      shadowOffset: { width: 0, height: 1 },
+                      shadowOpacity: isUnread ? 0.1 : 0,
+                      shadowRadius: 2,
+                      elevation: isUnread ? 2 : 0,
                     }}
                   >
                     {/* LOGO ICON */}
                     <View
                       style={{
-                        width: 38,
-                        height: 38,
-                        borderRadius: 19,
+                        width: 44,
+                        height: 44,
+                        borderRadius: 22,
                         backgroundColor: bg,
                         justifyContent: "center",
                         alignItems: "center",
-                        marginRight: 12,
+                        marginRight: 14,
+                        flexShrink: 0,
                       }}
                     >
-                      <Ionicons name={icon} size={18} color="#fff" />
+                      <Ionicons name={icon} size={20} color="#fff" />
                     </View>
 
-                    {/* TITLE */}
                     {/* TEXT CONTAINER */}
-                    <View style={{ flex: 1 }}>
+                    <View style={{ flex: 1, justifyContent: "center" }}>
                       {/* TITLE */}
                       <Text
                         numberOfLines={1}
                         style={{
                           fontWeight: "600",
-                          fontSize: 15,
-                          color: isUnread ? "#fff" : "#111",
+                          fontSize: 14,
+                          color: isUnread ? "#F3F4F6" : "#1F2937",
+                          marginBottom: 6,
                         }}
                       >
                         {notification.title}
@@ -244,17 +256,31 @@ function Notifications() {
 
                       {/* DESCRIPTION PREVIEW */}
                       <Text
-                        numberOfLines={1}
+                        numberOfLines={2}
                         ellipsizeMode="tail"
                         style={{
                           fontSize: 13,
-                          marginTop: 4,
-                          color: isUnread ? "#D1D5DB" : "#555",
+                          color: isUnread ? "#D1D5DB" : "#6B7280",
+                          lineHeight: 18,
                         }}
                       >
                         {notification.notification}
                       </Text>
                     </View>
+
+                    {/* UNREAD INDICATOR */}
+                    {isUnread && (
+                      <View
+                        style={{
+                          width: 10,
+                          height: 10,
+                          borderRadius: 5,
+                          backgroundColor: bg,
+                          marginLeft: 12,
+                          marginTop: 2,
+                        }}
+                      />
+                    )}
                   </View>
                 </TouchableOpacity>
               );
@@ -263,35 +289,45 @@ function Notifications() {
         )}
       />
       {/* ---------- MODAL ---------- */}
-      <Modal visible={!!selected} transparent animationType="slide">
-        <View
+      <Modal visible={!!selected} transparent animationType="fade">
+        <TouchableOpacity
           style={{
             height: "100%",
             width: "100%",
-            backgroundColor: "rgba(0, 0, 0, 0.35)", // full-screen dim
+            backgroundColor: "rgba(0, 0, 0, 0.5)",
             justifyContent: "flex-end",
           }}
+          activeOpacity={1}
+          onPress={() => setSelected(null)}
         >
-          <View
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={() => {}}
             style={{
               backgroundColor: "#FFFFFF",
-              borderTopLeftRadius: 28,
-              borderTopRightRadius: 28,
-              paddingHorizontal: 16,
-              paddingTop: 12,
-              paddingBottom: 20,
-              maxHeight: "45%",
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              paddingHorizontal: 20,
+              paddingTop: 16,
+              paddingBottom: 32,
+              maxHeight: "70%",
+              minHeight: 300,
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: -2 },
+              shadowOpacity: 0.15,
+              shadowRadius: 8,
+              elevation: 10,
             }}
           >
             {/* Drag indicator */}
             <View
               style={{
-                width: 36,
+                width: 40,
                 height: 4,
                 borderRadius: 2,
-                backgroundColor: "#D1D5DB",
+                backgroundColor: "#E5E7EB",
                 alignSelf: "center",
-                marginBottom: 12,
+                marginBottom: 16,
               }}
             />
 
@@ -300,40 +336,78 @@ function Notifications() {
               style={{
                 flexDirection: "row",
                 justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: 8,
+                alignItems: "flex-start",
+                marginBottom: 16,
               }}
             >
-              <Text
-                numberOfLines={1}
-                style={{ fontSize: 16, fontWeight: "600" }}
-              >
-                {selected?.title || "Notification"}
-              </Text>
+              <View style={{ flex: 1, marginRight: 12 }}>
+                <Text
+                  numberOfLines={2}
+                  style={{
+                    fontSize: 18,
+                    fontWeight: "700",
+                    color: "#111827",
+                    marginBottom: 4,
+                  }}
+                >
+                  {selected?.title || "Notification"}
+                </Text>
+                <Text
+                  numberOfLines={1}
+                  style={{
+                    fontSize: 12,
+                    color: "#9CA3AF",
+                  }}
+                >
+                  {selected?.date}
+                </Text>
+              </View>
 
-              <TouchableOpacity onPress={() => setSelected(null)}>
+              <TouchableOpacity
+                onPress={() => setSelected(null)}
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 18,
+                  backgroundColor: "#F3F4F6",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  flexShrink: 0,
+                }}
+              >
                 <Ionicons name="close" size={20} color="#6B7280" />
               </TouchableOpacity>
             </View>
 
-            {/* Content */}
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <Text style={{ fontSize: 15, lineHeight: 22, color: "#111827" }}>
-                {selected?.notification}
-              </Text>
+            {/* Divider */}
+            <View
+              style={{
+                height: 1,
+                backgroundColor: "#E5E7EB",
+                marginBottom: 16,
+              }}
+            />
 
+            {/* Content */}
+            <ScrollView 
+              showsVerticalScrollIndicator={true}
+              nestedScrollEnabled={true}
+              scrollEventThrottle={16}
+            >
               <Text
                 style={{
-                  fontSize: 12,
-                  color: "#6B7280",
-                  marginTop: 12,
+                  fontSize: 15,
+                  lineHeight: 24,
+                  color: "#374151",
+                  fontWeight: "400",
+                  paddingRight: 8,
                 }}
               >
-                {selected?.date}
+                {selected?.notification}
               </Text>
             </ScrollView>
-          </View>
-        </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
     </View>
   );
