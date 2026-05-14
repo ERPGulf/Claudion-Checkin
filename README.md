@@ -49,8 +49,10 @@ This project is already configured for EAS Update:
 
 - `expo-updates` is installed.
 - `updates.url` points to the Expo project.
-- `runtimeVersion.policy` is set to `appVersion`.
+- `runtimeVersion` is pinned manually to `1.1.7` for bare-workflow EAS builds.
 - EAS build channels are defined in `eas.json`.
+
+When you bump the app version, update the pinned runtime version in `app.json` and the native Expo update config so OTA compatibility stays aligned.
 
 Use a real EAS build to test OTA updates. Expo Go will not receive updates from your project channel.
 
