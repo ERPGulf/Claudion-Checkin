@@ -28,8 +28,7 @@
         "expo-build-properties",
         {
           "ios": {
-            "useFrameworks": "static",
-            "buildReactNativeFromSource": true
+            "useFrameworks": "static"
           }
         }
       ],
@@ -41,6 +40,9 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.bazim.claudioncheckin",
       "googleServicesFile": "./GoogleService-Info.plist",
+      "entitlements": {
+        "aps-environment": "production"
+      },
       "infoPlist": {
         "NSCameraUsageDescription": "Allow $(PRODUCT_NAME) to access your camera to enable essential functionality, such as scanning QR codes and capturing photos for employee activity tracking and verification.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Allow $(PRODUCT_NAME) to use your location for tracking check-ins, check-outs, and real-time location updates for drivers during trips, enhancing user experiences.",
