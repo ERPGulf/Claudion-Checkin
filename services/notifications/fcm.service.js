@@ -21,6 +21,7 @@ import { cleanBaseUrl, setCommonHeaders } from "../api/utils";
 import { getNotifications } from "../api/notification.service";
 import { setUnreadCount } from "../../redux/Slices/notificationSlice";
 import { navigateSafely } from "../../navigation/rootNavigation";
+import { getSanitizedTopics, getTopicSyncPlan } from "../../utils/fcmTopics";
 
 const FCM_TOKEN_KEY = "fcm_token";
 const FCM_LAST_MESSAGE_AT_KEY = "fcm_last_message_at";
@@ -192,17 +193,6 @@ const extractTopicSyncData = (payload) => {
   return payload;
 };
 
-const getSanitizedTopics = (topics) => {
-  if (!Array.isArray(topics)) {
-    return [];
-  }
-
-  return topics
-    .filter((topic) => typeof topic === "string")
-    .map((topic) => topic.trim())
-    .filter(Boolean);
-};
-
 const getStoredTopics = async () => {
   try {
     const serializedTopics = await AsyncStorage.getItem(FCM_TOPICS_KEY);
@@ -225,12 +215,11 @@ const syncTopicsFromBackend = async (messagingInstance, topics) => {
 
   const nextTopics = getSanitizedTopics(topics);
   const currentTopics = await getStoredTopics();
+  const { topicsToSubscribe, topicsToUnsubscribe, syncedTopics } =
+    getTopicSyncPlan(currentTopics, nextTopics);
 
   console.log("[FCM] syncTopicsFromBackend: next topics", nextTopics);
   console.log("[FCM] syncTopicsFromBackend: current topics", currentTopics);
-
-  const topicsToUnsubscribe = currentTopics;
-  const topicsToSubscribe = [...new Set(nextTopics)];
 
   console.log("[FCM] topics to subscribe:", topicsToSubscribe);
   console.log("[FCM] topics to unsubscribe:", topicsToUnsubscribe);
@@ -264,10 +253,7 @@ const syncTopicsFromBackend = async (messagingInstance, topics) => {
   );
 
   try {
-    await AsyncStorage.setItem(
-      FCM_TOPICS_KEY,
-      JSON.stringify(topicsToSubscribe),
-    );
+    await AsyncStorage.setItem(FCM_TOPICS_KEY, JSON.stringify(syncedTopics));
   } catch {
     // Ignore storage issues and continue app startup.
   }
