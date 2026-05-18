@@ -101,35 +101,94 @@ const buildFcmRegistrationUrl = (methodPath, baseUrl) => {
   return `${cleanBaseUrl(baseUrl)}/api/method/${normalizedMethodPath}`;
 };
 
+const normalizeMessageData = (value) => {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value;
+  }
+
+  if (typeof value === "string" && value.trim()) {
+    try {
+      const parsedValue = JSON.parse(value);
+
+      if (
+        parsedValue &&
+        typeof parsedValue === "object" &&
+        !Array.isArray(parsedValue)
+      ) {
+        return parsedValue;
+      }
+    } catch {
+      return {};
+    }
+  }
+
+  return {};
+};
+
+const getMessageData = (remoteMessage) => {
+  const candidates = [
+    remoteMessage?.data,
+    remoteMessage?.metadata?.data,
+    remoteMessage?.notification?.data,
+  ];
+
+  for (const candidate of candidates) {
+    const normalizedCandidate = normalizeMessageData(candidate);
+
+    if (Object.keys(normalizedCandidate).length > 0) {
+      return normalizedCandidate;
+    }
+  }
+
+  return normalizeMessageData(remoteMessage?.data);
+};
+
 const getMessageTitle = (remoteMessage) => {
+  const messageData = getMessageData(remoteMessage);
   const notificationTitle = remoteMessage?.notification?.title;
-  const dataTitle = remoteMessage?.data?.title;
+  const dataTitle = messageData.title;
 
   return notificationTitle || dataTitle || "New update";
 };
 
 const getMessageBody = (remoteMessage) => {
+  const messageData = getMessageData(remoteMessage);
   const notificationBody = remoteMessage?.notification?.body;
-  const dataBody = remoteMessage?.data?.body || remoteMessage?.data?.message;
+  const dataBody = messageData.body || messageData.message;
 
   return notificationBody || dataBody || "You have a new notification.";
 };
 
 const logNotificationPayload = (source, remoteMessage) => {
+  const messageData = getMessageData(remoteMessage);
+
   try {
     console.log(
       `[FCM] ${source}: messageId`,
       remoteMessage?.messageId || "n/a",
     );
     console.log(`[FCM] ${source}: from`, remoteMessage?.from || "n/a");
-    console.log(
-      `[FCM] ${source}: data`,
-      JSON.stringify(remoteMessage?.data || {}),
-    );
+    console.log(`[FCM] ${source}: data`, JSON.stringify(messageData));
     console.log(
       `[FCM] ${source}: notification`,
       JSON.stringify(remoteMessage?.notification || {}),
     );
+  } catch {
+    // Logging should never interrupt notification handling.
+  }
+};
+
+const logNotificationReceived = (source, remoteMessage) => {
+  const messageData = getMessageData(remoteMessage);
+
+  try {
+    console.log("[FCM] new notification received", {
+      source,
+      title: getMessageTitle(remoteMessage),
+      body: getMessageBody(remoteMessage),
+      routeName: getTargetRoute(remoteMessage),
+      type: messageData.type || "n/a",
+    });
   } catch {
     // Logging should never interrupt notification handling.
   }
@@ -165,10 +224,9 @@ const parseRouteParams = (data = {}) => {
 };
 
 const getTargetRoute = (remoteMessage) => {
+  const messageData = getMessageData(remoteMessage);
   const routeFromPayload =
-    remoteMessage?.data?.route ||
-    remoteMessage?.data?.screen ||
-    remoteMessage?.data?.navigateTo;
+    messageData.route || messageData.screen || messageData.navigateTo;
 
   if (!routeFromPayload || typeof routeFromPayload !== "string") {
     return DEFAULT_NOTIFICATION_ROUTE;
@@ -453,7 +511,7 @@ export const handleNotificationOpen = async (remoteMessage, dispatch) => {
   await syncUnreadCountFromServer(dispatch);
 
   const routeName = getTargetRoute(remoteMessage);
-  const params = parseRouteParams(remoteMessage?.data);
+  const params = parseRouteParams(getMessageData(remoteMessage));
 
   const navigated = navigateSafely(routeName, params);
 
@@ -474,6 +532,7 @@ export const registerBackgroundMessageHandler = () => {
   }
 
   setBackgroundMessageHandler(messagingInstance, async (remoteMessage) => {
+    logNotificationReceived("backgroundMessage", remoteMessage);
     logNotificationPayload("backgroundMessage", remoteMessage);
     await AsyncStorage.setItem(FCM_LAST_MESSAGE_AT_KEY, String(Date.now()));
   });
@@ -522,6 +581,9 @@ export const initializeFcm = async ({
   const unsubscribeForeground = onMessage(
     messagingInstance,
     async (remoteMessage) => {
+      const messageData = getMessageData(remoteMessage);
+
+      logNotificationReceived("foregroundMessage", remoteMessage);
       logNotificationPayload("foregroundMessage", remoteMessage);
       await AsyncStorage.setItem(FCM_LAST_MESSAGE_AT_KEY, String(Date.now()));
       await syncUnreadCountFromServer(dispatch);
@@ -531,6 +593,10 @@ export const initializeFcm = async ({
           remoteMessage,
           title: getMessageTitle(remoteMessage),
           body: getMessageBody(remoteMessage),
+          data: messageData,
+          type: messageData.type,
+          routeName: getTargetRoute(remoteMessage),
+          params: parseRouteParams(messageData),
         });
       }
     },
