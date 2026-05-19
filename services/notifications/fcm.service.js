@@ -4,12 +4,15 @@ import { getApp, getApps } from "@react-native-firebase/app";
 import {
   AuthorizationStatus,
   deleteToken,
+  getAPNSToken,
   getInitialNotification,
   getMessaging,
   getToken,
+  isDeviceRegisteredForRemoteMessages,
   onMessage,
   onNotificationOpenedApp,
   onTokenRefresh,
+  registerDeviceForRemoteMessages,
   requestPermission,
   setBackgroundMessageHandler,
   subscribeToTopic,
@@ -79,6 +82,100 @@ const getRegistrationMethod = () => {
   }
 
   return registrationMethod.trim();
+};
+
+const getAuthorizationStatusLabel = (status) => {
+  switch (status) {
+    case AuthorizationStatus.NOT_DETERMINED:
+      return "NOT_DETERMINED";
+    case AuthorizationStatus.DENIED:
+      return "DENIED";
+    case AuthorizationStatus.AUTHORIZED:
+      return "AUTHORIZED";
+    case AuthorizationStatus.PROVISIONAL:
+      return "PROVISIONAL";
+    case AuthorizationStatus.EPHEMERAL:
+      return "EPHEMERAL";
+    default:
+      return "UNKNOWN";
+  }
+};
+
+const formatTokenForLogs = (token) => {
+  if (!token || typeof token !== "string") {
+    return "null";
+  }
+
+  const prefixLength = Math.min(token.length, 20);
+  return `${token.slice(0, prefixLength)}... (${token.length} chars)`;
+};
+
+const logIosPushDiagnostics = async (messagingInstance, authStatus, source) => {
+  if (Platform.OS !== "ios" || !messagingInstance) {
+    return;
+  }
+
+  if (typeof authStatus !== "undefined") {
+    console.log(
+      `[FCM] ${source}: auth status =`,
+      authStatus,
+      getAuthorizationStatusLabel(authStatus),
+    );
+  }
+
+  try {
+    console.log(
+      `[FCM] ${source}: isDeviceRegisteredForRemoteMessages =`,
+      isDeviceRegisteredForRemoteMessages(messagingInstance),
+    );
+  } catch (error) {
+    console.log(
+      `[FCM] ${source}: failed to read device registration state`,
+      error?.message,
+    );
+  }
+
+  try {
+    const apnsToken = await getAPNSToken(messagingInstance);
+    console.log(`[FCM] ${source}: APNS token =`, formatTokenForLogs(apnsToken));
+  } catch (error) {
+    console.log(`[FCM] ${source}: failed to read APNS token`, error?.message);
+  }
+};
+
+const ensureIosDeviceRegisteredForRemoteMessages = async (
+  messagingInstance,
+  source,
+) => {
+  if (Platform.OS !== "ios" || !messagingInstance) {
+    return true;
+  }
+
+  try {
+    const isRegistered = isDeviceRegisteredForRemoteMessages(messagingInstance);
+
+    console.log(
+      `[FCM] ${source}: isDeviceRegisteredForRemoteMessages =`,
+      isRegistered,
+    );
+
+    if (isRegistered) {
+      return true;
+    }
+
+    console.log(`[FCM] ${source}: registering device for remote messages`);
+    await registerDeviceForRemoteMessages(messagingInstance);
+
+    console.log(`[FCM] ${source}: registerDeviceForRemoteMessages completed`);
+
+    return true;
+  } catch (error) {
+    console.log(
+      `[FCM] ${source}: registerDeviceForRemoteMessages failed`,
+      error?.message,
+    );
+    return false;
+  }
 };
 
 const buildFcmRegistrationUrl = (methodPath, baseUrl) => {
@@ -462,12 +559,28 @@ export const requestFcmPermission = async () => {
   const androidAllowed = await requestAndroidNotificationPermission();
 
   if (!androidAllowed) {
+    console.log(
+      "[FCM] requestFcmPermission: Android POST_NOTIFICATIONS denied",
+    );
     return false;
   }
 
   const messagingInstance = await getMessagingInstanceWithRetry();
 
   if (!messagingInstance) {
+    console.log("[FCM] requestFcmPermission: messaging instance unavailable");
+    return false;
+  }
+
+  const isRegistered = await ensureIosDeviceRegisteredForRemoteMessages(
+    messagingInstance,
+    "requestFcmPermission",
+  );
+
+  if (!isRegistered) {
+    console.log(
+      "[FCM] requestFcmPermission: device is not registered for remote messages",
+    );
     return false;
   }
 
@@ -479,12 +592,27 @@ export const requestFcmPermission = async () => {
       provisional: false,
     });
 
+    console.log(
+      "[FCM] requestFcmPermission: auth status =",
+      authStatus,
+      getAuthorizationStatusLabel(authStatus),
+    );
+    await logIosPushDiagnostics(
+      messagingInstance,
+      authStatus,
+      "requestFcmPermission",
+    );
+
     return (
       authStatus === AuthorizationStatus.AUTHORIZED ||
       authStatus === AuthorizationStatus.PROVISIONAL ||
       authStatus === AuthorizationStatus.EPHEMERAL
     );
-  } catch {
+  } catch (error) {
+    console.log(
+      "[FCM] requestFcmPermission: permission request failed",
+      error?.message,
+    );
     return false;
   }
 };
@@ -558,12 +686,14 @@ export const initializeFcm = async ({
   const messagingInstance = await getMessagingInstanceWithRetry();
 
   if (!messagingInstance) {
+    console.log("[FCM] initializeFcm: messaging instance unavailable");
     return () => {};
   }
 
   const hasPermission = await requestFcmPermission();
 
   if (!hasPermission) {
+    console.log("[FCM] initializeFcm: notification permission not granted");
     return () => {};
   }
 
@@ -643,18 +773,36 @@ export const getClientFcmToken = async () => {
   const cachedToken = await AsyncStorage.getItem(FCM_TOKEN_KEY);
 
   if (cachedToken) {
+    console.log(
+      "[FCM] getClientFcmToken: using cached token",
+      formatTokenForLogs(cachedToken),
+    );
     return cachedToken;
   }
 
   const messagingInstance = await getMessagingInstanceWithRetry();
 
   if (!messagingInstance) {
+    console.log("[FCM] getClientFcmToken: messaging instance unavailable");
+    return null;
+  }
+
+  const isRegistered = await ensureIosDeviceRegisteredForRemoteMessages(
+    messagingInstance,
+    "getClientFcmToken",
+  );
+
+  if (!isRegistered) {
+    console.log(
+      "[FCM] getClientFcmToken: device is not registered for remote messages",
+    );
     return null;
   }
 
   const hasPermission = await requestFcmPermission();
 
   if (!hasPermission) {
+    console.log("[FCM] getClientFcmToken: notification permission not granted");
     return null;
   }
 

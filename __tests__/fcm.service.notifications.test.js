@@ -21,6 +21,9 @@ const mockAuthorizationStatus = {
 let foregroundMessageHandler;
 
 const mockGetToken = jest.fn();
+const mockGetAPNSToken = jest.fn();
+const mockIsDeviceRegisteredForRemoteMessages = jest.fn();
+const mockRegisterDeviceForRemoteMessages = jest.fn();
 const mockOnMessage = jest.fn();
 const mockOnNotificationOpenedApp = jest.fn();
 const mockOnTokenRefresh = jest.fn();
@@ -69,12 +72,17 @@ const loadFcmService = () => {
   jest.doMock("@react-native-firebase/messaging", () => ({
     AuthorizationStatus: mockAuthorizationStatus,
     deleteToken: jest.fn(() => Promise.resolve()),
+    getAPNSToken: (...args) => mockGetAPNSToken(...args),
     getInitialNotification: (...args) => mockGetInitialNotification(...args),
     getMessaging: jest.fn(() => ({ appName: "[DEFAULT]" })),
     getToken: (...args) => mockGetToken(...args),
+    isDeviceRegisteredForRemoteMessages: (...args) =>
+      mockIsDeviceRegisteredForRemoteMessages(...args),
     onMessage: (...args) => mockOnMessage(...args),
     onNotificationOpenedApp: (...args) => mockOnNotificationOpenedApp(...args),
     onTokenRefresh: (...args) => mockOnTokenRefresh(...args),
+    registerDeviceForRemoteMessages: (...args) =>
+      mockRegisterDeviceForRemoteMessages(...args),
     requestPermission: (...args) => mockRequestPermission(...args),
     setBackgroundMessageHandler: jest.fn(),
     subscribeToTopic: (...args) => mockSubscribeToTopic(...args),
@@ -163,6 +171,9 @@ describe("FCM notification metadata handling", () => {
     });
 
     mockGetToken.mockResolvedValue("test-fcm-token");
+    mockGetAPNSToken.mockResolvedValue("test-apns-token");
+    mockIsDeviceRegisteredForRemoteMessages.mockReturnValue(true);
+    mockRegisterDeviceForRemoteMessages.mockResolvedValue(undefined);
     mockRequestPermission.mockResolvedValue(mockAuthorizationStatus.AUTHORIZED);
     mockGetInitialNotification.mockResolvedValue(null);
 
@@ -221,6 +232,35 @@ describe("FCM notification metadata handling", () => {
         type: "announcement",
       },
     });
+  });
+
+  it("logs iOS APNS diagnostics during initialization", async () => {
+    await initializeFcm({
+      dispatch: jest.fn(),
+      onForegroundNotification: jest.fn(),
+    });
+
+    expect(mockIsDeviceRegisteredForRemoteMessages).toHaveBeenCalledWith({
+      appName: "[DEFAULT]",
+    });
+    expect(mockGetAPNSToken).toHaveBeenCalledWith({ appName: "[DEFAULT]" });
+  });
+
+  it("registers iOS for remote messages before requesting the token", async () => {
+    mockIsDeviceRegisteredForRemoteMessages
+      .mockReturnValueOnce(false)
+      .mockReturnValue(true);
+
+    await initializeFcm({
+      dispatch: jest.fn(),
+      onForegroundNotification: jest.fn(),
+    });
+
+    expect(mockRegisterDeviceForRemoteMessages).toHaveBeenCalledWith({
+      appName: "[DEFAULT]",
+    });
+    expect(mockGetToken).toHaveBeenCalledWith({ appName: "[DEFAULT]" });
+    expect(mockGetAPNSToken).toHaveBeenCalledWith({ appName: "[DEFAULT]" });
   });
 
   it("uses metadata data when opening a notification", async () => {
