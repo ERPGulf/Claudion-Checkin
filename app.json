@@ -6,87 +6,71 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "cover",
       "backgroundColor": "#ffffff"
     },
-
     "plugins": [
       "@react-native-firebase/app",
       "@react-native-firebase/messaging",
-
       [
         "expo-location",
         {
           "locationAlwaysAndWhenInUsePermission": "Allow $(PRODUCT_NAME) to use your location for tracking check-ins, check-outs, and real-time location updates for drivers during trips, enhancing user experiences."
         }
       ],
-
       [
         "expo-camera",
         {
           "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera to enable essential functionality, such as scanning QR codes and capturing photos for employee activity tracking and verification."
         }
       ],
-
       [
         "expo-build-properties",
         {
           "ios": {
             "useFrameworks": "static",
-            "forceStaticLinking": ["RNFBApp", "RNFBMessaging"]
+            "forceStaticLinking": [
+              "RNFBApp",
+              "RNFBMessaging"
+            ]
           }
         }
       ],
-
       "expo-font",
       "expo-asset"
     ],
-
-    "assetBundlePatterns": ["**/*"],
-
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": false,
-
       "bundleIdentifier": "com.bazim.claudioncheckin",
-
       "googleServicesFile": "./GoogleService-Info.plist",
-
       "infoPlist": {
         "NSCameraUsageDescription": "Allow $(PRODUCT_NAME) to access your camera to enable essential functionality, such as scanning QR codes and capturing photos for employee activity tracking and verification.",
-
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Allow $(PRODUCT_NAME) to use your location for tracking check-ins, check-outs, and real-time location updates for drivers during trips, enhancing user experiences.",
-
         "NSLocationWhenInUseUsageDescription": "Allow $(PRODUCT_NAME) to use your location for tracking check-ins, check-outs, and real-time location updates for drivers during trips, enhancing user experiences.",
-
         "NSBarcodeScannerUsageDescription": "Allow $(PRODUCT_NAME) to access your camera to enable essential functionality, such as scanning QR codes and capturing photos for employee activity tracking and verification.",
-
         "NSMicrophoneUsageDescription": "Allow $(PRODUCT_NAME) to access your microphone",
-
         "ITSAppUsesNonExemptEncryption": false,
-
-        "UIBackgroundModes": ["remote-notification"]
+        "UIBackgroundModes": [
+          "remote-notification"
+        ]
       },
-
-      "buildNumber": "4"
+      "buildNumber": "4",
+      "appleTeamId": "VWL956UDWG"
     },
-
     "android": {
       "softwareKeyboardLayoutMode": "pan",
-
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-
       "package": "com.bazim.claudioncheckin",
-
       "versionCode": 15,
-
       "googleServicesFile": "./google-services.json",
-
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.ACCESS_COARSE_LOCATION",
@@ -97,23 +81,17 @@
         "android.permission.POST_NOTIFICATIONS"
       ]
     },
-
     "web": {
       "favicon": "./assets/favicon.ico"
     },
-
     "extra": {
       "fcmRegistrationMethod": "whatsapp_saudi.whatsapp_saudi.doctype.whatsapp_saudi.whatsapp_saudi.get_or_update_employee_token",
-
       "eas": {
         "projectId": "ee37c3a6-1da3-43ae-ad14-6b34a26c92ac"
       }
     },
-
     "owner": "erpgulf",
-
     "runtimeVersion": "1.1.7",
-
     "updates": {
       "url": "https://u.expo.dev/ee37c3a6-1da3-43ae-ad14-6b34a26c92ac",
       "enabled": true,
