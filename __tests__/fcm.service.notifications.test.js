@@ -4,6 +4,11 @@ const mockMultiRemove = jest.fn();
 const mockDispatchSetUnreadCount = jest.fn();
 const mockGetNotifications = jest.fn();
 const mockNavigateSafely = jest.fn();
+const mockPlainAxiosGet = jest.fn();
+const mockPlainAxiosPost = jest.fn();
+const mockSubscribeToTopic = jest.fn();
+const mockUnsubscribeFromTopic = jest.fn();
+const mockGetTopicSyncPlan = jest.fn();
 
 const mockAuthorizationStatus = {
   NOT_DETERMINED: -1,
@@ -24,6 +29,7 @@ const mockGetInitialNotification = jest.fn();
 
 let handleNotificationOpen;
 let initializeFcm;
+let fetchTopicsFromServer;
 
 const loadFcmService = () => {
   jest.resetModules();
@@ -32,10 +38,16 @@ const loadFcmService = () => {
     __esModule: true,
     default: {
       manifest: {
-        extra: {},
+        extra: {
+          fcmRegistrationMethod:
+            "whatsapp_saudi.whatsapp_saudi.doctype.whatsapp_saudi.whatsapp_saudi.get_or_update_employee_token",
+        },
       },
       expoConfig: {
-        extra: {},
+        extra: {
+          fcmRegistrationMethod:
+            "whatsapp_saudi.whatsapp_saudi.doctype.whatsapp_saudi.whatsapp_saudi.get_or_update_employee_token",
+        },
       },
     },
   }));
@@ -65,14 +77,14 @@ const loadFcmService = () => {
     onTokenRefresh: (...args) => mockOnTokenRefresh(...args),
     requestPermission: (...args) => mockRequestPermission(...args),
     setBackgroundMessageHandler: jest.fn(),
-    subscribeToTopic: jest.fn(() => Promise.resolve()),
-    unsubscribeFromTopic: jest.fn(() => Promise.resolve()),
+    subscribeToTopic: (...args) => mockSubscribeToTopic(...args),
+    unsubscribeFromTopic: (...args) => mockUnsubscribeFromTopic(...args),
   }));
 
   jest.doMock("../services/api/apiClient", () => ({
     plainAxios: {
-      post: jest.fn(),
-      get: jest.fn(),
+      post: (...args) => mockPlainAxiosPost(...args),
+      get: (...args) => mockPlainAxiosGet(...args),
     },
   }));
 
@@ -97,11 +109,7 @@ const loadFcmService = () => {
     getSanitizedTopics: jest.fn((topics) =>
       Array.isArray(topics) ? topics.filter(Boolean) : [],
     ),
-    getTopicSyncPlan: jest.fn(() => ({
-      topicsToSubscribe: [],
-      topicsToUnsubscribe: [],
-      syncedTopics: [],
-    })),
+    getTopicSyncPlan: (...args) => mockGetTopicSyncPlan(...args),
   }));
 
   const { Platform } = require("react-native");
@@ -118,6 +126,7 @@ const loadFcmService = () => {
   ({
     handleNotificationOpen,
     initializeFcm,
+    fetchTopicsFromServer,
   } = require("../services/notifications/fcm.service"));
 };
 
@@ -143,6 +152,15 @@ describe("FCM notification metadata handling", () => {
     }));
     mockGetNotifications.mockResolvedValue([{ read: 0 }, { read: 1 }]);
     mockNavigateSafely.mockReturnValue(true);
+    mockPlainAxiosGet.mockResolvedValue({ status: 200, data: {} });
+    mockPlainAxiosPost.mockResolvedValue({ status: 200, data: {} });
+    mockSubscribeToTopic.mockResolvedValue(undefined);
+    mockUnsubscribeFromTopic.mockResolvedValue(undefined);
+    mockGetTopicSyncPlan.mockReturnValue({
+      topicsToSubscribe: [],
+      topicsToUnsubscribe: [],
+      syncedTopics: [],
+    });
 
     mockGetToken.mockResolvedValue("test-fcm-token");
     mockRequestPermission.mockResolvedValue(mockAuthorizationStatus.AUTHORIZED);
@@ -228,5 +246,73 @@ describe("FCM notification metadata handling", () => {
     expect(mockNavigateSafely).toHaveBeenNthCalledWith(2, "Notifications", {
       type: "announcement",
     });
+  });
+
+  it("reuses POST topics when the server reports token_updated false", async () => {
+    mockGetItem.mockImplementation(async (key) => {
+      if (key === "baseUrl") {
+        return "https://aysha.erpgulf.com";
+      }
+
+      if (key === "access_token") {
+        return "auth-token";
+      }
+
+      if (key === "employee_id") {
+        return "EMP-001";
+      }
+
+      if (key === "fcm_token") {
+        return "cached-fcm-token";
+      }
+
+      if (key === "fcm_topics") {
+        return JSON.stringify(["alertMessage"]);
+      }
+
+      return null;
+    });
+
+    mockPlainAxiosGet.mockResolvedValueOnce({
+      status: 200,
+      data: {
+        data: {
+          employee: "EMP-001",
+          topics: ["alertMessage", "General"],
+          token_updated: false,
+        },
+      },
+    });
+
+    mockPlainAxiosPost.mockResolvedValueOnce({
+      status: 200,
+      data: {
+        data: {
+          employee: "EMP-001",
+          topics: ["alertMessage", "General"],
+          token_updated: false,
+        },
+      },
+    });
+
+    mockGetTopicSyncPlan.mockReturnValue({
+      topicsToSubscribe: ["General"],
+      topicsToUnsubscribe: [],
+      syncedTopics: ["alertMessage", "General"],
+    });
+
+    const topics = await fetchTopicsFromServer();
+
+    expect(topics).toEqual(["alertMessage", "General"]);
+    expect(mockPlainAxiosGet).toHaveBeenCalledTimes(1);
+    expect(mockPlainAxiosPost).toHaveBeenCalledTimes(1);
+    expect(mockSubscribeToTopic).toHaveBeenCalledWith(
+      { appName: "[DEFAULT]" },
+      "General",
+    );
+    expect(mockSetItem).toHaveBeenCalledWith(
+      "fcm_topics",
+      JSON.stringify(["alertMessage", "General"]),
+    );
   });
 });

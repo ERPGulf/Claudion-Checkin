@@ -355,6 +355,12 @@ const syncTokenToBackend = async (token) => {
   }
 
   try {
+    console.log("[FCM] sending token to server:", {
+      token: token ? `${token}` : "null",
+      platform: Platform.OS,
+      employeeId: employeeId || "n/a",
+    });
+
     const response = await plainAxios.post(registrationUrl, body.toString(), {
       headers: {
         ...setCommonHeaders(),
@@ -366,19 +372,24 @@ const syncTokenToBackend = async (token) => {
     console.log("[FCM] token sync status:", response?.status);
     console.log("[FCM] POST API response:", response?.data);
 
-    // Fetch topics from a GET request
-    const topicsUrl = buildFcmRegistrationUrl(registrationMethod, baseUrl);
-    const topicsResponse = await plainAxios.get(topicsUrl, {
-      headers: {
-        ...setCommonHeaders(),
-        Authorization: `Bearer ${authToken}`,
-      },
-      timeout: 10000,
-    });
+    let topicData = extractTopicSyncData(response?.data);
 
-    console.log("[FCM] GET topics response:", topicsResponse?.data);
+    if (!Array.isArray(topicData?.topics)) {
+      const topicsUrl = buildFcmRegistrationUrl(registrationMethod, baseUrl);
+      const topicsResponse = await plainAxios.get(topicsUrl, {
+        headers: {
+          ...setCommonHeaders(),
+          Authorization: `Bearer ${authToken}`,
+        },
+        timeout: 10000,
+      });
 
-    const topicData = extractTopicSyncData(topicsResponse?.data);
+      console.log("[FCM] GET topics response:", topicsResponse?.data);
+      topicData = extractTopicSyncData(topicsResponse?.data);
+    } else {
+      console.log("[FCM] using topics from POST response");
+    }
+
     console.log("[FCM] topics from server:", topicData?.topics);
     console.log("[FCM] topicData before sync:", topicData);
 

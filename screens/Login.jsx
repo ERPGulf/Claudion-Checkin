@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import { getNotifications } from "../services/api/notification.service";
-import { syncFcmTokenAfterLogin } from "../services/notifications/fcm.service";
 import { setUnreadCount } from "../redux/Slices/notificationSlice";
 
 import {
@@ -23,7 +22,7 @@ import { useNavigation } from "@react-navigation/native";
 import { setSignIn } from "../redux/Slices/AuthSlice";
 import { COLORS, SIZES } from "../constants";
 import { WelcomeCard } from "../components/Login";
-import { selectEmployeeCode, selectName } from "../redux/Slices/UserSlice";
+import { selectEmployeeCode } from "../redux/Slices/UserSlice";
 import { generateToken } from "../services/api";
 
 function Login() {
@@ -32,7 +31,6 @@ function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const employeeCode = useSelector(selectEmployeeCode);
-  const fullName = useSelector(selectName);
 
   // Form validation schema
   const loginSchema = Yup.object().shape({
@@ -75,13 +73,6 @@ function Login() {
       }
 
       dispatch(setSignIn({ isLoggedIn: true, token: access_token }));
-
-      // 🔔 Send FCM token to backend after successful login
-      try {
-        await syncFcmTokenAfterLogin();
-      } catch (err) {
-        console.log("[FCM] Failed to sync token after login:", err?.message);
-      }
 
       // 🔔 NEW: fetch notifications at login
       try {
