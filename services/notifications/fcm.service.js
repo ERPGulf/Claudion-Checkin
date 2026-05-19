@@ -30,6 +30,25 @@ const FCM_TOKEN_KEY = "fcm_token";
 const FCM_LAST_MESSAGE_AT_KEY = "fcm_last_message_at";
 const FCM_TOPICS_KEY = "fcm_topics";
 const DEFAULT_NOTIFICATION_ROUTE = "Notifications";
+const ROUTE_ALIASES = {
+  notification: DEFAULT_NOTIFICATION_ROUTE,
+  notifications: DEFAULT_NOTIFICATION_ROUTE,
+  announcement: DEFAULT_NOTIFICATION_ROUTE,
+  announcements: DEFAULT_NOTIFICATION_ROUTE,
+  annoncement: DEFAULT_NOTIFICATION_ROUTE,
+  annoucement: DEFAULT_NOTIFICATION_ROUTE,
+};
+
+const TYPE_ALIASES = {
+  notification: "notification",
+  notifications: "notification",
+  general: "notification",
+  announcement: "announcement",
+  announcements: "announcement",
+  alertmessage: "announcement",
+  annoncement: "announcement",
+  annoucement: "announcement",
+};
 
 let backgroundHandlerRegistered = false;
 
@@ -222,6 +241,18 @@ const normalizeMessageData = (value) => {
   return {};
 };
 
+const normalizePayloadToken = (value) => {
+  if (typeof value !== "string") {
+    return "";
+  }
+
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_-]+/g, "")
+    .replace(/[^a-z]/g, "");
+};
+
 const getMessageData = (remoteMessage) => {
   const candidates = [
     remoteMessage?.data,
@@ -238,6 +269,17 @@ const getMessageData = (remoteMessage) => {
   }
 
   return normalizeMessageData(remoteMessage?.data);
+};
+
+const getMessageType = (remoteMessage) => {
+  const messageData = getMessageData(remoteMessage);
+  const normalizedType = normalizePayloadToken(messageData.type);
+
+  if (!normalizedType) {
+    return "";
+  }
+
+  return TYPE_ALIASES[normalizedType] || normalizedType;
 };
 
 const getMessageTitle = (remoteMessage) => {
@@ -276,7 +318,7 @@ const logNotificationPayload = (source, remoteMessage) => {
 };
 
 const logNotificationReceived = (source, remoteMessage) => {
-  const messageData = getMessageData(remoteMessage);
+  const messageType = getMessageType(remoteMessage);
 
   try {
     console.log("[FCM] new notification received", {
@@ -284,7 +326,7 @@ const logNotificationReceived = (source, remoteMessage) => {
       title: getMessageTitle(remoteMessage),
       body: getMessageBody(remoteMessage),
       routeName: getTargetRoute(remoteMessage),
-      type: messageData.type || "n/a",
+      type: messageType || "n/a",
     });
   } catch {
     // Logging should never interrupt notification handling.
@@ -324,12 +366,28 @@ const getTargetRoute = (remoteMessage) => {
   const messageData = getMessageData(remoteMessage);
   const routeFromPayload =
     messageData.route || messageData.screen || messageData.navigateTo;
+  const normalizedRoute = normalizePayloadToken(routeFromPayload);
 
-  if (!routeFromPayload || typeof routeFromPayload !== "string") {
-    return DEFAULT_NOTIFICATION_ROUTE;
+  if (normalizedRoute && ROUTE_ALIASES[normalizedRoute]) {
+    return ROUTE_ALIASES[normalizedRoute];
   }
 
-  return routeFromPayload.trim() || DEFAULT_NOTIFICATION_ROUTE;
+  if (routeFromPayload && typeof routeFromPayload === "string") {
+    const trimmedRoute = routeFromPayload.trim();
+
+    if (trimmedRoute) {
+      return trimmedRoute;
+    }
+  }
+
+  const messageType = getMessageType(remoteMessage);
+  const routeFromType = ROUTE_ALIASES[normalizePayloadToken(messageType)];
+
+  if (routeFromType) {
+    return routeFromType;
+  }
+
+  return DEFAULT_NOTIFICATION_ROUTE;
 };
 
 const extractTopicSyncData = (payload) => {
@@ -735,7 +793,7 @@ export const initializeFcm = async ({
           title: getMessageTitle(remoteMessage),
           body: getMessageBody(remoteMessage),
           data: messageData,
-          type: messageData.type,
+          type: getMessageType(remoteMessage),
           routeName: getTargetRoute(remoteMessage),
           params: parseRouteParams(messageData),
         });

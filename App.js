@@ -14,6 +14,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { SIZES } from "./constants";
 import { toastConfig } from "./Toast/Config";
 import Navigator from "./navigation/navigator";
+import { navigateSafely } from "./navigation/rootNavigation";
 import * as Updates from "expo-updates";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { selectIsLoggedIn } from "./redux/Slices/AuthSlice";
@@ -27,6 +28,16 @@ function cacheFonts(fonts) {
 }
 const queryClient = new QueryClient();
 registerBackgroundMessageHandler();
+
+const getForegroundToastType = (type) => {
+  if (typeof type !== "string") {
+    return "notificationToast";
+  }
+
+  return type.toLowerCase() === "announcement"
+    ? "announcementToast"
+    : "notificationToast";
+};
 
 function FcmBootstrap() {
   const dispatch = useDispatch();
@@ -46,11 +57,15 @@ function FcmBootstrap() {
 
       const teardown = await initializeFcm({
         dispatch,
-        onForegroundNotification: ({ title, body }) => {
+        onForegroundNotification: ({ title, body, type }) => {
           Toast.show({
-            type: "info",
+            type: getForegroundToastType(type),
             text1: title,
             text2: body,
+            onPress: () => {
+              Toast.hide();
+              navigateSafely("Notifications");
+            },
             autoHide: true,
             visibilityTime: 3500,
           });

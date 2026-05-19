@@ -227,9 +227,42 @@ describe("FCM notification metadata handling", () => {
         screen: "announcement",
       },
       type: "announcement",
-      routeName: "announcement",
+      routeName: "Notifications",
       params: {
         type: "announcement",
+      },
+    });
+  });
+
+  it("maps notification payload routes to the Notifications screen", async () => {
+    const dispatch = jest.fn();
+    const onForegroundNotification = jest.fn();
+
+    await initializeFcm({ dispatch, onForegroundNotification });
+
+    expect(typeof foregroundMessageHandler).toBe("function");
+
+    const remoteMessage = {
+      data: {
+        type: "notification",
+        screen: "Notification",
+      },
+    };
+
+    await foregroundMessageHandler(remoteMessage);
+
+    expect(onForegroundNotification).toHaveBeenCalledWith({
+      remoteMessage,
+      title: "New update",
+      body: "You have a new notification.",
+      data: {
+        type: "notification",
+        screen: "Notification",
+      },
+      type: "notification",
+      routeName: "Notifications",
+      params: {
+        type: "notification",
       },
     });
   });
@@ -266,7 +299,7 @@ describe("FCM notification metadata handling", () => {
   it("uses metadata data when opening a notification", async () => {
     const dispatch = jest.fn();
 
-    mockNavigateSafely.mockReturnValueOnce(false).mockReturnValueOnce(true);
+    mockNavigateSafely.mockReturnValue(false);
 
     await handleNotificationOpen(
       {
@@ -280,10 +313,8 @@ describe("FCM notification metadata handling", () => {
       dispatch,
     );
 
-    expect(mockNavigateSafely).toHaveBeenNthCalledWith(1, "announcement", {
-      type: "announcement",
-    });
-    expect(mockNavigateSafely).toHaveBeenNthCalledWith(2, "Notifications", {
+    expect(mockNavigateSafely).toHaveBeenCalledTimes(1);
+    expect(mockNavigateSafely).toHaveBeenCalledWith("Notifications", {
       type: "announcement",
     });
   });

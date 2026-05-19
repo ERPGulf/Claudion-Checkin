@@ -57,6 +57,7 @@ function Profile() {
   );
   const [clientToken, setClientToken] = useState(null);
   const [isSharingClientToken, setIsSharingClientToken] = useState(false);
+  const [mockToastCount, setMockToastCount] = useState(0);
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -200,6 +201,33 @@ function Profile() {
     } finally {
       setIsSharingClientToken(false);
     }
+  };
+
+  const handleMockForegroundToast = () => {
+    if (!__DEV__) {
+      return;
+    }
+
+    const isAnnouncement = mockToastCount % 2 === 1;
+    const toastType = isAnnouncement
+      ? "announcementToast"
+      : "notificationToast";
+
+    Toast.show({
+      type: toastType,
+      text1: isAnnouncement ? "Mock announcement" : "Mock notification",
+      text2: isAnnouncement
+        ? "Dev-only toast test for announcement payload style."
+        : "Dev-only toast test for notification payload style.",
+      visibilityTime: 3500,
+      autoHide: true,
+      onPress: () => {
+        Toast.hide();
+        navigation.navigate("Notifications");
+      },
+    });
+
+    setMockToastCount((prev) => prev + 1);
   };
 
   const handleCheckForUpdates = async () => {
@@ -578,6 +606,31 @@ function Profile() {
                     : "Share client token"}
                 </Text>
               </TouchableOpacity>
+
+              {__DEV__ && (
+                <TouchableOpacity
+                  onPress={handleMockForegroundToast}
+                  activeOpacity={0.9}
+                  style={{
+                    marginTop: 12,
+                    borderRadius: 14,
+                    borderWidth: 1,
+                    borderColor: "#F59E0B",
+                    backgroundColor: "#FFFBEB",
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    paddingVertical: 10,
+                  }}
+                >
+                  <Ionicons name="flask-outline" size={16} color="#B45309" />
+                  <Text className="ml-2 text-sm font-semibold text-amber-700">
+                    {mockToastCount % 2 === 0
+                      ? "Test notification toast"
+                      : "Test announcement toast"}
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             <TouchableOpacity
