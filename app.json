@@ -2,7 +2,7 @@
   "expo": {
     "name": "Claudion Checkin",
     "slug": "claudion-checkin",
-    "version": "1.1.7",
+    "version": "1.1.8",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -59,7 +59,7 @@
           "remote-notification"
         ]
       },
-      "buildNumber": "5",
+      "buildNumber": "6",
       "appleTeamId": "VWL956UDWG"
     },
     "android": {
@@ -69,7 +69,7 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.bazim.claudioncheckin",
-      "versionCode": 16,
+      "versionCode": 17,
       "googleServicesFile": "./google-services.json",
       "permissions": [
         "android.permission.CAMERA",
@@ -91,7 +91,7 @@
       }
     },
     "owner": "erpgulf",
-    "runtimeVersion": "1.1.7",
+    "runtimeVersion": "1.1.8",
     "updates": {
       "url": "https://u.expo.dev/ee37c3a6-1da3-43ae-ad14-6b34a26c92ac",
       "enabled": true,
