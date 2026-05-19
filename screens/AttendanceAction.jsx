@@ -78,6 +78,7 @@ function AttendanceAction() {
   const [distanceInfo, setDistanceInfo] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [restrictLocation, setRestrictLocation] = useState("0");
+  const [unrestrictedCheckout, setUnrestrictedCheckout] = useState("0");
   const [restrictionLoaded, setRestrictionLoaded] = useState(false);
   const [onBreak, setOnBreak] = useState(false);
   const [liveBreakTime, setLiveBreakTime] = useState("00:00:00");
@@ -125,8 +126,10 @@ function AttendanceAction() {
   useEffect(() => {
     const loadRestriction = async () => {
       const r = await AsyncStorage.getItem("restrict_location");
+      const u = await AsyncStorage.getItem("unrestricted_checkout_location");
       if (!isMountedRef.current) return;
       setRestrictLocation(r === "1" ? "1" : "0");
+      setUnrestrictedCheckout(u === "1" ? "1" : "0");
       setRestrictionLoaded(true);
     };
     loadRestriction();
@@ -745,6 +748,7 @@ function AttendanceAction() {
       </SafeAreaView>
     );
   }
+  const allowCheckoutAnywhere = checkin && unrestrictedCheckout === "1";
 
   return (
     <SafeAreaView
@@ -941,9 +945,18 @@ function AttendanceAction() {
               <TouchableOpacity
                 className={`justify-center items-center h-16 w-full mt-4 rounded-2xl ${
                   checkin ? "bg-red-600" : "bg-green-600"
-                } ${restrictLocation === "1" && !inTarget ? "opacity-50" : ""}`}
+                } ${
+                  restrictLocation === "1" &&
+                  !inTarget &&
+                  !allowCheckoutAnywhere
+                    ? "opacity-50"
+                    : ""
+                }`}
                 disabled={
-                  actionLoading || (restrictLocation === "1" && !inTarget)
+                  actionLoading ||
+                  (restrictLocation === "1" &&
+                    !inTarget &&
+                    !allowCheckoutAnywhere)
                 }
                 onPress={async () => {
                   try {
