@@ -59,7 +59,7 @@
           "remote-notification"
         ]
       },
-      "buildNumber": "4",
+      "buildNumber": "5",
       "appleTeamId": "VWL956UDWG"
     },
     "android": {
@@ -69,7 +69,7 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.bazim.claudioncheckin",
-      "versionCode": 15,
+      "versionCode": 16,
       "googleServicesFile": "./google-services.json",
       "permissions": [
         "android.permission.CAMERA",
