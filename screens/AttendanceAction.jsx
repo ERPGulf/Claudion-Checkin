@@ -31,6 +31,11 @@ import {
 } from "../redux/Slices/AttendanceSlice";
 import { COLORS, SIZES } from "../constants";
 import WelcomeCard from "../components/AttendanceAction/WelcomeCard";
+import DevPanel from "../components/AttendanceAction/DevPanel";
+import BreakTimerCard from "../components/AttendanceAction/BreakTimerCard";
+import CheckinButton from "../components/AttendanceAction/CheckinButton";
+import BreakButton from "../components/AttendanceAction/BreakButton";
+import AttendanceInfo from "../components/AttendanceAction/AttendanceInfo";
 import { updateDateTime } from "../utils/TimeServices";
 import { saveTokens } from "../services/api/apiClient";
 import {
@@ -664,13 +669,6 @@ function AttendanceAction() {
 
     try {
       setActionLoading(true);
-
-      // const response = await employeeBreak({ employeeCode, type });
-
-      // if (!response.allowed) {
-      //   Toast.show({ type: "error", text1: response.message });
-      //   return;
-      // }
       const response = await employeeBreak({ employeeCode, type });
 
       if (!response.allowed) {
@@ -745,6 +743,27 @@ function AttendanceAction() {
       </SafeAreaView>
     );
   }
+  const handleCheckinPress = async () => {
+    try {
+      const photoValue = await AsyncStorage.getItem("photo");
+
+      const actionType = checkin ? "OUT" : "IN";
+
+      if (photoValue !== "1") {
+        await handleDirectCheckInOut(actionType);
+      } else {
+        navigation.navigate("Attendance camera", {
+          type: actionType,
+        });
+      }
+    } catch (error) {
+      Toast.show({
+        type: "error",
+        text1: ":warning: Action failed",
+        text2: error.message,
+      });
+    }
+  };
 
   return (
     <SafeAreaView
@@ -789,229 +808,46 @@ function AttendanceAction() {
         }
       >
         <View style={{ width: "100%" }} className="flex-1 px-3">
-          {onBreak && (
-            <View className="mb-3 rounded-2xl bg-amber-500 px-4 py-1">
-              <Text className="text-center text-xs font-semibold tracking-widest text-amber-100">
-                BREAK IN PROGRESS
-              </Text>
-              <Text
-                className="mt-1 text-center text-2xl font-extrabold text-white"
-                style={{ fontVariant: ["tabular-nums"] }}
-              >
-                {liveBreakTime || "00:00:00"}
-              </Text>
-              <Text className="mt-1 text-center text-xs text-amber-100">
-                Auto-ends at 02:00:00
-              </Text>
-            </View>
-          )}
+          {onBreak && <BreakTimerCard liveBreakTime={liveBreakTime} />}
           <WelcomeCard />
           {__DEV__ && (
-            <View className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-3">
-              <TouchableOpacity
-                className="rounded-2xl bg-red-600 px-4 py-3 items-center"
-                onPress={handleInvalidateAccessToken}
-              >
-                <Text className="text-white font-bold">
-                  DEV: Invalidate access token
-                </Text>
-              </TouchableOpacity>
-
-              <Text className="mt-3 text-xs font-bold uppercase tracking-wide text-red-700">
-                DEV: Break UI presets
-              </Text>
-
-              <TouchableOpacity
-                className={`mt-2 rounded-xl px-3 py-2 ${
-                  devBreakMockMode ? "bg-emerald-700" : "bg-slate-700"
-                }`}
-                onPress={() => setDevBreakMockMode((prev) => !prev)}
-              >
-                <Text className="text-xs font-semibold text-white">
-                  DEV local break flow: {devBreakMockMode ? "ON" : "OFF"}
-                </Text>
-              </TouchableOpacity>
-
-              <View className="mt-2 flex-row flex-wrap">
-                <TouchableOpacity
-                  className="mb-2 mr-2 rounded-xl bg-slate-700 px-3 py-2"
-                  onPress={() => applyDevBreakPreset("idle-0")}
-                >
-                  <Text className="text-xs font-semibold text-white">
-                    Idle 00:00
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  className="mb-2 mr-2 rounded-xl bg-slate-700 px-3 py-2"
-                  onPress={() => applyDevBreakPreset("idle-45")}
-                >
-                  <Text className="text-xs font-semibold text-white">
-                    Idle 00:45
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  className="mb-2 mr-2 rounded-xl bg-amber-700 px-3 py-2"
-                  onPress={() => applyDevBreakPreset("running-30")}
-                >
-                  <Text className="text-xs font-semibold text-white">
-                    Running +30m
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  className="mb-2 mr-2 rounded-xl bg-gray-700 px-3 py-2"
-                  onPress={() => applyDevBreakPreset("cap-120")}
-                >
-                  <Text className="text-xs font-semibold text-white">
-                    Cap 02:00
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  className="mb-2 mr-2 rounded-xl bg-indigo-700 px-3 py-2"
-                  onPress={() => applyDevBreakPreset("completed")}
-                >
-                  <Text className="text-xs font-semibold text-white">
-                    Completed 1/day
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  className="mb-2 mr-2 rounded-xl bg-rose-700 px-3 py-2"
-                  onPress={() => applyDevBreakPreset("monthly-cap")}
-                >
-                  <Text className="text-xs font-semibold text-white">
-                    Monthly Cap 8h
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
+            <DevPanel
+              devBreakMockMode={devBreakMockMode}
+              setDevBreakMockMode={setDevBreakMockMode}
+              applyDevBreakPreset={applyDevBreakPreset}
+              handleInvalidateAccessToken={handleInvalidateAccessToken}
+            />
           )}
           <View className="h-72 mt-4 mb-24">
             <View className="p-3">
               {/* DATE & TIME */}
-              <Text className="text-base text-gray-500 font-semibold">
-                DATE AND TIME *
-              </Text>
-              <View className="flex-row items-end border-b border-gray-400 pb-2 mb-6 justify-between">
-                <Text className="text-sm font-medium text-gray-500">
-                  {dateTime}
-                </Text>
-                <MaterialCommunityIcons
-                  name="calendar-month"
-                  size={28}
-                  color={COLORS.gray}
-                />
-              </View>
-              {/* LOCATION */}
-              <Text className="text-base text-gray-500 font-semibold">
-                LOCATION *
-              </Text>
-              <View className="flex-row items-end border-b border-gray-400 pb-2 mb-4 justify-between">
-                <Text className="text-sm font-medium text-gray-500">
-                  {restrictLocation === "0"
-                    ? "Not Required"
-                    : !ready
-                      ? "Getting Location..."
-                      : // : distanceInfo?.locationName
-                        //   ? distanceInfo.locationName
-                        inTarget
-                        ? "In bound"
-                        : "Out of bound"}
-                </Text>
-
-                <MaterialCommunityIcons
-                  name="map-marker-radius-outline"
-                  size={28}
-                  color={COLORS.gray}
-                />
-              </View>
-              {restrictLocation === "1" && distanceInfo && (
-                <View className="mb-3">
-                  <Text className="text-xs text-gray-400">
-                    Distance: {distanceInfo.distance} m | Allowed:{" "}
-                    {distanceInfo.radius} m
-                  </Text>
-                </View>
-              )}
+              <AttendanceInfo
+                dateTime={dateTime}
+                restrictLocation={restrictLocation}
+                ready={ready}
+                inTarget={inTarget}
+                distanceInfo={distanceInfo}
+              />
 
               {/* CHECK-IN / CHECK-OUT BUTTON */}
-              <TouchableOpacity
-                className={`justify-center items-center h-16 w-full mt-4 rounded-2xl ${
-                  checkin ? "bg-red-600" : "bg-green-600"
-                } ${restrictLocation === "1" && !inTarget ? "opacity-50" : ""}`}
-                disabled={
-                  actionLoading || (restrictLocation === "1" && !inTarget)
-                }
-                onPress={async () => {
-                  try {
-                    const photoValue = await AsyncStorage.getItem("photo");
-                    const actionType = checkin ? "OUT" : "IN";
-
-                    if (photoValue !== "1") {
-                      await handleDirectCheckInOut(actionType);
-                    } else {
-                      navigation.navigate("Attendance camera", {
-                        type: actionType,
-                      });
-                    }
-                  } catch (error) {
-                    Toast.show({
-                      type: "error",
-                      text1: ":warning: Action failed",
-                      text2: error.message,
-                    });
-                  }
-                }}
-              >
-                <Text className="text-xl font-bold text-white">
-                  {checkin ? "CHECK-OUT" : "CHECK-IN"}
-                </Text>
-              </TouchableOpacity>
+              <CheckinButton
+                checkin={checkin}
+                actionLoading={actionLoading}
+                disabled={restrictLocation === "1" && !inTarget}
+                onPress={handleCheckinPress}
+              />
               {/* BREAK BUTTON */}
               {checkin && (
-                <View>
-                  <TouchableOpacity
-                    className={`justify-center items-center h-16 w-full mt-4 rounded-2xl ${
-                      actionLoading ||
-                      (restrictLocation === "1" && !inTarget) ||
-                      breakCompleted ||
-                      breakMinutes >= 120
-                        ? "bg-gray-400" // ✅ disabled color
-                        : onBreak
-                          ? "bg-slate-500" // break running
-                          : "bg-blue-400" // normal
-                    }`}
-                    disabled={
-                      actionLoading ||
-                      (restrictLocation === "1" && !inTarget) ||
-                      breakCompleted ||
-                      breakMinutes >= 120
-                    }
-                    onPress={handleBreak}
-                  >
-                    <Text className="text-xl font-bold text-white">
-                      {actionLoading ||
-                      (restrictLocation === "1" && !inTarget) ||
-                      breakCompleted ||
-                      breakMinutes >= 120
-                        ? "BREAK NOT ALLOWED"
-                        : onBreak
-                          ? "END BREAK"
-                          : "TAKE BREAK"}
-                    </Text>
-                  </TouchableOpacity>
-
-                  {!!monthlyCapMessage && (
-                    <View className="mt-3 rounded-xl border border-rose-300 bg-rose-50 px-3 py-2">
-                      <Text className="text-xs font-semibold text-rose-700">
-                        {monthlyCapMessage}
-                      </Text>
-                    </View>
-                  )}
-                </View>
+                <BreakButton
+                  actionLoading={actionLoading}
+                  restrictLocation={restrictLocation}
+                  inTarget={inTarget}
+                  breakCompleted={breakCompleted}
+                  breakMinutes={breakMinutes}
+                  onBreak={onBreak}
+                  onPress={handleBreak}
+                  monthlyCapMessage={monthlyCapMessage}
+                />
               )}
             </View>
           </View>
