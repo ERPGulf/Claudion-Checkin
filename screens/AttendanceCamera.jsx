@@ -104,9 +104,16 @@ function AttendanceCamera() {
         await AsyncStorage.getItem("restrict_location")
       )?.trim();
 
+      const unrestrictedCheckout = (
+        await AsyncStorage.getItem("unrestricted_checkout_location")
+      )?.trim();
+
+      const shouldSkipLocationRestriction =
+        type === "OUT" && unrestrictedCheckout === "1";
+
       // 📍 Only call location API if restriction is enabled
       let locationData = null;
-      if (restrictLocation === "1") {
+      if (!shouldSkipLocationRestriction && restrictLocation === "1") {
         locationData = await getOfficeLocation(employeeCode);
 
         // If not within radius, block

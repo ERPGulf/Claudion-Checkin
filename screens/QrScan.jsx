@@ -107,8 +107,13 @@ function QrScan() {
         app_key: appKey,
         photo: photoFlag,
         restrict_location: qrData["Restrict Location"]?.trim() ?? "0", // :point_left: NEW
-        unrestricted_checkout_location: qrData["Unrestricted Checkout Location"]?.trim() ?? "0", 
+        unrestricted_checkout_location:
+          qrData["Unrestricted Checkout Location"]?.trim() ?? "0",
       };
+      console.log(
+        "QR UNRESTRICTED VALUE:",
+        cleanedData.unrestricted_checkout_location,
+      );
       // :eight: Validate required fields
       if (
         cleanedData.company &&
@@ -124,7 +129,10 @@ function QrScan() {
           ["baseUrl", cleanedData.baseUrl],
           ["photo", String(cleanedData.photo)],
           ["restrict_location", cleanedData.restrict_location], // :point_left: NEW
-          ["unrestricted_checkout_location", cleanedData.unrestricted_checkout_location], 
+          [
+            "unrestricted_checkout_location",
+            cleanedData.unrestricted_checkout_location,
+          ],
         ]);
         // Redux dispatch (NO restrict_location)
         dispatch(setUsername(cleanedData.api_key));
@@ -177,6 +185,7 @@ function QrScan() {
       </SafeAreaView>
     );
   }
+
   return (
     <CameraView
       barcodeScannerSettings={{ barcodeTypes: ["qr"] }}

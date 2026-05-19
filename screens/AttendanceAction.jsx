@@ -748,8 +748,9 @@ function AttendanceAction() {
       </SafeAreaView>
     );
   }
-  const allowCheckoutAnywhere = checkin && unrestrictedCheckout === "1";
-
+  const allowCheckoutAnywhere =
+    checkin === true && unrestrictedCheckout === "1";
+ 
   return (
     <SafeAreaView
       style={{ flex: 1, backgroundColor: "white" }}
