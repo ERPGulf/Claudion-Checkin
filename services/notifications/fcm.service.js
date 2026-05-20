@@ -4,12 +4,15 @@ import { getApp, getApps } from "@react-native-firebase/app";
 import {
   AuthorizationStatus,
   deleteToken,
+  getAPNSToken,
   getInitialNotification,
   getMessaging,
   getToken,
+  isDeviceRegisteredForRemoteMessages,
   onMessage,
   onNotificationOpenedApp,
   onTokenRefresh,
+  registerDeviceForRemoteMessages,
   requestPermission,
   setBackgroundMessageHandler,
   subscribeToTopic,
@@ -27,6 +30,25 @@ const FCM_TOKEN_KEY = "fcm_token";
 const FCM_LAST_MESSAGE_AT_KEY = "fcm_last_message_at";
 const FCM_TOPICS_KEY = "fcm_topics";
 const DEFAULT_NOTIFICATION_ROUTE = "Notifications";
+const ROUTE_ALIASES = {
+  notification: DEFAULT_NOTIFICATION_ROUTE,
+  notifications: DEFAULT_NOTIFICATION_ROUTE,
+  announcement: DEFAULT_NOTIFICATION_ROUTE,
+  announcements: DEFAULT_NOTIFICATION_ROUTE,
+  annoncement: DEFAULT_NOTIFICATION_ROUTE,
+  annoucement: DEFAULT_NOTIFICATION_ROUTE,
+};
+
+const TYPE_ALIASES = {
+  notification: "notification",
+  notifications: "notification",
+  general: "notification",
+  announcement: "announcement",
+  announcements: "announcement",
+  alertmessage: "announcement",
+  annoncement: "announcement",
+  annoucement: "announcement",
+};
 
 let backgroundHandlerRegistered = false;
 
@@ -81,6 +103,100 @@ const getRegistrationMethod = () => {
   return registrationMethod.trim();
 };
 
+const getAuthorizationStatusLabel = (status) => {
+  switch (status) {
+    case AuthorizationStatus.NOT_DETERMINED:
+      return "NOT_DETERMINED";
+    case AuthorizationStatus.DENIED:
+      return "DENIED";
+    case AuthorizationStatus.AUTHORIZED:
+      return "AUTHORIZED";
+    case AuthorizationStatus.PROVISIONAL:
+      return "PROVISIONAL";
+    case AuthorizationStatus.EPHEMERAL:
+      return "EPHEMERAL";
+    default:
+      return "UNKNOWN";
+  }
+};
+
+const formatTokenForLogs = (token) => {
+  if (!token || typeof token !== "string") {
+    return "null";
+  }
+
+  const prefixLength = Math.min(token.length, 20);
+  return `${token.slice(0, prefixLength)}... (${token.length} chars)`;
+};
+
+const logIosPushDiagnostics = async (messagingInstance, authStatus, source) => {
+  if (Platform.OS !== "ios" || !messagingInstance) {
+    return;
+  }
+
+  if (typeof authStatus !== "undefined") {
+    console.log(
+      `[FCM] ${source}: auth status =`,
+      authStatus,
+      getAuthorizationStatusLabel(authStatus),
+    );
+  }
+
+  try {
+    console.log(
+      `[FCM] ${source}: isDeviceRegisteredForRemoteMessages =`,
+      isDeviceRegisteredForRemoteMessages(messagingInstance),
+    );
+  } catch (error) {
+    console.log(
+      `[FCM] ${source}: failed to read device registration state`,
+      error?.message,
+    );
+  }
+
+  try {
+    const apnsToken = await getAPNSToken(messagingInstance);
+    console.log(`[FCM] ${source}: APNS token =`, formatTokenForLogs(apnsToken));
+  } catch (error) {
+    console.log(`[FCM] ${source}: failed to read APNS token`, error?.message);
+  }
+};
+
+const ensureIosDeviceRegisteredForRemoteMessages = async (
+  messagingInstance,
+  source,
+) => {
+  if (Platform.OS !== "ios" || !messagingInstance) {
+    return true;
+  }
+
+  try {
+    const isRegistered = isDeviceRegisteredForRemoteMessages(messagingInstance);
+
+    console.log(
+      `[FCM] ${source}: isDeviceRegisteredForRemoteMessages =`,
+      isRegistered,
+    );
+
+    if (isRegistered) {
+      return true;
+    }
+
+    console.log(`[FCM] ${source}: registering device for remote messages`);
+    await registerDeviceForRemoteMessages(messagingInstance);
+
+    console.log(`[FCM] ${source}: registerDeviceForRemoteMessages completed`);
+
+    return true;
+  } catch (error) {
+    console.log(
+      `[FCM] ${source}: registerDeviceForRemoteMessages failed`,
+      error?.message,
+    );
+    return false;
+  }
+};
+
 const buildFcmRegistrationUrl = (methodPath, baseUrl) => {
   if (!methodPath) {
     return "";
@@ -101,35 +217,117 @@ const buildFcmRegistrationUrl = (methodPath, baseUrl) => {
   return `${cleanBaseUrl(baseUrl)}/api/method/${normalizedMethodPath}`;
 };
 
+const normalizeMessageData = (value) => {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value;
+  }
+
+  if (typeof value === "string" && value.trim()) {
+    try {
+      const parsedValue = JSON.parse(value);
+
+      if (
+        parsedValue &&
+        typeof parsedValue === "object" &&
+        !Array.isArray(parsedValue)
+      ) {
+        return parsedValue;
+      }
+    } catch {
+      return {};
+    }
+  }
+
+  return {};
+};
+
+const normalizePayloadToken = (value) => {
+  if (typeof value !== "string") {
+    return "";
+  }
+
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_-]+/g, "")
+    .replace(/[^a-z]/g, "");
+};
+
+const getMessageData = (remoteMessage) => {
+  const candidates = [
+    remoteMessage?.data,
+    remoteMessage?.metadata?.data,
+    remoteMessage?.notification?.data,
+  ];
+
+  for (const candidate of candidates) {
+    const normalizedCandidate = normalizeMessageData(candidate);
+
+    if (Object.keys(normalizedCandidate).length > 0) {
+      return normalizedCandidate;
+    }
+  }
+
+  return normalizeMessageData(remoteMessage?.data);
+};
+
+const getMessageType = (remoteMessage) => {
+  const messageData = getMessageData(remoteMessage);
+  const normalizedType = normalizePayloadToken(messageData.type);
+
+  if (!normalizedType) {
+    return "";
+  }
+
+  return TYPE_ALIASES[normalizedType] || normalizedType;
+};
+
 const getMessageTitle = (remoteMessage) => {
+  const messageData = getMessageData(remoteMessage);
   const notificationTitle = remoteMessage?.notification?.title;
-  const dataTitle = remoteMessage?.data?.title;
+  const dataTitle = messageData.title;
 
   return notificationTitle || dataTitle || "New update";
 };
 
 const getMessageBody = (remoteMessage) => {
+  const messageData = getMessageData(remoteMessage);
   const notificationBody = remoteMessage?.notification?.body;
-  const dataBody = remoteMessage?.data?.body || remoteMessage?.data?.message;
+  const dataBody = messageData.body || messageData.message;
 
   return notificationBody || dataBody || "You have a new notification.";
 };
 
 const logNotificationPayload = (source, remoteMessage) => {
+  const messageData = getMessageData(remoteMessage);
+
   try {
     console.log(
       `[FCM] ${source}: messageId`,
       remoteMessage?.messageId || "n/a",
     );
     console.log(`[FCM] ${source}: from`, remoteMessage?.from || "n/a");
-    console.log(
-      `[FCM] ${source}: data`,
-      JSON.stringify(remoteMessage?.data || {}),
-    );
+    console.log(`[FCM] ${source}: data`, JSON.stringify(messageData));
     console.log(
       `[FCM] ${source}: notification`,
       JSON.stringify(remoteMessage?.notification || {}),
     );
+  } catch {
+    // Logging should never interrupt notification handling.
+  }
+};
+
+const logNotificationReceived = (source, remoteMessage) => {
+  const messageType = getMessageType(remoteMessage);
+
+  try {
+    console.log("[FCM] new notification received", {
+      source,
+      title: getMessageTitle(remoteMessage),
+      body: getMessageBody(remoteMessage),
+      routeName: getTargetRoute(remoteMessage),
+      type: messageType || "n/a",
+    });
   } catch {
     // Logging should never interrupt notification handling.
   }
@@ -165,16 +363,31 @@ const parseRouteParams = (data = {}) => {
 };
 
 const getTargetRoute = (remoteMessage) => {
+  const messageData = getMessageData(remoteMessage);
   const routeFromPayload =
-    remoteMessage?.data?.route ||
-    remoteMessage?.data?.screen ||
-    remoteMessage?.data?.navigateTo;
+    messageData.route || messageData.screen || messageData.navigateTo;
+  const normalizedRoute = normalizePayloadToken(routeFromPayload);
 
-  if (!routeFromPayload || typeof routeFromPayload !== "string") {
-    return DEFAULT_NOTIFICATION_ROUTE;
+  if (normalizedRoute && ROUTE_ALIASES[normalizedRoute]) {
+    return ROUTE_ALIASES[normalizedRoute];
   }
 
-  return routeFromPayload.trim() || DEFAULT_NOTIFICATION_ROUTE;
+  if (routeFromPayload && typeof routeFromPayload === "string") {
+    const trimmedRoute = routeFromPayload.trim();
+
+    if (trimmedRoute) {
+      return trimmedRoute;
+    }
+  }
+
+  const messageType = getMessageType(remoteMessage);
+  const routeFromType = ROUTE_ALIASES[normalizePayloadToken(messageType)];
+
+  if (routeFromType) {
+    return routeFromType;
+  }
+
+  return DEFAULT_NOTIFICATION_ROUTE;
 };
 
 const extractTopicSyncData = (payload) => {
@@ -297,6 +510,12 @@ const syncTokenToBackend = async (token) => {
   }
 
   try {
+    console.log("[FCM] sending token to server:", {
+      token: token ? `${token}` : "null",
+      platform: Platform.OS,
+      employeeId: employeeId || "n/a",
+    });
+
     const response = await plainAxios.post(registrationUrl, body.toString(), {
       headers: {
         ...setCommonHeaders(),
@@ -308,19 +527,24 @@ const syncTokenToBackend = async (token) => {
     console.log("[FCM] token sync status:", response?.status);
     console.log("[FCM] POST API response:", response?.data);
 
-    // Fetch topics from a GET request
-    const topicsUrl = buildFcmRegistrationUrl(registrationMethod, baseUrl);
-    const topicsResponse = await plainAxios.get(topicsUrl, {
-      headers: {
-        ...setCommonHeaders(),
-        Authorization: `Bearer ${authToken}`,
-      },
-      timeout: 10000,
-    });
+    let topicData = extractTopicSyncData(response?.data);
 
-    console.log("[FCM] GET topics response:", topicsResponse?.data);
+    if (!Array.isArray(topicData?.topics)) {
+      const topicsUrl = buildFcmRegistrationUrl(registrationMethod, baseUrl);
+      const topicsResponse = await plainAxios.get(topicsUrl, {
+        headers: {
+          ...setCommonHeaders(),
+          Authorization: `Bearer ${authToken}`,
+        },
+        timeout: 10000,
+      });
 
-    const topicData = extractTopicSyncData(topicsResponse?.data);
+      console.log("[FCM] GET topics response:", topicsResponse?.data);
+      topicData = extractTopicSyncData(topicsResponse?.data);
+    } else {
+      console.log("[FCM] using topics from POST response");
+    }
+
     console.log("[FCM] topics from server:", topicData?.topics);
     console.log("[FCM] topicData before sync:", topicData);
 
@@ -393,12 +617,28 @@ export const requestFcmPermission = async () => {
   const androidAllowed = await requestAndroidNotificationPermission();
 
   if (!androidAllowed) {
+    console.log(
+      "[FCM] requestFcmPermission: Android POST_NOTIFICATIONS denied",
+    );
     return false;
   }
 
   const messagingInstance = await getMessagingInstanceWithRetry();
 
   if (!messagingInstance) {
+    console.log("[FCM] requestFcmPermission: messaging instance unavailable");
+    return false;
+  }
+
+  const isRegistered = await ensureIosDeviceRegisteredForRemoteMessages(
+    messagingInstance,
+    "requestFcmPermission",
+  );
+
+  if (!isRegistered) {
+    console.log(
+      "[FCM] requestFcmPermission: device is not registered for remote messages",
+    );
     return false;
   }
 
@@ -410,12 +650,27 @@ export const requestFcmPermission = async () => {
       provisional: false,
     });
 
+    console.log(
+      "[FCM] requestFcmPermission: auth status =",
+      authStatus,
+      getAuthorizationStatusLabel(authStatus),
+    );
+    await logIosPushDiagnostics(
+      messagingInstance,
+      authStatus,
+      "requestFcmPermission",
+    );
+
     return (
       authStatus === AuthorizationStatus.AUTHORIZED ||
       authStatus === AuthorizationStatus.PROVISIONAL ||
       authStatus === AuthorizationStatus.EPHEMERAL
     );
-  } catch {
+  } catch (error) {
+    console.log(
+      "[FCM] requestFcmPermission: permission request failed",
+      error?.message,
+    );
     return false;
   }
 };
@@ -453,7 +708,7 @@ export const handleNotificationOpen = async (remoteMessage, dispatch) => {
   await syncUnreadCountFromServer(dispatch);
 
   const routeName = getTargetRoute(remoteMessage);
-  const params = parseRouteParams(remoteMessage?.data);
+  const params = parseRouteParams(getMessageData(remoteMessage));
 
   const navigated = navigateSafely(routeName, params);
 
@@ -474,6 +729,7 @@ export const registerBackgroundMessageHandler = () => {
   }
 
   setBackgroundMessageHandler(messagingInstance, async (remoteMessage) => {
+    logNotificationReceived("backgroundMessage", remoteMessage);
     logNotificationPayload("backgroundMessage", remoteMessage);
     await AsyncStorage.setItem(FCM_LAST_MESSAGE_AT_KEY, String(Date.now()));
   });
@@ -488,12 +744,14 @@ export const initializeFcm = async ({
   const messagingInstance = await getMessagingInstanceWithRetry();
 
   if (!messagingInstance) {
+    console.log("[FCM] initializeFcm: messaging instance unavailable");
     return () => {};
   }
 
   const hasPermission = await requestFcmPermission();
 
   if (!hasPermission) {
+    console.log("[FCM] initializeFcm: notification permission not granted");
     return () => {};
   }
 
@@ -522,6 +780,9 @@ export const initializeFcm = async ({
   const unsubscribeForeground = onMessage(
     messagingInstance,
     async (remoteMessage) => {
+      const messageData = getMessageData(remoteMessage);
+
+      logNotificationReceived("foregroundMessage", remoteMessage);
       logNotificationPayload("foregroundMessage", remoteMessage);
       await AsyncStorage.setItem(FCM_LAST_MESSAGE_AT_KEY, String(Date.now()));
       await syncUnreadCountFromServer(dispatch);
@@ -531,6 +792,10 @@ export const initializeFcm = async ({
           remoteMessage,
           title: getMessageTitle(remoteMessage),
           body: getMessageBody(remoteMessage),
+          data: messageData,
+          type: getMessageType(remoteMessage),
+          routeName: getTargetRoute(remoteMessage),
+          params: parseRouteParams(messageData),
         });
       }
     },
@@ -566,18 +831,36 @@ export const getClientFcmToken = async () => {
   const cachedToken = await AsyncStorage.getItem(FCM_TOKEN_KEY);
 
   if (cachedToken) {
+    console.log(
+      "[FCM] getClientFcmToken: using cached token",
+      formatTokenForLogs(cachedToken),
+    );
     return cachedToken;
   }
 
   const messagingInstance = await getMessagingInstanceWithRetry();
 
   if (!messagingInstance) {
+    console.log("[FCM] getClientFcmToken: messaging instance unavailable");
+    return null;
+  }
+
+  const isRegistered = await ensureIosDeviceRegisteredForRemoteMessages(
+    messagingInstance,
+    "getClientFcmToken",
+  );
+
+  if (!isRegistered) {
+    console.log(
+      "[FCM] getClientFcmToken: device is not registered for remote messages",
+    );
     return null;
   }
 
   const hasPermission = await requestFcmPermission();
 
   if (!hasPermission) {
+    console.log("[FCM] getClientFcmToken: notification permission not granted");
     return null;
   }
 
