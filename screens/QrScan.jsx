@@ -49,7 +49,8 @@ function QrScan() {
         "Employee_Code",
         "Full_Name",
         "Photo",
-        "Restrict Location",   // :point_left: NEW FIELD
+        "Restrict Location",
+        "Unrestricted Checkout Location",
         "User_id",
         "API",
         "App_key",
@@ -60,8 +61,8 @@ function QrScan() {
       value = value
         .replace(/[\u0000-\u001F\u00A0]+/g, " ")
         .replace(
-          /[%#;]+(?:\s+)?(Company|Employee_Code|Full_Name|Photo|Restrict Location|User_id|API|App_key)(?:\s*[:=])/g,
-          (_, key) => `${key}:`
+          /[%#;]+(?:\s+)?(Company|Employee_Code|Full_Name|Photo|Restrict Location|Unrestricted Checkout Location|User_id|API|App_key)(?:\s*[:=])/g,
+          (_, key) => `${key}:`,
         )
         .replace(/[^\S\r\n]+/g, " ")
         .trim();
@@ -70,7 +71,7 @@ function QrScan() {
       const keyAlt = KEYS.join("|");
       const pairRE = new RegExp(
         `\\b(${keyAlt})\\s*[:=]\\s*([\\s\\S]*?)(?=\\s*(?:${keyAlt})\\s*[:=]|$)`,
-        "gi"
+        "gi",
       );
       let m;
       while ((m = pairRE.exec(value))) {
@@ -106,7 +107,13 @@ function QrScan() {
         app_key: appKey,
         photo: photoFlag,
         restrict_location: qrData["Restrict Location"]?.trim() ?? "0", // :point_left: NEW
+        unrestricted_checkout_location:
+          qrData["Unrestricted Checkout Location"]?.trim() ?? "0",
       };
+      console.log(
+        "QR UNRESTRICTED VALUE:",
+        cleanedData.unrestricted_checkout_location,
+      );
       // :eight: Validate required fields
       if (
         cleanedData.company &&
@@ -122,6 +129,10 @@ function QrScan() {
           ["baseUrl", cleanedData.baseUrl],
           ["photo", String(cleanedData.photo)],
           ["restrict_location", cleanedData.restrict_location], // :point_left: NEW
+          [
+            "unrestricted_checkout_location",
+            cleanedData.unrestricted_checkout_location,
+          ],
         ]);
         // Redux dispatch (NO restrict_location)
         dispatch(setUsername(cleanedData.api_key));
@@ -151,7 +162,7 @@ function QrScan() {
       if (result?.canceled) return;
       if (result.assets[0]?.uri) {
         const scannedResults = await Camera.scanFromURLAsync(
-          result.assets[0].uri
+          result.assets[0].uri,
         );
         const { data } = scannedResults[0];
         await handleQRCodeData(data);
@@ -174,6 +185,7 @@ function QrScan() {
       </SafeAreaView>
     );
   }
+
   return (
     <CameraView
       barcodeScannerSettings={{ barcodeTypes: ["qr"] }}

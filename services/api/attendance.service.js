@@ -198,11 +198,23 @@ export const userCheckIn = async ({ employeeCode, type, locationData }) => {
     const restrictLocation = (
       await AsyncStorage.getItem("restrict_location")
     )?.trim();
+
+    const unrestrictedCheckout = (
+      await AsyncStorage.getItem("unrestricted_checkout_location")
+    )?.trim();
+
     let nearest = null;
     let radius = null;
 
     // 📍 Location restriction is enabled
-    if (restrictLocation && restrictLocation.toString() === "1") {
+    const shouldSkipLocationRestriction =
+      type === "OUT" && unrestrictedCheckout === "1";
+
+    if (
+      !shouldSkipLocationRestriction &&
+      restrictLocation &&
+      restrictLocation.toString() === "1"
+    ) {
       nearest = await getOfficeLocation(employeeCode); // Returns closest office + distance
 
       if (!nearest) {
