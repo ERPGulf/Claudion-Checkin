@@ -77,8 +77,8 @@ function AttendanceAction() {
   const [ready, setReady] = useState(false);
   const [distanceInfo, setDistanceInfo] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
-  const [restrictLocation, setRestrictLocation] = useState("0");
-  const [unrestrictedCheckout, setUnrestrictedCheckout] = useState("0");
+  const [restrictLocation, setRestrictLocation] = useState(0);
+  const [unrestrictedCheckout, setUnrestrictedCheckout] = useState(0);
   const [restrictionLoaded, setRestrictionLoaded] = useState(false);
   const [onBreak, setOnBreak] = useState(false);
   const [liveBreakTime, setLiveBreakTime] = useState("00:00:00");
@@ -128,8 +128,9 @@ function AttendanceAction() {
       const r = await AsyncStorage.getItem("restrict_location");
       const u = await AsyncStorage.getItem("unrestricted_checkout_location");
       if (!isMountedRef.current) return;
-      setRestrictLocation(r === "1" ? "1" : "0");
-      setUnrestrictedCheckout(u === "1" ? "1" : "0");
+      setRestrictLocation(Number(r) || 0);
+
+      setUnrestrictedCheckout(Number(u) || 0);
       setRestrictionLoaded(true);
     };
     loadRestriction();
@@ -187,15 +188,22 @@ function AttendanceAction() {
     try {
       setReady(false);
 
-      if (restrictLocation === "0") {
-        setInTarget(true);
+      // if (restrictLocation === 0) {
+      //   setInTarget(true);
+      //   setDistanceInfo(null);
+      //   setReady(true);
+      //   return;
+      // }
+
+      const nearest = await getOfficeLocation(employeeCode);
+      if (!isMountedRef.current) return;
+      if (!nearest) {
+        setInTarget(false);
         setDistanceInfo(null);
         setReady(true);
         return;
       }
 
-      const nearest = await getOfficeLocation(employeeCode);
-      if (!isMountedRef.current) return;
       setInTarget(nearest.withinRadius);
       setDistanceInfo(nearest);
       setReady(true);
@@ -419,7 +427,7 @@ function AttendanceAction() {
           dispatch(
             setCheckin({
               checkinTime: startedAt,
-              location: restrictLocation === "1" ? response.location : null,
+              location: restrictLocation === 1 ? response.location : null,
             }),
           );
         } else {
@@ -591,7 +599,7 @@ function AttendanceAction() {
       return;
     }
 
-    if (restrictLocation === "1" && !inTarget) {
+    if (restrictLocation === 1 && !inTarget) {
       Toast.show({
         type: "error",
         text1: "You are out of allowed location",
@@ -667,13 +675,6 @@ function AttendanceAction() {
 
     try {
       setActionLoading(true);
-
-      // const response = await employeeBreak({ employeeCode, type });
-
-      // if (!response.allowed) {
-      //   Toast.show({ type: "error", text1: response.message });
-      //   return;
-      // }
       const response = await employeeBreak({ employeeCode, type });
 
       if (!response.allowed) {
@@ -748,9 +749,8 @@ function AttendanceAction() {
       </SafeAreaView>
     );
   }
-  const allowCheckoutAnywhere =
-    checkin === true && unrestrictedCheckout === "1";
- 
+  const allowCheckoutAnywhere = checkin === true && unrestrictedCheckout === 1;
+
   return (
     <SafeAreaView
       style={{ flex: 1, backgroundColor: "white" }}
@@ -916,7 +916,7 @@ function AttendanceAction() {
               </Text>
               <View className="flex-row items-end border-b border-gray-400 pb-2 mb-4 justify-between">
                 <Text className="text-sm font-medium text-gray-500">
-                  {restrictLocation === "0"
+                  {restrictLocation === 0
                     ? "Not Required"
                     : !ready
                       ? "Getting Location..."
@@ -933,7 +933,7 @@ function AttendanceAction() {
                   color={COLORS.gray}
                 />
               </View>
-              {restrictLocation === "1" && distanceInfo && (
+              {restrictLocation === 1 && distanceInfo && (
                 <View className="mb-3">
                   <Text className="text-xs text-gray-400">
                     Distance: {distanceInfo.distance} m | Allowed:{" "}
@@ -947,15 +947,13 @@ function AttendanceAction() {
                 className={`justify-center items-center h-16 w-full mt-4 rounded-2xl ${
                   checkin ? "bg-red-600" : "bg-green-600"
                 } ${
-                  restrictLocation === "1" &&
-                  !inTarget &&
-                  !allowCheckoutAnywhere
+                  restrictLocation === 1 && !inTarget && !allowCheckoutAnywhere
                     ? "opacity-50"
                     : ""
                 }`}
                 disabled={
                   actionLoading ||
-                  (restrictLocation === "1" &&
+                  (restrictLocation === 1 &&
                     !inTarget &&
                     !allowCheckoutAnywhere)
                 }
@@ -990,7 +988,7 @@ function AttendanceAction() {
                   <TouchableOpacity
                     className={`justify-center items-center h-16 w-full mt-4 rounded-2xl ${
                       actionLoading ||
-                      (restrictLocation === "1" && !inTarget) ||
+                      (restrictLocation === 1 && !inTarget) ||
                       breakCompleted ||
                       breakMinutes >= 120
                         ? "bg-gray-400" // ✅ disabled color
@@ -1000,7 +998,7 @@ function AttendanceAction() {
                     }`}
                     disabled={
                       actionLoading ||
-                      (restrictLocation === "1" && !inTarget) ||
+                      (restrictLocation === 1 && !inTarget) ||
                       breakCompleted ||
                       breakMinutes >= 120
                     }
@@ -1008,7 +1006,7 @@ function AttendanceAction() {
                   >
                     <Text className="text-xl font-bold text-white">
                       {actionLoading ||
-                      (restrictLocation === "1" && !inTarget) ||
+                      (restrictLocation === 1 && !inTarget) ||
                       breakCompleted ||
                       breakMinutes >= 120
                         ? "BREAK NOT ALLOWED"
