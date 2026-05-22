@@ -42,18 +42,35 @@ function QrScan() {
       ),
     });
   }, [navigation]);
+
+  const sanitizeString = (value, defaultValue = "") => {
+    if (value === null || value === undefined) {
+      return defaultValue;
+    }
+
+    return String(value).trim();
+  };
+
+  const sanitizeNumber = (value, defaultValue = 0) => {
+    const parsed = Number(value);
+
+    return Number.isFinite(parsed) ? parsed : defaultValue;
+  };
+
   const handleQRCodeData = async (data) => {
     try {
       const KEYS = [
         "Company",
         "Employee_Code",
         "Full_Name",
-        "Photo",
-        "Restrict Location",
-        "Unrestricted Checkout Location",
         "User_id",
         "API",
         "App_key",
+
+        // Optional old fields (backward compatibility)
+        "Photo",
+        "Restrict Location",
+        "Unrestricted Checkout Location",
       ];
       // :one: Decode Base64
       let value = utf8.decode(base64.decode(data));
@@ -99,16 +116,27 @@ function QrScan() {
         : 1;
       // :seven: Build final object
       const cleanedData = {
-        company: qrData["Company"],
-        employee_code: qrData["Employee_Code"],
-        full_name: qrData["Full_Name"]?.trim(),
-        api_key: qrData["User_id"]?.trim(),
-        baseUrl: qrData["API"]?.trim(),
-        app_key: appKey,
-        photo: photoFlag,
-        restrict_location: qrData["Restrict Location"]?.trim() ?? "0", // :point_left: NEW
-        unrestricted_checkout_location:
-          qrData["Unrestricted Checkout Location"]?.trim() ?? "0",
+        company: sanitizeString(qrData["Company"]),
+
+        employee_code: sanitizeString(qrData["Employee_Code"]),
+
+        full_name: sanitizeString(qrData["Full_Name"]),
+
+        api_key: sanitizeString(qrData["User_id"]),
+
+        baseUrl: sanitizeString(qrData["API"]),
+
+        app_key: sanitizeString(appKey),
+
+        // Optional old QR fallback values
+        photo: sanitizeNumber(qrData["Photo"], 0),
+
+        restrict_location: sanitizeNumber(qrData["Restrict Location"], 0),
+
+        unrestricted_checkout_location: sanitizeNumber(
+          qrData["Unrestricted Checkout Location"],
+          0,
+        ),
       };
       console.log(
         "QR UNRESTRICTED VALUE:",
@@ -128,10 +156,10 @@ function QrScan() {
           ["app_key", cleanedData.app_key],
           ["baseUrl", cleanedData.baseUrl],
           ["photo", String(cleanedData.photo)],
-          ["restrict_location", cleanedData.restrict_location], // :point_left: NEW
+          ["restrict_location", String(cleanedData.restrict_location)], // :point_left: NEW
           [
             "unrestricted_checkout_location",
-            cleanedData.unrestricted_checkout_location,
+            String(cleanedData.unrestricted_checkout_location),
           ],
         ]);
         // Redux dispatch (NO restrict_location)

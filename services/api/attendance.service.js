@@ -54,8 +54,52 @@ export const getOfficeLocation = async (employeeCode) => {
     timeout: 10000,
   });
 
-  const employee = data?.message;
-  const locations = employee?.employee_locations || [];
+  console.log(
+    `${logPrefix} RAW EMPLOYEE RESPONSE`,
+    JSON.stringify(data, null, 2),
+  );
+
+  const employee = data?.message || {};
+
+  const sanitizeNumber = (value, defaultValue = 0) => {
+    const parsed = Number(value);
+
+    return Number.isFinite(parsed) ? parsed : defaultValue;
+  };
+
+  const sanitizeArray = (value) => {
+    return Array.isArray(value) ? value : [];
+  };
+
+  const restrictLocation = sanitizeNumber(employee?.restrict_location);
+
+  const unrestrictedCheckoutLocation = sanitizeNumber(
+    employee?.unrestricted_checkout_location,
+  );
+
+  const photo = sanitizeNumber(employee?.photo);
+
+  const locations = sanitizeArray(employee?.employee_locations);
+
+  console.log(`${logPrefix} Employee API response`, employee);
+
+  console.log(`${logPrefix} Restriction settings`, {
+    restrict_location: restrictLocation,
+    unrestricted_checkout_location: unrestrictedCheckoutLocation,
+    photo,
+    locationsCount: locations.length,
+  });
+
+  await AsyncStorage.multiSet([
+    ["restrict_location", String(restrictLocation)],
+
+    ["unrestricted_checkout_location", String(unrestrictedCheckoutLocation)],
+
+    ["photo", String(photo)],
+
+    ["employee_locations", JSON.stringify(locations)],
+  ]);
+
   console.log(`${logPrefix} Employee locations`, locations);
   console.log(`${logPrefix} Locations fetched`, {
     totalLocations: locations.length,
@@ -143,7 +187,8 @@ export const getOfficeLocation = async (employeeCode) => {
         },
       );
 
-      const radius = Number(loc?.reporting_radius) || 0;
+      // const radius = Number(loc?.reporting_radius) || 0;
+      const radius = sanitizeNumber(loc?.reporting_radius);
 
       const candidate = {
         locationName: loc?.location || `location-${index + 1}`,
@@ -195,25 +240,26 @@ export const userCheckIn = async ({ employeeCode, type, locationData }) => {
     const token = await AsyncStorage.getItem("access_token");
     if (!token) throw new Error("Token missing");
 
-    const restrictLocation = (
-      await AsyncStorage.getItem("restrict_location")
-    )?.trim();
+  
+    const restrictLocation =
+      Number(await AsyncStorage.getItem("restrict_location")) || 0;
 
-    const unrestrictedCheckout = (
-      await AsyncStorage.getItem("unrestricted_checkout_location")
-    )?.trim();
+    const unrestrictedCheckout =
+      Number(await AsyncStorage.getItem("unrestricted_checkout_location")) || 0;
 
     let nearest = null;
     let radius = null;
 
     // 📍 Location restriction is enabled
     const shouldSkipLocationRestriction =
-      type === "OUT" && unrestrictedCheckout === "1";
+      type === "OUT" && unrestrictedCheckout === 1;
 
     if (
       !shouldSkipLocationRestriction &&
       restrictLocation &&
-      restrictLocation.toString() === "1"
+      // restrictLocation.toString() === "1"
+
+      restrictLocation === 1
     ) {
       nearest = await getOfficeLocation(employeeCode); // Returns closest office + distance
 
@@ -250,7 +296,7 @@ export const userCheckIn = async ({ employeeCode, type, locationData }) => {
     };
 
     // 👉 Only attach location fields when restriction is enabled
-    if (restrictLocation === "1" && nearest) {
+    if (restrictLocation === 1 && nearest) {
       payload.location = nearest.locationName;
       payload.latitude = nearest.latitude;
       payload.longitude = nearest.longitude;
