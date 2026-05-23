@@ -82,7 +82,8 @@ function AttendanceAction() {
   const [ready, setReady] = useState(false);
   const [distanceInfo, setDistanceInfo] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
-  const [restrictLocation, setRestrictLocation] = useState("0");
+  const [restrictLocation, setRestrictLocation] = useState(0);
+  const [unrestrictedCheckout, setUnrestrictedCheckout] = useState(0);
   const [restrictionLoaded, setRestrictionLoaded] = useState(false);
   const [onBreak, setOnBreak] = useState(false);
   const [liveBreakTime, setLiveBreakTime] = useState("00:00:00");
@@ -130,8 +131,11 @@ function AttendanceAction() {
   useEffect(() => {
     const loadRestriction = async () => {
       const r = await AsyncStorage.getItem("restrict_location");
+      const u = await AsyncStorage.getItem("unrestricted_checkout_location");
       if (!isMountedRef.current) return;
-      setRestrictLocation(r === "1" ? "1" : "0");
+      setRestrictLocation(Number(r) || 0);
+
+      setUnrestrictedCheckout(Number(u) || 0);
       setRestrictionLoaded(true);
     };
     loadRestriction();
@@ -189,15 +193,22 @@ function AttendanceAction() {
     try {
       setReady(false);
 
-      if (restrictLocation === "0") {
-        setInTarget(true);
+      // if (restrictLocation === 0) {
+      //   setInTarget(true);
+      //   setDistanceInfo(null);
+      //   setReady(true);
+      //   return;
+      // }
+
+      const nearest = await getOfficeLocation(employeeCode);
+      if (!isMountedRef.current) return;
+      if (!nearest) {
+        setInTarget(false);
         setDistanceInfo(null);
         setReady(true);
         return;
       }
 
-      const nearest = await getOfficeLocation(employeeCode);
-      if (!isMountedRef.current) return;
       setInTarget(nearest.withinRadius);
       setDistanceInfo(nearest);
       setReady(true);
@@ -421,7 +432,7 @@ function AttendanceAction() {
           dispatch(
             setCheckin({
               checkinTime: startedAt,
-              location: restrictLocation === "1" ? response.location : null,
+              location: restrictLocation === 1 ? response.location : null,
             }),
           );
         } else {
@@ -593,7 +604,7 @@ function AttendanceAction() {
       return;
     }
 
-    if (restrictLocation === "1" && !inTarget) {
+    if (restrictLocation === 1 && !inTarget) {
       Toast.show({
         type: "error",
         text1: "You are out of allowed location",
@@ -743,27 +754,7 @@ function AttendanceAction() {
       </SafeAreaView>
     );
   }
-  const handleCheckinPress = async () => {
-    try {
-      const photoValue = await AsyncStorage.getItem("photo");
-
-      const actionType = checkin ? "OUT" : "IN";
-
-      if (photoValue !== "1") {
-        await handleDirectCheckInOut(actionType);
-      } else {
-        navigation.navigate("Attendance camera", {
-          type: actionType,
-        });
-      }
-    } catch (error) {
-      Toast.show({
-        type: "error",
-        text1: ":warning: Action failed",
-        text2: error.message,
-      });
-    }
-  };
+  const allowCheckoutAnywhere = checkin === true && unrestrictedCheckout === 1;
 
   return (
     <SafeAreaView
@@ -821,33 +812,133 @@ function AttendanceAction() {
           <View className="h-72 mt-4 mb-24">
             <View className="p-3">
               {/* DATE & TIME */}
-              <AttendanceInfo
-                dateTime={dateTime}
-                restrictLocation={restrictLocation}
-                ready={ready}
-                inTarget={inTarget}
-                distanceInfo={distanceInfo}
-              />
+              <Text className="text-base text-gray-500 font-semibold">
+                DATE AND TIME *
+              </Text>
+              <View className="flex-row items-end border-b border-gray-400 pb-2 mb-6 justify-between">
+                <Text className="text-sm font-medium text-gray-500">
+                  {dateTime}
+                </Text>
+                <MaterialCommunityIcons
+                  name="calendar-month"
+                  size={28}
+                  color={COLORS.gray}
+                />
+              </View>
+              {/* LOCATION */}
+              <Text className="text-base text-gray-500 font-semibold">
+                LOCATION *
+              </Text>
+              <View className="flex-row items-end border-b border-gray-400 pb-2 mb-4 justify-between">
+                <Text className="text-sm font-medium text-gray-500">
+                  {restrictLocation === 0
+                    ? "Not Required"
+                    : !ready
+                      ? "Getting Location..."
+                      : // : distanceInfo?.locationName
+                        //   ? distanceInfo.locationName
+                        inTarget
+                        ? "In bound"
+                        : "Out of bound"}
+                </Text>
+
+                <MaterialCommunityIcons
+                  name="map-marker-radius-outline"
+                  size={28}
+                  color={COLORS.gray}
+                />
+              </View>
+              {restrictLocation === 1 && distanceInfo && (
+                <View className="mb-3">
+                  <Text className="text-xs text-gray-400">
+                    Distance: {distanceInfo.distance} m | Allowed:{" "}
+                    {distanceInfo.radius} m
+                  </Text>
+                </View>
+              )}
 
               {/* CHECK-IN / CHECK-OUT BUTTON */}
-              <CheckinButton
-                checkin={checkin}
-                actionLoading={actionLoading}
-                disabled={restrictLocation === "1" && !inTarget}
-                onPress={handleCheckinPress}
-              />
+              <TouchableOpacity
+                className={`justify-center items-center h-16 w-full mt-4 rounded-2xl ${
+                  checkin ? "bg-red-600" : "bg-green-600"
+                } ${
+                  restrictLocation === 1 && !inTarget && !allowCheckoutAnywhere
+                    ? "opacity-50"
+                    : ""
+                }`}
+                disabled={
+                  actionLoading ||
+                  (restrictLocation === 1 &&
+                    !inTarget &&
+                    !allowCheckoutAnywhere)
+                }
+                onPress={async () => {
+                  try {
+                    const photoValue = await AsyncStorage.getItem("photo");
+                    const actionType = checkin ? "OUT" : "IN";
+
+                    if (photoValue !== "1") {
+                      await handleDirectCheckInOut(actionType);
+                    } else {
+                      navigation.navigate("Attendance camera", {
+                        type: actionType,
+                      });
+                    }
+                  } catch (error) {
+                    Toast.show({
+                      type: "error",
+                      text1: ":warning: Action failed",
+                      text2: error.message,
+                    });
+                  }
+                }}
+              >
+                <Text className="text-xl font-bold text-white">
+                  {checkin ? "CHECK-OUT" : "CHECK-IN"}
+                </Text>
+              </TouchableOpacity>
               {/* BREAK BUTTON */}
               {checkin && (
-                <BreakButton
-                  actionLoading={actionLoading}
-                  restrictLocation={restrictLocation}
-                  inTarget={inTarget}
-                  breakCompleted={breakCompleted}
-                  breakMinutes={breakMinutes}
-                  onBreak={onBreak}
-                  onPress={handleBreak}
-                  monthlyCapMessage={monthlyCapMessage}
-                />
+                <View>
+                  <TouchableOpacity
+                    className={`justify-center items-center h-16 w-full mt-4 rounded-2xl ${
+                      actionLoading ||
+                      (restrictLocation === 1 && !inTarget) ||
+                      breakCompleted ||
+                      breakMinutes >= 120
+                        ? "bg-gray-400" // ✅ disabled color
+                        : onBreak
+                          ? "bg-slate-500" // break running
+                          : "bg-blue-400" // normal
+                    }`}
+                    disabled={
+                      actionLoading ||
+                      (restrictLocation === 1 && !inTarget) ||
+                      breakCompleted ||
+                      breakMinutes >= 120
+                    }
+                    onPress={handleBreak}
+                  >
+                    <Text className="text-xl font-bold text-white">
+                      {actionLoading ||
+                      (restrictLocation === 1 && !inTarget) ||
+                      breakCompleted ||
+                      breakMinutes >= 120
+                        ? "BREAK NOT ALLOWED"
+                        : onBreak
+                          ? "END BREAK"
+                          : "TAKE BREAK"}
+                    </Text>
+                  </TouchableOpacity>
+
+                  {!!monthlyCapMessage && (
+                    <View className="mt-3 rounded-xl border border-rose-300 bg-rose-50 px-3 py-2">
+                      <Text className="text-xs font-semibold text-rose-700">
+                        {monthlyCapMessage}
+                      </Text>
+                    </View>
+                  )}
+                </View>
               )}
             </View>
           </View>
