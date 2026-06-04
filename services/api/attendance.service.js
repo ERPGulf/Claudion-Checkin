@@ -240,7 +240,6 @@ export const userCheckIn = async ({ employeeCode, type, locationData }) => {
     const token = await AsyncStorage.getItem("access_token");
     if (!token) throw new Error("Token missing");
 
-  
     const restrictLocation =
       Number(await AsyncStorage.getItem("restrict_location")) || 0;
 
@@ -287,6 +286,20 @@ export const userCheckIn = async ({ employeeCode, type, locationData }) => {
     // 🕒 Timestamp for check-in
     const timestamp = await getServerTime();
 
+    let currentLocation = null;
+
+    if (type === "OUT" && unrestrictedCheckout === 1) {
+      nearest = await getOfficeLocation(employeeCode);
+      const gps = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Highest,
+      });
+
+      currentLocation = {
+        latitude: gps.coords.latitude,
+        longitude: gps.coords.longitude,
+      };
+    }
+
     // Build base payload
     const payload = {
       device_id: "MobileAPP",
@@ -294,6 +307,11 @@ export const userCheckIn = async ({ employeeCode, type, locationData }) => {
       log_type: type,
       timestamp,
     };
+    if (currentLocation) {
+      payload.location = nearest?.locationName;
+      payload.latitude = currentLocation.latitude;
+      payload.longitude = currentLocation.longitude;
+    }
 
     // 👉 Only attach location fields when restriction is enabled
     if (restrictLocation === 1 && nearest) {
@@ -303,7 +321,7 @@ export const userCheckIn = async ({ employeeCode, type, locationData }) => {
       payload.distance = nearest.distance;
       payload.radius = nearest.radius;
     }
-
+  
     // 📡 Send check-in / check-out request
     const response = await apiClient.post(
       `${baseUrl}/api/method/employee_app.attendance_api.add_log_based_on_employee_field`,
