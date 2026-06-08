@@ -9,6 +9,7 @@ import apiClient from "../services/api/apiClient";
 import { clearTokens } from "../services/api/apiClient";
 import { refreshAccessToken } from "../services/api/apiClient";
 import { plainAxios } from "../services/api/apiClient";
+import { registerSessionCleanupHandler } from "../services/api/apiClient";
 import * as utils from "../services/api/utils";
 
 // mock base URL utilities
@@ -34,6 +35,8 @@ describe("API Client (Interceptors + Token Refresh)", () => {
   afterEach(() => {
     mock.reset();
     refreshMock.reset();
+    // Clear any handler registered during a test so it can't leak across tests.
+    registerSessionCleanupHandler(null);
   });
 
   // ---------------------------------------------------------
@@ -158,6 +161,67 @@ describe("API Client (Interceptors + Token Refresh)", () => {
       );
 
       expect(refreshMock.history.post).toHaveLength(1);
+    });
+  });
+
+  // ---------------------------------------------------------
+  // FORCED LOGOUT CLEANUP (expireSession session cleanup hook)
+  // ---------------------------------------------------------
+  describe("Forced logout cleanup (expireSession)", () => {
+    const triggerTerminalFailure = () => {
+      mock.onGet("https://example.com/api/data").reply(401);
+      refreshMock
+        .onPost(
+          "https://example.com/api/method/employee_app.gauth.create_refresh_token",
+        )
+        .reply(401, {
+          data: JSON.stringify({
+            exc_type: "PermissionError",
+            _error_message: "No permission for User",
+          }),
+        });
+    };
+
+    it("invokes the registered cleanup handler on forced logout", async () => {
+      const cleanup = jest.fn().mockResolvedValue(undefined);
+      registerSessionCleanupHandler(cleanup);
+
+      triggerTerminalFailure();
+
+      await expect(apiClient.get("data")).rejects.toThrow(
+        "Session expired. Please login again.",
+      );
+
+      expect(cleanup).toHaveBeenCalledTimes(1);
+    });
+
+    it("still expires the session when the cleanup handler rejects", async () => {
+      const cleanup = jest
+        .fn()
+        .mockRejectedValue(new Error("fcm cleanup failed"));
+      registerSessionCleanupHandler(cleanup);
+
+      triggerTerminalFailure();
+
+      await expect(apiClient.get("data")).rejects.toThrow(
+        "Session expired. Please login again.",
+      );
+
+      expect(cleanup).toHaveBeenCalledTimes(1);
+      expect(await AsyncStorage.getItem("access_token")).toBeNull();
+      expect(await AsyncStorage.getItem("refresh_token")).toBeNull();
+    });
+
+    it("expires the session normally when no cleanup handler is registered", async () => {
+      registerSessionCleanupHandler(null);
+
+      triggerTerminalFailure();
+
+      await expect(apiClient.get("data")).rejects.toThrow(
+        "Session expired. Please login again.",
+      );
+
+      expect(await AsyncStorage.getItem("access_token")).toBeNull();
     });
   });
 

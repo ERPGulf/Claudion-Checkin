@@ -21,13 +21,17 @@ import { selectIsLoggedIn } from "./redux/Slices/AuthSlice";
 import {
   initializeFcm,
   registerBackgroundMessageHandler,
+  clearFcmRegistration,
 } from "./services/notifications/fcm.service";
+import { registerSessionCleanupHandler } from "./services/api/apiClient";
 
 function cacheFonts(fonts) {
   return fonts.map((font) => Font.loadAsync(font));
 }
 const queryClient = new QueryClient();
 registerBackgroundMessageHandler();
+// Forced logout (session expiry) reuses the same FCM cleanup as manual logout.
+registerSessionCleanupHandler(clearFcmRegistration);
 
 const getForegroundToastType = (type) => {
   if (typeof type !== "string") {

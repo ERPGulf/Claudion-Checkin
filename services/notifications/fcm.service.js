@@ -774,6 +774,14 @@ export const initializeFcm = async ({
     messagingInstance,
     async (token) => {
       await persistFcmToken(token);
+      // A rotated token is NOT subscribed to the previous token's topics. Reset
+      // the local topic baseline so the sync below re-subscribes the new token
+      // to every backend topic (Firebase recommends resubscribing on token
+      // change; our diff-based sync would otherwise see no change and skip it).
+      await AsyncStorage.removeItem(FCM_TOPICS_KEY);
+      // Push the rotated token to the backend immediately so it never serves a
+      // stale token between the refresh and the next Home-focus sync.
+      await syncTokenToBackend(token);
     },
   );
 

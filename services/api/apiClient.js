@@ -158,6 +158,19 @@ const apiClient = axios.create({ timeout: 30000 });
 export const plainAxios = axios.create({ timeout: 30000 });
 
 // ----------------------
+// SESSION CLEANUP HOOK
+// ----------------------
+// Optional async handler run during forced logout (expireSession) so non-API
+// teardown (e.g. FCM token/topic cleanup) can mirror manual logout WITHOUT
+// apiClient importing that module — this avoids an apiClient <-> fcm.service
+// import cycle. App.js registers the handler at startup.
+let sessionCleanupHandler = null;
+
+export const registerSessionCleanupHandler = (handler) => {
+  sessionCleanupHandler = typeof handler === "function" ? handler : null;
+};
+
+// ----------------------
 // REFRESH CONTROL
 // ----------------------
 let isRefreshing = false;
@@ -204,6 +217,18 @@ const expireSession = async () => {
   memoryAccessToken = null;
   memoryRefreshToken = null;
   delete apiClient.defaults.headers.common.Authorization;
+
+  // Mirror manual logout: invalidate the FCM token and topic subscriptions on
+  // forced logout too. Runs before the token/topic AsyncStorage removals so the
+  // handler can still read stored topics. Failures must never block teardown.
+  if (sessionCleanupHandler) {
+    try {
+      await sessionCleanupHandler();
+    } catch {
+      // Ignore cleanup failures; session teardown must always proceed.
+    }
+  }
+
   await AsyncStorage.multiRemove([
     "access_token",
     "refresh_token",

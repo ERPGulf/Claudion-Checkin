@@ -1,5 +1,6 @@
 const mockGetItem = jest.fn();
 const mockSetItem = jest.fn();
+const mockRemoveItem = jest.fn();
 const mockMultiRemove = jest.fn();
 const mockDispatchSetUnreadCount = jest.fn();
 const mockGetNotifications = jest.fn();
@@ -60,6 +61,7 @@ const loadFcmService = () => {
     default: {
       getItem: (...args) => mockGetItem(...args),
       setItem: (...args) => mockSetItem(...args),
+      removeItem: (...args) => mockRemoveItem(...args),
       multiRemove: (...args) => mockMultiRemove(...args),
     },
   }));
@@ -153,6 +155,7 @@ describe("FCM notification metadata handling", () => {
     });
 
     mockSetItem.mockResolvedValue(undefined);
+    mockRemoveItem.mockResolvedValue(undefined);
     mockMultiRemove.mockResolvedValue(undefined);
     mockDispatchSetUnreadCount.mockImplementation((count) => ({
       type: "notification/setUnreadCount",
@@ -317,6 +320,50 @@ describe("FCM notification metadata handling", () => {
     expect(mockNavigateSafely).toHaveBeenCalledWith("Notifications", {
       type: "announcement",
     });
+  });
+
+  it("pushes the refreshed token and resets the topic baseline on token refresh", async () => {
+    let tokenRefreshHandler;
+    mockOnTokenRefresh.mockImplementation((_instance, handler) => {
+      tokenRefreshHandler = handler;
+      return jest.fn();
+    });
+
+    mockGetItem.mockImplementation(async (key) => {
+      if (key === "baseUrl") return "https://aysha.erpgulf.com";
+      if (key === "access_token") return "auth-token";
+      if (key === "employee_id") return "EMP-001";
+      if (key === "fcm_token") return "old-fcm-token";
+      return null;
+    });
+
+    mockPlainAxiosPost.mockResolvedValue({
+      status: 200,
+      data: {
+        data: { employee: "EMP-001", topics: ["General"], token_updated: true },
+      },
+    });
+
+    await initializeFcm({
+      dispatch: jest.fn(),
+      onForegroundNotification: jest.fn(),
+    });
+
+    expect(typeof tokenRefreshHandler).toBe("function");
+
+    // initializeFcm itself does not POST; isolate the refresh-triggered work.
+    mockPlainAxiosPost.mockClear();
+    mockRemoveItem.mockClear();
+
+    await tokenRefreshHandler("new-fcm-token");
+
+    // The rotated token is pushed to the backend...
+    expect(mockPlainAxiosPost).toHaveBeenCalledTimes(1);
+    const [, requestBody] = mockPlainAxiosPost.mock.calls[0];
+    expect(String(requestBody)).toContain("new-fcm-token");
+
+    // ...and the topic cache is cleared so the new token re-subscribes.
+    expect(mockRemoveItem).toHaveBeenCalledWith("fcm_topics");
   });
 
   it("reuses POST topics when the server reports token_updated false", async () => {
