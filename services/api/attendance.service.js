@@ -288,8 +288,10 @@ export const userCheckIn = async ({ employeeCode, type, locationData }) => {
 
     let currentLocation = null;
 
+    
     if (type === "OUT" && unrestrictedCheckout === 1) {
       nearest = await getOfficeLocation(employeeCode);
+
       const gps = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.Highest,
       });
@@ -298,8 +300,23 @@ export const userCheckIn = async ({ employeeCode, type, locationData }) => {
         latitude: gps.coords.latitude,
         longitude: gps.coords.longitude,
       };
-    }
 
+      if (nearest?.withinRadius) {
+        currentLocation.locationName = nearest.locationName;
+      } else {
+        const address = await Location.reverseGeocodeAsync({
+          latitude: currentLocation.latitude,
+          longitude: currentLocation.longitude,
+        });
+        
+
+        currentLocation.locationName =
+          address?.[0]?.city ||
+          address?.[0]?.subregion ||
+          address?.[0]?.region ||
+          "Live Location";
+      }
+    }
     // Build base payload
     const payload = {
       device_id: "MobileAPP",
@@ -307,21 +324,27 @@ export const userCheckIn = async ({ employeeCode, type, locationData }) => {
       log_type: type,
       timestamp,
     };
+   
     if (currentLocation) {
-      payload.location = nearest?.locationName;
+      payload.location = currentLocation.locationName || "Live Location";
+
       payload.latitude = currentLocation.latitude;
       payload.longitude = currentLocation.longitude;
     }
 
-    // 👉 Only attach location fields when restriction is enabled
-    if (restrictLocation === 1 && nearest) {
+    
+    if (
+      restrictLocation === 1 &&
+      nearest &&
+      !(type === "OUT" && unrestrictedCheckout === 1)
+    ) {
       payload.location = nearest.locationName;
       payload.latitude = nearest.latitude;
       payload.longitude = nearest.longitude;
       payload.distance = nearest.distance;
       payload.radius = nearest.radius;
     }
-  
+
     // 📡 Send check-in / check-out request
     const response = await apiClient.post(
       `${baseUrl}/api/method/employee_app.attendance_api.add_log_based_on_employee_field`,
