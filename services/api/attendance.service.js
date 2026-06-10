@@ -288,17 +288,7 @@ export const userCheckIn = async ({ employeeCode, type, locationData }) => {
 
     let currentLocation = null;
 
-    // if (type === "OUT" && unrestrictedCheckout === 1) {
-    //   nearest = await getOfficeLocation(employeeCode);
-    //   const gps = await Location.getCurrentPositionAsync({
-    //     accuracy: Location.Accuracy.Highest,
-    //   });
-
-    //   currentLocation = {
-    //     latitude: gps.coords.latitude,
-    //     longitude: gps.coords.longitude,
-    //   };
-    // }
+    
     if (type === "OUT" && unrestrictedCheckout === 1) {
       nearest = await getOfficeLocation(employeeCode);
 
@@ -318,12 +308,11 @@ export const userCheckIn = async ({ employeeCode, type, locationData }) => {
           latitude: currentLocation.latitude,
           longitude: currentLocation.longitude,
         });
+        
 
         currentLocation.locationName =
-          address?.[0]?.name ||
-          address?.[0]?.street ||
           address?.[0]?.city ||
-          address?.[0]?.district ||
+          address?.[0]?.subregion ||
           address?.[0]?.region ||
           "Live Location";
       }
@@ -335,11 +324,7 @@ export const userCheckIn = async ({ employeeCode, type, locationData }) => {
       log_type: type,
       timestamp,
     };
-    // if (currentLocation) {
-    //   payload.location = nearest?.locationName;
-    //   payload.latitude = currentLocation.latitude;
-    //   payload.longitude = currentLocation.longitude;
-    // }
+   
     if (currentLocation) {
       payload.location = currentLocation.locationName || "Live Location";
 
@@ -347,14 +332,7 @@ export const userCheckIn = async ({ employeeCode, type, locationData }) => {
       payload.longitude = currentLocation.longitude;
     }
 
-    // 👉 Only attach location fields when restriction is enabled
-    // if (restrictLocation === 1 && nearest) {
-    //   payload.location = nearest.locationName;
-    //   payload.latitude = nearest.latitude;
-    //   payload.longitude = nearest.longitude;
-    //   payload.distance = nearest.distance;
-    //   payload.radius = nearest.radius;
-    // }
+    
     if (
       restrictLocation === 1 &&
       nearest &&
