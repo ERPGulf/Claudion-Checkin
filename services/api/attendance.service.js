@@ -309,16 +309,7 @@ export const userCheckIn = async ({ employeeCode, type, locationData }) => {
         currentLocation.locationName = nearest.locationName;
       } else {
         currentLocation.locationName = `${currentLocation.latitude.toFixed(6)}, ${currentLocation.longitude.toFixed(6)}`;
-        // const address = await Location.reverseGeocodeAsync({
-        //   latitude: currentLocation.latitude,
-        //   longitude: currentLocation.longitude,
-        // });
-
-        // currentLocation.locationName =
-        //   address?.[0]?.city ||
-        //   address?.[0]?.subregion ||
-        //   address?.[0]?.region ||
-        //   "Live Location";
+        
       }
     }
     // Build base payload
