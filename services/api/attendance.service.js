@@ -288,7 +288,6 @@ export const userCheckIn = async ({ employeeCode, type, locationData }) => {
 
     let currentLocation = null;
 
-    
     if (type === "OUT" && unrestrictedCheckout === 1) {
       nearest = await getOfficeLocation(employeeCode);
 
@@ -301,20 +300,16 @@ export const userCheckIn = async ({ employeeCode, type, locationData }) => {
         longitude: gps.coords.longitude,
       };
 
+      console.log("CURRENT GPS:", {
+        latitude: currentLocation.latitude,
+        longitude: currentLocation.longitude,
+      });
+
       if (nearest?.withinRadius) {
         currentLocation.locationName = nearest.locationName;
       } else {
-        const address = await Location.reverseGeocodeAsync({
-          latitude: currentLocation.latitude,
-          longitude: currentLocation.longitude,
-        });
+        currentLocation.locationName = `${currentLocation.latitude.toFixed(6)}, ${currentLocation.longitude.toFixed(6)}`;
         
-
-        currentLocation.locationName =
-          address?.[0]?.city ||
-          address?.[0]?.subregion ||
-          address?.[0]?.region ||
-          "Live Location";
       }
     }
     // Build base payload
@@ -324,7 +319,7 @@ export const userCheckIn = async ({ employeeCode, type, locationData }) => {
       log_type: type,
       timestamp,
     };
-   
+
     if (currentLocation) {
       payload.location = currentLocation.locationName || "Live Location";
 
@@ -332,7 +327,6 @@ export const userCheckIn = async ({ employeeCode, type, locationData }) => {
       payload.longitude = currentLocation.longitude;
     }
 
-    
     if (
       restrictLocation === 1 &&
       nearest &&
