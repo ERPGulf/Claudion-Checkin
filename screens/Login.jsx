@@ -24,6 +24,7 @@ import { COLORS, SIZES } from "../constants";
 import { WelcomeCard } from "../components/Login";
 import { selectEmployeeCode } from "../redux/Slices/UserSlice";
 import { generateToken } from "../services/api";
+import { getLoginErrorMessage } from "../utils/loginError";
 
 function Login() {
   const navigation = useNavigation();
@@ -97,15 +98,23 @@ function Login() {
 
       // navigation.navigate("homeTab");
     } catch (error) {
+      // Log the real cause for engineers (adb logcat / Metro). The user used to
+      // see only a generic "Something went wrong", which hid SSL/clock/network
+      // failures behind the same text as a wrong password.
+      console.log("Login failed", {
+        message: error?.message ?? null,
+        code: error?.code ?? null,
+        status: error?.response?.status ?? null,
+        data: error?.response?.data ?? null,
+      });
+
+      const { text1, text2 } = getLoginErrorMessage(error);
       Toast.show({
         type: "error",
-        text1: "Login failed",
-        text2:
-          error.response?.data?.message ||
-          error.message ||
-          "Something went wrong",
+        text1,
+        text2,
         autoHide: true,
-        visibilityTime: 3000,
+        visibilityTime: 4000,
       });
     } finally {
       setIsLoading(false);
