@@ -30,7 +30,7 @@ import { getLoginErrorMessage } from "../utils/loginError";
 // a device pulled the latest OTA. BUMP THE LETTER (A → B → C …) and set today's
 // date EVERY TIME you publish an OTA (eas update). If the device shows the new
 // value, the OTA is live on that device.
-const BUILD_TAG = "2026-06-28 A";
+const BUILD_TAG = "2026-06-28 B";
 
 function Login() {
   const navigation = useNavigation();
