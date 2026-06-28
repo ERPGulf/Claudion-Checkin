@@ -26,6 +26,12 @@ import { selectEmployeeCode } from "../redux/Slices/UserSlice";
 import { generateToken } from "../services/api";
 import { getLoginErrorMessage } from "../utils/loginError";
 
+// 🔖 OTA BUILD STAMP — shown at the bottom of the login screen so we can confirm
+// a device pulled the latest OTA. BUMP THE LETTER (A → B → C …) and set today's
+// date EVERY TIME you publish an OTA (eas update). If the device shows the new
+// value, the OTA is live on that device.
+const BUILD_TAG = "2026-06-28 A";
+
 function Login() {
   const navigation = useNavigation();
   const dispatch = useDispatch();
@@ -259,6 +265,17 @@ function Login() {
                   Rescan QR Code
                 </Text>
               </TouchableOpacity>
+
+              <Text
+                style={{
+                  textAlign: "center",
+                  color: COLORS.gray2,
+                  fontSize: 12,
+                  marginTop: 14,
+                }}
+              >
+                {BUILD_TAG}
+              </Text>
             </View>
           </View>
         )}
