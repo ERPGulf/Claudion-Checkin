@@ -17,6 +17,7 @@ import Navigator from "./navigation/navigator";
 import { navigateSafely } from "./navigation/rootNavigation";
 import * as Updates from "expo-updates";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import UpdateBanner from "./components/UpdateBanner";
 import { selectIsLoggedIn } from "./redux/Slices/AuthSlice";
 import {
   initializeFcm,
@@ -141,6 +142,7 @@ export default function App() {
           <QueryClientProvider client={queryClient}>
             <FcmBootstrap />
             <Navigator />
+            <UpdateBanner />
             <StatusBar style="auto" />
             <Toast
               topOffset={
