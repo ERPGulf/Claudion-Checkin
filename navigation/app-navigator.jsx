@@ -13,6 +13,7 @@ import {
   Shortcut2,
   Shortcut3,
   MyQrCode,
+  Diagnostics,
 } from "../screens";
 import HomeTabGroup from "./home.tabbar";
 import ComingSoon from "../screens/ComingSoon";
@@ -38,6 +39,7 @@ function AppNavigator() {
       <Stack.Screen name="Shortcut3" component={Shortcut3} />
       <Stack.Screen name="My QR Code" component={MyQrCode} />
       <Stack.Screen name="Notifications" component={Notifications} />
+      <Stack.Screen name="Diagnostics" component={Diagnostics} />
       <Stack.Screen name="comingsoon" component={ComingSoon} />
     </Stack.Navigator>
   );

@@ -634,6 +634,64 @@ function Profile() {
             </View>
 
             <TouchableOpacity
+              onPress={() => navigation.navigate("Diagnostics")}
+              activeOpacity={0.9}
+              style={{
+                marginTop: 16,
+                borderRadius: 20,
+                borderWidth: 1,
+                borderColor: "#D8E5FF",
+                backgroundColor: "#F5F9FF",
+                paddingHorizontal: 16,
+                paddingVertical: 14,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <View className="flex-row items-center flex-1 pr-3">
+                <View
+                  style={{
+                    width: 46,
+                    height: 46,
+                    borderRadius: 16,
+                    backgroundColor: "#EAF1FF",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Ionicons
+                    name="document-text-outline"
+                    color="#2457D6"
+                    size={22}
+                  />
+                </View>
+
+                <View className="ml-3">
+                  <Text className="text-base font-semibold text-slate-900">
+                    Diagnostics &amp; logs
+                  </Text>
+                  <Text className="mt-1 text-sm leading-5 text-slate-500">
+                    View and share app logs for support
+                  </Text>
+                </View>
+              </View>
+
+              <View
+                style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: 17,
+                  backgroundColor: "#EAF1FF",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Ionicons name="chevron-forward" size={18} color="#2457D6" />
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
               onPress={() => {
                 Alert.alert("Logout", "Are you sure you want to logout?", [
                   {

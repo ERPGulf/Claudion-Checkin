@@ -27,9 +27,22 @@ function WelcomeScreen() {
           style={{ width: 250, height: 250 }}
         />
 
-        <Text style={{ color: COLORS.gray2, fontSize: 12, marginTop: 8 }}>
-          {BUILD_TAG}
-        </Text>
+        <TouchableOpacity
+          onPress={() => navigation.navigate("Diagnostics")}
+          style={{ marginTop: 8, alignItems: "center" }}
+        >
+          <Text style={{ color: COLORS.gray2, fontSize: 12 }}>{BUILD_TAG}</Text>
+          <Text
+            style={{
+              color: COLORS.primary,
+              fontSize: 12,
+              marginTop: 4,
+              textDecorationLine: "underline",
+            }}
+          >
+            Diagnostics
+          </Text>
+        </TouchableOpacity>
       </View>
 
       <TouchableOpacity
