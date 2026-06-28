@@ -4,7 +4,7 @@ import { Image } from "expo-image";
 import React from "react";
 import { useNavigation } from "@react-navigation/native";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { COLORS } from "../constants";
+import { COLORS, BUILD_TAG } from "../constants";
 import icon from "../assets/icon.png";
 
 function WelcomeScreen() {
@@ -26,6 +26,10 @@ function WelcomeScreen() {
           source={icon}
           style={{ width: 250, height: 250 }}
         />
+
+        <Text style={{ color: COLORS.gray2, fontSize: 12, marginTop: 8 }}>
+          {BUILD_TAG}
+        </Text>
       </View>
 
       <TouchableOpacity

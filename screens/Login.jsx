@@ -20,17 +20,11 @@ import { Formik } from "formik";
 import * as Yup from "yup";
 import { useNavigation } from "@react-navigation/native";
 import { setSignIn } from "../redux/Slices/AuthSlice";
-import { COLORS, SIZES } from "../constants";
+import { COLORS, SIZES, BUILD_TAG } from "../constants";
 import { WelcomeCard } from "../components/Login";
 import { selectEmployeeCode } from "../redux/Slices/UserSlice";
 import { generateToken } from "../services/api";
 import { getLoginErrorMessage } from "../utils/loginError";
-
-// 🔖 OTA BUILD STAMP — shown at the bottom of the login screen so we can confirm
-// a device pulled the latest OTA. BUMP THE LETTER (A → B → C …) and set today's
-// date EVERY TIME you publish an OTA (eas update). If the device shows the new
-// value, the OTA is live on that device.
-const BUILD_TAG = "2026-06-28 C";
 
 function Login() {
   const navigation = useNavigation();
