@@ -25,7 +25,6 @@ import { WelcomeCard } from "../components/Login";
 import { selectEmployeeCode } from "../redux/Slices/UserSlice";
 import { generateToken } from "../services/api";
 import { getLoginErrorMessage } from "../utils/loginError";
-import { recordEvent } from "../utils/diagnosticLog";
 
 function Login() {
   const navigation = useNavigation();
@@ -50,24 +49,7 @@ function Login() {
       const app_key = await AsyncStorage.getItem("app_key");
       const baseUrl = await AsyncStorage.getItem("baseUrl");
 
-      // Structured diagnostic event (captured into the in-app log buffer) so a
-      // support engineer can see, from a shared log, whether provisioning is
-      // present, which server was hit, and the device clock — the top causes of
-      // login failures on client devices.
-      recordEvent("login/attempt", {
-        baseUrl: baseUrl ?? null,
-        hasApiKey: Boolean(api_key),
-        hasAppKey: Boolean(app_key),
-        deviceTime: new Date().toString(),
-        deviceTimeISO: new Date().toISOString(),
-      });
-
       if (!api_key || !app_key || !baseUrl) {
-        recordEvent("login/missing-provisioning", {
-          hasApiKey: Boolean(api_key),
-          hasAppKey: Boolean(app_key),
-          hasBaseUrl: Boolean(baseUrl),
-        });
         Toast.show({
           type: "error",
           text1: "QR code not scanned",
@@ -92,7 +74,6 @@ function Login() {
       }
 
       dispatch(setSignIn({ isLoggedIn: true, token: access_token }));
-      recordEvent("login/success", { hasToken: Boolean(access_token) });
 
       // 🔔 NEW: fetch notifications at login
       try {
@@ -128,17 +109,6 @@ function Login() {
       });
 
       const { text1, text2 } = getLoginErrorMessage(error);
-
-      // Mirror the failure (with its user-facing classification) into the
-      // diagnostic buffer so a shared log shows what category the failure fell
-      // into, not just the raw error.
-      recordEvent("login/error", {
-        classifiedAs: text1,
-        message: error?.message ?? null,
-        code: error?.code ?? null,
-        status: error?.response?.status ?? null,
-        hasResponse: Boolean(error?.response),
-      });
       Toast.show({
         type: "error",
         text1,
@@ -290,31 +260,16 @@ function Login() {
                 </Text>
               </TouchableOpacity>
 
-              <TouchableOpacity
-                onPress={() => navigation.navigate("Diagnostics")}
-                style={{ marginTop: 14 }}
+              <Text
+                style={{
+                  textAlign: "center",
+                  color: COLORS.gray2,
+                  fontSize: 12,
+                  marginTop: 14,
+                }}
               >
-                <Text
-                  style={{
-                    textAlign: "center",
-                    color: COLORS.gray2,
-                    fontSize: 12,
-                  }}
-                >
-                  {BUILD_TAG}
-                </Text>
-                <Text
-                  style={{
-                    textAlign: "center",
-                    color: COLORS.primary,
-                    fontSize: 12,
-                    marginTop: 4,
-                    textDecorationLine: "underline",
-                  }}
-                >
-                  View login logs (diagnostics)
-                </Text>
-              </TouchableOpacity>
+                {BUILD_TAG}
+              </Text>
             </View>
           </View>
         )}

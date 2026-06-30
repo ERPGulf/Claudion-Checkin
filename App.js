@@ -25,17 +25,6 @@ import {
   clearFcmRegistration,
 } from "./services/notifications/fcm.service";
 import { registerSessionCleanupHandler } from "./services/api/apiClient";
-import {
-  installConsoleCapture,
-  loadPersistedEntries,
-  recordEvent,
-} from "./utils/diagnosticLog";
-
-// Capture logs into an in-app buffer so release/preview APKs (no Metro / adb)
-// can export diagnostics from the Diagnostics screen. Installed at module load
-// so it captures from the earliest possible point.
-installConsoleCapture();
-loadPersistedEntries().then(() => recordEvent("app/start", { __DEV__ }));
 
 function cacheFonts(fonts) {
   return fonts.map((font) => Font.loadAsync(font));

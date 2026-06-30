@@ -17,9 +17,7 @@ import Shortcut3 from './Shortcut3';
 import Shortcut2 from './Shortcut2';
 import MyQrCode from './MyQrCode';
 import AttendanceRequest from './AttendanceRequest';
-import Diagnostics from './Diagnostics';
 export {
-  Diagnostics,
   Home,
   AttendanceAction,
   QrScan,

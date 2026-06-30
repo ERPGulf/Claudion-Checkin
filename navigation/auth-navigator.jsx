@@ -1,7 +1,7 @@
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
 import React from "react";
-import { Login, QrScan, WelcomeScreen, Diagnostics } from "../screens";
+import { Login, QrScan, WelcomeScreen } from "../screens";
 
 const Stack = createNativeStackNavigator();
 
@@ -14,7 +14,6 @@ function AuthNavigator() {
       <Stack.Screen name="login" component={Login} />
       <Stack.Screen name="Qrscan" component={QrScan} />
       <Stack.Screen name="welcome" component={WelcomeScreen} />
-      <Stack.Screen name="Diagnostics" component={Diagnostics} />
     </Stack.Navigator>
   );
 }
