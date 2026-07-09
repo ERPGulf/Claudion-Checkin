@@ -119,6 +119,7 @@ function SalaryAdvanceForm({ onSubmit, isLoading, resetSignal }) {
         onChangeText={setReason}
         multiline
         numberOfLines={3}
+        maxLength={250}
         className="border border-gray-300 rounded p-2 mb-5 bg-gray-50 text-gray-900"
       />
 
