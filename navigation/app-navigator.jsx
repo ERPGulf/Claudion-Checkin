@@ -13,6 +13,7 @@ import {
   Shortcut2,
   Shortcut3,
   MyQrCode,
+  SalaryAdvance
 } from "../screens";
 import HomeTabGroup from "./home.tabbar";
 import ComingSoon from "../screens/ComingSoon";
@@ -39,6 +40,7 @@ function AppNavigator() {
       <Stack.Screen name="My QR Code" component={MyQrCode} />
       <Stack.Screen name="Notifications" component={Notifications} />
       <Stack.Screen name="comingsoon" component={ComingSoon} />
+      <Stack.Screen name="Salary advance" component={SalaryAdvance} />
     </Stack.Navigator>
   );
 }
