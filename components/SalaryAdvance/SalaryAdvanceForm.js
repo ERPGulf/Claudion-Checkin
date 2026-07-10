@@ -16,13 +16,13 @@ import SubmitButton from "../common/SubmitButton";
 
 function SalaryAdvanceForm({ onSubmit, isLoading, resetSignal }) {
   const [amount, setAmount] = useState("");
-  const [reason, setReason] = useState("");
+  const [purpose, setPurpose] = useState("");
   const [date, setDate] = useState("");
   const [showPicker, setShowPicker] = useState(false);
 
   useEffect(() => {
     setAmount("");
-    setReason("");
+    setPurpose("");
     setDate("");
   }, [resetSignal]);
 
@@ -44,18 +44,28 @@ function SalaryAdvanceForm({ onSubmit, isLoading, resetSignal }) {
   };
 
   const handleSubmit = async () => {
+    const amountValue = Number(amount);
+
     if (!amount.trim()) {
       return showToast("Please enter amount.");
     }
 
-    if (Number(amount) <= 0) {
-      return showToast("Amount should be greater than zero.");
+    if (isNaN(amountValue) || amountValue <= 0) {
+      return showToast("Please enter a valid amount greater than zero.");
+    }
+
+    if (!date) {
+      return showToast("Please select a date.");
+    }
+
+    if (!purpose.trim()) {
+      return showToast("Please enter the purpose.");
     }
 
     const payload = {
-      amount: Number(amount),
+      amount: amountValue,
       date,
-      reason: reason.trim() || "nill",
+      purpose: purpose.trim(),
     };
 
     try {
@@ -109,18 +119,20 @@ function SalaryAdvanceForm({ onSubmit, isLoading, resetSignal }) {
         />
       )}
 
-      {/* Reason */}
-      <Label text="Reason" optional />
+      {/* Purpose */}
+      <Label text="Purpose" required />
 
       <TextInput
-        placeholder="Enter reason"
+        placeholder="Enter purpose"
         placeholderTextColor="#6B7280"
-        value={reason}
-        onChangeText={setReason}
+        value={purpose}
+        onChangeText={setPurpose}
         multiline
-        numberOfLines={3}
+        numberOfLines={5}
         maxLength={250}
+        textAlignVertical="top"
         className="border border-gray-300 rounded p-2 mb-5 bg-gray-50 text-gray-900"
+        style={{ height: 120 }}
       />
 
       {/* Submit */}
