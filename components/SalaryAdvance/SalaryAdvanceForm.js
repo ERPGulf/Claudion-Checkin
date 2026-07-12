@@ -42,7 +42,6 @@ function SalaryAdvanceForm({ onSubmit, isLoading, resetSignal }) {
       setDate(formatted);
     }
   };
-
   const handleSubmit = async () => {
     const amountValue = Number(amount);
 
@@ -69,8 +68,10 @@ function SalaryAdvanceForm({ onSubmit, isLoading, resetSignal }) {
     };
 
     try {
-      await onSubmit?.(payload);
-    } catch {
+      const response = await onSubmit?.(payload);
+    
+    } catch (error) {
+      console.log("Submit Error:", error);
       showToast("Failed to submit salary advance request.");
     }
   };

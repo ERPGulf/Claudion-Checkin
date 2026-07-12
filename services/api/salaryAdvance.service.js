@@ -18,7 +18,7 @@ export const SalaryAdvanceRequest = async (advanceData) => {
       employee: employeeCode,
       amount: String(advanceData.amount),
       date: advanceData.date,
-      reason: advanceData.reason || "",
+      reason: advanceData.purpose,
     });
 
     const response = await apiClient.post(url, params.toString(), {
@@ -40,10 +40,7 @@ export const SalaryAdvanceRequest = async (advanceData) => {
     }
 
     return {
-      error: parseError(
-        error,
-        "Server error. Please try again later."
-      ),
+      error: parseError(error, "Server error. Please try again later."),
     };
   }
 };

@@ -1,10 +1,5 @@
 import React, { useLayoutEffect, useState } from "react";
-import {
-  View,
-  TouchableOpacity,
-  Alert,
-  ScrollView,
-} from "react-native";
+import { View, TouchableOpacity, Alert, ScrollView } from "react-native";
 import Entypo from "@expo/vector-icons/Entypo";
 import { useNavigation } from "@react-navigation/native";
 import { useMutation } from "@tanstack/react-query";
@@ -36,27 +31,22 @@ export default function SalaryAdvance() {
     });
   }, [navigation]);
 
-  // Submit mutation
-  const { mutate: submitRequest, isPending } = useMutation({
+  const { mutateAsync: submitRequest, isPending } = useMutation({
     mutationFn: SalaryAdvanceRequest,
 
     onSuccess: () => {
-      Alert.alert(
-        "Success",
-        "Salary advance request submitted successfully.",
-        [
-          {
-            text: "OK",
-            onPress: () => setResetFormFlag((prev) => !prev),
-          },
-        ]
-      );
+      Alert.alert("Success", "Salary advance request submitted successfully.", [
+        {
+          text: "OK",
+          onPress: () => setResetFormFlag((prev) => !prev),
+        },
+      ]);
     },
 
     onError: (err) => {
       Alert.alert(
         "Error",
-        err.message || "Failed to submit salary advance request."
+        err.message || "Failed to submit salary advance request.",
       );
     },
   });
