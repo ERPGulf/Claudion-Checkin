@@ -1,0 +1,32 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+  <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+  <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION"/>
+  <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+
+  <application>
+    <!--
+      Receives geofence transition broadcasts from Play Services.
+      Not exported: only PendingIntents created by this app target it.
+    -->
+    <receiver
+      android:name="expo.modules.autoattendance.GeofenceBroadcastReceiver"
+      android:enabled="true"
+      android:exported="false"/>
+
+    <!--
+      Geofences are cleared by the OS on reboot; this receiver re-registers the
+      persisted geofence. System broadcasts are delivered regardless of the
+      exported flag, so it stays unexported.
+    -->
+    <receiver
+      android:name="expo.modules.autoattendance.GeofenceBootReceiver"
+      android:enabled="true"
+      android:exported="false">
+      <intent-filter>
+        <action android:name="android.intent.action.BOOT_COMPLETED"/>
+        <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+      </intent-filter>
+    </receiver>
+  </application>
+</manifest>

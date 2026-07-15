@@ -206,6 +206,11 @@ function LavaMenu() {
                 bold: true,
               },
               {
+                label: ["Automatic", "Attendance"],
+                icon: "location-outline",
+                nav: "Auto attendance",
+              },
+              {
                 label: ["Expense", "claim"],
                 icon: "wallet-outline",
                 nav: "Expense claim",

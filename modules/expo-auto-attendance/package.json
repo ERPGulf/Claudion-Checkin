@@ -1,0 +1,7 @@
+{
+  "name": "expo-auto-attendance",
+  "version": "0.1.0",
+  "description": "Native Android geofencing (GeofencingClient) for automatic attendance check-in/check-out",
+  "main": "index.js",
+  "private": true
+}

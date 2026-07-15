@@ -1,0 +1,10 @@
+{
+  "platforms": ["android", "apple"],
+  "android": {
+    "modules": ["expo.modules.autoattendance.ExpoAutoAttendanceModule"]
+  },
+  "apple": {
+    "modules": ["ExpoAutoAttendanceModule"],
+    "appDelegateSubscribers": ["AutoAttendanceAppDelegateSubscriber"]
+  }
+}

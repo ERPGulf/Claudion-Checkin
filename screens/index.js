@@ -18,6 +18,7 @@ import Shortcut2 from './Shortcut2';
 import MyQrCode from './MyQrCode';
 import AttendanceRequest from './AttendanceRequest';
 import SalaryAdvance from './SalaryAdvance';
+import AutoAttendanceScreen from './AutoAttendance';
 export {
   Home,
   AttendanceAction,
@@ -38,6 +39,7 @@ export {
   Shortcut2,
   Shortcut1,
   Shortcut3,
-  MyQrCode
+  MyQrCode,
+  AutoAttendanceScreen
 
 };
