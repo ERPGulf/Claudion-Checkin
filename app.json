@@ -2,7 +2,7 @@
   "expo": {
     "name": "Claudion Checkin",
     "slug": "claudion-checkin",
-    "version": "1.1.8",
+    "version": "1.1.9",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -53,7 +53,7 @@
         "ITSAppUsesNonExemptEncryption": false,
         "UIBackgroundModes": ["remote-notification"]
       },
-      "buildNumber": "6",
+      "buildNumber": "7",
       "appleTeamId": "VWL956UDWG"
     },
     "android": {
@@ -87,7 +87,7 @@
       }
     },
     "owner": "erpgulf",
-    "runtimeVersion": "1.1.8",
+    "runtimeVersion": "1.1.9",
     "updates": {
       "url": "https://u.expo.dev/ee37c3a6-1da3-43ae-ad14-6b34a26c92ac",
       "enabled": true,
