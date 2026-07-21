@@ -6,6 +6,8 @@ import React, {
 } from "react";
 import {
   Alert,
+  Linking,
+  Platform,
   ScrollView,
   Text,
   TextInput,
@@ -26,11 +28,21 @@ import {
   clearLastEvent,
   getLastEvent,
   getRegisteredGeofences,
+  hasFullAccuracy,
   isAvailable,
+  isIgnoringBatteryOptimizations,
+  isLowPowerModeEnabled,
   isMonitoring,
   startGeofence,
   stopGeofence,
 } from "../modules/expo-auto-attendance";
+
+// Codes emitted on the native onError channel for non-fatal reliability
+// warnings (as opposed to the permission-loss case, which has no code).
+const WARNING_CODES = {
+  LOW_POWER_MODE: -2,
+  REDUCED_ACCURACY: -3,
+};
 
 // Default test values — editable on screen. Later the geofence will come from
 // the backend (employee_locations), like the existing location-restricted check-in.
@@ -113,6 +125,7 @@ export default function AutoAttendanceScreen() {
   const [lastEvent, setLastEvent] = useState(null);
   const [eventLog, setEventLog] = useState([]);
   const [permissionError, setPermissionError] = useState(null);
+  const [reliabilityWarning, setReliabilityWarning] = useState(null);
   const [busy, setBusy] = useState(false);
   const [latitudeText, setLatitudeText] = useState(
     String(DEFAULT_GEOFENCE.latitude),
@@ -146,6 +159,35 @@ export default function AutoAttendanceScreen() {
     );
   }, []);
 
+  // iOS-only reliability signals (no equivalent on Android — hasFullAccuracy
+  // and isLowPowerModeEnabled resolve to true/false there). Re-checked on
+  // focus since the user typically toggles these from system Settings, not
+  // from inside the app.
+  const refreshReliabilityStatus = useCallback(() => {
+    if (!available) return;
+    try {
+      if (!hasFullAccuracy()) {
+        setReliabilityWarning(
+          "Precise Location is off for this app. A 100 m geofence needs it to detect check-in/out reliably — turn it on in Settings > Privacy & Security > Location Services.",
+        );
+      } else if (isLowPowerModeEnabled()) {
+        setReliabilityWarning(
+          Platform.OS === "ios"
+            ? "Low Power Mode is on. iOS may delay or suppress automatic check-in/out until it's turned off."
+            : "Battery Saver is on. Android may delay or block automatic check-in/out until it's turned off.",
+        );
+      } else if (Platform.OS === "android" && !isIgnoringBatteryOptimizations()) {
+        setReliabilityWarning(
+          "Battery optimization is restricting this app. Open Settings > Apps > Claudion Checkin > Battery and choose \"Unrestricted\" so check-in/out keeps working in the background.",
+        );
+      } else {
+        setReliabilityWarning(null);
+      }
+    } catch (error) {
+      console.log("[AutoAttendance] Failed to read reliability status:", error);
+    }
+  }, [available]);
+
   // Load native state + subscribe to geofence events.
   useEffect(() => {
     if (!available) return undefined;
@@ -163,6 +205,7 @@ export default function AutoAttendanceScreen() {
     } catch (error) {
       console.log("[AutoAttendance] Failed to read native state:", error);
     }
+    refreshReliabilityStatus();
 
     const subscriptions = [
       addGeofenceEnterListener((event) => {
@@ -178,11 +221,24 @@ export default function AutoAttendanceScreen() {
       addErrorListener((event) => {
         console.log("[AutoAttendance] Geofence error", event);
         appendLog({ transition: "ERROR", ...event });
+        if (
+          event.code === WARNING_CODES.LOW_POWER_MODE ||
+          event.code === WARNING_CODES.REDUCED_ACCURACY
+        ) {
+          setReliabilityWarning(event.message);
+        }
       }),
     ];
 
     return () => subscriptions.forEach((subscription) => subscription.remove());
-  }, [available, appendLog]);
+  }, [available, appendLog, refreshReliabilityStatus]);
+
+  // Settings toggles happen outside the app, so re-check whenever the screen
+  // regains focus rather than only once on mount.
+  useEffect(() => {
+    if (!available) return undefined;
+    return navigation.addListener("focus", refreshReliabilityStatus);
+  }, [available, navigation, refreshReliabilityStatus]);
 
   const requestPermissions = async () => {
     const foreground = await Location.requestForegroundPermissionsAsync();
@@ -439,7 +495,47 @@ export default function AutoAttendanceScreen() {
               </Text>
             </View>
           ) : null}
+          {reliabilityWarning ? (
+            <View className="flex-row items-start bg-amber-50 rounded-lg px-3 py-2 mt-2">
+              <Ionicons name="alert-circle-outline" size={18} color="#B45309" />
+              <Text className="text-xs ml-2 flex-1" style={{ color: "#B45309" }}>
+                {reliabilityWarning}
+              </Text>
+            </View>
+          ) : null}
         </SectionCard>
+
+        {/* Neither OS gives a reliable code-level signal for these, so this is
+            user education, not detection. iOS: a swipe-kill from the App
+            Switcher stops Core Location from relaunching the app for a region
+            crossing until it's reopened — locking the screen or Home is fine.
+            Android: swiping from Recents is fine (the OS can still wake the app
+            for the geofence broadcast); the real risks are an explicit "Force
+            stop" from Settings, or OEM battery management (common on Xiaomi,
+            Huawei, Oppo, Vivo, OnePlus, Samsung) killing it in the background. */}
+        <View className="bg-gray-100 rounded-lg px-3 py-2 mb-4">
+          <View className="flex-row items-start">
+            <Ionicons name="information-circle-outline" size={18} color={COLORS.gray} />
+            <Text className="text-xs text-gray-500 ml-2 flex-1">
+              {Platform.OS === "ios"
+                ? "Don't swipe this app away from the App Switcher while monitoring — it stops automatic check-in/out until you reopen the app. Locking the screen or pressing Home is fine."
+                : "Don't \"Force stop\" this app from Settings while monitoring — it stops automatic check-in/out until you reopen the app. Swiping it away from Recents is fine. Also check your phone maker's battery settings (Xiaomi, Huawei, Oppo, Vivo, OnePlus, Samsung, etc. often restrict background apps by default)."}
+            </Text>
+          </View>
+          {Platform.OS === "android" ? (
+            <TouchableOpacity
+              className="mt-2 self-start"
+              onPress={() => Linking.openSettings()}
+            >
+              <Text
+                className="text-xs font-semibold"
+                style={{ color: COLORS.primary }}
+              >
+                Open app settings
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
 
         <TouchableOpacity
           className="rounded-xl py-3.5 items-center mb-3"

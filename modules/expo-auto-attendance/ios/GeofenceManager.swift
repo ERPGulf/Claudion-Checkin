@@ -42,6 +42,26 @@ final class GeofenceManager: NSObject, CLLocationManagerDelegate {
 
   private override init() {
     super.init()
+    // Low Power Mode throttles Core Location's background accuracy/frequency and
+    // can delay or suppress region transitions — there's no way to block it like
+    // a permission, so just warn while a geofence is active.
+    NotificationCenter.default.addObserver(
+      self,
+      selector: #selector(powerStateDidChange),
+      name: .NSProcessInfoPowerStateDidChange,
+      object: nil
+    )
+  }
+
+  @objc private func powerStateDidChange() {
+    guard GeofenceStore.shared.isMonitoring else { return }
+    let enabled = ProcessInfo.processInfo.isLowPowerModeEnabled
+    NSLog("%@ Low Power Mode changed: %d", Self.logTag, enabled)
+    guard enabled else { return }
+    GeofenceEventBus.shared.emit(GeofenceEvents.error, [
+      "code": -2,
+      "message": "Low Power Mode is on; iOS may delay or suppress automatic check-in/out until it's turned off."
+    ])
   }
 
   /**
@@ -62,6 +82,12 @@ final class GeofenceManager: NSObject, CLLocationManagerDelegate {
 
   var hasAlwaysAuthorization: Bool {
     return locationManager.authorizationStatus == .authorizedAlways
+  }
+
+  /// False when the user picked "Precise: Off" for this app — a geofence radius
+  /// as small as 100 m is unreliable under reduced (city-block level) accuracy.
+  var hasFullAccuracy: Bool {
+    return locationManager.accuracyAuthorization == .fullAccuracy
   }
 
   /**
@@ -235,10 +261,16 @@ final class GeofenceManager: NSObject, CLLocationManagerDelegate {
   func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
     let status = manager.authorizationStatus
     NSLog("%@ Authorization changed: %d", Self.logTag, status.rawValue)
-    if GeofenceStore.shared.isMonitoring && status != .authorizedAlways {
+    guard GeofenceStore.shared.isMonitoring else { return }
+    if status != .authorizedAlways {
       GeofenceEventBus.shared.emit(GeofenceEvents.error, [
         "code": -1,
         "message": "Location authorization was reduced; geofencing may stop working until \"Always\" access is restored"
+      ])
+    } else if manager.accuracyAuthorization != .fullAccuracy {
+      GeofenceEventBus.shared.emit(GeofenceEvents.error, [
+        "code": -3,
+        "message": "Precise Location was turned off; automatic check-in/out may be unreliable until it's turned back on for this app."
       ])
     }
   }

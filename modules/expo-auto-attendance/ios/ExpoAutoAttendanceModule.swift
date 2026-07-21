@@ -1,4 +1,5 @@
 import ExpoModulesCore
+import Foundation
 
 /// Options accepted by `startGeofence` from JS — mirrors the Android Record.
 struct GeofenceOptions: Record {
@@ -66,6 +67,14 @@ public class ExpoAutoAttendanceModule: Module {
         )
         return
       }
+      if !GeofenceManager.shared.hasFullAccuracy {
+        NSLog("%@ Reduced accuracy: Precise Location is off", GeofenceManager.logTag)
+        promise.reject(
+          "ERR_REDUCED_ACCURACY",
+          "Precise Location is off for this app. Turn it on in Settings > Privacy & Security > Location Services > Claudion Checkin > Precise Location, then try again."
+        )
+        return
+      }
       NSLog("%@ Permission granted, registering geofence", GeofenceManager.logTag)
 
       GeofenceManager.shared.start(
@@ -86,6 +95,16 @@ public class ExpoAutoAttendanceModule: Module {
 
     Function("isMonitoring") {
       return GeofenceStore.shared.isMonitoring
+    }
+
+    // Status queries the JS screen can poll (e.g. on focus, before Start) to
+    // warn the user proactively instead of only after a rejected startGeofence.
+    Function("hasFullAccuracy") {
+      return GeofenceManager.shared.hasFullAccuracy
+    }
+
+    Function("isLowPowerModeEnabled") {
+      return ProcessInfo.processInfo.isLowPowerModeEnabled
     }
 
     Function("getRegisteredGeofences") { () -> [[String: Any]] in

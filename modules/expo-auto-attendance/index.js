@@ -66,6 +66,48 @@ export function isMonitoring() {
 }
 
 /**
+ * iOS only: false once the user picks "Precise: Off" for this app — a small
+ * geofence radius is unreliable under reduced (city-block) accuracy. Always
+ * true on Android, which has no equivalent per-app toggle.
+ * @returns {boolean}
+ */
+export function hasFullAccuracy() {
+  if (!ExpoAutoAttendance || typeof ExpoAutoAttendance.hasFullAccuracy !== "function") {
+    return true;
+  }
+  return ExpoAutoAttendance.hasFullAccuracy();
+}
+
+/**
+ * iOS only: Low Power Mode throttles Core Location and can delay or suppress
+ * geofence delivery. Always false on Android.
+ * @returns {boolean}
+ */
+export function isLowPowerModeEnabled() {
+  if (!ExpoAutoAttendance || typeof ExpoAutoAttendance.isLowPowerModeEnabled !== "function") {
+    return false;
+  }
+  return ExpoAutoAttendance.isLowPowerModeEnabled();
+}
+
+/**
+ * Android only: false when OS/OEM battery management (common on Xiaomi, Huawei,
+ * Oppo, Vivo, OnePlus, Samsung) may restrict this app's background execution —
+ * the single biggest real-world cause of missed geofence events on Android,
+ * distinct from Battery Saver. No equivalent on iOS — always true there.
+ * @returns {boolean}
+ */
+export function isIgnoringBatteryOptimizations() {
+  if (
+    !ExpoAutoAttendance ||
+    typeof ExpoAutoAttendance.isIgnoringBatteryOptimizations !== "function"
+  ) {
+    return true;
+  }
+  return ExpoAutoAttendance.isIgnoringBatteryOptimizations();
+}
+
+/**
  * @returns {Array<{identifier: string, latitude: number, longitude: number, radius: number}>}
  */
 export function getRegisteredGeofences() {

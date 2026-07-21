@@ -1,6 +1,12 @@
 package expo.modules.autoattendance
 
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.os.PowerManager
 import android.util.Log
+import androidx.core.content.ContextCompat
 import expo.modules.kotlin.Promise
 import expo.modules.kotlin.exception.Exceptions
 import expo.modules.kotlin.modules.Module
@@ -34,6 +40,39 @@ class ExpoAutoAttendanceModule : Module() {
   private val context
     get() = appContext.reactContext ?: throw Exceptions.ReactContextLost()
 
+  // Battery Saver throttles background location the same way iOS's Low Power Mode
+  // does. Registered dynamically (not manifest-declared) since this is only an
+  // advisory banner for JS while the app process is alive — the geofence
+  // transition itself is still delivered independently via GeofenceBroadcastReceiver.
+  private var powerSaveReceiver: BroadcastReceiver? = null
+
+  private fun registerPowerSaveReceiver(reactContext: Context) {
+    val receiver = object : BroadcastReceiver() {
+      override fun onReceive(receiverContext: Context, intent: Intent) {
+        if (!GeofenceStore.isMonitoring(receiverContext)) return
+        val enabled = GeofenceManager.isPowerSaveModeEnabled(receiverContext)
+        Log.i(GeofenceManager.TAG, "Battery Saver changed: $enabled")
+        if (enabled) {
+          GeofenceEventBus.emit(
+            EVENT_ERROR,
+            mapOf(
+              "code" to -2,
+              "message" to
+                "Battery Saver is on; Android may delay or block automatic check-in/out until it's turned off.",
+            ),
+          )
+        }
+      }
+    }
+    ContextCompat.registerReceiver(
+      reactContext,
+      receiver,
+      IntentFilter(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED),
+      ContextCompat.RECEIVER_NOT_EXPORTED,
+    )
+    powerSaveReceiver = receiver
+  }
+
   override fun definition() = ModuleDefinition {
     Name("ExpoAutoAttendance")
 
@@ -41,10 +80,15 @@ class ExpoAutoAttendanceModule : Module() {
 
     OnCreate {
       GeofenceEventBus.attach { eventName, payload -> sendEvent(eventName, payload) }
+      appContext.reactContext?.let { registerPowerSaveReceiver(it) }
     }
 
     OnDestroy {
       GeofenceEventBus.detach()
+      powerSaveReceiver?.let { receiver ->
+        appContext.reactContext?.unregisterReceiver(receiver)
+      }
+      powerSaveReceiver = null
     }
 
     AsyncFunction("startGeofence") { options: GeofenceOptions, promise: Promise ->
@@ -113,6 +157,20 @@ class ExpoAutoAttendanceModule : Module() {
 
     Function("isMonitoring") {
       GeofenceStore.isMonitoring(context)
+    }
+
+    // Status queries the JS screen can poll (e.g. on focus, before Start) to warn
+    // the user proactively — mirrors the iOS module's equivalent functions.
+    Function("hasFullAccuracy") {
+      GeofenceManager.hasFullAccuracy(context)
+    }
+
+    Function("isLowPowerModeEnabled") {
+      GeofenceManager.isPowerSaveModeEnabled(context)
+    }
+
+    Function("isIgnoringBatteryOptimizations") {
+      GeofenceManager.isIgnoringBatteryOptimizations(context)
     }
 
     Function("getRegisteredGeofences") {

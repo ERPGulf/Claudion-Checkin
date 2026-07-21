@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.PowerManager
 import android.util.Log
 import androidx.core.content.ContextCompat
 import com.google.android.gms.location.Geofence
@@ -61,6 +62,31 @@ object GeofenceManager {
         context,
         Manifest.permission.ACCESS_BACKGROUND_LOCATION,
       ) == PackageManager.PERMISSION_GRANTED
+
+  /**
+   * False once the user picks "Approximate" only (Android 12+ location permission
+   * dialog) — mirrors iOS's Precise Location toggle. Already enforced indirectly by
+   * [hasForegroundLocationPermission] (Approximate-only leaves ACCESS_FINE_LOCATION
+   * ungranted), this just exposes the same check under a name matching the iOS API
+   * so JS can show the same proactive status regardless of platform.
+   */
+  fun hasFullAccuracy(context: Context): Boolean = hasForegroundLocationPermission(context)
+
+  private fun powerManager(context: Context): PowerManager? =
+    context.applicationContext.getSystemService(Context.POWER_SERVICE) as? PowerManager
+
+  /** Android's Low Power Mode equivalent — can delay or suppress geofence delivery. */
+  fun isPowerSaveModeEnabled(context: Context): Boolean =
+    powerManager(context)?.isPowerSaveMode == true
+
+  /**
+   * False when the OS (or, commonly, OEM battery management on Xiaomi/Huawei/Oppo/
+   * Vivo/OnePlus/Samsung) may restrict this app's background execution — the
+   * single biggest real-world cause of missed Android geofence events, distinct
+   * from Battery Saver mode.
+   */
+  fun isIgnoringBatteryOptimizations(context: Context): Boolean =
+    powerManager(context)?.isIgnoringBatteryOptimizations(context.packageName) == true
 
   /**
    * Registers a single circular geofence that reports ENTER and EXIT transitions.
