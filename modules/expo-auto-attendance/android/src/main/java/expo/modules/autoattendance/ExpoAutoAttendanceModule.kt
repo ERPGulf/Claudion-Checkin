@@ -4,9 +4,9 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.os.Build
 import android.os.PowerManager
 import android.util.Log
-import androidx.core.content.ContextCompat
 import expo.modules.kotlin.Promise
 import expo.modules.kotlin.exception.Exceptions
 import expo.modules.kotlin.modules.Module
@@ -64,12 +64,14 @@ class ExpoAutoAttendanceModule : Module() {
         }
       }
     }
-    ContextCompat.registerReceiver(
-      reactContext,
-      receiver,
-      IntentFilter(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED),
-      ContextCompat.RECEIVER_NOT_EXPORTED,
-    )
+    val filter = IntentFilter(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED)
+    // RECEIVER_NOT_EXPORTED is required on Android 13+ for dynamically registered
+    // receivers of a system broadcast that isn't meant to be sent by other apps.
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+      reactContext.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
+    } else {
+      reactContext.registerReceiver(receiver, filter)
+    }
     powerSaveReceiver = receiver
   }
 

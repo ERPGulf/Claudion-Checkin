@@ -16,11 +16,20 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
+import { useDispatch, useSelector } from "react-redux";
 import Entypo from "@expo/vector-icons/Entypo";
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import { format } from "date-fns";
 import { COLORS, SIZES } from "../constants";
+import {
+  AUTO_ATTENDANCE_MODES,
+  selectAutoAttendanceFullActions,
+  selectAutoAttendanceMode,
+  selectAutoAttendanceShowWarnings,
+  setAutoAttendanceMode,
+} from "../redux/Slices/AutoAttendanceSlice";
+import { getOfficeLocation } from "../services/api/attendance.service";
 import {
   addErrorListener,
   addGeofenceEnterListener,
@@ -33,6 +42,7 @@ import {
   isIgnoringBatteryOptimizations,
   isLowPowerModeEnabled,
   isMonitoring,
+  OFFICE_GEOFENCE_IDENTIFIER,
   startGeofence,
   stopGeofence,
 } from "../modules/expo-auto-attendance";
@@ -44,16 +54,41 @@ const WARNING_CODES = {
   REDUCED_ACCURACY: -3,
 };
 
-// Default test values — editable on screen. Later the geofence will come from
-// the backend (employee_locations), like the existing location-restricted check-in.
+// __DEV__-only default test values for the manual geofence override below —
+// production always uses the backend office location (see AutoAttendanceBootstrap).
 const DEFAULT_GEOFENCE = {
   latitude: 25.286106,
   longitude: 51.534817,
   radius: 100,
-  identifier: "office-main",
 };
 
 const MAX_LOG_ENTRIES = 20;
+
+const MODE_OPTIONS = [
+  {
+    value: AUTO_ATTENDANCE_MODES.DISABLED,
+    title: "Disable geotagging",
+    description: "Automatic attendance is off.",
+  },
+  {
+    value: AUTO_ATTENDANCE_MODES.MONITOR_WITH_WARNINGS,
+    title: "Enable geotagging with warnings",
+    description:
+      "Detects when you enter or leave the office and shows reliability warnings, but does not check you in/out automatically.",
+  },
+  {
+    value: AUTO_ATTENDANCE_MODES.FULL_ACTIONS_NO_WARNINGS,
+    title: "Enable geotagging with full attendance actions (without warnings)",
+    description:
+      "Automatically checks you in/out at the office boundary. Reliability warnings are hidden.",
+  },
+  {
+    value: AUTO_ATTENDANCE_MODES.FULL_ACTIONS_WITH_WARNINGS,
+    title: "Enable geotagging with full attendance actions (with warnings)",
+    description:
+      "Automatically checks you in/out at the office boundary, and shows reliability warnings.",
+  },
+];
 
 const formatTimestamp = (timestamp) =>
   timestamp ? format(new Date(timestamp), "dd MMM yyyy, HH:mm:ss") : "—";
@@ -117,9 +152,39 @@ function SectionCard({ title, children }) {
   );
 }
 
+function ModeOptionRow({ title, description, selected, onPress, disabled }) {
+  return (
+    <TouchableOpacity
+      className="flex-row items-start py-2.5"
+      onPress={onPress}
+      disabled={disabled || selected}
+      style={{ opacity: disabled ? 0.5 : 1 }}
+    >
+      <Ionicons
+        name={selected ? "radio-button-on" : "radio-button-off"}
+        size={20}
+        color={selected ? COLORS.primary : COLORS.gray2}
+        style={{ marginTop: 1 }}
+      />
+      <View className="ml-2.5 flex-1">
+        <Text className="text-sm font-semibold text-gray-800">{title}</Text>
+        <Text className="text-xs text-gray-500 mt-0.5">{description}</Text>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
 export default function AutoAttendanceScreen() {
   const navigation = useNavigation();
+  const dispatch = useDispatch();
   const available = isAvailable();
+
+  const mode = useSelector(selectAutoAttendanceMode);
+  const fullActions = useSelector(selectAutoAttendanceFullActions);
+  const showWarnings = useSelector(selectAutoAttendanceShowWarnings);
+  const employeeCode = useSelector(
+    (state) => state.user?.userDetails?.employeeCode,
+  );
 
   const [monitoring, setMonitoring] = useState(false);
   const [lastEvent, setLastEvent] = useState(null);
@@ -159,10 +224,11 @@ export default function AutoAttendanceScreen() {
     );
   }, []);
 
-  // iOS-only reliability signals (no equivalent on Android — hasFullAccuracy
-  // and isLowPowerModeEnabled resolve to true/false there). Re-checked on
-  // focus since the user typically toggles these from system Settings, not
-  // from inside the app.
+  // Reliability signals JS can poll (hasFullAccuracy/isLowPowerModeEnabled are
+  // iOS-only in practice — they resolve to true/false on Android via the
+  // module's fallbacks; isIgnoringBatteryOptimizations is Android-only).
+  // Re-checked on focus since the user typically toggles these from system
+  // Settings, not from inside the app.
   const refreshReliabilityStatus = useCallback(() => {
     if (!available) return;
     try {
@@ -188,7 +254,8 @@ export default function AutoAttendanceScreen() {
     }
   }, [available]);
 
-  // Load native state + subscribe to geofence events.
+  // Load native state + subscribe to geofence events (kept even in production
+  // so the Status card reflects reality — only the raw testing UI is dev-only).
   useEffect(() => {
     if (!available) return undefined;
 
@@ -210,11 +277,13 @@ export default function AutoAttendanceScreen() {
     const subscriptions = [
       addGeofenceEnterListener((event) => {
         console.log("[AutoAttendance] ENTER detected", event);
+        setMonitoring(isMonitoring());
         setLastEvent(event);
         appendLog(event);
       }),
       addGeofenceExitListener((event) => {
         console.log("[AutoAttendance] EXIT detected", event);
+        setMonitoring(isMonitoring());
         setLastEvent(event);
         appendLog(event);
       }),
@@ -233,11 +302,15 @@ export default function AutoAttendanceScreen() {
     return () => subscriptions.forEach((subscription) => subscription.remove());
   }, [available, appendLog, refreshReliabilityStatus]);
 
-  // Settings toggles happen outside the app, so re-check whenever the screen
-  // regains focus rather than only once on mount.
+  // Settings toggles happen outside the app, and monitoring can be (re)started
+  // by AutoAttendanceBootstrap in the background — re-check both on focus
+  // rather than only once on mount.
   useEffect(() => {
     if (!available) return undefined;
-    return navigation.addListener("focus", refreshReliabilityStatus);
+    return navigation.addListener("focus", () => {
+      setMonitoring(isMonitoring());
+      refreshReliabilityStatus();
+    });
   }, [available, navigation, refreshReliabilityStatus]);
 
   const requestPermissions = async () => {
@@ -264,13 +337,63 @@ export default function AutoAttendanceScreen() {
     return true;
   };
 
+  // Only requests permission and validates an office location is configured,
+  // then persists the choice to Redux — AutoAttendanceBootstrap is the single
+  // place that actually calls startGeofence/stopGeofence and owns the
+  // ENTER/EXIT listeners, so it stays correct regardless of which screen (or
+  // none) is open.
+  const handleSelectMode = async (newMode) => {
+    if (newMode === mode || busy) return;
+
+    if (newMode === AUTO_ATTENDANCE_MODES.DISABLED) {
+      dispatch(setAutoAttendanceMode(AUTO_ATTENDANCE_MODES.DISABLED));
+      return;
+    }
+
+    setBusy(true);
+    try {
+      const granted = await requestPermissions();
+      if (!granted) return;
+
+      if (!employeeCode) {
+        Alert.alert(
+          "Not available yet",
+          "Your employee record hasn't finished loading. Try again in a moment.",
+        );
+        return;
+      }
+
+      const nearest = await getOfficeLocation(employeeCode);
+      if (!nearest) {
+        Alert.alert(
+          "No office location configured",
+          "Your account has no reporting location set up. Contact HR/admin to enable automatic attendance.",
+        );
+        return;
+      }
+
+      dispatch(setAutoAttendanceMode(newMode));
+      console.log("[AutoAttendance] Mode changed", { newMode, nearest });
+    } catch (error) {
+      console.log("[AutoAttendance] Failed to change mode:", error);
+      Alert.alert(
+        "Could not update setting",
+        error?.message || "Something went wrong.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // __DEV__ only below — raw native testing with manual coordinates,
+  // independent of the mode selector above.
   const handleStart = async () => {
     const parsed = parseGeofenceInput(latitudeText, longitudeText, radiusText);
     if (parsed.error) {
       Alert.alert("Invalid geofence", parsed.error);
       return;
     }
-    const geofence = { ...parsed, identifier: DEFAULT_GEOFENCE.identifier };
+    const geofence = { ...parsed, identifier: OFFICE_GEOFENCE_IDENTIFIER };
 
     setBusy(true);
     try {
@@ -421,50 +544,17 @@ export default function AutoAttendanceScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        <SectionCard title="Office Location">
-          <InputRow
-            label="Latitude"
-            value={latitudeText}
-            onChangeText={setLatitudeText}
-            editable={!monitoring && !busy}
-          />
-          <InputRow
-            label="Longitude"
-            value={longitudeText}
-            onChangeText={setLongitudeText}
-            editable={!monitoring && !busy}
-          />
-          <InputRow
-            label="Radius (m)"
-            value={radiusText}
-            onChangeText={setRadiusText}
-            editable={!monitoring && !busy}
-          />
-          <InfoRow label="Identifier" value={DEFAULT_GEOFENCE.identifier} />
-          {monitoring ? (
-            <Text className="text-xs text-gray-400 mt-1">
-              Stop monitoring to change the location.
-            </Text>
-          ) : (
-            <TouchableOpacity
-              className="flex-row items-center justify-center mt-2 py-2 rounded-lg bg-gray-100"
-              style={{ opacity: busy ? 0.5 : 1 }}
-              onPress={handleUseCurrentLocation}
+        <SectionCard title="Geotagging">
+          {MODE_OPTIONS.map((option) => (
+            <ModeOptionRow
+              key={option.value}
+              title={option.title}
+              description={option.description}
+              selected={mode === option.value}
               disabled={busy}
-            >
-              <Ionicons
-                name="locate-outline"
-                size={16}
-                color={COLORS.primary}
-              />
-              <Text
-                className="text-sm font-semibold ml-1.5"
-                style={{ color: COLORS.primary }}
-              >
-                Use my current location
-              </Text>
-            </TouchableOpacity>
-          )}
+              onPress={() => handleSelectMode(option.value)}
+            />
+          ))}
         </SectionCard>
 
         <SectionCard title="Status">
@@ -480,6 +570,10 @@ export default function AutoAttendanceScreen() {
             </Text>
           </View>
           <InfoRow
+            label="Automatic check-in/out"
+            value={fullActions ? "On" : "Off"}
+          />
+          <InfoRow
             label="Last event"
             value={lastEvent?.transition || "None yet"}
           />
@@ -487,7 +581,7 @@ export default function AutoAttendanceScreen() {
             label="Timestamp"
             value={formatTimestamp(lastEvent?.timestamp)}
           />
-          {permissionError ? (
+          {showWarnings && permissionError ? (
             <View className="flex-row items-start bg-red-50 rounded-lg px-3 py-2 mt-2">
               <Ionicons name="warning-outline" size={18} color="#DC2626" />
               <Text className="text-xs text-red-600 ml-2 flex-1">
@@ -495,7 +589,7 @@ export default function AutoAttendanceScreen() {
               </Text>
             </View>
           ) : null}
-          {reliabilityWarning ? (
+          {showWarnings && reliabilityWarning ? (
             <View className="flex-row items-start bg-amber-50 rounded-lg px-3 py-2 mt-2">
               <Ionicons name="alert-circle-outline" size={18} color="#B45309" />
               <Text className="text-xs ml-2 flex-1" style={{ color: "#B45309" }}>
@@ -505,111 +599,179 @@ export default function AutoAttendanceScreen() {
           ) : null}
         </SectionCard>
 
-        {/* Neither OS gives a reliable code-level signal for these, so this is
-            user education, not detection. iOS: a swipe-kill from the App
-            Switcher stops Core Location from relaunching the app for a region
-            crossing until it's reopened — locking the screen or Home is fine.
-            Android: swiping from Recents is fine (the OS can still wake the app
-            for the geofence broadcast); the real risks are an explicit "Force
-            stop" from Settings, or OEM battery management (common on Xiaomi,
-            Huawei, Oppo, Vivo, OnePlus, Samsung) killing it in the background. */}
-        <View className="bg-gray-100 rounded-lg px-3 py-2 mb-4">
-          <View className="flex-row items-start">
-            <Ionicons name="information-circle-outline" size={18} color={COLORS.gray} />
-            <Text className="text-xs text-gray-500 ml-2 flex-1">
-              {Platform.OS === "ios"
-                ? "Don't swipe this app away from the App Switcher while monitoring — it stops automatic check-in/out until you reopen the app. Locking the screen or pressing Home is fine."
-                : "Don't \"Force stop\" this app from Settings while monitoring — it stops automatic check-in/out until you reopen the app. Swiping it away from Recents is fine. Also check your phone maker's battery settings (Xiaomi, Huawei, Oppo, Vivo, OnePlus, Samsung, etc. often restrict background apps by default)."}
-            </Text>
-          </View>
-          {Platform.OS === "android" ? (
-            <TouchableOpacity
-              className="mt-2 self-start"
-              onPress={() => Linking.openSettings()}
-            >
-              <Text
-                className="text-xs font-semibold"
-                style={{ color: COLORS.primary }}
-              >
-                Open app settings
+        {mode !== AUTO_ATTENDANCE_MODES.DISABLED ? (
+          // Neither OS gives a reliable code-level signal for these, so this
+          // is user education, not detection. iOS: a swipe-kill from the App
+          // Switcher stops Core Location from relaunching the app for a
+          // region crossing until it's reopened — locking the screen or Home
+          // is fine. Android: swiping from Recents is fine (the OS can still
+          // wake the app for the geofence broadcast); the real risks are an
+          // explicit "Force stop" from Settings, or OEM battery management
+          // (common on Xiaomi, Huawei, Oppo, Vivo, OnePlus, Samsung) killing
+          // it in the background.
+          <View className="bg-gray-100 rounded-lg px-3 py-2 mb-4">
+            <View className="flex-row items-start">
+              <Ionicons
+                name="information-circle-outline"
+                size={18}
+                color={COLORS.gray}
+              />
+              <Text className="text-xs text-gray-500 ml-2 flex-1">
+                {Platform.OS === "ios"
+                  ? "Don't swipe this app away from the App Switcher while monitoring — it stops automatic check-in/out until you reopen the app. Locking the screen or pressing Home is fine."
+                  : "Don't \"Force stop\" this app from Settings while monitoring — it stops automatic check-in/out until you reopen the app. Swiping it away from Recents is fine. Also check your phone maker's battery settings (Xiaomi, Huawei, Oppo, Vivo, OnePlus, Samsung, etc. often restrict background apps by default)."}
               </Text>
-            </TouchableOpacity>
-          ) : null}
-        </View>
-
-        <TouchableOpacity
-          className="rounded-xl py-3.5 items-center mb-3"
-          style={{
-            backgroundColor: COLORS.primary,
-            opacity: busy || monitoring ? 0.5 : 1,
-          }}
-          onPress={handleStart}
-          disabled={busy || monitoring}
-        >
-          <Text className="text-white text-base font-semibold">
-            Start Monitoring
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          className="rounded-xl py-3.5 items-center mb-3"
-          style={{
-            backgroundColor: COLORS.primary2,
-            opacity: busy || !monitoring ? 0.5 : 1,
-          }}
-          onPress={handleStop}
-          disabled={busy || !monitoring}
-        >
-          <Text className="text-white text-base font-semibold">
-            Stop Monitoring
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          className="rounded-xl py-3.5 items-center mb-4 bg-white"
-          onPress={handleClearStatus}
-          disabled={busy}
-        >
-          <Text
-            className="text-base font-semibold"
-            style={{ color: COLORS.primary }}
-          >
-            Clear Status
-          </Text>
-        </TouchableOpacity>
-
-        <SectionCard title="Event Log">
-          {eventLog.length === 0 ? (
-            <Text className="text-sm text-gray-400 py-1.5">
-              No events received in this session.
-            </Text>
-          ) : (
-            eventLog.map((entry) => (
-              <View
-                key={`${entry.transition}-${entry.receivedAt}`}
-                className="flex-row justify-between items-center py-1.5 border-b border-gray-100"
+            </View>
+            {Platform.OS === "android" ? (
+              <TouchableOpacity
+                className="mt-2 self-start"
+                onPress={() => Linking.openSettings()}
               >
                 <Text
-                  className="text-sm font-semibold"
-                  style={{
-                    color:
-                      entry.transition === "ENTER"
-                        ? "#16A34A"
-                        : entry.transition === "EXIT"
-                          ? "#DC2626"
-                          : COLORS.primary2,
-                  }}
+                  className="text-xs font-semibold"
+                  style={{ color: COLORS.primary }}
                 >
-                  {entry.transition}
-                  {entry.message ? ` — ${entry.message}` : ""}
+                  Open app settings
                 </Text>
-                <Text className="text-xs text-gray-500">
-                  {formatTimestamp(entry.timestamp || entry.receivedAt)}
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        ) : null}
+
+        {__DEV__ ? (
+          <>
+            <Text className="text-xs font-semibold text-gray-400 mb-2">
+              DEVELOPER TESTING TOOLS (hidden in production builds)
+            </Text>
+
+            <SectionCard title="Manual Geofence Override">
+              <InputRow
+                label="Latitude"
+                value={latitudeText}
+                onChangeText={setLatitudeText}
+                editable={!monitoring && !busy}
+              />
+              <InputRow
+                label="Longitude"
+                value={longitudeText}
+                onChangeText={setLongitudeText}
+                editable={!monitoring && !busy}
+              />
+              <InputRow
+                label="Radius (m)"
+                value={radiusText}
+                onChangeText={setRadiusText}
+                editable={!monitoring && !busy}
+              />
+              <InfoRow label="Identifier" value={OFFICE_GEOFENCE_IDENTIFIER} />
+              {monitoring ? (
+                <Text className="text-xs text-gray-400 mt-1">
+                  Stop monitoring to change the location.
                 </Text>
-              </View>
-            ))
-          )}
-        </SectionCard>
+              ) : (
+                <TouchableOpacity
+                  className="flex-row items-center justify-center mt-2 py-2 rounded-lg bg-gray-100"
+                  style={{ opacity: busy ? 0.5 : 1 }}
+                  onPress={handleUseCurrentLocation}
+                  disabled={busy}
+                >
+                  <Ionicons
+                    name="locate-outline"
+                    size={16}
+                    color={COLORS.primary}
+                  />
+                  <Text
+                    className="text-sm font-semibold ml-1.5"
+                    style={{ color: COLORS.primary }}
+                  >
+                    Use my current location
+                  </Text>
+                </TouchableOpacity>
+              )}
+              <Text className="text-xs text-gray-400 mt-2">
+                Overrides the mode selector's geofence with these coordinates.
+                Note: if a "full attendance actions" mode is selected above,
+                crossing this manual fence will still trigger the real
+                check-in/checkout API — this is the same listener, not a
+                separate sandbox.
+              </Text>
+            </SectionCard>
+
+            <TouchableOpacity
+              className="rounded-xl py-3.5 items-center mb-3"
+              style={{
+                backgroundColor: COLORS.primary,
+                opacity: busy || monitoring ? 0.5 : 1,
+              }}
+              onPress={handleStart}
+              disabled={busy || monitoring}
+            >
+              <Text className="text-white text-base font-semibold">
+                Start Monitoring
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              className="rounded-xl py-3.5 items-center mb-3"
+              style={{
+                backgroundColor: COLORS.primary2,
+                opacity: busy || !monitoring ? 0.5 : 1,
+              }}
+              onPress={handleStop}
+              disabled={busy || !monitoring}
+            >
+              <Text className="text-white text-base font-semibold">
+                Stop Monitoring
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              className="rounded-xl py-3.5 items-center mb-4 bg-white"
+              onPress={handleClearStatus}
+              disabled={busy}
+            >
+              <Text
+                className="text-base font-semibold"
+                style={{ color: COLORS.primary }}
+              >
+                Clear Status
+              </Text>
+            </TouchableOpacity>
+
+            <SectionCard title="Event Log">
+              {eventLog.length === 0 ? (
+                <Text className="text-sm text-gray-400 py-1.5">
+                  No events received in this session.
+                </Text>
+              ) : (
+                eventLog.map((entry) => (
+                  <View
+                    key={`${entry.transition}-${entry.receivedAt}`}
+                    className="flex-row justify-between items-center py-1.5 border-b border-gray-100"
+                  >
+                    <Text
+                      className="text-sm font-semibold"
+                      style={{
+                        color:
+                          entry.transition === "ENTER"
+                            ? "#16A34A"
+                            : entry.transition === "EXIT"
+                              ? "#DC2626"
+                              : COLORS.primary2,
+                      }}
+                    >
+                      {entry.transition}
+                      {entry.message ? ` — ${entry.message}` : ""}
+                    </Text>
+                    <Text className="text-xs text-gray-500">
+                      {formatTimestamp(entry.timestamp || entry.receivedAt)}
+                    </Text>
+                  </View>
+                ))
+              )}
+            </SectionCard>
+          </>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );

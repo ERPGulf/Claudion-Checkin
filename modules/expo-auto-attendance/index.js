@@ -20,6 +20,11 @@ export const EVENT_ENTER = "onGeofenceEnter";
 export const EVENT_EXIT = "onGeofenceExit";
 export const EVENT_ERROR = "onError";
 
+/** Shared identifier for the single production geofence, used by both the
+ * AutoAttendance screen (dev tools) and AutoAttendanceBootstrap (real
+ * monitoring) so they always replace the same registration. */
+export const OFFICE_GEOFENCE_IDENTIFIER = "office-main";
+
 /** True when the native module is present (dev/production build). */
 export function isAvailable() {
   return ExpoAutoAttendance != null;
