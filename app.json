@@ -53,7 +53,7 @@
         "ITSAppUsesNonExemptEncryption": false,
         "UIBackgroundModes": ["remote-notification"]
       },
-      "buildNumber": "7",
+      "buildNumber": "8",
       "appleTeamId": "VWL956UDWG"
     },
     "android": {
