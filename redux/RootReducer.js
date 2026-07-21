@@ -6,6 +6,7 @@ import AuthSlice from './Slices/AuthSlice';
 import AttendanceSlice from './Slices/AttendanceSlice';
 import QuickAccessSlice from './Slices/QuickAccessSlice';
 import notificationSlice from './Slices/notificationSlice';
+import AutoAttendanceSlice from './Slices/AutoAttendanceSlice';
 
 const RootReducer = combineReducers({
   user: UserSlice,
@@ -13,6 +14,7 @@ const RootReducer = combineReducers({
   attendance: AttendanceSlice,
   quickAccess: QuickAccessSlice,
   notification: notificationSlice,
+  autoAttendance: AutoAttendanceSlice,
   // Other individual reducers
 });
 

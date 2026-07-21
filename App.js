@@ -18,6 +18,7 @@ import { navigateSafely } from "./navigation/rootNavigation";
 import * as Updates from "expo-updates";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import UpdateBanner from "./components/UpdateBanner";
+import AutoAttendanceBootstrap from "./components/AutoAttendanceBootstrap";
 import { selectIsLoggedIn } from "./redux/Slices/AuthSlice";
 import {
   initializeFcm,
@@ -141,6 +142,7 @@ export default function App() {
         <PersistGate persistor={persistor} loading={null}>
           <QueryClientProvider client={queryClient}>
             <FcmBootstrap />
+            <AutoAttendanceBootstrap />
             <Navigator />
             <UpdateBanner />
             <StatusBar style="auto" />
