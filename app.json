@@ -54,7 +54,7 @@
         "ITSAppUsesNonExemptEncryption": false,
         "UIBackgroundModes": ["remote-notification"]
       },
-      "buildNumber": "8",
+      "buildNumber": "9",
       "appleTeamId": "VWL956UDWG"
     },
     "android": {
@@ -64,7 +64,7 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.bazim.claudioncheckin",
-      "versionCode": 17,
+      "versionCode": 18,
       "googleServicesFile": "./google-services.json",
       "permissions": [
         "android.permission.CAMERA",
