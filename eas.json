@@ -2,7 +2,8 @@
   "cli": {
     "version": ">= 4.1.2",
     "requireCommit": true,
-    "appVersionSource": "local"
+    "appVersionSource": "local",
+    "promptToConfigurePushNotifications": false
   },
   "build": {
     "development": {
