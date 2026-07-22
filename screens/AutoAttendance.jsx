@@ -2,6 +2,7 @@ import React, {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useRef,
   useState,
 } from "react";
 import {
@@ -9,6 +10,7 @@ import {
   Linking,
   Platform,
   ScrollView,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -23,13 +25,19 @@ import * as Location from "expo-location";
 import { format } from "date-fns";
 import { COLORS, SIZES } from "../constants";
 import {
-  AUTO_ATTENDANCE_MODES,
+  GEOTAGGING,
+  GEOTAGGING_LABELS,
+  selectAutoAttendanceActive,
+  selectAutoAttendanceAllowed,
   selectAutoAttendanceFullActions,
-  selectAutoAttendanceMode,
-  selectAutoAttendanceShowWarnings,
-  setAutoAttendanceMode,
+  selectAutoAttendanceGeotagging,
+  selectAutoAttendanceUserEnabled,
+  setAutoAttendanceGeotagging,
+  setAutoAttendanceUserEnabled,
 } from "../redux/Slices/AutoAttendanceSlice";
 import { getOfficeLocation } from "../services/api/attendance.service";
+import { fetchEmployeeData } from "../services/api/employee.service";
+import { ensureNotificationSetup } from "../services/notifications/localNotifications";
 import {
   addErrorListener,
   addGeofenceEnterListener,
@@ -63,32 +71,6 @@ const DEFAULT_GEOFENCE = {
 };
 
 const MAX_LOG_ENTRIES = 20;
-
-const MODE_OPTIONS = [
-  {
-    value: AUTO_ATTENDANCE_MODES.DISABLED,
-    title: "Disable geotagging",
-    description: "Automatic attendance is off.",
-  },
-  {
-    value: AUTO_ATTENDANCE_MODES.MONITOR_WITH_WARNINGS,
-    title: "Enable geotagging with warnings",
-    description:
-      "Detects when you enter or leave the office and shows reliability warnings, but does not check you in/out automatically.",
-  },
-  {
-    value: AUTO_ATTENDANCE_MODES.FULL_ACTIONS_NO_WARNINGS,
-    title: "Enable geotagging with full attendance actions (without warnings)",
-    description:
-      "Automatically checks you in/out at the office boundary. Reliability warnings are hidden.",
-  },
-  {
-    value: AUTO_ATTENDANCE_MODES.FULL_ACTIONS_WITH_WARNINGS,
-    title: "Enable geotagging with full attendance actions (with warnings)",
-    description:
-      "Automatically checks you in/out at the office boundary, and shows reliability warnings.",
-  },
-];
 
 const formatTimestamp = (timestamp) =>
   timestamp ? format(new Date(timestamp), "dd MMM yyyy, HH:mm:ss") : "—";
@@ -152,14 +134,10 @@ function SectionCard({ title, children }) {
   );
 }
 
-function ModeOptionRow({ title, description, selected, onPress, disabled }) {
+// __DEV__-only radio row used to simulate each server geotagging policy.
+function DevPolicyRow({ title, description, selected, onPress }) {
   return (
-    <TouchableOpacity
-      className="flex-row items-start py-2.5"
-      onPress={onPress}
-      disabled={disabled || selected}
-      style={{ opacity: disabled ? 0.5 : 1 }}
-    >
+    <TouchableOpacity className="flex-row items-start py-2.5" onPress={onPress}>
       <Ionicons
         name={selected ? "radio-button-on" : "radio-button-off"}
         size={20}
@@ -174,19 +152,32 @@ function ModeOptionRow({ title, description, selected, onPress, disabled }) {
   );
 }
 
+// The three server-side policy values, ordered for the dev simulator.
+const DEV_POLICY_OPTIONS = [
+  GEOTAGGING.DISABLED,
+  GEOTAGGING.WARNINGS_ONLY,
+  GEOTAGGING.ALL_ACTIONS,
+];
+
 export default function AutoAttendanceScreen() {
   const navigation = useNavigation();
   const dispatch = useDispatch();
   const available = isAvailable();
 
-  const mode = useSelector(selectAutoAttendanceMode);
+  const geotagging = useSelector(selectAutoAttendanceGeotagging);
+  const allowed = useSelector(selectAutoAttendanceAllowed);
+  const userEnabled = useSelector(selectAutoAttendanceUserEnabled);
+  const active = useSelector(selectAutoAttendanceActive);
   const fullActions = useSelector(selectAutoAttendanceFullActions);
-  const showWarnings = useSelector(selectAutoAttendanceShowWarnings);
   const employeeCode = useSelector(
     (state) => state.user?.userDetails?.employeeCode,
   );
 
+  const policy =
+    GEOTAGGING_LABELS[geotagging] || GEOTAGGING_LABELS[GEOTAGGING.DISABLED];
+
   const [monitoring, setMonitoring] = useState(false);
+  const [permissionGranted, setPermissionGranted] = useState(false);
   const [lastEvent, setLastEvent] = useState(null);
   const [eventLog, setEventLog] = useState([]);
   const [permissionError, setPermissionError] = useState(null);
@@ -199,6 +190,11 @@ export default function AutoAttendanceScreen() {
     String(DEFAULT_GEOFENCE.longitude),
   );
   const [radiusText, setRadiusText] = useState(String(DEFAULT_GEOFENCE.radius));
+
+  // __DEV__ only: once the developer simulates a policy, pause the automatic
+  // server refresh so the simulated value survives navigation/focus. Never set
+  // in production (the simulator UI that flips it is inside a __DEV__ block).
+  const devPolicyOverrideRef = useRef(false);
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -222,6 +218,41 @@ export default function AutoAttendanceScreen() {
     setEventLog((prev) =>
       [{ ...entry, receivedAt: Date.now() }, ...prev].slice(0, MAX_LOG_ENTRIES),
     );
+  }, []);
+
+  // Reflect the latest server-side policy whenever the screen is opened, so an
+  // administrator's change shows up without requiring a re-login. Silent on
+  // failure — Redux keeps the last synced value (seeded by AutoAttendanceBootstrap).
+  const refreshGeotagging = useCallback(async () => {
+    if (devPolicyOverrideRef.current) return;
+    if (!employeeCode) return;
+    try {
+      const employee = await fetchEmployeeData(employeeCode);
+      dispatch(setAutoAttendanceGeotagging(employee?.geotagging));
+    } catch (error) {
+      console.log(
+        "[AutoAttendance] Failed to refresh geotagging policy:",
+        error?.message,
+      );
+    }
+  }, [employeeCode, dispatch]);
+
+  const refreshPermissionStatus = useCallback(async () => {
+    try {
+      const [foreground, background] = await Promise.all([
+        Location.getForegroundPermissionsAsync(),
+        Location.getBackgroundPermissionsAsync(),
+      ]);
+      setPermissionGranted(
+        foreground.status === "granted" && background.status === "granted",
+      );
+    } catch (error) {
+      console.log(
+        "[AutoAttendance] Failed to read permission status:",
+        error?.message,
+      );
+      setPermissionGranted(false);
+    }
   }, []);
 
   // Reliability signals JS can poll (hasFullAccuracy/isLowPowerModeEnabled are
@@ -273,6 +304,8 @@ export default function AutoAttendanceScreen() {
       console.log("[AutoAttendance] Failed to read native state:", error);
     }
     refreshReliabilityStatus();
+    refreshPermissionStatus();
+    refreshGeotagging();
 
     const subscriptions = [
       addGeofenceEnterListener((event) => {
@@ -300,18 +333,32 @@ export default function AutoAttendanceScreen() {
     ];
 
     return () => subscriptions.forEach((subscription) => subscription.remove());
-  }, [available, appendLog, refreshReliabilityStatus]);
+  }, [
+    available,
+    appendLog,
+    refreshReliabilityStatus,
+    refreshPermissionStatus,
+    refreshGeotagging,
+  ]);
 
-  // Settings toggles happen outside the app, and monitoring can be (re)started
-  // by AutoAttendanceBootstrap in the background — re-check both on focus
-  // rather than only once on mount.
+  // Settings toggles and the policy itself can change outside this screen, and
+  // monitoring can be (re)started by AutoAttendanceBootstrap in the background
+  // — re-check everything on focus rather than only once on mount.
   useEffect(() => {
     if (!available) return undefined;
     return navigation.addListener("focus", () => {
       setMonitoring(isMonitoring());
       refreshReliabilityStatus();
+      refreshPermissionStatus();
+      refreshGeotagging();
     });
-  }, [available, navigation, refreshReliabilityStatus]);
+  }, [
+    available,
+    navigation,
+    refreshReliabilityStatus,
+    refreshPermissionStatus,
+    refreshGeotagging,
+  ]);
 
   const requestPermissions = async () => {
     const foreground = await Location.requestForegroundPermissionsAsync();
@@ -337,23 +384,45 @@ export default function AutoAttendanceScreen() {
     return true;
   };
 
-  // Only requests permission and validates an office location is configured,
-  // then persists the choice to Redux — AutoAttendanceBootstrap is the single
-  // place that actually calls startGeofence/stopGeofence and owns the
-  // ENTER/EXIT listeners, so it stays correct regardless of which screen (or
-  // none) is open.
-  const handleSelectMode = async (newMode) => {
-    if (newMode === mode || busy) return;
+  // The administrator sets the policy (server-side geotagging); this is the
+  // user's own opt-in. Turning it on persists `userEnabled` (redux-persist),
+  // so the service stays on across relaunches, then grants location permission
+  // and registers the office geofence. AutoAttendanceBootstrap re-establishes
+  // monitoring on every launch while `userEnabled` remains true, and owns the
+  // ENTER/EXIT listeners that perform the real check-in/checkout.
+  const handleToggleEnabled = async (value) => {
+    if (busy) return;
 
-    if (newMode === AUTO_ATTENDANCE_MODES.DISABLED) {
-      dispatch(setAutoAttendanceMode(AUTO_ATTENDANCE_MODES.DISABLED));
+    if (!value) {
+      dispatch(setAutoAttendanceUserEnabled(false));
+      setBusy(true);
+      try {
+        await stopGeofence();
+        setMonitoring(false);
+      } catch (error) {
+        console.log("[AutoAttendance] Failed to stop monitoring:", error);
+      } finally {
+        setBusy(false);
+      }
       return;
     }
+
+    // Persist the opt-in first, so it survives even if the user backgrounds the
+    // app during the permission prompt.
+    dispatch(setAutoAttendanceUserEnabled(true));
 
     setBusy(true);
     try {
       const granted = await requestPermissions();
+      setPermissionGranted(granted);
+      // Opt-in stays saved even if permission is declined — the user can grant
+      // it later (or on the next launch) and monitoring resumes.
       if (!granted) return;
+
+      // Secure notification permission + Android channel now, in the
+      // foreground, so the automatic check-out alert can fire later from the
+      // background. Non-blocking: monitoring still starts if the user declines.
+      await ensureNotificationSetup();
 
       if (!employeeCode) {
         Alert.alert(
@@ -372,12 +441,18 @@ export default function AutoAttendanceScreen() {
         return;
       }
 
-      dispatch(setAutoAttendanceMode(newMode));
-      console.log("[AutoAttendance] Mode changed", { newMode, nearest });
+      await startGeofence({
+        identifier: OFFICE_GEOFENCE_IDENTIFIER,
+        latitude: nearest.latitude,
+        longitude: nearest.longitude,
+        radius: nearest.radius > 0 ? nearest.radius : 100,
+      });
+      setMonitoring(true);
+      console.log("[AutoAttendance] Monitoring enabled", nearest);
     } catch (error) {
-      console.log("[AutoAttendance] Failed to change mode:", error);
+      console.log("[AutoAttendance] Failed to enable monitoring:", error);
       Alert.alert(
-        "Could not update setting",
+        "Could not turn on monitoring",
         error?.message || "Something went wrong.",
       );
     } finally {
@@ -386,7 +461,7 @@ export default function AutoAttendanceScreen() {
   };
 
   // __DEV__ only below — raw native testing with manual coordinates,
-  // independent of the mode selector above.
+  // independent of the server policy above.
   const handleStart = async () => {
     const parsed = parseGeofenceInput(latitudeText, longitudeText, radiusText);
     if (parsed.error) {
@@ -512,6 +587,22 @@ export default function AutoAttendanceScreen() {
     console.log("[AutoAttendance] Status cleared");
   };
 
+  // __DEV__ only: force a geotagging policy locally (bypassing the server) so
+  // all three states can be exercised without an HR change. It dispatches into
+  // the same Redux state the real policy uses, so AutoAttendanceBootstrap reacts
+  // to it exactly as it would to a server value.
+  const handleSimulatePolicy = (value) => {
+    devPolicyOverrideRef.current = true;
+    dispatch(setAutoAttendanceGeotagging(value));
+    console.log("[AutoAttendance] Simulating geotagging policy", value);
+  };
+
+  const handleResetPolicy = () => {
+    devPolicyOverrideRef.current = false;
+    refreshGeotagging();
+    console.log("[AutoAttendance] Reset to server geotagging policy");
+  };
+
   if (!available) {
     return (
       <SafeAreaView
@@ -545,16 +636,85 @@ export default function AutoAttendanceScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <SectionCard title="Geotagging">
-          {MODE_OPTIONS.map((option) => (
-            <ModeOptionRow
-              key={option.value}
-              title={option.title}
-              description={option.description}
-              selected={mode === option.value}
-              disabled={busy}
-              onPress={() => handleSelectMode(option.value)}
+          <View className="flex-row items-center mb-2">
+            <Ionicons
+              name="lock-closed-outline"
+              size={13}
+              color={COLORS.gray}
             />
-          ))}
+            <Text className="text-xs text-gray-400 ml-1">
+              Set by your administrator
+            </Text>
+          </View>
+
+          <View className="flex-row items-start">
+            <Ionicons
+              name={
+                geotagging === GEOTAGGING.ALL_ACTIONS
+                  ? "checkmark-circle"
+                  : geotagging === GEOTAGGING.WARNINGS_ONLY
+                    ? "alert-circle"
+                    : "close-circle"
+              }
+              size={20}
+              color={allowed ? COLORS.primary : COLORS.gray2}
+              style={{ marginTop: 1 }}
+            />
+            <View className="ml-2.5 flex-1">
+              <Text className="text-sm font-semibold text-gray-800">
+                {policy.title}
+              </Text>
+              <Text className="text-xs text-gray-500 mt-0.5">
+                {policy.description}
+              </Text>
+            </View>
+          </View>
+
+          {allowed ? (
+            <View className="flex-row items-center justify-between mt-3 pt-3 border-t border-gray-100">
+              <View className="flex-1 pr-3">
+                <Text className="text-sm font-semibold text-gray-800">
+                  Turn on automatic attendance
+                </Text>
+                <Text className="text-xs text-gray-500 mt-0.5">
+                  Stays on across app restarts until you turn it off.
+                </Text>
+              </View>
+              <Switch
+                value={userEnabled}
+                onValueChange={handleToggleEnabled}
+                disabled={busy}
+                trackColor={{ true: COLORS.primary }}
+              />
+            </View>
+          ) : null}
+
+          {allowed && userEnabled && !permissionGranted ? (
+            <>
+              <TouchableOpacity
+                className="flex-row items-center justify-center mt-3 py-2.5 rounded-lg"
+                style={{
+                  backgroundColor: COLORS.primary,
+                  opacity: busy ? 0.5 : 1,
+                }}
+                onPress={() => handleToggleEnabled(true)}
+                disabled={busy}
+              >
+                <Ionicons
+                  name="location-outline"
+                  size={16}
+                  color={COLORS.white}
+                />
+                <Text className="text-sm font-semibold text-white ml-1.5">
+                  Grant location access
+                </Text>
+              </TouchableOpacity>
+              <Text className="text-xs text-gray-400 mt-2">
+                Automatic attendance needs "Allow all the time" (Android) or
+                "Always" (iOS) location access to work while the app is closed.
+              </Text>
+            </>
+          ) : null}
         </SectionCard>
 
         <SectionCard title="Status">
@@ -571,7 +731,7 @@ export default function AutoAttendanceScreen() {
           </View>
           <InfoRow
             label="Automatic check-in/out"
-            value={fullActions ? "On" : "Off"}
+            value={active && fullActions ? "On" : "Off"}
           />
           <InfoRow
             label="Last event"
@@ -581,7 +741,7 @@ export default function AutoAttendanceScreen() {
             label="Timestamp"
             value={formatTimestamp(lastEvent?.timestamp)}
           />
-          {showWarnings && permissionError ? (
+          {active && permissionError ? (
             <View className="flex-row items-start bg-red-50 rounded-lg px-3 py-2 mt-2">
               <Ionicons name="warning-outline" size={18} color="#DC2626" />
               <Text className="text-xs text-red-600 ml-2 flex-1">
@@ -589,7 +749,7 @@ export default function AutoAttendanceScreen() {
               </Text>
             </View>
           ) : null}
-          {showWarnings && reliabilityWarning ? (
+          {active && reliabilityWarning ? (
             <View className="flex-row items-start bg-amber-50 rounded-lg px-3 py-2 mt-2">
               <Ionicons name="alert-circle-outline" size={18} color="#B45309" />
               <Text className="text-xs ml-2 flex-1" style={{ color: "#B45309" }}>
@@ -599,7 +759,7 @@ export default function AutoAttendanceScreen() {
           ) : null}
         </SectionCard>
 
-        {mode !== AUTO_ATTENDANCE_MODES.DISABLED ? (
+        {active ? (
           // Neither OS gives a reliable code-level signal for these, so this
           // is user education, not detection. iOS: a swipe-kill from the App
           // Switcher stops Core Location from relaunching the app for a
@@ -643,6 +803,33 @@ export default function AutoAttendanceScreen() {
             <Text className="text-xs font-semibold text-gray-400 mb-2">
               DEVELOPER TESTING TOOLS (hidden in production builds)
             </Text>
+
+            <SectionCard title="Simulate Policy">
+              <Text className="text-xs text-gray-400 mb-1">
+                Overrides the server geotagging value locally so you can test
+                each state. Pauses the automatic server refresh until reset.
+              </Text>
+              {DEV_POLICY_OPTIONS.map((value) => (
+                <DevPolicyRow
+                  key={value}
+                  title={GEOTAGGING_LABELS[value].title}
+                  description={GEOTAGGING_LABELS[value].description}
+                  selected={geotagging === value}
+                  onPress={() => handleSimulatePolicy(value)}
+                />
+              ))}
+              <TouchableOpacity
+                className="mt-1 self-start"
+                onPress={handleResetPolicy}
+              >
+                <Text
+                  className="text-xs font-semibold"
+                  style={{ color: COLORS.primary }}
+                >
+                  Reset to server policy
+                </Text>
+              </TouchableOpacity>
+            </SectionCard>
 
             <SectionCard title="Manual Geofence Override">
               <InputRow
@@ -689,11 +876,10 @@ export default function AutoAttendanceScreen() {
                 </TouchableOpacity>
               )}
               <Text className="text-xs text-gray-400 mt-2">
-                Overrides the mode selector's geofence with these coordinates.
-                Note: if a "full attendance actions" mode is selected above,
-                crossing this manual fence will still trigger the real
-                check-in/checkout API — this is the same listener, not a
-                separate sandbox.
+                Overrides the office geofence with these coordinates. Note: if
+                the policy above is "all attendance actions", crossing this
+                manual fence will still trigger the real check-in/checkout API
+                — this is the same listener, not a separate sandbox.
               </Text>
             </SectionCard>
 

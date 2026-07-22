@@ -79,6 +79,11 @@ export const getOfficeLocation = async (employeeCode) => {
 
   const photo = sanitizeNumber(employee?.photo);
 
+  // Server-controlled automatic-attendance policy (0 disabled / 1 warnings only
+  // / 2 all attendance actions). Cached like the other HR policies so it is
+  // available offline and to code paths that only read AsyncStorage.
+  const geotagging = sanitizeNumber(employee?.geotagging);
+
   const locations = sanitizeArray(employee?.employee_locations);
 
   console.log(`${logPrefix} Employee API response`, employee);
@@ -87,6 +92,7 @@ export const getOfficeLocation = async (employeeCode) => {
     restrict_location: restrictLocation,
     unrestricted_checkout_location: unrestrictedCheckoutLocation,
     photo,
+    geotagging,
     locationsCount: locations.length,
   });
 
@@ -96,6 +102,8 @@ export const getOfficeLocation = async (employeeCode) => {
     ["unrestricted_checkout_location", String(unrestrictedCheckoutLocation)],
 
     ["photo", String(photo)],
+
+    ["geotagging", String(geotagging)],
 
     ["employee_locations", JSON.stringify(locations)],
   ]);
@@ -376,6 +384,89 @@ export const userCheckIn = async ({ employeeCode, type, locationData }) => {
       distance: null,
       radius: null,
       location: null,
+    };
+  }
+};
+
+/**
+ * autoCheckInOut({ employeeCode, type, office }) — attendance triggered by the
+ * office geofence (AutoAttendanceBootstrap), NOT the manual screens.
+ *
+ * Deliberately separate from `userCheckIn` so the manual flow (including the
+ * `restrict_location` / `unrestricted_checkout_location` remote-worker rules)
+ * stays exactly as-is. Here the geofence transition IS the location check:
+ * ENTER means the device is inside the radius, EXIT means it is outside — so
+ * this path must NOT re-run the within-radius gate. Doing so would reject every
+ * automatic check-out, since leaving the office is by definition "outside".
+ *
+ * Hits the same backend method as `userCheckIn`. `office` (optional) is the
+ * reporting location the geofence is registered against; it is used only to tag
+ * the log with a location, never to allow or deny the action.
+ */
+export const autoCheckInOut = async ({ employeeCode, type, office = null }) => {
+  const logPrefix = "[attendance.service/autoCheckInOut]";
+  try {
+    if (!employeeCode) throw new Error("Employee ID is required");
+    if (type !== "IN" && type !== "OUT") {
+      throw new Error(`Invalid attendance type: ${type}`);
+    }
+
+    const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
+    const baseUrl = cleanBaseUrl(rawBaseUrl);
+    if (!baseUrl) throw new Error("Base URL missing");
+
+    const token = await AsyncStorage.getItem("access_token");
+    if (!token) throw new Error("Token missing");
+
+    const timestamp = await getServerTime();
+
+    const payload = {
+      device_id: "MobileAPP",
+      employee_field_value: employeeCode,
+      log_type: type,
+      timestamp,
+    };
+
+    // Informational only — position was already proven by the geofence
+    // transition, so a missing office just means an untagged log, never a
+    // blocked action.
+    const latitude = Number(office?.latitude);
+    const longitude = Number(office?.longitude);
+    if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+      payload.latitude = latitude;
+      payload.longitude = longitude;
+      payload.location = office?.locationName || "Automatic (geofence)";
+    }
+
+    console.log(`${logPrefix} Auto ${type}`, payload);
+
+    const response = await apiClient.post(
+      `${baseUrl}/api/method/employee_app.attendance_api.add_log_based_on_employee_field`,
+      payload,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+
+    const checkinId = response.data?.message?.name;
+    if (!checkinId) {
+      return {
+        allowed: false,
+        message: "Failed to register automatic attendance",
+        location: office,
+      };
+    }
+
+    return {
+      allowed: true,
+      name: checkinId,
+      message: `Automatically ${type === "IN" ? "checked in" : "checked out"}`,
+      location: office,
+    };
+  } catch (error) {
+    console.log(`${logPrefix} Failed:`, error?.message);
+    return {
+      allowed: false,
+      message: error?.message || "Automatic attendance failed",
+      location: office,
     };
   }
 };
@@ -774,6 +865,7 @@ export default {
   getServerTime,
   getOfficeLocation,
   userCheckIn,
+  autoCheckInOut,
   getUserAttendance,
   getAttendanceStatus,
   getDailyWorkedHours,
