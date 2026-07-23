@@ -6,6 +6,7 @@ import React, {
   useState,
 } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Linking,
   Platform,
@@ -19,9 +20,11 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { useDispatch, useSelector } from "react-redux";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import Entypo from "@expo/vector-icons/Entypo";
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
+import { getPreciseDistance } from "geolib";
 import { format } from "date-fns";
 import { COLORS, SIZES } from "../constants";
 import {
@@ -74,6 +77,81 @@ const MAX_LOG_ENTRIES = 20;
 
 const formatTimestamp = (timestamp) =>
   timestamp ? format(new Date(timestamp), "dd MMM yyyy, HH:mm:ss") : "—";
+
+// Human-friendly distance: metres under 1 km, otherwise kilometres.
+const formatDistance = (meters) => {
+  if (!Number.isFinite(meters)) return "—";
+  if (meters < 1000) return `${Math.round(meters)} m`;
+  return `${(meters / 1000).toFixed(meters < 10000 ? 1 : 0)} km`;
+};
+
+// Coordinates for a cached employee_locations entry — same precedence as the
+// service's resolveCoordinates (reporting_location GeoJSON first, then the
+// flat latitude/longitude fields).
+const parseLocationCoords = (loc) => {
+  const flatLat = Number(loc?.latitude);
+  const flatLng = Number(loc?.longitude);
+  if (Number.isFinite(flatLat) && Number.isFinite(flatLng)) {
+    return { latitude: flatLat, longitude: flatLng };
+  }
+  try {
+    const coords = JSON.parse(loc?.reporting_location || "{}")?.features?.[0]
+      ?.geometry?.coordinates;
+    if (Array.isArray(coords) && coords.length === 2) {
+      const [lng, lat] = coords.map(Number);
+      if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        return { latitude: lat, longitude: lng };
+      }
+    }
+  } catch {
+    // fall through to null
+  }
+  return null;
+};
+
+// Best-effort name for the registered geofence: the cached office nearest to
+// the fence centre (they share the same source coordinates, so the closest one
+// is the office the fence was built from). Null when nothing matches.
+const resolveOfficeName = async (latitude, longitude) => {
+  try {
+    const raw = await AsyncStorage.getItem("employee_locations");
+    const locations = raw ? JSON.parse(raw) : null;
+    if (!Array.isArray(locations) || !locations.length) return null;
+    let bestName = null;
+    let bestDistance = Infinity;
+    locations.forEach((loc) => {
+      const coords = parseLocationCoords(loc);
+      if (!coords) return;
+      const distance = getPreciseDistance({ latitude, longitude }, coords);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestName = loc?.location || null;
+      }
+    });
+    return bestName;
+  } catch {
+    return null;
+  }
+};
+
+// getCurrentPositionAsync can wait forever on an emulator with no simulated
+// fix — race it against a timeout, then fall back to the last known position.
+const readDevicePosition = async () => {
+  try {
+    return await Promise.race([
+      Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("Timed out waiting for a GPS fix")), 8000),
+      ),
+    ]);
+  } catch (error) {
+    console.log(
+      "[AutoAttendance] Presence GPS failed, trying last known:",
+      error?.message,
+    );
+    return Location.getLastKnownPositionAsync({ maxAge: 600000 });
+  }
+};
 
 const parseNumber = (text) => {
   const trimmed = String(text).trim();
@@ -134,6 +212,102 @@ function SectionCard({ title, children }) {
   );
 }
 
+// At-a-glance card telling the user whether they're currently inside or outside
+// the office boundary, plus the info that makes the automatic check-in/out
+// understandable: which office, how far, the boundary size, whether monitoring
+// is running, and the last entry/exit. `presence` is null until a fix + a
+// registered fence are both available.
+function PresenceCard({
+  presence,
+  loading,
+  monitoring,
+  permissionGranted,
+  lastEvent,
+  onRefresh,
+}) {
+  const known = presence != null;
+  const inside = presence?.withinRadius === true;
+
+  const accent = !known ? COLORS.gray : inside ? "#16A34A" : "#B45309";
+  const background = !known ? "#F3F4F6" : inside ? "#ECFDF5" : "#FFFBEB";
+  const icon = !known
+    ? "help-circle-outline"
+    : inside
+      ? "business"
+      : "navigate-outline";
+
+  let title;
+  let subtitle;
+  if (loading && !known) {
+    title = "Checking your location…";
+    subtitle = "Reading your current position";
+  } else if (!known) {
+    title = "Location unavailable";
+    subtitle = permissionGranted
+      ? "No location fix or office boundary yet — tap refresh to retry."
+      : "Grant location access to see whether you're at the office.";
+  } else if (inside) {
+    title = "You're at the office";
+    subtitle = `Inside the ${formatDistance(presence.radius)} boundary`;
+  } else {
+    title = "You're away from the office";
+    subtitle = `About ${formatDistance(presence.distance)} from the office`;
+  }
+
+  return (
+    <View
+      className="rounded-xl px-4 py-4 mb-4"
+      style={{ backgroundColor: background }}
+    >
+      <View className="flex-row items-center">
+        <View
+          className="h-11 w-11 rounded-full items-center justify-center mr-3"
+          style={{ backgroundColor: accent }}
+        >
+          <Ionicons name={icon} size={22} color={COLORS.white} />
+        </View>
+        <View className="flex-1">
+          <Text className="text-base font-bold" style={{ color: accent }}>
+            {title}
+          </Text>
+          <Text className="text-xs text-gray-500 mt-0.5">{subtitle}</Text>
+        </View>
+        <TouchableOpacity
+          onPress={onRefresh}
+          disabled={loading}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          {loading ? (
+            <ActivityIndicator size="small" color={accent} />
+          ) : (
+            <Ionicons name="refresh" size={20} color={accent} />
+          )}
+        </TouchableOpacity>
+      </View>
+
+      {known ? (
+        <View
+          className="mt-3 pt-3 border-t"
+          style={{ borderColor: "rgba(0,0,0,0.06)" }}
+        >
+          <InfoRow label="Nearest office" value={presence.locationName || "Your office"} />
+          <InfoRow label="Distance to office" value={formatDistance(presence.distance)} />
+          <InfoRow label="Boundary radius" value={formatDistance(presence.radius)} />
+          <InfoRow label="Monitoring" value={monitoring ? "Active" : "Paused"} />
+          <InfoRow
+            label="Last change"
+            value={
+              lastEvent?.transition
+                ? `${lastEvent.transition === "ENTER" ? "Arrived" : "Left"} · ${formatTimestamp(lastEvent.timestamp)}`
+                : "None yet"
+            }
+          />
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 // __DEV__-only radio row used to simulate each server geotagging policy.
 function DevPolicyRow({ title, description, selected, onPress }) {
   return (
@@ -183,6 +357,8 @@ export default function AutoAttendanceScreen() {
   const [permissionError, setPermissionError] = useState(null);
   const [reliabilityWarning, setReliabilityWarning] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [presence, setPresence] = useState(null);
+  const [presenceLoading, setPresenceLoading] = useState(false);
   const [latitudeText, setLatitudeText] = useState(
     String(DEFAULT_GEOFENCE.latitude),
   );
@@ -285,6 +461,59 @@ export default function AutoAttendanceScreen() {
     }
   }, [available]);
 
+  // Compute the user's live position relative to the registered office fence.
+  // Uses the actual registered geofence (not the nearest configured office) so
+  // it reflects the boundary that will really trigger check-in/out, and reads
+  // GPS directly (timeout-guarded) rather than via getOfficeLocation, so there
+  // is no network round-trip and no risk of hanging on a fix-less emulator.
+  const refreshPresence = useCallback(async () => {
+    if (!available) return;
+
+    let registered = null;
+    try {
+      [registered] = getRegisteredGeofences();
+    } catch (error) {
+      console.log("[AutoAttendance] Failed to read registered fence:", error?.message);
+    }
+    if (!registered) {
+      setPresence(null);
+      return;
+    }
+
+    setPresenceLoading(true);
+    try {
+      const position = await readDevicePosition();
+      if (!position) {
+        setPresence(null);
+        return;
+      }
+      const distance = getPreciseDistance(
+        {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        },
+        { latitude: registered.latitude, longitude: registered.longitude },
+      );
+      const locationName = await resolveOfficeName(
+        registered.latitude,
+        registered.longitude,
+      );
+      setPresence({
+        locationName,
+        latitude: registered.latitude,
+        longitude: registered.longitude,
+        radius: registered.radius,
+        distance,
+        withinRadius: registered.radius > 0 ? distance <= registered.radius : false,
+      });
+    } catch (error) {
+      console.log("[AutoAttendance] Failed to compute presence:", error?.message);
+      setPresence(null);
+    } finally {
+      setPresenceLoading(false);
+    }
+  }, [available]);
+
   // Load native state + subscribe to geofence events (kept even in production
   // so the Status card reflects reality — only the raw testing UI is dev-only).
   useEffect(() => {
@@ -306,6 +535,7 @@ export default function AutoAttendanceScreen() {
     refreshReliabilityStatus();
     refreshPermissionStatus();
     refreshGeotagging();
+    refreshPresence();
 
     const subscriptions = [
       addGeofenceEnterListener((event) => {
@@ -313,12 +543,14 @@ export default function AutoAttendanceScreen() {
         setMonitoring(isMonitoring());
         setLastEvent(event);
         appendLog(event);
+        refreshPresence();
       }),
       addGeofenceExitListener((event) => {
         console.log("[AutoAttendance] EXIT detected", event);
         setMonitoring(isMonitoring());
         setLastEvent(event);
         appendLog(event);
+        refreshPresence();
       }),
       addErrorListener((event) => {
         console.log("[AutoAttendance] Geofence error", event);
@@ -339,6 +571,7 @@ export default function AutoAttendanceScreen() {
     refreshReliabilityStatus,
     refreshPermissionStatus,
     refreshGeotagging,
+    refreshPresence,
   ]);
 
   // Settings toggles and the policy itself can change outside this screen, and
@@ -351,6 +584,7 @@ export default function AutoAttendanceScreen() {
       refreshReliabilityStatus();
       refreshPermissionStatus();
       refreshGeotagging();
+      refreshPresence();
     });
   }, [
     available,
@@ -358,7 +592,20 @@ export default function AutoAttendanceScreen() {
     refreshReliabilityStatus,
     refreshPermissionStatus,
     refreshGeotagging,
+    refreshPresence,
   ]);
+
+  // Recompute presence when monitoring turns on (e.g. right after the user
+  // enables it, or when AutoAttendanceBootstrap re-registers the fence); clear
+  // it when monitoring stops, since there's no boundary to be inside/outside of.
+  useEffect(() => {
+    if (!available) return;
+    if (monitoring) {
+      refreshPresence();
+    } else {
+      setPresence(null);
+    }
+  }, [available, monitoring, refreshPresence]);
 
   const requestPermissions = async () => {
     const foreground = await Location.requestForegroundPermissionsAsync();
@@ -635,6 +882,17 @@ export default function AutoAttendanceScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
+        {active || monitoring ? (
+          <PresenceCard
+            presence={presence}
+            loading={presenceLoading}
+            monitoring={monitoring}
+            permissionGranted={permissionGranted}
+            lastEvent={lastEvent}
+            onRefresh={refreshPresence}
+          />
+        ) : null}
+
         <SectionCard title="Geotagging">
           <View className="flex-row items-center mb-2">
             <Ionicons
