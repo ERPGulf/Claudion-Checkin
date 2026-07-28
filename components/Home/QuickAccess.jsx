@@ -1,68 +1,75 @@
-import { View, Text, TouchableOpacity, Platform } from 'react-native';
 import React from 'react';
-import { FontAwesome, AntDesign } from '@expo/vector-icons';
+import { View } from 'react-native';
 import { useSelector } from 'react-redux';
 import { useNavigation } from '@react-navigation/native';
-import { COLORS, SIZES } from '../../constants';
+import { RADIUS, SHADOWS, SPACING } from '../../constants';
+import useAppTheme from '../../hooks/useAppTheme';
 import { activeButtonsSelector } from '../../redux/Slices/QuickAccessSlice';
-import ButtonItem from '../SelectQuickAccess/ButtonItem';
+import SectionHeader from '../common/SectionHeader';
+import FeatureTile from '../common/FeatureTile';
+import EmptyState from '../common/EmptyState';
 
+const COLUMNS = 4;
+
+/**
+ * User-pinned shortcuts. Behaviour is unchanged — the same Redux selector, the
+ * same `navigation.navigate(item.url)` on tap, the same "Quick access" screen
+ * for editing. Only the container changed: an elevated card with a real empty
+ * state instead of a dashed 2px placeholder box.
+ */
 function QuickAccess() {
   const navigation = useNavigation();
+  const { colors, isDark } = useAppTheme();
   const activeButtons = useSelector(activeButtonsSelector);
+  const hasShortcuts = activeButtons?.length > 0;
+
+  const openPicker = () => navigation.navigate('Quick access');
+
   return (
-    <View className="mt-4 w-full">
-      <View className="flex-row justify-between items-center ">
-        <Text className="text-sm font-semibold">Quick Access</Text>
-        <TouchableOpacity
-          className="flex-row space-x-2 items-center"
-          onPress={() => navigation.navigate('Quick access')}
-        >
-          <Text className="text-sm font-semibold" style={{ color: COLORS.red }}>
-            Add New
-          </Text>
-          <FontAwesome name="plus" size={SIZES.xLarge} color={COLORS.red} />
-        </TouchableOpacity>
-      </View>
+    <View style={{ width: '100%' }}>
+      <SectionHeader
+        title="Quick Access"
+        actionLabel={hasShortcuts ? 'Edit' : 'Add New'}
+        actionIcon={hasShortcuts ? 'options-outline' : 'add'}
+        onActionPress={openPicker}
+      />
+
       <View
         style={{
-          borderRadius: Platform.OS === 'android' ? 0 : '12px',
-          backgroundColor: 'white',
+          backgroundColor: colors.cardBackground,
+          borderRadius: RADIUS.xl,
+          borderWidth: 1,
+          borderColor: colors.cardBorder,
+          paddingHorizontal: SPACING.md,
+          paddingTop: hasShortcuts ? SPACING.lg : 0,
+          paddingBottom: hasShortcuts ? SPACING.xs : 0,
+          ...(isDark ? null : SHADOWS.card),
         }}
-        className="border-dashed flex-wrap flex-row justify-evenly border-red-900 border-2 mt-2 p-2 "
       >
-        {activeButtons.length > 0 ? (
-          activeButtons?.map(item => (
-            <TouchableOpacity
-              onPress={() => {
-                item?.url && navigation.navigate(item.url);
-              }}
-              key={item?.iconName}
-            >
-              <ButtonItem
-                iconName={item?.iconName}
-                text1={item?.text1}
-                text2={item?.text2 || null}
+        {hasShortcuts ? (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+            {activeButtons.map(item => (
+              <FeatureTile
+                key={item?.iconName}
+                icon={item?.iconName}
+                label={[item?.text1, item?.text2]}
+                columns={COLUMNS}
+                tint={colors.accentSurface}
+                iconColor={colors.primary2}
+                onPress={() => {
+                  if (item?.url) navigation.navigate(item.url);
+                }}
               />
-            </TouchableOpacity>
-          ))
+            ))}
+          </View>
         ) : (
-          <TouchableOpacity
-            onPress={() => navigation.navigate('Quick access')}
-            className="items-center justify-center mx-auto my-10"
-          >
-            <AntDesign
-              name="file-add"
-              size={SIZES.xxxLarge - 4}
-              color={COLORS.red}
-            />
-            <Text className="text-xs mt-2 font-light text-gray-800">
-              Add quick shortcuts to your most used features
-            </Text>
-            <Text className="text-xs font-light text-gray-800">
-              here to access them quickly
-            </Text>
-          </TouchableOpacity>
+          <EmptyState
+            icon="flash-outline"
+            title="Pin your most-used actions"
+            description="Add shortcuts here to reach the features you use every day in one tap."
+            actionLabel="Add shortcuts"
+            onActionPress={openPicker}
+          />
         )}
       </View>
     </View>

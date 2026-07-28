@@ -1,12 +1,6 @@
 /* eslint-disable react/prop-types */
 import React, { useEffect, useState } from "react";
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  ScrollView,
-  Linking,
-} from "react-native";
+import { View, Text, Linking } from "react-native";
 /* ---------------- DEFAULT FALLBACK RECORDS ---------------- */
 const DEFAULT_RECORDS = [
   {
@@ -30,21 +24,83 @@ const DEFAULT_RECORDS = [
 
 import { useSelector } from "react-redux";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import {
-  Ionicons,
-  AntDesign,
-  Octicons,
-  MaterialCommunityIcons,
-} from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
-import { COLORS, SIZES } from "../../constants";
+import { ICON, RADIUS, SPACING, TYPO } from "../../constants";
+import useAppTheme from "../../hooks/useAppTheme";
 import {
   getShortcut1,
   getShortcut2,
   getShortcut3,
 } from "../../services/api/records.service";
+import SectionHeader from "../common/SectionHeader";
+import ModuleCard from "../common/ModuleCard";
+import FeatureTile from "../common/FeatureTile";
+import PressableScale from "../common/PressableScale";
 
 const SHORTCUT_CACHE_KEY = "user_shortcuts_cache_v2";
+
+/** Tiles per row. 4 keeps every label readable at 11pt on a 360dp screen. */
+const COLUMNS = 4;
+
+/**
+ * HR features. Labels are single strings — <FeatureTile> wraps them onto two
+ * lines itself, so they no longer have to be hand-split. `nav` targets are
+ * unchanged and must keep matching the route names in app-navigator.jsx.
+ *
+ * Two conventions, both enforced by __tests__/featureLabels.test.js:
+ *  - Sentence case, so the grid reads as one list rather than a mix of styles.
+ *  - No per-item weight overrides. Two entries used to be flagged for heavier
+ *    text, which rendered them darker than their neighbours with nothing to
+ *    explain why — it read as a rendering bug, not as emphasis.
+ */
+export const HR_FEATURES = [
+  {
+    label: "Attendance action",
+    icon: "calendar-outline",
+    nav: "Attendance action",
+  },
+  {
+    label: "Attendance history",
+    icon: "receipt-outline",
+    nav: "Attendance history",
+  },
+  {
+    label: "Attendance request",
+    icon: "clipboard-outline",
+    nav: "Attendance request",
+  },
+  {
+    label: "Automatic attendance",
+    icon: "location-outline",
+    nav: "Auto attendance",
+  },
+  {
+    label: "Expense claim",
+    icon: "wallet-outline",
+    nav: "Expense claim",
+  },
+  {
+    label: "Leave request",
+    icon: "document-text-outline",
+    nav: "Leave request",
+  },
+  {
+    label: "Salary advance",
+    icon: "card-outline",
+    nav: "Salary advance",
+  },
+  {
+    label: "Complaints",
+    icon: "chatbox-ellipses-outline",
+    nav: "Complaints",
+  },
+  {
+    label: "Vacation list",
+    icon: "list-outline",
+    nav: "comingsoon", // or your actual screen name
+  },
+];
 
 /* ---------------------------------------------------
  * Memoized Shortcut Button (prevents re-render)
@@ -67,31 +123,60 @@ const ShortcutButton = React.memo(({ shortcut, navigation }) => {
   };
 
   return (
-    <TouchableOpacity className="w-16 mr-4" onPress={handlePress}>
-      <View className="items-center mt-3">
-        <View className="bg-gray-100 h-14 w-14 justify-center items-center rounded-lg">
-          <Ionicons
-            name={shortcut.icon}
-            size={SIZES.xxxLarge - 6}
-            color={COLORS.primary}
-          />
-        </View>
-
-        <View className="mt-1 px-1">
-          <Text className="text-xs text-center font-medium text-gray-500">
-            {shortcut.shortcut}
-          </Text>
-        </View>
-      </View>
-    </TouchableOpacity>
+    <FeatureTile
+      icon={shortcut.icon}
+      label={shortcut.shortcut}
+      columns={COLUMNS}
+      onPress={handlePress}
+    />
   );
 });
+
+/** Placeholder tiles that match the real grid geometry, so nothing shifts. */
+function ShortcutSkeleton() {
+  const { colors } = useAppTheme();
+
+  return (
+    <>
+      {[1, 2, 3].map((i) => (
+        <View
+          key={i}
+          style={{
+            width: `${100 / COLUMNS}%`,
+            paddingHorizontal: SPACING.xs,
+            marginBottom: SPACING.md,
+            alignItems: "center",
+          }}
+        >
+          <View
+            style={{
+              width: 48,
+              height: 48,
+              borderRadius: RADIUS.lg,
+              backgroundColor: colors.skeleton,
+            }}
+          />
+          <View
+            style={{
+              width: 44,
+              height: 10,
+              borderRadius: RADIUS.sm,
+              backgroundColor: colors.skeleton,
+              marginTop: SPACING.sm,
+            }}
+          />
+        </View>
+      ))}
+    </>
+  );
+}
 
 /* ---------------------------------------------------
  * Main Component
  * --------------------------------------------------- */
 function LavaMenu() {
   const navigation = useNavigation();
+  const { colors } = useAppTheme();
   const [shortcuts, setShortcuts] = useState([]);
   const [loadingShortcuts, setLoadingShortcuts] = useState(true);
 
@@ -169,133 +254,41 @@ function LavaMenu() {
   }, [employeeCode]);
 
   return (
-    <View className="my-2" style={{ width: "100%" }}>
+    <View style={{ width: "100%" }}>
       {/* -------------------- HEADER -------------------- */}
-      <Text className="text-sm font-semibold mb-2">Menu</Text>
+      <SectionHeader title="Menu" />
 
       {/* -------------------- HR SECTION -------------------- */}
-      <View>
-        <View
-          className="flex-row justify-between items-center py-2.5 px-3 rounded-t-xl"
-          style={{ backgroundColor: COLORS.primary }}
-        >
-          <Octicons name="people" size={SIZES.xxLarge + 4} color="#fff" />
-          <Text className="text-lg font-medium text-white">
-            Human Resources
-          </Text>
-          <AntDesign name="right" size={SIZES.xxLarge + 4} color="#fff" />
+      <ModuleCard
+        icon="people"
+        iconFamily="Octicons"
+        title="Human Resources"
+        subtitle="Attendance, leave, claims"
+        style={{ marginBottom: SPACING.lg }}
+      >
+        <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
+          {HR_FEATURES.map((item) => (
+            <FeatureTile
+              key={item.nav + item.label}
+              icon={item.icon}
+              label={item.label}
+              columns={COLUMNS}
+              onPress={() => navigation.navigate(item.nav)}
+            />
+          ))}
         </View>
-
-        <View className="bg-white rounded-b-xl py-3 px-2 mb-4">
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            {[
-              {
-                label: ["Attendance", "action"],
-                icon: "calendar-outline",
-                nav: "Attendance action",
-              },
-              {
-                label: ["Attendance", "history"],
-                icon: "receipt-outline",
-                nav: "Attendance history",
-              },
-              {
-                label: ["Attendance", "Request"],
-                icon: "clipboard-outline",
-                nav: "Attendance request",
-                bold: true,
-              },
-              {
-                label: ["Automatic", "Attendance"],
-                icon: "location-outline",
-                nav: "Auto attendance",
-              },
-              {
-                label: ["Expense", "claim"],
-                icon: "wallet-outline",
-                nav: "Expense claim",
-              },
-              {
-                label: ["Leave", "Request"],
-                icon: "document-text-outline",
-                nav: "Leave request",
-                bold: true,
-              },
-              {
-                label: ["Salary", "Advance"],
-                icon: "card-outline",
-                nav: "Salary advance",
-              },
-              {
-                label: ["Complaints"],
-                icon: "chatbox-ellipses-outline",
-                nav: "Complaints",
-              },
-              {
-                label: ["Vacation", "list"],
-                icon: "list-outline",
-                nav: "comingsoon", // or your actual screen name
-              },
-            ].map((item, index) => (
-              <TouchableOpacity
-                key={index}
-                className="mr-4"
-                onPress={() => navigation.navigate(item.nav)}
-              >
-                <View className="bg-gray-100 p-2 items-center rounded-lg w-16">
-                  <Ionicons
-                    name={item.icon}
-                    size={SIZES.xxxLarge - 3}
-                    color={COLORS.primary}
-                  />
-                </View>
-                {item.label.map((t, i) => (
-                  <Text
-                    key={i}
-                    className={`text-xs text-center mt-1 ${
-                      item.bold
-                        ? "font-semibold text-gray-700"
-                        : "font-medium text-gray-500"
-                    }`}
-                  >
-                    {t}
-                  </Text>
-                ))}
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-      </View>
+      </ModuleCard>
 
       {/* -------------------- YOUR RECORDS -------------------- */}
-      <View>
-        <View
-          className="flex-row justify-between items-center py-2.5 px-3 rounded-t-xl"
-          style={{ backgroundColor: COLORS.primary }}
-        >
-          <MaterialCommunityIcons
-            name="card-account-details"
-            size={SIZES.xxLarge + 4}
-            color="#fff"
-          />
-          <Text className="text-lg font-medium text-white">
-            Your Records In The Company
-          </Text>
-          <AntDesign name="right" size={SIZES.xxLarge + 4} color="#fff" />
-        </View>
-
-        <View className="flex-row bg-white flex-wrap py-4 px-2 rounded-b-xl">
+      <ModuleCard
+        icon="card-account-details-outline"
+        iconFamily="MaterialCommunityIcons"
+        title="Your Records"
+        subtitle="Documents held by the company"
+      >
+        <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
           {/* Skeleton */}
-          {loadingShortcuts && shortcuts.length === 0 && (
-            <View className="flex-row px-2">
-              {[1, 2, 3].map((i) => (
-                <View key={i} className="w-16 mr-4 items-center">
-                  <View className="bg-gray-200 h-14 w-14 rounded-lg" />
-                  <View className="h-8 mt-1 bg-gray-200 w-14 rounded" />
-                </View>
-              ))}
-            </View>
-          )}
+          {loadingShortcuts && shortcuts.length === 0 && <ShortcutSkeleton />}
 
           {/* Dynamic shortcuts */}
           {recordsToShow.map((shortcut, index) => (
@@ -307,45 +300,43 @@ function LavaMenu() {
           ))}
 
           {/* Static QR */}
-          <TouchableOpacity
-            className="w-16 mr-4"
+          <FeatureTile
+            icon="qr-code-outline"
+            label="My QR"
+            columns={COLUMNS}
             onPress={() => navigation.navigate("My QR Code")}
-          >
-            <View className="items-center mt-3">
-              <View className="bg-gray-100 h-14 w-14 items-center justify-center rounded-lg">
-                <Ionicons
-                  name="qr-code"
-                  size={SIZES.xxxLarge - 6}
-                  color={COLORS.primary}
-                />
-              </View>
-              <Text className="text-xs text-center font-medium text-gray-500 mt-1">
-                My QR
-              </Text>
-            </View>
-          </TouchableOpacity>
+          />
         </View>
-      </View>
+      </ModuleCard>
 
       {/* -------------------- FOOTER LINK -------------------- */}
-      <View
-        className="flex-row items-center justify-between px-4 py-3 rounded-xl mt-3"
-        style={{ backgroundColor: COLORS.primary }}
+      <PressableScale
+        onPress={() => Linking.openURL("https://erpgulf.com")}
+        accessibilityLabel="Open ERPGulf.com"
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "center",
+          paddingVertical: SPACING.lg,
+          marginTop: SPACING.sm,
+        }}
       >
-        <Ionicons name="globe-outline" size={SIZES.xxLarge} color="#fff" />
-
-        <TouchableOpacity
-          onPress={() => Linking.openURL("https://erpgulf.com")}
-          className="flex-row items-center"
+        <Ionicons
+          name="globe-outline"
+          size={ICON.sm}
+          color={colors.textMuted}
+        />
+        <Text
+          style={{
+            ...TYPO.subhead,
+            color: colors.textMuted,
+            marginHorizontal: SPACING.sm,
+          }}
         >
-          <Text className="text-lg font-semibold text-white mr-1">
-            ERPGulf.com
-          </Text>
-          <Ionicons name="open-outline" size={16} color="#fff" />
-        </TouchableOpacity>
-
-        <View style={{ width: SIZES.xxLarge }} />
-      </View>
+          ERPGulf.com
+        </Text>
+        <Ionicons name="open-outline" size={13} color={colors.textMuted} />
+      </PressableScale>
     </View>
   );
 }

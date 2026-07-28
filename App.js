@@ -1,7 +1,6 @@
 import { Provider } from "react-redux";
 import { store, persistor } from "./redux/Store";
 import "react-native-gesture-handler";
-import { StatusBar } from "expo-status-bar";
 import Toast from "react-native-toast-message";
 import { PersistGate } from "redux-persist/integration/react";
 import { useState, useEffect, useRef } from "react";
@@ -18,6 +17,7 @@ import { navigateSafely } from "./navigation/rootNavigation";
 import * as Updates from "expo-updates";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import UpdateBanner from "./components/UpdateBanner";
+import ThemedStatusBar from "./components/common/ThemedStatusBar";
 import AutoAttendanceBootstrap from "./components/AutoAttendanceBootstrap";
 import { selectIsLoggedIn } from "./redux/Slices/AuthSlice";
 import {
@@ -26,6 +26,9 @@ import {
   clearFcmRegistration,
 } from "./services/notifications/fcm.service";
 import { registerSessionCleanupHandler } from "./services/api/apiClient";
+import { hydrate as hydrateAppearance } from "./settings/appearance";
+// TEMPORARY: New Home Experience experiment — remove with the feature.
+import { hydrate as hydrateHomeExperience } from "./settings/homeExperience";
 
 function cacheFonts(fonts) {
   return fonts.map((font) => Font.loadAsync(font));
@@ -110,6 +113,12 @@ export default function App() {
         const IconAssets = cacheFonts([Ionicons.font]);
         await Promise.all([...IconAssets]);
 
+        // Both must resolve before the navigator mounts. Appearance decides the
+        // palette of the first paint; the Home variant decides which screen
+        // component mounts, and getting it wrong remounts Home and fires its
+        // focus effects (and their network calls) twice.
+        await Promise.all([hydrateAppearance(), hydrateHomeExperience()]);
+
         if (!__DEV__ && Updates.isEnabled) {
           try {
             const update = await Updates.checkForUpdateAsync();
@@ -145,7 +154,7 @@ export default function App() {
             <AutoAttendanceBootstrap />
             <Navigator />
             <UpdateBanner />
-            <StatusBar style="auto" />
+            <ThemedStatusBar />
             <Toast
               topOffset={
                 Platform.OS === "ios" ? SIZES.topOffset + 55 : SIZES.topOffset

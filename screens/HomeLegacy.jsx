@@ -1,19 +1,18 @@
 import { ScrollView, View } from "react-native";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Constants from "expo-constants";
 import { useCallback } from "react";
-import { LavaMenu, QuickAccess, WelcomeCard } from "../components/Home";
-import { LAYOUT, SPACING } from "../constants";
-import useAppTheme from "../hooks/useAppTheme";
+import { LavaMenu, QuickAccess, WelcomeCard } from "../components/HomeLegacy";
+import { COLORS, SIZES } from "../constants";
 import { fetchTopicsFromServer } from "../services/notifications/fcm.service";
 
-/** Docked tab bar + breathing room, on top of the bottom safe-area inset. */
-const TAB_BAR_CLEARANCE = LAYOUT.tabBarContentHeight + SPACING.xxl;
-
-function Home() {
+/**
+ * TEMPORARY — the pre-redesign Home screen, kept verbatim so testers can
+ * compare it against the new one via the "New Home Experience" toggle.
+ * Delete alongside components/HomeLegacy/ when the experiment ends.
+ */
+function HomeLegacy() {
   const navigation = useNavigation();
-  const insets = useSafeAreaInsets();
-  const { colors } = useAppTheme();
 
   useFocusEffect(
     useCallback(() => {
@@ -38,30 +37,26 @@ function Home() {
     <View
       style={{
         flex: 1,
-        backgroundColor: colors.surfaceSecondary,
-        paddingTop: insets.top,
+        flexGrow: 1,
+        alignItems: "center",
+        paddingTop: Constants.statusBarHeight,
+        paddingBottom: 68,
       }}
+      className="bg-gray-200"
     >
       <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{
-          paddingHorizontal: SPACING.lg,
-          paddingTop: SPACING.md,
-          paddingBottom: insets.bottom + TAB_BAR_CLEARANCE,
-        }}
+        style={{ width: "95%" }}
+        contentContainerStyle={{ justifyContent: "center" }}
         showsVerticalScrollIndicator={false}
+        StickyHeaderComponent={WelcomeCard}
         alwaysBounceVertical
       >
         <WelcomeCard />
-
-        <View style={{ height: SPACING.xxl }} />
         <QuickAccess navigation={navigation} />
-
-        <View style={{ height: SPACING.xxl }} />
         <LavaMenu navigation={navigation} />
       </ScrollView>
     </View>
   );
 }
 
-export default Home;
+export default HomeLegacy;

@@ -38,6 +38,15 @@ jest.mock("../components/AttendanceAction/WelcomeCard", () => {
   return () => <Text>WelcomeCardMock</Text>;
 });
 
+// Stubbed for the same reason as WelcomeCard: it imports expo-image, which
+// jest.config.js does not transform. The card is not what these suites assert on.
+jest.mock("../components/AttendanceAction/StatusCard", () => {
+  const React = require("react");
+  const { Text } = require("react-native");
+
+  return () => <Text>StatusCardMock</Text>;
+});
+
 jest.mock("react-native-safe-area-context", () => {
   const React = require("react");
   const { View } = require("react-native");
@@ -54,6 +63,7 @@ jest.mock("@expo/vector-icons", () => {
 
   return {
     Entypo: (props) => <Text {...props}>Entypo</Text>,
+    Ionicons: (props) => <Text {...props}>Icon</Text>,
     MaterialCommunityIcons: (props) => <Text {...props}>Icon</Text>,
   };
 });
@@ -247,10 +257,10 @@ describe("AttendanceAction session timer behavior", () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText("CHECK-OUT")).toBeTruthy();
+      expect(screen.getByText("Check out")).toBeTruthy();
     });
 
-    fireEvent.press(screen.getByText("CHECK-OUT"));
+    fireEvent.press(screen.getByText("Check out"));
 
     await waitFor(() => {
       const attendance = screen.store.getState().attendance;
@@ -283,7 +293,7 @@ describe("AttendanceAction session timer behavior", () => {
       const attendance = screen.store.getState().attendance;
       expect(attendance.checkin).toBe(false);
       expect(attendance.checkinTime).toBeNull();
-      expect(screen.getByText("CHECK-IN")).toBeTruthy();
+      expect(screen.getByText("Check in")).toBeTruthy();
     });
 
     const storedStart = await AsyncStorage.getItem("checkinStartTime");

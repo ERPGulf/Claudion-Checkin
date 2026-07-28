@@ -1,824 +1,124 @@
-import React, {
-  useEffect,
-  useLayoutEffect,
-  useState,
-  useRef,
-  useCallback,
-} from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
-  TouchableOpacity,
   ActivityIndicator,
   ScrollView,
   RefreshControl,
-  Alert,
   StyleSheet,
 } from "react-native";
-import { Entypo, MaterialCommunityIcons } from "@expo/vector-icons";
-import { useDispatch, useSelector } from "react-redux";
-import Toast from "react-native-toast-message";
-import { useNavigation } from "@react-navigation/native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import {
-  setCheckin,
-  setCheckout,
-  resetCheckin,
-  setBreakMinutes,
-  setBreakStatus,
-  setTodayHours,
-  setMonthlyHours,
-} from "../redux/Slices/AttendanceSlice";
-import { COLORS, SIZES } from "../constants";
-import WelcomeCard from "../components/AttendanceAction/WelcomeCard";
-import { updateDateTime } from "../utils/TimeServices";
-import { saveTokens } from "../services/api/apiClient";
-import {
-  getOfficeLocation,
-  userCheckIn,
-  getAttendanceStatus,
-  getDailyWorkedHours,
-  getMonthlyWorkedHours,
-  getServerTime,
-  employeeBreak,
-  getTodayBreaks,
-} from "../services/api/attendance.service";
-import {
-  getPersistedSessionTimes,
-  resolveActiveSessionStart,
-} from "../utils/attendanceSession";
-import {
-  performSessionTransition,
-  reconcileSessionFromServer,
-  SESSION_ORIGIN,
-  SESSION_STATUS,
-  TRANSITION_RESULT,
-} from "../utils/attendanceSessionState";
-import {
-  selectAutoAttendanceActive,
-  selectAutoAttendanceFullActions,
-} from "../redux/Slices/AutoAttendanceSlice";
+import { Ionicons } from "@expo/vector-icons";
 import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
+import { ICON, RADIUS, SPACING, TYPO } from "../constants";
+import useAppTheme from "../hooks/useAppTheme";
+import useModernScreenHeader from "../hooks/useModernScreenHeader";
+import useAttendanceAction from "../hooks/useAttendanceAction";
+import Card from "../components/common/Card";
+import PressableScale from "../components/common/PressableScale";
+import ActionButton from "../components/common/ActionButton";
+import SectionHeader from "../components/common/SectionHeader";
+import SettingsRow, { RowDivider } from "../components/common/SettingsRow";
+import StatusBanner from "../components/common/StatusBanner";
+import StatusCard from "../components/AttendanceAction/StatusCard";
+import { SESSION_ORIGIN } from "../utils/attendanceSessionState";
 
-const BREAK_LIMIT_MS = 2 * 60 * 60 * 1000; // 2 hours
-
-/** Returns today's date formatted as DD-MM-YYYY */
-const getTodayString = () =>
-  new Date().toLocaleDateString("en-GB").replace(/\//g, "-");
+/** Break presets, previously nine hand-styled buttons in six different colours. */
+const DEV_BREAK_PRESETS = [
+  { key: "idle-0", label: "Idle 00:00" },
+  { key: "idle-45", label: "Idle 00:45" },
+  { key: "running-30", label: "Running +30m" },
+  { key: "cap-120", label: "Cap 02:00" },
+  { key: "completed", label: "Completed 1/day" },
+  { key: "monthly-cap", label: "Monthly Cap 8h" },
+];
 
 function AttendanceAction() {
   const insets = useSafeAreaInsets();
-  const navigation = useNavigation();
-  const dispatch = useDispatch();
-  const checkin = useSelector((state) => state.attendance.checkin);
-  const checkinTime = useSelector((state) => state.attendance.checkinTime);
-  const checkinLocation = useSelector((state) => state.attendance.location);
-  const userDetails = useSelector((state) => state.user.userDetails);
-  const breakMinutes = useSelector((state) => state.attendance.breakMinutes);
-  const sessionOrigin = useSelector((state) => state.attendance.sessionOrigin);
-  // Monitoring has to be running (policy allows it AND the user opted in) and
-  // the policy has to cover attendance actions before the geofence will close
-  // this session — otherwise promising an automatic check-out would be a lie.
-  const autoMonitoringActive = useSelector(selectAutoAttendanceActive);
-  const autoActionsEnabled =
-    useSelector(selectAutoAttendanceFullActions) && autoMonitoringActive;
-  const employeeCode = userDetails?.employeeCode;
-  const [refresh, setRefresh] = useState(false);
-  const [dateTime, setDateTime] = useState(null);
-  const [inTarget, setInTarget] = useState(true);
-  const [ready, setReady] = useState(false);
-  const [distanceInfo, setDistanceInfo] = useState(null);
-  const [actionLoading, setActionLoading] = useState(false);
-  const [restrictLocation, setRestrictLocation] = useState(0);
-  const [unrestrictedCheckout, setUnrestrictedCheckout] = useState(0);
-  const [restrictionLoaded, setRestrictionLoaded] = useState(false);
-  const [onBreak, setOnBreak] = useState(false);
-  const [liveBreakTime, setLiveBreakTime] = useState("00:00:00");
-  const [breakStartTime, setBreakStartTime] = useState(null);
-  const breakTriggeredRef = useRef(false);
-  const isMountedRef = useRef(true);
-  const [breakCompleted, setBreakCompleted] = useState(false);
-  const [monthlyCapMessage, setMonthlyCapMessage] = useState("");
-  const [devBreakMockMode, setDevBreakMockMode] = useState(false);
-  const isBreakCompleted = (breakData) => {
-    if (!breakData?.breaks?.length) return false;
+  const { colors, isDark } = useAppTheme();
+  const [devOpen, setDevOpen] = useState(false);
 
-    const hasIn = breakData.breaks.some((b) => b.start);
-    const hasOut = breakData.breaks.some((b) => b.end);
-
-    return hasIn && hasOut;
-  };
-  useEffect(() => {
-    isMountedRef.current = true;
-    return () => {
-      isMountedRef.current = false;
-    };
-  }, []);
-
-  useLayoutEffect(() => {
-    navigation.setOptions({
-      headerShadowVisible: false,
-      headerShown: true,
-      headerTitle: "Attendance Action",
-      headerTitleAlign: "center",
-      statusBarTranslucent: false,
-      headerLeft: () => (
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Entypo
-            name="chevron-left"
-            size={SIZES.xxxLarge - 5}
-            color={COLORS.primary}
-          />
-        </TouchableOpacity>
-      ),
-    });
-  }, [navigation]);
-
-  // Load location restriction
-  useEffect(() => {
-    const loadRestriction = async () => {
-      const r = await AsyncStorage.getItem("restrict_location");
-      const u = await AsyncStorage.getItem("unrestricted_checkout_location");
-      if (!isMountedRef.current) return;
-      setRestrictLocation(Number(r) || 0);
-
-      setUnrestrictedCheckout(Number(u) || 0);
-      setRestrictionLoaded(true);
-    };
-    loadRestriction();
-  }, []);
-
-  /** Mirrors a session record from the state machine into Redux. */
-  const syncUiToSession = useCallback(
-    (session) => {
-      if (session?.status === SESSION_STATUS.CHECKED_IN) {
-        dispatch(
-          setCheckin({
-            checkinTime: session.startedAt,
-            location: checkinLocation,
-            sessionOrigin: session.origin,
-          }),
-        );
-        return;
-      }
-
-      dispatch(setCheckout({ checkoutTime: session?.endedAt ?? Date.now() }));
-    },
-    [checkinLocation, dispatch],
-  );
-
-  const syncCheckinFromStatus = useCallback(
-    async (status) => {
-      const { checkinStartTime, lastCheckoutTime } =
-        await getPersistedSessionTimes();
-
-      const resolvedStart = resolveActiveSessionStart({
-        status,
-        storedCheckinStartTime: checkinStartTime,
-        reduxCheckinTime: checkinTime,
-        lastCheckoutTime,
-      });
-
-      // Push the server's verdict into the session state machine before
-      // mirroring it into Redux, so the geofence listeners — which read the
-      // machine, not Redux — agree with what this screen is showing.
-      const session = await reconcileSessionFromServer({
-        activeStartedAt: resolvedStart,
-      });
-
-      if (session.status === SESSION_STATUS.CHECKED_IN) {
-        dispatch(
-          setCheckin({
-            checkinTime: session.startedAt,
-            location: checkinLocation,
-            sessionOrigin: session.origin,
-          }),
-        );
-        return;
-      }
-
-      dispatch(resetCheckin());
-    },
-    [checkinLocation, checkinTime, dispatch],
-  );
-
-  useEffect(() => {
-    const loadCheckinStatus = async () => {
-      try {
-        const res = await getAttendanceStatus();
-
-        if (!isMountedRef.current) return;
-
-        await syncCheckinFromStatus(res);
-      } catch (e) {
-        console.log("Status sync error:", e);
-      }
-    };
-
-    if (employeeCode) {
-      loadCheckinStatus();
-    }
-  }, [employeeCode, syncCheckinFromStatus]);
-
-  const fetchStatusAndLocation = useCallback(async () => {
-    try {
-      setReady(false);
-
-      // if (restrictLocation === 0) {
-      //   setInTarget(true);
-      //   setDistanceInfo(null);
-      //   setReady(true);
-      //   return;
-      // }
-
-      const nearest = await getOfficeLocation(employeeCode);
-      if (!isMountedRef.current) return;
-      if (!nearest) {
-        setInTarget(false);
-        setDistanceInfo(null);
-        setReady(true);
-        return;
-      }
-
-      setInTarget(nearest.withinRadius);
-      setDistanceInfo(nearest);
-      setReady(true);
-    } catch (error) {
-      if (!isMountedRef.current) return;
-      Toast.show({
-        type: "error",
-        text1: ":warning: Location error",
-        text2: error.message,
-      });
-      setInTarget(false);
-      setReady(true);
-    }
-  }, [restrictLocation, employeeCode]);
-
-  // Fetch GPS on mount
-  useEffect(() => {
-    if (restrictionLoaded && employeeCode) fetchStatusAndLocation();
-  }, [restrictionLoaded, employeeCode, fetchStatusAndLocation]);
-
-  // Update date & time every 10 seconds
-  useEffect(() => {
-    const loadServerTime = async () => {
-      const server = await getServerTime();
-      if (!isMountedRef.current) return;
-      if (server) setDateTime(updateDateTime(server));
-    };
-
-    loadServerTime();
-    const intervalId = setInterval(loadServerTime, 10000);
-    return () => clearInterval(intervalId);
-  }, []);
-
-  /**
-   * Dispatches today + monthly worked hours and break minutes to Redux.
-   * Avoids duplicating three identical Promise.all blocks across handlers.
-   */
-  const refreshAttendanceData = useCallback(async () => {
-    const todayStr = getTodayString();
-    const now = new Date();
-    const [todayWorked, monthlyWorked, breakData] = await Promise.all([
-      getDailyWorkedHours(employeeCode, todayStr),
-      getMonthlyWorkedHours(
-        employeeCode,
-        now.getMonth() + 1,
-        now.getFullYear(),
-      ),
-      getTodayBreaks(employeeCode, todayStr),
-    ]);
-
-    dispatch(setTodayHours(todayWorked ?? "00:00"));
-    dispatch(setMonthlyHours(monthlyWorked ?? "00:00"));
-    dispatch(setBreakMinutes(breakData?.total_break_minutes ?? 0));
-
-    return breakData;
-  }, [dispatch, employeeCode]);
-
-  /**
-   * Syncs onBreak / breakStartTime state from a breakData response object.
-   */
-
-  const syncBreakState = useCallback(async (breakData) => {
-    const lastBreak = breakData?.breaks?.find((b) => !b.end || b.end === null);
-
-    if (!lastBreak) {
-      setOnBreak(false);
-      setBreakStartTime(null);
-      await AsyncStorage.removeItem("breakStartTime"); // ✅ keep storage clean
-      return;
-    }
-
-    const isOpen =
-      !lastBreak.end || lastBreak.end === "" || lastBreak.end === null;
-
-    setOnBreak(isOpen);
-
-    if (isOpen) breakTriggeredRef.current = false;
-
-    const savedTime = await AsyncStorage.getItem("breakStartTime");
-
-    if (savedTime) {
-      setBreakStartTime(parseInt(savedTime));
-    } else {
-      const backendTime = new Date(lastBreak.start).getTime();
-      setBreakStartTime(backendTime);
-
-      await AsyncStorage.setItem("breakStartTime", backendTime.toString());
-    }
-  }, []);
-
-  useEffect(() => {
-    const unsubscribe = navigation.addListener("focus", async () => {
-      try {
-        if (!employeeCode) return;
-
-        // ✅ 1. FIRST: sync attendance status
-        const res = await getAttendanceStatus();
-
-        console.log("FOCUS STATUS:", res.custom_in);
-
-        if (!isMountedRef.current) return;
-
-        await syncCheckinFromStatus(res);
-
-        // ✅ 2. THEN: fetch totals
-        const breakData = await refreshAttendanceData();
-
-        if (!isMountedRef.current) return;
-        setBreakCompleted(isBreakCompleted(breakData));
-
-        syncBreakState(breakData);
-      } catch (e) {
-        console.log("Focus sync error:", e);
-      }
-    });
-
-    return unsubscribe;
-  }, [
-    navigation,
-    employeeCode,
-    refreshAttendanceData,
-    syncBreakState,
-    syncCheckinFromStatus,
-  ]);
-
-  useEffect(() => {
-    const loadBreak = async () => {
-      const saved = await AsyncStorage.getItem("breakStartTime");
-      const breakData = await getTodayBreaks(employeeCode, getTodayString());
-      setBreakCompleted(isBreakCompleted(breakData));
-
-      if (saved) {
-        const parsedTime = parseInt(saved);
-
-        setBreakStartTime(parsedTime);
-        setOnBreak(true);
-      }
-    };
-
-    loadBreak();
-  }, []);
-
-  useEffect(() => {
-    if (!onBreak || !breakStartTime) {
-      setLiveBreakTime("00:00:00");
-      return;
-    }
-
-    const interval = setInterval(async () => {
-      const diff = Date.now() - breakStartTime;
-      const currentBreakSeconds = Math.floor(diff / 1000);
-
-      const hrs = String(Math.floor(currentBreakSeconds / 3600)).padStart(
-        2,
-        "0",
-      );
-      const mins = String(
-        Math.floor((currentBreakSeconds % 3600) / 60),
-      ).padStart(2, "0");
-      const secs = String(currentBreakSeconds % 60).padStart(2, "0");
-      setLiveBreakTime(`${hrs}:${mins}:${secs}`);
-
-      if (diff >= BREAK_LIMIT_MS && !breakTriggeredRef.current) {
-        breakTriggeredRef.current = true;
-
-        try {
-          await employeeBreak({ employeeCode, type: "OUT" });
-          await AsyncStorage.removeItem("breakStartTime");
-
-          if (!isMountedRef.current) return;
-          setOnBreak(false);
-          setBreakStartTime(null);
-          setBreakCompleted(true);
-
-          const breakData = await getTodayBreaks(
-            employeeCode,
-            getTodayString(),
-          );
-          if (!isMountedRef.current) return;
-          dispatch(setBreakMinutes(breakData?.total_break_minutes ?? 0));
-
-          Alert.alert(
-            "Break Ended",
-            "2-hour break limit reached. Break automatically stopped.",
-          );
-        } catch {
-          Alert.alert("Error", "Auto break end failed");
-        }
-      }
-    }, 1000);
-    console.log("BREAK START TIME:", breakStartTime);
-    console.log("NOW:", Date.now());
-    console.log("DIFF MIN:", (Date.now() - breakStartTime) / 60000);
-
-    return () => clearInterval(interval);
-  }, [onBreak, breakStartTime, dispatch, employeeCode]);
-
-  const handleDirectCheckInOut = useCallback(
-    async (type) => {
-      try {
-        setActionLoading(true);
-
-        const outcome = await performSessionTransition({
-          type,
-          origin: SESSION_ORIGIN.MANUAL,
-          execute: () =>
-            userCheckIn({
-              employeeCode,
-              type,
-              locationData: distanceInfo,
-            }),
-        });
-
-        // The session already moved without this screen knowing — almost
-        // always the geofence checked the user out in the background. Nothing
-        // was sent; just re-sync the UI to the real state.
-        if (outcome.status === TRANSITION_RESULT.SKIPPED) {
-          syncUiToSession(outcome.session);
-
-          Toast.show({
-            type: "info",
-            text1:
-              outcome.session.status === SESSION_STATUS.CHECKED_IN
-                ? "Already checked in"
-                : "Already checked out",
-            text2:
-              outcome.session.closedBy === SESSION_ORIGIN.AUTO
-                ? "You were checked out automatically when you left the office."
-                : undefined,
-          });
-          return;
-        }
-
-        if (outcome.status === TRANSITION_RESULT.FAILED) {
-          Toast.show({
-            type: "error",
-            text1: ":warning: Action blocked",
-            text2: outcome.response?.message,
-          });
-          return;
-        }
-
-        const { session, response } = outcome;
-
-        if (type === "IN") {
-          dispatch({ type: "attendance/setSelectedLocation", payload: null });
-          dispatch(
-            setCheckin({
-              checkinTime: session.startedAt,
-              location: restrictLocation === 1 ? response.location : null,
-              sessionOrigin: session.origin,
-            }),
-          );
-        } else {
-          if (onBreak) {
-            const breakRes = await employeeBreak({
-              employeeCode,
-              type: "OUT",
-            });
-            if (!breakRes?.allowed) {
-              console.log("Break already ended from backend");
-            }
-          }
-
-          dispatch(setCheckout({ checkoutTime: session.endedAt }));
-          dispatch({ type: "attendance/setSelectedLocation", payload: null });
-        }
-
-        const breakData = await refreshAttendanceData();
-        syncBreakState(breakData);
-
-        Toast.show({
-          type: "success",
-          text1: type === "IN" ? "Checked in!" : "Checked out!",
-        });
-      } catch (error) {
-        console.log("AttendanceAction.handleDirectCheckInOut error:", {
-          errorMessage: error?.message,
-          status: error?.response?.status,
-          responseData: error?.response?.data,
-        });
-
-        Toast.show({
-          type: "error",
-          text1: ":warning: Failed",
-          text2:
-            error?.response?.data?.message ||
-            error?.response?.data ||
-            error.message ||
-            "Request failed",
-        });
-      } finally {
-        setActionLoading(false);
-      }
-    },
-    [
-      employeeCode,
-      distanceInfo,
-      restrictLocation,
-      onBreak,
-      dispatch,
-      refreshAttendanceData,
-      syncBreakState,
-      syncUiToSession,
-    ],
-  );
-
-  const handleInvalidateAccessToken = useCallback(async () => {
-    try {
-      const refreshToken = await AsyncStorage.getItem("refresh_token");
-
-      if (!refreshToken) {
-        Toast.show({
-          type: "error",
-          text1: "Refresh token missing",
-          text2: "Cannot invalidate access token without a refresh token.",
-        });
-        return;
-      }
-
-      await saveTokens("invalid-access-token-123", refreshToken);
-      const maskedRefresh = `${refreshToken.slice(0, 6)}...${refreshToken.slice(-4)}`;
-      Toast.show({
-        type: "success",
-        text1: "Dev token invalidated",
-        text2: `Refresh token preserved: ${maskedRefresh}`,
-      });
-    } catch (error) {
-      Toast.show({
-        type: "error",
-        text1: "Dev token reset failed",
-        text2: error.message || "Unable to invalidate access token.",
-      });
-    }
-  }, []);
-
-  const applyDevBreakPreset = useCallback(
-    async (preset) => {
-      const now = Date.now();
-      const setIdleState = async (minutes, completed = false) => {
-        setOnBreak(false);
-        setBreakStartTime(null);
-        setBreakCompleted(completed);
-        setMonthlyCapMessage("");
-        breakTriggeredRef.current = false;
-        dispatch(setBreakMinutes(minutes));
-        dispatch(
-          setBreakStatus({
-            onBreak: false,
-            breakStartTime: null,
-          }),
-        );
-        await AsyncStorage.removeItem("breakStartTime");
-      };
-
-      dispatch(
-        setCheckin({
-          checkinTime: now,
-          location: null,
-        }),
-      );
-
-      if (preset === "idle-0") {
-        await setIdleState(0, false);
-      }
-
-      if (preset === "idle-45") {
-        await setIdleState(45, false);
-      }
-
-      if (preset === "running-30") {
-        const startTime = now - 30 * 60 * 1000;
-        setOnBreak(true);
-        setBreakStartTime(startTime);
-        setBreakCompleted(false);
-        breakTriggeredRef.current = false;
-        dispatch(setBreakMinutes(45));
-        dispatch(
-          setBreakStatus({
-            onBreak: true,
-            breakStartTime: startTime,
-          }),
-        );
-        await AsyncStorage.setItem("breakStartTime", String(startTime));
-      }
-
-      if (preset === "cap-120") {
-        await setIdleState(120, false);
-      }
-
-      if (preset === "completed") {
-        await setIdleState(60, true);
-      }
-
-      if (preset === "monthly-cap") {
-        await setIdleState(30, true);
-        setMonthlyCapMessage("Monthly break limit reached (8h)");
-        Toast.show({
-          type: "error",
-          text1: "Monthly break limit reached (8h)",
-        });
-      }
-
-      if (__DEV__) {
-        setDevBreakMockMode(true);
-      }
-
-      Toast.show({
-        type: "success",
-        text1: `DEV preset applied: ${preset}`,
-      });
-    },
-    [dispatch],
-  );
-
-  const handleBreak = useCallback(async () => {
-    if (!checkin) {
-      Toast.show({ type: "error", text1: "Please check-in first" });
-      return;
-    }
-
-    if (restrictLocation === 1 && !inTarget) {
-      Toast.show({
-        type: "error",
-        text1: "You are out of allowed location",
-      });
-      return;
-    }
-
-    if (__DEV__ && devBreakMockMode) {
-      try {
-        setActionLoading(true);
-
-        if (!onBreak) {
-          const startTime = Date.now();
-          setOnBreak(true);
-          setBreakStartTime(startTime);
-          setBreakCompleted(false);
-          setMonthlyCapMessage("");
-          breakTriggeredRef.current = false;
-
-          dispatch(
-            setBreakStatus({
-              onBreak: true,
-              breakStartTime: startTime,
-            }),
-          );
-          await AsyncStorage.setItem("breakStartTime", String(startTime));
-
-          Toast.show({ type: "success", text1: "DEV break started (local)" });
-          return;
-        }
-
-        const elapsedMinutes = Math.max(
-          0,
-          Math.floor((Date.now() - breakStartTime) / 60000),
-        );
-        const nextTotal = Math.min(120, (breakMinutes ?? 0) + elapsedMinutes);
-
-        setOnBreak(false);
-        setBreakStartTime(null);
-        setBreakCompleted(true);
-        setMonthlyCapMessage("");
-        dispatch(setBreakMinutes(nextTotal));
-        dispatch(
-          setBreakStatus({
-            onBreak: false,
-            breakStartTime: null,
-          }),
-        );
-        await AsyncStorage.removeItem("breakStartTime");
-
-        Toast.show({
-          type: "success",
-          text1: `DEV break ended (total: ${nextTotal}m)`,
-        });
-        return;
-      } finally {
-        setActionLoading(false);
-      }
-    }
-
-    // ✅ FIRST check from backend (important)
-    const breakDataCheck = await getTodayBreaks(employeeCode, getTodayString());
-
-    if (isBreakCompleted(breakDataCheck)) {
-      Toast.show({
-        type: "error",
-        text1: "Break already completed for today",
-      });
-      return;
-    }
-
-    const type = onBreak ? "OUT" : "IN";
-
-    try {
-      setActionLoading(true);
-      const response = await employeeBreak({ employeeCode, type });
-
-      if (!response.allowed) {
-        // ✅ Handle monthly limit from backend
-        if (response.message?.includes("Monthly break limit")) {
-          setBreakCompleted(true); // disable button
-          setMonthlyCapMessage(response.message);
-        } else {
-          setMonthlyCapMessage("");
-        }
-
-        Toast.show({ type: "error", text1: response.message });
-        return;
-      }
-
-      if (type === "IN") {
-        const startTime = Date.now();
-
-        setOnBreak(true);
-        setBreakStartTime(startTime);
-        setMonthlyCapMessage("");
-
-        await AsyncStorage.setItem("breakStartTime", startTime.toString());
-      } else {
-        setOnBreak(false);
-        setBreakStartTime(null);
-        setMonthlyCapMessage("");
-
-        await AsyncStorage.removeItem("breakStartTime");
-      }
-
-      // ✅ Fetch latest break data
-      const breakData = await getTodayBreaks(employeeCode, getTodayString());
-
-      setBreakCompleted(isBreakCompleted(breakData));
-      dispatch(setBreakMinutes(breakData?.total_break_minutes ?? 0));
-
-      syncBreakState(breakData);
-
-      Toast.show({ type: "success", text1: response.message });
-    } catch (error) {
-      Toast.show({
-        type: "error",
-        text1: "Break failed",
-        text2: error.message,
-      });
-    } finally {
-      setActionLoading(false);
-    }
-  }, [
+  const {
     checkin,
+    sessionOrigin,
+    autoActionsEnabled,
+    dateTime,
     restrictLocation,
+    restrictionLoaded,
+    allowCheckoutAnywhere,
     inTarget,
+    ready,
+    distanceInfo,
     onBreak,
-    devBreakMockMode,
+    liveBreakTime,
     breakMinutes,
-    breakStartTime,
-    dispatch,
-  ]);
+    breakCompleted,
+    monthlyCapMessage,
+    actionLoading,
+    refresh,
+    setRefresh,
+    fetchStatusAndLocation,
+    handlePrimaryAction,
+    handleBreak,
+    devBreakMockMode,
+    setDevBreakMockMode,
+    applyDevBreakPreset,
+    handleInvalidateAccessToken,
+  } = useAttendanceAction();
 
-  // Temporary loading screen
+  useModernScreenHeader("Attendance Action");
+
+  // Identical gating to the classic screen — only the presentation differs.
+  const checkoutBlocked =
+    restrictLocation === 1 && !inTarget && !allowCheckoutAnywhere;
+  const breakBlocked =
+    actionLoading ||
+    (restrictLocation === 1 && !inTarget) ||
+    breakCompleted ||
+    breakMinutes >= 120;
+
+  const locationValue =
+    restrictLocation === 0
+      ? "Not Required"
+      : !ready
+        ? "Getting Location..."
+        : inTarget
+          ? "In bound"
+          : "Out of bound";
+
   if (!restrictionLoaded) {
     return (
       <SafeAreaView
-        style={{ flex: 1, backgroundColor: "white" }}
+        style={{ flex: 1, backgroundColor: colors.surfaceSecondary }}
         edges={["bottom", "left", "right"]}
       >
-        <View className="flex-1 items-center justify-center bg-white">
-          <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text className="mt-2 text-gray-600">Loading settings...</Text>
+        <View
+          style={{
+            flex: 1,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <ActivityIndicator size="large" color={colors.textMuted} />
+          <Text
+            style={{
+              ...TYPO.subhead,
+              color: colors.textMuted,
+              marginTop: SPACING.sm,
+            }}
+          >
+            Loading settings...
+          </Text>
         </View>
       </SafeAreaView>
     );
   }
-  const allowCheckoutAnywhere = checkin === true && unrestrictedCheckout === 1;
 
   return (
     <SafeAreaView
-      style={{ flex: 1, backgroundColor: "white" }}
+      style={{ flex: 1, backgroundColor: colors.surfaceSecondary }}
       edges={["bottom", "left", "right"]}
     >
       {actionLoading && (
@@ -830,27 +130,35 @@ function AttendanceAction() {
               backgroundColor: "rgba(0,0,0,0.5)",
               paddingTop: insets.top,
               paddingBottom: insets.bottom,
+              alignItems: "center",
+              justifyContent: "center",
             },
           ]}
-          className="items-center justify-center"
         >
           <ActivityIndicator size="large" color="white" />
-          <Text className="text-white mt-2 text-base">Processing...</Text>
+          <Text
+            style={{
+              ...TYPO.body,
+              color: "white",
+              marginTop: SPACING.sm,
+            }}
+          >
+            Processing...
+          </Text>
         </View>
       )}
 
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{
-          flexGrow: 1,
-          alignItems: "center",
-          backgroundColor: "white",
-          paddingTop: 16,
-          paddingBottom: Math.max(insets.bottom, 16),
+          paddingHorizontal: SPACING.lg,
+          paddingTop: SPACING.md,
+          paddingBottom: Math.max(insets.bottom, SPACING.lg) + SPACING.xxl,
         }}
         refreshControl={
           <RefreshControl
             refreshing={refresh}
+            tintColor={colors.textMuted}
             onRefresh={() => {
               setRefresh(true);
               fetchStatusAndLocation().finally(() => setRefresh(false));
@@ -858,252 +166,294 @@ function AttendanceAction() {
           />
         }
       >
-        <View style={{ width: "100%" }} className="flex-1 px-3">
-          {onBreak && (
-            <View className="mb-3 rounded-2xl bg-amber-500 px-4 py-1">
-              <Text className="text-center text-xs font-semibold tracking-widest text-amber-100">
-                BREAK IN PROGRESS
-              </Text>
-              <Text
-                className="mt-1 text-center text-2xl font-extrabold text-white"
-                style={{ fontVariant: ["tabular-nums"] }}
-              >
-                {liveBreakTime || "00:00:00"}
-              </Text>
-              <Text className="mt-1 text-center text-xs text-amber-100">
-                Auto-ends at 02:00:00
-              </Text>
-            </View>
+        {/* -------------------- BREAK IN PROGRESS -------------------- */}
+        {onBreak && (
+          <Card
+            padded
+            style={{
+              marginBottom: SPACING.lg,
+              backgroundColor: colors.warningSurface,
+              borderColor: colors.warningBorder,
+            }}
+          >
+            <Text
+              style={{
+                ...TYPO.caption2,
+                fontWeight: "700",
+                letterSpacing: 1.2,
+                textAlign: "center",
+                color: colors.warningText,
+              }}
+            >
+              BREAK IN PROGRESS
+            </Text>
+            <Text
+              style={{
+                ...TYPO.title1,
+                textAlign: "center",
+                color: colors.textPrimary,
+                marginTop: SPACING.xs,
+                fontVariant: ["tabular-nums"],
+              }}
+            >
+              {liveBreakTime || "00:00:00"}
+            </Text>
+            <Text
+              style={{
+                ...TYPO.caption,
+                textAlign: "center",
+                color: colors.textMuted,
+                marginTop: 2,
+              }}
+            >
+              Auto-ends at 02:00:00
+            </Text>
+          </Card>
+        )}
+
+        {/* -------------------- STATUS -------------------- */}
+        <StatusCard />
+
+        {checkin && autoActionsEnabled && (
+          <StatusBanner
+            tone="success"
+            title="Automatic checkout is enabled"
+            message={
+              sessionOrigin === SESSION_ORIGIN.AUTO
+                ? "Checked in automatically. You'll be checked out when you leave the office."
+                : "You'll be checked out automatically when you leave the office."
+            }
+            style={{ marginTop: SPACING.lg }}
+          />
+        )}
+
+        {/* -------------------- SESSION DETAILS -------------------- */}
+        <SectionHeader
+          title="Session details"
+          style={{ marginTop: SPACING.xxl }}
+        />
+
+        <Card>
+          <SettingsRow
+            icon="calendar-outline"
+            title="Date and time"
+            value={dateTime}
+          />
+          <RowDivider />
+          <SettingsRow
+            icon="location-outline"
+            iconTint={
+              restrictLocation === 1 && !inTarget
+                ? colors.errorSurface
+                : colors.iconBackground
+            }
+            iconColor={
+              restrictLocation === 1 && !inTarget
+                ? colors.errorText
+                : colors.textPrimary
+            }
+            title="Location"
+            description={
+              restrictLocation === 1 && distanceInfo
+                ? `Distance: ${distanceInfo.distance} m | Allowed: ${distanceInfo.radius} m`
+                : undefined
+            }
+            value={locationValue}
+          />
+        </Card>
+
+        {/* -------------------- ACTIONS -------------------- */}
+        <View style={{ marginTop: SPACING.xxl }}>
+          <ActionButton
+            size="lg"
+            elevated
+            icon={checkin ? "log-out-outline" : "log-in-outline"}
+            label={checkin ? "Check out" : "Check in"}
+            onPress={handlePrimaryAction}
+            loading={actionLoading}
+            disabled={checkoutBlocked}
+          />
+
+          {checkoutBlocked && (
+            <StatusBanner
+              tone="warning"
+              title="You're outside the allowed area"
+              message="Move within the office radius to record this action."
+              style={{ marginTop: SPACING.md }}
+            />
           )}
-          <WelcomeCard />
-          {checkin && autoActionsEnabled && (
-            <View className="mt-3 rounded-2xl bg-emerald-50 border border-emerald-200 px-4 py-2">
-              <Text className="text-center text-xs text-emerald-800">
-                {sessionOrigin === SESSION_ORIGIN.AUTO
-                  ? "Checked in automatically. You'll be checked out when you leave the office."
-                  : "You'll be checked out automatically when you leave the office."}
-              </Text>
-            </View>
-          )}
-          {__DEV__ && (
-            <View className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-3">
-              <TouchableOpacity
-                className="rounded-2xl bg-red-600 px-4 py-3 items-center"
-                onPress={handleInvalidateAccessToken}
-              >
-                <Text className="text-white font-bold">
-                  DEV: Invalidate access token
-                </Text>
-              </TouchableOpacity>
 
-              <Text className="mt-3 text-xs font-bold uppercase tracking-wide text-red-700">
-                DEV: Break UI presets
-              </Text>
-
-              <TouchableOpacity
-                className={`mt-2 rounded-xl px-3 py-2 ${
-                  devBreakMockMode ? "bg-emerald-700" : "bg-slate-700"
-                }`}
-                onPress={() => setDevBreakMockMode((prev) => !prev)}
-              >
-                <Text className="text-xs font-semibold text-white">
-                  DEV local break flow: {devBreakMockMode ? "ON" : "OFF"}
-                </Text>
-              </TouchableOpacity>
-
-              <View className="mt-2 flex-row flex-wrap">
-                <TouchableOpacity
-                  className="mb-2 mr-2 rounded-xl bg-slate-700 px-3 py-2"
-                  onPress={() => applyDevBreakPreset("idle-0")}
-                >
-                  <Text className="text-xs font-semibold text-white">
-                    Idle 00:00
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  className="mb-2 mr-2 rounded-xl bg-slate-700 px-3 py-2"
-                  onPress={() => applyDevBreakPreset("idle-45")}
-                >
-                  <Text className="text-xs font-semibold text-white">
-                    Idle 00:45
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  className="mb-2 mr-2 rounded-xl bg-amber-700 px-3 py-2"
-                  onPress={() => applyDevBreakPreset("running-30")}
-                >
-                  <Text className="text-xs font-semibold text-white">
-                    Running +30m
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  className="mb-2 mr-2 rounded-xl bg-gray-700 px-3 py-2"
-                  onPress={() => applyDevBreakPreset("cap-120")}
-                >
-                  <Text className="text-xs font-semibold text-white">
-                    Cap 02:00
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  className="mb-2 mr-2 rounded-xl bg-indigo-700 px-3 py-2"
-                  onPress={() => applyDevBreakPreset("completed")}
-                >
-                  <Text className="text-xs font-semibold text-white">
-                    Completed 1/day
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  className="mb-2 mr-2 rounded-xl bg-rose-700 px-3 py-2"
-                  onPress={() => applyDevBreakPreset("monthly-cap")}
-                >
-                  <Text className="text-xs font-semibold text-white">
-                    Monthly Cap 8h
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
-          <View className="h-72 mt-4 mb-24">
-            <View className="p-3">
-              {/* DATE & TIME */}
-              <Text className="text-base text-gray-500 font-semibold">
-                DATE AND TIME *
-              </Text>
-              <View className="flex-row items-end border-b border-gray-400 pb-2 mb-6 justify-between">
-                <Text className="text-sm font-medium text-gray-500">
-                  {dateTime}
-                </Text>
-                <MaterialCommunityIcons
-                  name="calendar-month"
-                  size={28}
-                  color={COLORS.gray}
-                />
-              </View>
-              {/* LOCATION */}
-              <Text className="text-base text-gray-500 font-semibold">
-                LOCATION *
-              </Text>
-              <View className="flex-row items-end border-b border-gray-400 pb-2 mb-4 justify-between">
-                <Text className="text-sm font-medium text-gray-500">
-                  {restrictLocation === 0
-                    ? "Not Required"
-                    : !ready
-                      ? "Getting Location..."
-                      : // : distanceInfo?.locationName
-                        //   ? distanceInfo.locationName
-                        inTarget
-                        ? "In bound"
-                        : "Out of bound"}
-                </Text>
-
-                <MaterialCommunityIcons
-                  name="map-marker-radius-outline"
-                  size={28}
-                  color={COLORS.gray}
-                />
-              </View>
-              {restrictLocation === 1 && distanceInfo && (
-                <View className="mb-3">
-                  <Text className="text-xs text-gray-400">
-                    Distance: {distanceInfo.distance} m | Allowed:{" "}
-                    {distanceInfo.radius} m
-                  </Text>
-                </View>
-              )}
-
-              {/* CHECK-IN / CHECK-OUT BUTTON */}
-              <TouchableOpacity
-                className={`justify-center items-center h-16 w-full mt-4 rounded-2xl ${
-                  checkin ? "bg-red-600" : "bg-green-600"
-                } ${
-                  restrictLocation === 1 && !inTarget && !allowCheckoutAnywhere
-                    ? "opacity-50"
-                    : ""
-                }`}
-                disabled={
-                  actionLoading ||
-                  (restrictLocation === 1 &&
-                    !inTarget &&
-                    !allowCheckoutAnywhere)
+          {checkin && (
+            <>
+              <ActionButton
+                size="lg"
+                variant="outline"
+                icon={
+                  breakBlocked
+                    ? "cafe-outline"
+                    : onBreak
+                      ? "play-outline"
+                      : "cafe-outline"
                 }
-                onPress={async () => {
-                  try {
-                    const photoValue = await AsyncStorage.getItem("photo");
-                    const actionType = checkin ? "OUT" : "IN";
+                label={
+                  breakBlocked
+                    ? "Break not allowed"
+                    : onBreak
+                      ? "End break"
+                      : "Take break"
+                }
+                onPress={handleBreak}
+                disabled={breakBlocked}
+                style={{ marginTop: SPACING.lg }}
+              />
 
-                    if (photoValue !== "1") {
-                      await handleDirectCheckInOut(actionType);
-                    } else {
-                      navigation.navigate("Attendance camera", {
-                        type: actionType,
-                      });
-                    }
-                  } catch (error) {
-                    Toast.show({
-                      type: "error",
-                      text1: ":warning: Action failed",
-                      text2: error.message,
-                    });
-                  }
-                }}
+              {!!monthlyCapMessage && (
+                <StatusBanner
+                  tone="error"
+                  message={monthlyCapMessage}
+                  style={{ marginTop: SPACING.md }}
+                />
+              )}
+            </>
+          )}
+        </View>
+
+        {/* -------------------- DEVELOPER TOOLS -------------------- */}
+        {__DEV__ && (
+          <>
+            <SectionHeader
+              title="Developer tools"
+              subtitle="Debug builds only — never shipped to users."
+              style={{ marginTop: SPACING.xxl }}
+            />
+
+            <Card>
+              <SettingsRow
+                icon="construct-outline"
+                iconTint={colors.warningSurface}
+                iconColor={colors.warningText}
+                title="Developer tools"
+                description={devOpen ? "Tap to collapse" : "Tap to expand"}
+                onPress={() => setDevOpen(open => !open)}
               >
-                <Text className="text-xl font-bold text-white">
-                  {checkin ? "CHECK-OUT" : "CHECK-IN"}
-                </Text>
-              </TouchableOpacity>
-              {/* BREAK BUTTON */}
-              {checkin && (
-                <View>
-                  <TouchableOpacity
-                    className={`justify-center items-center h-16 w-full mt-4 rounded-2xl ${
-                      actionLoading ||
-                      (restrictLocation === 1 && !inTarget) ||
-                      breakCompleted ||
-                      breakMinutes >= 120
-                        ? "bg-gray-400" // ✅ disabled color
-                        : onBreak
-                          ? "bg-slate-500" // break running
-                          : "bg-blue-400" // normal
-                    }`}
-                    disabled={
-                      actionLoading ||
-                      (restrictLocation === 1 && !inTarget) ||
-                      breakCompleted ||
-                      breakMinutes >= 120
-                    }
-                    onPress={handleBreak}
-                  >
-                    <Text className="text-xl font-bold text-white">
-                      {actionLoading ||
-                      (restrictLocation === 1 && !inTarget) ||
-                      breakCompleted ||
-                      breakMinutes >= 120
-                        ? "BREAK NOT ALLOWED"
-                        : onBreak
-                          ? "END BREAK"
-                          : "TAKE BREAK"}
-                    </Text>
-                  </TouchableOpacity>
+                <Ionicons
+                  name={devOpen ? "chevron-up" : "chevron-down"}
+                  size={ICON.md}
+                  color={colors.textMuted}
+                />
+              </SettingsRow>
 
-                  {!!monthlyCapMessage && (
-                    <View className="mt-3 rounded-xl border border-rose-300 bg-rose-50 px-3 py-2">
-                      <Text className="text-xs font-semibold text-rose-700">
-                        {monthlyCapMessage}
-                      </Text>
-                    </View>
-                  )}
+              {devOpen && (
+                <View
+                  style={{
+                    paddingHorizontal: SPACING.lg,
+                    paddingBottom: SPACING.lg,
+                  }}
+                >
+                  <ActionButton
+                    variant="tinted"
+                    tone="error"
+                    icon="key-outline"
+                    label="DEV: Invalidate access token"
+                    onPress={handleInvalidateAccessToken}
+                  />
+
+                  <PressableScale
+                    onPress={() => setDevBreakMockMode(prev => !prev)}
+                    scaleTo={0.98}
+                    hitSlop={0}
+                    accessibilityRole="switch"
+                    accessibilityState={{ checked: devBreakMockMode }}
+                    accessibilityLabel="DEV local break flow"
+                    style={{
+                      marginTop: SPACING.md,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      paddingHorizontal: SPACING.md,
+                      height: 44,
+                      borderRadius: RADIUS.md,
+                      borderWidth: 1,
+                      borderColor: devBreakMockMode
+                        ? colors.successBorder
+                        : colors.cardBorder,
+                      backgroundColor: devBreakMockMode
+                        ? colors.successSurface
+                        : colors.surfaceSecondary,
+                    }}
+                  >
+                    <Text
+                      style={{ ...TYPO.subhead, color: colors.textPrimary }}
+                    >
+                      DEV local break flow
+                    </Text>
+                    <Text
+                      style={{
+                        ...TYPO.caption2,
+                        fontWeight: "700",
+                        color: devBreakMockMode
+                          ? colors.successText
+                          : colors.textMuted,
+                      }}
+                    >
+                      {devBreakMockMode ? "ON" : "OFF"}
+                    </Text>
+                  </PressableScale>
+
+                  <Text
+                    style={{
+                      ...TYPO.caption2,
+                      fontWeight: "700",
+                      letterSpacing: 0.8,
+                      color: colors.textMuted,
+                      marginTop: SPACING.lg,
+                      marginBottom: SPACING.sm,
+                    }}
+                  >
+                    BREAK UI PRESETS
+                  </Text>
+
+                  <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
+                    {DEV_BREAK_PRESETS.map(preset => (
+                      <PressableScale
+                        key={preset.key}
+                        onPress={() => applyDevBreakPreset(preset.key)}
+                        scaleTo={0.96}
+                        hitSlop={0}
+                        accessibilityLabel={`Preset ${preset.label}`}
+                        style={{
+                          minHeight: 34,
+                          justifyContent: "center",
+                          paddingHorizontal: SPACING.md,
+                          marginEnd: SPACING.sm,
+                          marginBottom: SPACING.sm,
+                          borderRadius: RADIUS.pill,
+                          borderWidth: 1,
+                          borderColor: colors.cardBorder,
+                          backgroundColor: isDark
+                            ? colors.surfaceSecondary
+                            : colors.iconBackground,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            ...TYPO.caption,
+                            color: colors.textSecondary,
+                          }}
+                        >
+                          {preset.label}
+                        </Text>
+                      </PressableScale>
+                    ))}
+                  </View>
                 </View>
               )}
-            </View>
-          </View>
-        </View>
+            </Card>
+          </>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
 }
+
 export default AttendanceAction;

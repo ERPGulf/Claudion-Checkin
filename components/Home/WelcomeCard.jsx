@@ -1,87 +1,105 @@
-import { View, Text, TouchableOpacity } from "react-native";
-import React from "react";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { useSelector } from "react-redux";
-import { useNavigation } from "@react-navigation/native";
-import { COLORS, SIZES } from "../../constants";
+import React, { useMemo } from 'react';
+import { View, Text } from 'react-native';
+import { useSelector } from 'react-redux';
+import { useNavigation } from '@react-navigation/native';
+import { RADIUS, SHADOWS, SPACING, TYPO } from '../../constants';
+import useAppTheme from '../../hooks/useAppTheme';
+import { resolveTextAlign } from '../../utils/textDirection';
+import Avatar from '../common/Avatar';
+import NotificationButton from '../common/NotificationButton';
 
+function getGreeting(hour) {
+  if (hour < 12) return 'Good morning';
+  if (hour < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
+/**
+ * Home identity header. Same data and the same single action (Notifications)
+ * as before, rendered as a light elevated card instead of a 192pt black block:
+ * the page no longer opens with a wall of dark pixels, and the employee's name
+ * becomes the largest thing on screen rather than the word "Home".
+ */
 function WelcomeCard() {
   const navigation = useNavigation();
-  const fullname = useSelector((state) => state.user.fullname);
- const unreadCount = useSelector(
-  (state) => state.notification?.unreadCount ?? 0
-);
+  const { colors, isDark } = useAppTheme();
+  const fullname = useSelector(state => state.user.fullname);
+  const employeeCode = useSelector(
+    state => state.user?.userDetails?.employeeCode,
+  );
+  const unreadCount = useSelector(
+    state => state.notification?.unreadCount ?? 0,
+  );
+
+  const greeting = useMemo(() => getGreeting(new Date().getHours()), []);
+  // Arabic names align to their own script so the block never reads as ragged.
+  const align = resolveTextAlign(fullname, 'left');
 
   return (
     <View
-      style={{ backgroundColor: COLORS.primary, width: "100%" }}
-      className="h-48 rounded-2xl p-3 justify-between"
+      style={{
+        width: '100%',
+        backgroundColor: colors.cardBackground,
+        borderRadius: RADIUS.xl,
+        borderWidth: 1,
+        borderColor: colors.cardBorder,
+        paddingVertical: SPACING.lg,
+        paddingHorizontal: SPACING.lg,
+        flexDirection: 'row',
+        alignItems: 'center',
+        ...(isDark ? null : SHADOWS.card),
+      }}
     >
-      <View className="flex-row justify-center items-center relative h-14">
-        <TouchableOpacity
-          onPress={() => navigation.navigate("Notifications")}
-          className="bg-gray-800 w-12 h-12 items-center justify-center rounded-full absolute right-1 top-1"
+      <Avatar name={fullname} size={48} />
+
+      <View style={{ flex: 1, marginHorizontal: SPACING.md }}>
+        <Text
+          style={{
+            ...TYPO.subhead,
+            color: colors.textMuted,
+            textAlign: align,
+          }}
         >
-          <MaterialCommunityIcons
-            name="bell"
-            color={COLORS.white}
-            size={SIZES.xxLarge}
-          />
-          {unreadCount > 0 && (
-            <View
-              style={{
-                position: "absolute",
-                top: 4,
-                right: 4,
-                minWidth: 18,
-                height: 18,
-                borderRadius: 9,
-                backgroundColor: "red",
-                alignItems: "center",
-                justifyContent: "center",
-                paddingHorizontal: 4,
-              }}
-            >
-              <Text
-                style={{
-                  color: "white",
-                  fontSize: 10,
-                  fontWeight: "bold",
-                }}
-              >
-                {unreadCount}
-              </Text>
-            </View>
-          )}
-        </TouchableOpacity>
-        <Text className="text-xl font-bold text-white">Home</Text>
-      </View>
-      <View>
-        <Text className="text-base font-medium text-white">Welcome,</Text>
-        <View className="flex-row items-center space-x-2 -mt-1">
+          {greeting}
+        </Text>
+
+        <Text
+          numberOfLines={2}
+          adjustsFontSizeToFit
+          minimumFontScale={0.85}
+          style={{
+            ...TYPO.title2,
+            // adjustsFontSizeToFit + an explicit lineHeight mis-centers the
+            // shrunken text on Android, so let the platform derive it.
+            lineHeight: undefined,
+            color: colors.textPrimary,
+            textAlign: align,
+            writingDirection: 'auto',
+            marginTop: 2,
+          }}
+        >
+          {fullname || 'username'}
+        </Text>
+
+        {!!employeeCode && (
           <Text
-            adjustsFontSizeToFit
-            minimumFontScale={0.8}
+            numberOfLines={1}
             style={{
-              width: "90%",
-              textAlign:
-                fullname && /[\u0600-\u06FF]/.test(fullname) ? "right" : "left",
-              writingDirection: "auto",
-              flexShrink: 1,
-              flexWrap: "wrap",
-              fontSize: SIZES.xxLarge,
-              fontWeight: "600",
-              color: COLORS.white,
-              fontFamily: undefined,
+              ...TYPO.caption,
+              color: colors.textMuted,
+              textAlign: align,
+              marginTop: SPACING.xs,
             }}
           >
-            {fullname || "username"}
+            {employeeCode}
           </Text>
-          <View className="bg-gray-800 w-10 h-10 items-center justify-center rounded-full">
-            <MaterialCommunityIcons name="hand-wave" color="white" size={24} />
-          </View>
-        </View>
+        )}
       </View>
+
+      <NotificationButton
+        count={unreadCount}
+        onPress={() => navigation.navigate('Notifications')}
+      />
     </View>
   );
 }

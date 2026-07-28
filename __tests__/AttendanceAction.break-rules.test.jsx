@@ -39,6 +39,15 @@ jest.mock("../components/AttendanceAction/WelcomeCard", () => {
   return () => <Text>WelcomeCardMock</Text>;
 });
 
+// Stubbed for the same reason as WelcomeCard: it imports expo-image, which
+// jest.config.js does not transform. The card is not what these suites assert on.
+jest.mock("../components/AttendanceAction/StatusCard", () => {
+  const React = require("react");
+  const { Text } = require("react-native");
+
+  return () => <Text>StatusCardMock</Text>;
+});
+
 jest.mock("react-native-safe-area-context", () => {
   const React = require("react");
   const { View } = require("react-native");
@@ -55,6 +64,7 @@ jest.mock("@expo/vector-icons", () => {
 
   return {
     Entypo: (props) => <Text {...props}>Entypo</Text>,
+    Ionicons: (props) => <Text {...props}>Icon</Text>,
     MaterialCommunityIcons: (props) => <Text {...props}>Icon</Text>,
   };
 });
@@ -165,7 +175,7 @@ describe("AttendanceAction break rules", () => {
     const screen = renderScreen({ checkin: true });
 
     await waitFor(() => {
-      expect(screen.getByText("BREAK NOT ALLOWED")).toBeTruthy();
+      expect(screen.getByText("Break not allowed")).toBeTruthy();
     });
   });
 
@@ -176,7 +186,7 @@ describe("AttendanceAction break rules", () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText("BREAK NOT ALLOWED")).toBeTruthy();
+      expect(screen.getByText("Break not allowed")).toBeTruthy();
     });
   });
 
@@ -194,10 +204,10 @@ describe("AttendanceAction break rules", () => {
     const screen = renderScreen({ checkin: true, breakMinutes: 45 });
 
     await waitFor(() => {
-      expect(screen.getByText("TAKE BREAK")).toBeTruthy();
+      expect(screen.getByText("Take break")).toBeTruthy();
     });
 
-    fireEvent.press(screen.getByText("TAKE BREAK"));
+    fireEvent.press(screen.getByText("Take break"));
 
     await waitFor(() => {
       expect(Toast.show).toHaveBeenCalledWith(
@@ -209,7 +219,7 @@ describe("AttendanceAction break rules", () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText("BREAK NOT ALLOWED")).toBeTruthy();
+      expect(screen.getByText("Break not allowed")).toBeTruthy();
     });
   });
 

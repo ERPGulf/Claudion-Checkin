@@ -1,10 +1,17 @@
 import Home from './Home';
+// TEMPORARY: New Home Experience experiment — remove with the feature.
+import HomeLegacy from './HomeLegacy';
 import AttendanceAction from './AttendanceAction';
+// TEMPORARY: New Home Experience experiment — remove with the feature.
+import AttendanceActionLegacy from './AttendanceActionLegacy';
 import QrScan from './QrScan';
 import Login from './Login';
 import WelcomeScreen from './WelcomeScreen';
 import AttendanceHistory from './AttendanceHistory';
+import AttendanceHistoryLegacy from './AttendanceHistoryLegacy';
 import SelectQuickAccess from './SelectQuickAccess';
+// TEMPORARY: New Home Experience experiment — remove with the feature.
+import SelectQuickAccessLegacy from './SelectQuickAccessLegacy';
 import ExpenseClaim from './ExpenseClaim';
 import LeaveRequest from './LeaveRequest';
 import Complaints from './Complaints';
@@ -21,14 +28,18 @@ import SalaryAdvance from './SalaryAdvance';
 import AutoAttendanceScreen from './AutoAttendance';
 export {
   Home,
+  HomeLegacy,
   AttendanceAction,
+  AttendanceActionLegacy,
   QrScan,
   Login,
   WelcomeScreen,
   AttendanceHistory,
+  AttendanceHistoryLegacy,
   AttendanceRequest,
   SalaryAdvance,
   SelectQuickAccess,
+  SelectQuickAccessLegacy,
   LeaveRequest,
   Complaints,
   ExpenseClaim,
