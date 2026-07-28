@@ -27,6 +27,59 @@ export const getServerTime = async () => {
   return response.data?.message?.server_time;
 };
 
+/** Frappe naive-datetime format used by the attendance endpoints. */
+const SERVER_TIMESTAMP_FORMAT = "yyyy-MM-dd HH:mm:ss";
+const SERVER_TIME_PATTERN = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})/;
+
+/**
+ * Reads the server's wall clock into a local Date carrying the SAME digits.
+ * The server sends a naive datetime with no offset, and engines disagree on how
+ * to parse that, so the components are read explicitly rather than via
+ * Date.parse.
+ */
+const parseServerWallClock = (value) => {
+  const match = SERVER_TIME_PATTERN.exec(String(value ?? "").trim());
+  if (!match) return null;
+
+  const [, year, month, day, hours, minutes, seconds] = match.map(Number);
+  const parsed = new Date(year, month - 1, day, hours, minutes, seconds);
+
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+/**
+ * Server-clock timestamp for something that happened `occurredAt` (device epoch
+ * ms) rather than now — used to backdate a geofence transition that the OS
+ * delivered while the app was killed, so the attendance log carries the moment
+ * the user actually crossed the boundary.
+ *
+ * Works without knowing the server's timezone: the age of the event is measured
+ * purely with the device clock (immune to device/server skew) and subtracted
+ * from the server's own wall clock, then re-formatted with the same digits the
+ * server would have used. A DST change inside the gap is the one case this can
+ * be an hour out; it degrades to a slightly wrong time, never a rejected log.
+ *
+ * Falls back to the server's current time whenever the event time is unusable,
+ * which is exactly the pre-existing behaviour.
+ */
+export const resolveServerTimestampAt = async (occurredAt, nowMs = Date.now()) => {
+  const serverNow = await getServerTime();
+  const occurredAtMs = toTimestampMs(occurredAt);
+
+  if (!occurredAtMs) return serverNow;
+
+  const ageMs = nowMs - occurredAtMs;
+  if (!Number.isFinite(ageMs) || ageMs <= 0) return serverNow;
+
+  const serverWallClock = parseServerWallClock(serverNow);
+  if (!serverWallClock) return serverNow;
+
+  return format(
+    new Date(serverWallClock.getTime() - ageMs),
+    SERVER_TIMESTAMP_FORMAT,
+  );
+};
+
 // getOfficeLocation(employeeCode) — returns nearest location object or null
 
 export const getOfficeLocation = async (employeeCode) => {
@@ -402,8 +455,18 @@ export const userCheckIn = async ({ employeeCode, type, locationData }) => {
  * Hits the same backend method as `userCheckIn`. `office` (optional) is the
  * reporting location the geofence is registered against; it is used only to tag
  * the log with a location, never to allow or deny the action.
+ *
+ * `occurredAt` (optional, device epoch ms) is when the geofence transition
+ * actually happened. It matters for events replayed at launch after the OS
+ * delivered them to a killed app: without it the log would carry the time the
+ * user next opened the app instead of the time they left the office.
  */
-export const autoCheckInOut = async ({ employeeCode, type, office = null }) => {
+export const autoCheckInOut = async ({
+  employeeCode,
+  type,
+  office = null,
+  occurredAt = null,
+}) => {
   const logPrefix = "[attendance.service/autoCheckInOut]";
   try {
     if (!employeeCode) throw new Error("Employee ID is required");
@@ -418,7 +481,7 @@ export const autoCheckInOut = async ({ employeeCode, type, office = null }) => {
     const token = await AsyncStorage.getItem("access_token");
     if (!token) throw new Error("Token missing");
 
-    const timestamp = await getServerTime();
+    const timestamp = await resolveServerTimestampAt(occurredAt);
 
     const payload = {
       device_id: "MobileAPP",

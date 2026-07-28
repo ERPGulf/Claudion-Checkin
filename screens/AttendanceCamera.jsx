@@ -32,9 +32,11 @@ import {
   getOfficeLocation,
 } from "../services/api";
 import {
-  persistCheckinStartTime,
-  persistCheckoutTime,
-} from "../utils/attendanceSession";
+  performSessionTransition,
+  SESSION_ORIGIN,
+  SESSION_STATUS,
+  TRANSITION_RESULT,
+} from "../utils/attendanceSessionState";
 
 function AttendanceCamera() {
   const navigation = useNavigation();
@@ -138,32 +140,86 @@ function AttendanceCamera() {
         radius: locationData?.radius || 0,
       };
 
-      const checkinResponse = await userCheckIn(dataField);
-      const docname = checkinResponse?.name;
+      // Same session state machine the geofence drives, so a photo check-in is
+      // an ordinary open session that an office EXIT can close automatically.
+      const outcome = await performSessionTransition({
+        type,
+        origin: SESSION_ORIGIN.MANUAL,
+        execute: () => userCheckIn(dataField),
+      });
+
+      if (outcome.status === TRANSITION_RESULT.SKIPPED) {
+        // Already in the target state (e.g. an automatic check-out landed while
+        // the camera was open). Nothing was sent; re-sync and go back.
+        const { session } = outcome;
+        if (session.status === SESSION_STATUS.CHECKED_IN) {
+          dispatch(
+            setCheckin({
+              checkinTime: session.startedAt,
+              location: null,
+              sessionOrigin: session.origin,
+            }),
+          );
+        } else {
+          dispatch(setCheckout({ checkoutTime: session.endedAt }));
+        }
+
+        Toast.show({
+          type: "info",
+          text1:
+            session.status === SESSION_STATUS.CHECKED_IN
+              ? "Already checked in"
+              : "Already checked out",
+          text2:
+            session.closedBy === SESSION_ORIGIN.AUTO
+              ? "You were checked out automatically when you left the office."
+              : undefined,
+        });
+        navigation.navigate("Attendance action");
+        return;
+      }
+
+      if (outcome.status === TRANSITION_RESULT.FAILED) {
+        throw new Error(outcome.response?.message || "Check-in failed");
+      }
+
+      const { session } = outcome;
+      const docname = outcome.response?.name;
       if (!docname) throw new Error("Check-in failed: Missing Checkin ID");
 
-      // Update employee status
-      await userStatusPut(employeeCode, custom_in);
-      // Upload photo
-      await uploadPicture(docname);
-      // Redux update
+      // Redux update. The attendance log now exists on the server, so the
+      // session is committed before the photo work: if the upload fails the
+      // user is still checked in/out, both here and for the geofence.
       if (custom_in === 1) {
-        const startedAt = await persistCheckinStartTime(Date.now());
-
         dispatch(
           setCheckin({
-            checkinTime: startedAt,
+            checkinTime: session.startedAt,
             location: {
               locationName: locationData?.locationName || "Office",
               latitude: locationData?.latitude,
               longitude: locationData?.longitude,
               radius: locationData?.radius,
             },
+            sessionOrigin: session.origin,
           }),
         );
       } else {
-        const checkedOutAt = await persistCheckoutTime(Date.now());
-        dispatch(setCheckout({ checkoutTime: checkedOutAt }));
+        dispatch(setCheckout({ checkoutTime: session.endedAt }));
+      }
+
+      try {
+        // Update employee status
+        await userStatusPut(employeeCode, custom_in);
+        // Upload photo
+        await uploadPicture(docname);
+      } catch (uploadError) {
+        Toast.show({
+          type: "error",
+          text1: `CHECKED ${type}, photo not saved`,
+          text2: uploadError.message,
+        });
+        navigation.navigate("Attendance action");
+        return;
       }
 
       hapticsMessage("success");

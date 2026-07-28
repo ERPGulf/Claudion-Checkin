@@ -4,6 +4,10 @@ const initialState = {
   checkin: false,
   checkinTime: null,
   checkoutTime: null,
+  // How the open session was started ("MANUAL" | "AUTO" | "UNKNOWN"), mirrored
+  // from the durable record in utils/attendanceSessionState.js so the UI can
+  // tell the user a manual check-in will still be closed by the geofence.
+  sessionOrigin: null,
   location: null, // selected location
   locations: [], // list of location objects
   todayHours: 0,
@@ -23,12 +27,14 @@ export const AttendanceSlice = createSlice({
       state.checkin = true;
       state.checkinTime = action.payload.checkinTime;
       state.location = action.payload?.location || null;
+      state.sessionOrigin = action.payload?.sessionOrigin || null;
     },
     setCheckout: (state, action) => {
       state.checkin = false;
       state.checkinTime = null;
       state.checkoutTime = action.payload.checkoutTime;
       state.location = null; // clear location on checkout
+      state.sessionOrigin = null;
     },
     setOnlyCheckIn: (state, action) => {
       state.checkin = action.payload;
@@ -38,6 +44,7 @@ export const AttendanceSlice = createSlice({
       state.checkinTime = null;
       state.checkoutTime = null;
       state.location = null;
+      state.sessionOrigin = null;
 
       state.onBreak = false;
       state.breakStartTime = null;
@@ -88,6 +95,7 @@ export const {
 export const selectCheckin = (state) => state.attendance.checkin;
 export const selectCheckinTime = (state) => state.attendance.checkinTime;
 export const selectCheckoutTime = (state) => state.attendance.checkoutTime;
+export const selectSessionOrigin = (state) => state.attendance.sessionOrigin;
 export const selectLocation = (state) => state.attendance.location;
 export const selectLocations = (state) => state.attendance.locations;
 export const selectTodayHours = (state) => state.attendance.todayHours;

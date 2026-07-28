@@ -13,7 +13,10 @@ jest.mock("../services/api/apiClient", () => ({
 }));
 
 import apiClient from "../services/api/apiClient";
-import { autoCheckInOut } from "../services/api/attendance.service";
+import {
+  autoCheckInOut,
+  resolveServerTimestampAt,
+} from "../services/api/attendance.service";
 
 const ADD_LOG_ENDPOINT = "add_log_based_on_employee_field";
 
@@ -96,5 +99,76 @@ describe("autoCheckInOut (geofence-driven attendance)", () => {
     });
     expect(result.allowed).toBe(false);
     expect(apiClient.post).not.toHaveBeenCalled();
+  });
+
+  // A transition the OS delivered while the app was killed must be logged at
+  // the time the user crossed the boundary, not the time they reopened the app.
+  describe("backdating a replayed transition", () => {
+    const SERVER_NOW = "2026-07-23 10:00:00";
+
+    beforeEach(() => {
+      apiClient.get.mockResolvedValue({
+        data: { message: { server_time: SERVER_NOW } },
+      });
+    });
+
+    it("subtracts the event's age from the server clock", async () => {
+      const now = Date.now();
+
+      await autoCheckInOut({
+        employeeCode: "HR-EMP-00011",
+        type: "OUT",
+        occurredAt: now - 90 * 60 * 1000, // left the office 90 minutes ago
+      });
+
+      const [, payload] = apiClient.post.mock.calls[0];
+      expect(payload.timestamp).toBe("2026-07-23 08:30:00");
+    });
+
+    it("derives the log time from the server clock, whatever the device clock reads", async () => {
+      // Device clock years out from the server: only the *age* of the event is
+      // taken from the device, so the logged time must not drift with it.
+      const deviceNow = Date.UTC(2030, 0, 1, 5, 0, 0);
+
+      const timestamp = await resolveServerTimestampAt(
+        deviceNow - 45 * 60 * 1000,
+        deviceNow,
+      );
+
+      expect(timestamp).toBe("2026-07-23 09:15:00");
+    });
+
+    it("uses the server's current time for a live transition", async () => {
+      await autoCheckInOut({
+        employeeCode: "HR-EMP-00011",
+        type: "IN",
+        occurredAt: Date.now(),
+      });
+
+      const [, payload] = apiClient.post.mock.calls[0];
+      expect(payload.timestamp).toBe(SERVER_NOW);
+    });
+
+    it("falls back to the server's current time when no event time is given", async () => {
+      await autoCheckInOut({ employeeCode: "HR-EMP-00011", type: "IN" });
+
+      const [, payload] = apiClient.post.mock.calls[0];
+      expect(payload.timestamp).toBe(SERVER_NOW);
+    });
+
+    it("falls back to the server's current time when it is unparseable", async () => {
+      apiClient.get.mockResolvedValue({
+        data: { message: { server_time: "not a datetime" } },
+      });
+
+      await autoCheckInOut({
+        employeeCode: "HR-EMP-00011",
+        type: "OUT",
+        occurredAt: Date.now() - 60 * 60 * 1000,
+      });
+
+      const [, payload] = apiClient.post.mock.calls[0];
+      expect(payload.timestamp).toBe("not a datetime");
+    });
   });
 });

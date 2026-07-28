@@ -44,12 +44,20 @@ import {
   getTodayBreaks,
 } from "../services/api/attendance.service";
 import {
-  clearPersistedCheckinStartTime,
   getPersistedSessionTimes,
-  persistCheckinStartTime,
-  persistCheckoutTime,
   resolveActiveSessionStart,
 } from "../utils/attendanceSession";
+import {
+  performSessionTransition,
+  reconcileSessionFromServer,
+  SESSION_ORIGIN,
+  SESSION_STATUS,
+  TRANSITION_RESULT,
+} from "../utils/attendanceSessionState";
+import {
+  selectAutoAttendanceActive,
+  selectAutoAttendanceFullActions,
+} from "../redux/Slices/AutoAttendanceSlice";
 import {
   SafeAreaView,
   useSafeAreaInsets,
@@ -70,6 +78,13 @@ function AttendanceAction() {
   const checkinLocation = useSelector((state) => state.attendance.location);
   const userDetails = useSelector((state) => state.user.userDetails);
   const breakMinutes = useSelector((state) => state.attendance.breakMinutes);
+  const sessionOrigin = useSelector((state) => state.attendance.sessionOrigin);
+  // Monitoring has to be running (policy allows it AND the user opted in) and
+  // the policy has to cover attendance actions before the geofence will close
+  // this session — otherwise promising an automatic check-out would be a lie.
+  const autoMonitoringActive = useSelector(selectAutoAttendanceActive);
+  const autoActionsEnabled =
+    useSelector(selectAutoAttendanceFullActions) && autoMonitoringActive;
   const employeeCode = userDetails?.employeeCode;
   const [refresh, setRefresh] = useState(false);
   const [dateTime, setDateTime] = useState(null);
@@ -136,6 +151,25 @@ function AttendanceAction() {
     loadRestriction();
   }, []);
 
+  /** Mirrors a session record from the state machine into Redux. */
+  const syncUiToSession = useCallback(
+    (session) => {
+      if (session?.status === SESSION_STATUS.CHECKED_IN) {
+        dispatch(
+          setCheckin({
+            checkinTime: session.startedAt,
+            location: checkinLocation,
+            sessionOrigin: session.origin,
+          }),
+        );
+        return;
+      }
+
+      dispatch(setCheckout({ checkoutTime: session?.endedAt ?? Date.now() }));
+    },
+    [checkinLocation, dispatch],
+  );
+
   const syncCheckinFromStatus = useCallback(
     async (status) => {
       const { checkinStartTime, lastCheckoutTime } =
@@ -148,19 +182,24 @@ function AttendanceAction() {
         lastCheckoutTime,
       });
 
-      if (resolvedStart) {
-        const persistedStart = await persistCheckinStartTime(resolvedStart);
+      // Push the server's verdict into the session state machine before
+      // mirroring it into Redux, so the geofence listeners — which read the
+      // machine, not Redux — agree with what this screen is showing.
+      const session = await reconcileSessionFromServer({
+        activeStartedAt: resolvedStart,
+      });
 
+      if (session.status === SESSION_STATUS.CHECKED_IN) {
         dispatch(
           setCheckin({
-            checkinTime: persistedStart,
+            checkinTime: session.startedAt,
             location: checkinLocation,
+            sessionOrigin: session.origin,
           }),
         );
         return;
       }
 
-      await clearPersistedCheckinStartTime();
       dispatch(resetCheckin());
     },
     [checkinLocation, checkinTime, dispatch],
@@ -405,29 +444,56 @@ function AttendanceAction() {
     async (type) => {
       try {
         setActionLoading(true);
-        const response = await userCheckIn({
-          employeeCode,
+
+        const outcome = await performSessionTransition({
           type,
-          locationData: distanceInfo,
+          origin: SESSION_ORIGIN.MANUAL,
+          execute: () =>
+            userCheckIn({
+              employeeCode,
+              type,
+              locationData: distanceInfo,
+            }),
         });
 
-        if (!response.allowed) {
+        // The session already moved without this screen knowing — almost
+        // always the geofence checked the user out in the background. Nothing
+        // was sent; just re-sync the UI to the real state.
+        if (outcome.status === TRANSITION_RESULT.SKIPPED) {
+          syncUiToSession(outcome.session);
+
           Toast.show({
-            type: "error",
-            text1: ":warning: Action blocked",
-            text2: response.message,
+            type: "info",
+            text1:
+              outcome.session.status === SESSION_STATUS.CHECKED_IN
+                ? "Already checked in"
+                : "Already checked out",
+            text2:
+              outcome.session.closedBy === SESSION_ORIGIN.AUTO
+                ? "You were checked out automatically when you left the office."
+                : undefined,
           });
           return;
         }
 
-        if (type === "IN") {
-          const startedAt = await persistCheckinStartTime(Date.now());
+        if (outcome.status === TRANSITION_RESULT.FAILED) {
+          Toast.show({
+            type: "error",
+            text1: ":warning: Action blocked",
+            text2: outcome.response?.message,
+          });
+          return;
+        }
 
+        const { session, response } = outcome;
+
+        if (type === "IN") {
           dispatch({ type: "attendance/setSelectedLocation", payload: null });
           dispatch(
             setCheckin({
-              checkinTime: startedAt,
+              checkinTime: session.startedAt,
               location: restrictLocation === 1 ? response.location : null,
+              sessionOrigin: session.origin,
             }),
           );
         } else {
@@ -441,9 +507,7 @@ function AttendanceAction() {
             }
           }
 
-          const checkedOutAt = await persistCheckoutTime(Date.now());
-
-          dispatch(setCheckout({ checkoutTime: checkedOutAt }));
+          dispatch(setCheckout({ checkoutTime: session.endedAt }));
           dispatch({ type: "attendance/setSelectedLocation", payload: null });
         }
 
@@ -482,6 +546,7 @@ function AttendanceAction() {
       dispatch,
       refreshAttendanceData,
       syncBreakState,
+      syncUiToSession,
     ],
   );
 
@@ -811,6 +876,15 @@ function AttendanceAction() {
             </View>
           )}
           <WelcomeCard />
+          {checkin && autoActionsEnabled && (
+            <View className="mt-3 rounded-2xl bg-emerald-50 border border-emerald-200 px-4 py-2">
+              <Text className="text-center text-xs text-emerald-800">
+                {sessionOrigin === SESSION_ORIGIN.AUTO
+                  ? "Checked in automatically. You'll be checked out when you leave the office."
+                  : "You'll be checked out automatically when you leave the office."}
+              </Text>
+            </View>
+          )}
           {__DEV__ && (
             <View className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-3">
               <TouchableOpacity
