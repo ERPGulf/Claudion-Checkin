@@ -154,7 +154,19 @@ export default function AutoAttendanceBootstrap() {
     // the attendance log and the session record carry the real crossing time
     // rather than the time the app woke up.
     const performAttendanceAction = async (type, occurredAt) => {
-      if (!fullActionsRef.current) return;
+      // geotagging === 1 ("warnings only"): the crossing is detected and shown
+      // on the AutoAttendance screen, but must never become an attendance log.
+      // Mark it handled anyway — the policy in force AT THE CROSSING governs, so
+      // raising the policy to 2 later must not retroactively replay it.
+      if (!fullActionsRef.current) {
+        console.log(
+          `${LOG_PREFIX} Policy does not cover attendance actions; ignoring ${type}`,
+        );
+        await markEventProcessed(occurredAt);
+        return;
+      }
+
+      // Transient, not a decision: retry on the next launch once it is known.
       const code = employeeCodeRef.current;
       if (!code) return;
 

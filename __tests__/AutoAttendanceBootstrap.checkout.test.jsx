@@ -56,6 +56,8 @@ import AutoAttendanceBootstrap from "../components/AutoAttendanceBootstrap";
 import RootReducer from "../redux/RootReducer";
 import { GEOTAGGING } from "../redux/Slices/AutoAttendanceSlice";
 import { autoCheckInOut } from "../services/api/attendance.service";
+import { fetchEmployeeData } from "../services/api/employee.service";
+import { stopGeofence } from "../modules/expo-auto-attendance";
 import { presentLocalNotification } from "../services/notifications/localNotifications";
 import {
   performSessionTransition,
@@ -67,14 +69,14 @@ import { getLastProcessedEventAt } from "../utils/geofenceEventLog";
 
 const EMPLOYEE_CODE = "HR-EMP-00011";
 
-const buildStore = () =>
+const buildStore = (geotagging = GEOTAGGING.ALL_ACTIONS) =>
   configureStore({
     reducer: RootReducer,
     preloadedState: {
       userAuth: { isLoggedIn: true, token: "tok" },
       user: { userDetails: { employeeCode: EMPLOYEE_CODE } },
       autoAttendance: {
-        geotagging: GEOTAGGING.ALL_ACTIONS,
+        geotagging,
         userEnabled: true,
       },
     },
@@ -97,6 +99,10 @@ const manualCheckOut = () =>
     execute: async () => ({ allowed: true, name: "MANUAL-002" }),
   });
 
+// A realistic timeline: checked in this morning, left 90 minutes ago.
+const startedWorkAt = () => Date.now() - 4 * 60 * 60 * 1000;
+const leftTheOfficeAt = () => Date.now() - 90 * 60 * 1000;
+
 const fireGeofence = async (transition) => {
   const event = {
     identifier: "office-main",
@@ -113,16 +119,21 @@ const fireGeofence = async (transition) => {
 describe("AutoAttendanceBootstrap geofence transitions", () => {
   let store;
 
-  /** Mounts the bootstrap and waits until it is listening. */
-  const mountBootstrap = async () => {
-    const attached = listeners.onGeofenceExit.length + 1;
-
-    store = buildStore();
+  /** Renders the bootstrap under a given server policy. */
+  const renderBootstrap = (geotagging = GEOTAGGING.ALL_ACTIONS) => {
+    store = buildStore(geotagging);
     render(
       <Provider store={store}>
         <AutoAttendanceBootstrap />
       </Provider>,
     );
+  };
+
+  /** Mounts the bootstrap and waits until it is listening. */
+  const mountBootstrap = async (geotagging = GEOTAGGING.ALL_ACTIONS) => {
+    const attached = listeners.onGeofenceExit.length + 1;
+
+    renderBootstrap(geotagging);
 
     await waitFor(() =>
       expect(listeners.onGeofenceExit).toHaveLength(attached),
@@ -146,6 +157,8 @@ describe("AutoAttendanceBootstrap geofence transitions", () => {
     listeners.onGeofenceEnter = [];
     listeners.onGeofenceExit = [];
     mockNativeLastEvent = null;
+    // clearAllMocks keeps implementations, so restore the policy baseline.
+    fetchEmployeeData.mockResolvedValue({ geotagging: GEOTAGGING.ALL_ACTIONS });
     await AsyncStorage.clear();
   });
 
@@ -260,9 +273,6 @@ describe("AutoAttendanceBootstrap geofence transitions", () => {
   // The OS delivers transitions to native code even with the app killed, but
   // the attendance call needs JS. These cover picking that up at next launch.
   describe("replay of a transition missed while JS was not running", () => {
-    // A realistic timeline: checked in this morning, left 90 minutes ago.
-    const startedWorkAt = () => Date.now() - 4 * 60 * 60 * 1000;
-    const leftTheOfficeAt = () => Date.now() - 90 * 60 * 1000;
 
     it("checks out at launch using the time the user actually left", async () => {
       await manualCheckIn(startedWorkAt());
@@ -428,6 +438,81 @@ describe("AutoAttendanceBootstrap geofence transitions", () => {
       await flushReplay();
       expect(autoCheckInOut).not.toHaveBeenCalled();
       expect((await readSession()).origin).toBe(SESSION_ORIGIN.MANUAL);
+    });
+  });
+
+  // The server-side `geotagging` policy: 0 disabled, 1 warnings only,
+  // 2 all attendance actions.
+  describe("geotagging policy levels", () => {
+    it("never monitors or logs when the policy is disabled", async () => {
+      fetchEmployeeData.mockResolvedValue({ geotagging: GEOTAGGING.DISABLED });
+      await manualCheckIn(startedWorkAt());
+      mockNativeLastEvent = {
+        transition: "EXIT",
+        identifier: "office-main",
+        timestamp: leftTheOfficeAt(),
+      };
+
+      renderBootstrap(GEOTAGGING.DISABLED);
+      await flushReplay();
+
+      expect(listeners.onGeofenceExit).toHaveLength(0);
+      expect(stopGeofence).toHaveBeenCalled();
+      expect(autoCheckInOut).not.toHaveBeenCalled();
+      expect((await readSession()).status).toBe(SESSION_STATUS.CHECKED_IN);
+    });
+
+    it("detects a crossing under warnings-only but never turns it into a log", async () => {
+      fetchEmployeeData.mockResolvedValue({
+        geotagging: GEOTAGGING.WARNINGS_ONLY,
+      });
+      await manualCheckIn(startedWorkAt());
+
+      await mountBootstrap(GEOTAGGING.WARNINGS_ONLY);
+      await fireGeofence("EXIT");
+
+      expect(autoCheckInOut).not.toHaveBeenCalled();
+      expect((await readSession()).status).toBe(SESSION_STATUS.CHECKED_IN);
+    });
+
+    it("does not replay a warnings-only crossing after the policy is raised", async () => {
+      fetchEmployeeData.mockResolvedValue({
+        geotagging: GEOTAGGING.WARNINGS_ONLY,
+      });
+      await manualCheckIn(startedWorkAt());
+      mockNativeLastEvent = {
+        transition: "EXIT",
+        identifier: "office-main",
+        timestamp: leftTheOfficeAt(),
+      };
+
+      // Launch under "warnings only": the crossing is recorded as handled.
+      await mountBootstrap(GEOTAGGING.WARNINGS_ONLY);
+      await flushReplay();
+      expect(autoCheckInOut).not.toHaveBeenCalled();
+      expect(await getLastProcessedEventAt()).toBe(
+        mockNativeLastEvent.timestamp,
+      );
+
+      // Admin raises the policy; the earlier crossing must not be logged now.
+      fetchEmployeeData.mockResolvedValue({
+        geotagging: GEOTAGGING.ALL_ACTIONS,
+      });
+      await mountBootstrap(GEOTAGGING.ALL_ACTIONS);
+      await flushReplay();
+
+      expect(autoCheckInOut).not.toHaveBeenCalled();
+      expect((await readSession()).status).toBe(SESSION_STATUS.CHECKED_IN);
+    });
+
+    it("acts on a crossing that happens after the policy is raised", async () => {
+      await manualCheckIn(startedWorkAt());
+
+      await mountBootstrap(GEOTAGGING.ALL_ACTIONS);
+      await fireGeofence("EXIT");
+
+      expect(autoCheckInOut).toHaveBeenCalledTimes(1);
+      expect((await readSession()).status).toBe(SESSION_STATUS.CHECKED_OUT);
     });
   });
 });
