@@ -457,7 +457,7 @@ function Profile() {
           <SettingsRow
             icon="pricetag-outline"
             title="Version"
-            value={`${appVersion}-Jul-10 ota-jul-28`}
+            value={`${appVersion}-Jul-10 ota-new-ui`}
           />
           <RowDivider />
           <SettingsRow

@@ -34,14 +34,14 @@ function HomeExperienceSetting() {
           icon="flask-outline"
           iconTint={colors.accentSurface}
           iconColor={colors.primary2}
-          title="Enable Modern UI"
-          description="Switch between the classic interface and the redesigned modern interface."
+          title="Enable New UI"
+          description="Switch between the classic interface and the redesigned interface."
         >
           <Switch
             value={enabled}
             onValueChange={setEnabled}
             trackColor={{ true: colors.primary2 }}
-            accessibilityLabel="Enable Modern UI"
+            accessibilityLabel="Enable New UI"
           />
         </SettingsRow>
       </Card>
