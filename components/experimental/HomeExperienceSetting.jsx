@@ -13,7 +13,7 @@ import SettingsRow from '../common/SettingsRow';
  * Self-contained on purpose: Profile only imports and renders it, so removing
  * the experiment is one import plus one JSX line.
  *
- * The user-facing copy ("Experimental UI" / "Enable Modern UI") is a rename
+ * The user-facing copy ("Experimental UI" / "Enable New UI") is a rename
  * only — the flag, its storage key and `useHomeExperience` are untouched, so
  * nothing behind this label changed.
  */

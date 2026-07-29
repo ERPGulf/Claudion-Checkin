@@ -140,10 +140,10 @@ describe('Experimental UI section', () => {
     const { getByText, queryByText } = render(<HomeExperienceSetting />);
 
     expect(getByText('Experimental UI')).toBeTruthy();
-    expect(getByText('Enable Modern UI')).toBeTruthy();
+    expect(getByText('Enable New UI')).toBeTruthy();
     expect(
       getByText(
-        'Switch between the classic interface and the redesigned modern interface.',
+        'Switch between the classic interface and the redesigned interface.',
       ),
     ).toBeTruthy();
 
