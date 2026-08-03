@@ -1,9 +1,11 @@
 import reducer, {
   normalizeGeotagging,
+  requestAutoAttendanceSync,
   selectAutoAttendanceActive,
   selectAutoAttendanceAllowed,
   selectAutoAttendanceFullActions,
   selectAutoAttendanceGeotagging,
+  selectAutoAttendanceSyncRequestId,
   selectAutoAttendanceUserEnabled,
   setAutoAttendanceGeotagging,
   setAutoAttendanceUserEnabled,
@@ -61,10 +63,37 @@ describe("AutoAttendanceSlice", () => {
 
   it("REVERT_ALL resets to disabled + opted-out", () => {
     const state = reducer(
-      { geotagging: 2, userEnabled: true },
+      { geotagging: 2, userEnabled: true, syncRequestId: 3 },
       { type: "REVERT_ALL" },
     );
-    expect(state).toEqual({ geotagging: 0, userEnabled: false });
+    expect(state).toEqual({
+      geotagging: 0,
+      userEnabled: false,
+      syncRequestId: 0,
+    });
+  });
+
+  describe("requestAutoAttendanceSync", () => {
+    it("increments the id so the bootstrap re-runs registration", () => {
+      const first = reducer(undefined, requestAutoAttendanceSync());
+      expect(selectAutoAttendanceSyncRequestId(wrap(first))).toBe(1);
+
+      const second = reducer(first, requestAutoAttendanceSync());
+      expect(selectAutoAttendanceSyncRequestId(wrap(second))).toBe(2);
+    });
+
+    // Persisted state written before this field existed rehydrates without it.
+    it("starts from zero when rehydrated state has no id", () => {
+      const state = reducer(
+        { geotagging: 2, userEnabled: true },
+        requestAutoAttendanceSync(),
+      );
+      expect(state.syncRequestId).toBe(1);
+    });
+
+    it("selector defaults to zero for a missing slice", () => {
+      expect(selectAutoAttendanceSyncRequestId({})).toBe(0);
+    });
   });
 
   it("selectors tolerate a missing slice", () => {

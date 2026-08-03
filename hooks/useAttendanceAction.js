@@ -139,7 +139,7 @@ export default function useAttendanceAction() {
   );
 
   const syncCheckinFromStatus = useCallback(
-    async (status) => {
+    async (status, fetchedAt) => {
       const { checkinStartTime, lastCheckoutTime } =
         await getPersistedSessionTimes();
 
@@ -153,8 +153,13 @@ export default function useAttendanceAction() {
       // Push the server's verdict into the session state machine before
       // mirroring it into Redux, so the geofence listeners — which read the
       // machine, not Redux — agree with what this screen is showing.
+      //
+      // `fetchedAt` is when the status request went out: it stops this stale
+      // snapshot from closing a session that the geofence opened while the
+      // request was still in flight.
       const session = await reconcileSessionFromServer({
         activeStartedAt: resolvedStart,
+        fetchedAt,
       });
 
       if (session.status === SESSION_STATUS.CHECKED_IN) {
@@ -176,11 +181,14 @@ export default function useAttendanceAction() {
   useEffect(() => {
     const loadCheckinStatus = async () => {
       try {
+        // Captured before the request so a session opened while it is in flight
+        // is recognised as newer than the response.
+        const fetchedAt = Date.now();
         const res = await getAttendanceStatus();
 
         if (!isMountedRef.current) return;
 
-        await syncCheckinFromStatus(res);
+        await syncCheckinFromStatus(res, fetchedAt);
       } catch (e) {
         console.log("Status sync error:", e);
       }
@@ -307,13 +315,14 @@ export default function useAttendanceAction() {
         if (!employeeCode) return;
 
         // ✅ 1. FIRST: sync attendance status
+        const fetchedAt = Date.now();
         const res = await getAttendanceStatus();
 
         console.log("FOCUS STATUS:", res.custom_in);
 
         if (!isMountedRef.current) return;
 
-        await syncCheckinFromStatus(res);
+        await syncCheckinFromStatus(res, fetchedAt);
 
         // ✅ 2. THEN: fetch totals
         const breakData = await refreshAttendanceData();

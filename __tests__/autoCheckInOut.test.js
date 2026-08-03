@@ -110,6 +110,16 @@ describe("autoCheckInOut (geofence-driven attendance)", () => {
       apiClient.get.mockResolvedValue({
         data: { message: { server_time: SERVER_NOW } },
       });
+      // The event's age is `Date.now()` inside the service minus the occurredAt
+      // these tests compute from `Date.now()` out here. Those are two separate
+      // reads, so on a loaded machine they can straddle a second boundary and
+      // shift the expected timestamp by a second. Freeze the clock so the age is
+      // exactly what each test says it is.
+      jest.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 6, 23, 7, 0, 0));
+    });
+
+    afterEach(() => {
+      Date.now.mockRestore();
     });
 
     it("subtracts the event's age from the server clock", async () => {

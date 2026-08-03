@@ -7,6 +7,7 @@ import {
   normalizeGeotagging,
   selectAutoAttendanceActive,
   selectAutoAttendanceFullActions,
+  selectAutoAttendanceSyncRequestId,
   setAutoAttendanceGeotagging,
 } from "../redux/Slices/AutoAttendanceSlice";
 import { setCheckin, setCheckout } from "../redux/Slices/AttendanceSlice";
@@ -74,6 +75,7 @@ export default function AutoAttendanceBootstrap() {
   const isLoggedIn = useSelector(selectIsLoggedIn);
   const active = useSelector(selectAutoAttendanceActive);
   const fullActions = useSelector(selectAutoAttendanceFullActions);
+  const syncRequestId = useSelector(selectAutoAttendanceSyncRequestId);
   const employeeCode = useSelector(
     (state) => state.user?.userDetails?.employeeCode,
   );
@@ -86,6 +88,8 @@ export default function AutoAttendanceBootstrap() {
   // The office geofence's reporting location, captured when monitoring is
   // (re)established, so auto check-in/out can tag its log without a GPS fetch.
   const officeRef = useRef(null);
+  // Serializes the startup sequence across effect runs — see the chain below.
+  const startupRef = useRef(Promise.resolve());
 
   // Sync the server-side geotagging policy into Redux whenever we log in or the
   // employee changes. Uses the lightweight employee-data GET (no GPS); on
@@ -153,7 +157,21 @@ export default function AutoAttendanceBootstrap() {
     // launch, the moment the OS recorded it while the app was killed — so both
     // the attendance log and the session record carry the real crossing time
     // rather than the time the app woke up.
-    const performAttendanceAction = async (type, occurredAt) => {
+    //
+    // `markProcessed` advances the geofence replay high-water mark. It must stay
+    // true for anything driven by a real native transition, and false for the
+    // presence reconciliation below, which is not a transition at all: moving
+    // the mark from it would swallow a native event recorded moments earlier
+    // that has not been replayed yet.
+    const performAttendanceAction = async (
+      type,
+      occurredAt,
+      { markProcessed = true } = {},
+    ) => {
+      const recordHandled = async (at) => {
+        if (markProcessed) await markEventProcessed(at);
+      };
+
       // geotagging === 1 ("warnings only"): the crossing is detected and shown
       // on the AutoAttendance screen, but must never become an attendance log.
       // Mark it handled anyway — the policy in force AT THE CROSSING governs, so
@@ -162,7 +180,7 @@ export default function AutoAttendanceBootstrap() {
         console.log(
           `${LOG_PREFIX} Policy does not cover attendance actions; ignoring ${type}`,
         );
-        await markEventProcessed(occurredAt);
+        await recordHandled(occurredAt);
         return;
       }
 
@@ -190,7 +208,7 @@ export default function AutoAttendanceBootstrap() {
           outcome.status === TRANSITION_RESULT.COMPLETED ||
           outcome.status === TRANSITION_RESULT.SKIPPED
         ) {
-          await markEventProcessed(occurredAt);
+          await recordHandled(occurredAt);
         }
 
         if (outcome.status === TRANSITION_RESULT.SKIPPED) {
@@ -312,10 +330,20 @@ export default function AutoAttendanceBootstrap() {
       }
     };
 
+    /**
+     * Resolves the office and makes sure the fence is registered.
+     *
+     * The office is resolved on EVERY run, not only when registration is needed:
+     * `getOfficeLocation` takes a fresh GPS fix and returns `withinRadius`, which
+     * is what reconcilePresence needs, and it is also the only thing that
+     * populates `officeRef` — skipping it while already monitoring used to leave
+     * that null, so a replayed log went out untagged.
+     *
+     * @returns {Promise<object|null>} the resolved office, or null when it could
+     *          not be determined (no permission, no configured location, error).
+     */
     const ensureMonitoring = async () => {
       try {
-        if (isMonitoring()) return;
-
         const [foreground, background] = await Promise.all([
           Location.getForegroundPermissionsAsync(),
           Location.getBackgroundPermissionsAsync(),
@@ -327,37 +355,97 @@ export default function AutoAttendanceBootstrap() {
           console.log(
             `${LOG_PREFIX} Location permission not granted yet, skipping`,
           );
-          return;
+          return null;
         }
 
         const nearest = await getOfficeLocation(employeeCode);
-        if (cancelled || !nearest) return;
+        if (cancelled || !nearest) return null;
 
         officeRef.current = nearest;
 
-        await startGeofence({
-          identifier: OFFICE_GEOFENCE_IDENTIFIER,
-          latitude: nearest.latitude,
-          longitude: nearest.longitude,
-          radius: nearest.radius > 0 ? nearest.radius : 100,
-        });
-        console.log(`${LOG_PREFIX} Monitoring (re)established`, nearest);
+        // Registering is idempotent from the caller's perspective but not free:
+        // re-adding an existing fence re-triggers the OS initial-state check and,
+        // on iOS, briefly stops the region being monitored.
+        if (!isMonitoring()) {
+          await startGeofence({
+            identifier: OFFICE_GEOFENCE_IDENTIFIER,
+            latitude: nearest.latitude,
+            longitude: nearest.longitude,
+            radius: nearest.radius > 0 ? nearest.radius : 100,
+          });
+          console.log(`${LOG_PREFIX} Monitoring (re)established`, nearest);
+        }
+
+        return nearest;
       } catch (error) {
         console.log(
           `${LOG_PREFIX} Failed to (re)start monitoring:`,
           error?.message,
         );
+        return null;
       }
     };
-    // Replay after monitoring is settled so a re-registered fence has populated
-    // `officeRef` and the replayed log can still be tagged with the office.
-    ensureMonitoring().then(replayPendingEvent);
+
+    /**
+     * Answers "is the user inside the office right now?" instead of only "tell
+     * me when they next cross the boundary".
+     *
+     * Both platforms ask the OS for the region state at registration time
+     * (Android INITIAL_TRIGGER_ENTER, iOS requestState), but both answers are
+     * best-effort: they depend on the OS having a usable location estimate, and
+     * a stale one — the outside fix from a previous monitoring window — produces
+     * no ENTER at all. Turning monitoring on inside the office then left the user
+     * uncheck-ed-in with no recovery path, since replay only ever reconsiders the
+     * single last native event and that one was already handled.
+     *
+     * So decide from the fix `ensureMonitoring` already took. The state machine
+     * is the arbiter, so a native ENTER arriving afterwards is a harmless no-op.
+     */
+    const reconcilePresence = async (office) => {
+      if (cancelled || !office?.withinRadius) return;
+
+      const session = await readSession();
+      if (isSessionActive(session)) return;
+
+      console.log(
+        `${LOG_PREFIX} Already inside ${office.locationName || "the office"} at startup; checking in`,
+      );
+      // Not a geofence transition: "now" is the only defensible timestamp, and
+      // the replay high-water mark must not move (see performAttendanceAction).
+      await performAttendanceAction("IN", Date.now(), { markProcessed: false });
+    };
+
+    // This effect re-runs for several reasons — login, the employee code
+    // arriving, the policy syncing, an explicit sync request after a permission
+    // grant — and two overlapping runs could both see isMonitoring() === false
+    // and both register the same fence. Chaining onto the previous run keeps
+    // exactly one startup sequence in flight, which is what makes this component
+    // safe to be the sole registrar.
+    //
+    // Within a run the order matters. Replay first: a real missed crossing
+    // carries the true crossing time, whereas presence reconciliation can only
+    // ever claim "now", so letting presence go first would take the check-in slot
+    // with a worse timestamp. Presence is the backstop for when the OS said
+    // nothing at all.
+    startupRef.current = startupRef.current
+      .then(async () => {
+        if (cancelled) return;
+        const office = await ensureMonitoring();
+        await replayPendingEvent();
+        await reconcilePresence(office);
+      })
+      .catch((error) => {
+        console.log(
+          `${LOG_PREFIX} Startup reconciliation failed:`,
+          error?.message,
+        );
+      });
 
     return () => {
       cancelled = true;
       subscriptions.forEach((subscription) => subscription.remove());
     };
-  }, [isLoggedIn, active, employeeCode, dispatch]);
+  }, [isLoggedIn, active, employeeCode, syncRequestId, dispatch]);
 
   return null;
 }

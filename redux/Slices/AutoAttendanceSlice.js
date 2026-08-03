@@ -60,6 +60,13 @@ export const normalizeGeotagging = (value) => {
 const initialState = {
   geotagging: GEOTAGGING.DISABLED,
   userEnabled: false,
+  // Bumped to ask AutoAttendanceBootstrap — the single owner of geofence
+  // registration — to re-run its startup sequence. The AutoAttendance screen
+  // uses it after granting location permission: the bootstrap's own attempt ran
+  // the moment the opt-in flipped, which is before the OS prompt was answered,
+  // so it bailed at the permission check and would not otherwise try again
+  // until the next launch.
+  syncRequestId: 0,
 };
 
 export const AutoAttendanceSlice = createSlice({
@@ -73,11 +80,19 @@ export const AutoAttendanceSlice = createSlice({
     setAutoAttendanceUserEnabled: (state, action) => {
       state.userEnabled = Boolean(action.payload);
     },
+    // Coerced rather than incremented directly: persisted state written before
+    // this field existed rehydrates without it, and undefined + 1 is NaN.
+    requestAutoAttendanceSync: (state) => {
+      state.syncRequestId = (Number(state.syncRequestId) || 0) + 1;
+    },
   },
 });
 
-export const { setAutoAttendanceGeotagging, setAutoAttendanceUserEnabled } =
-  AutoAttendanceSlice.actions;
+export const {
+  setAutoAttendanceGeotagging,
+  setAutoAttendanceUserEnabled,
+  requestAutoAttendanceSync,
+} = AutoAttendanceSlice.actions;
 
 export const selectAutoAttendanceGeotagging = (state) =>
   normalizeGeotagging(state.autoAttendance?.geotagging);
@@ -89,6 +104,9 @@ export const selectAutoAttendanceAllowed = (state) =>
 // The user's persisted opt-in.
 export const selectAutoAttendanceUserEnabled = (state) =>
   Boolean(state.autoAttendance?.userEnabled);
+
+export const selectAutoAttendanceSyncRequestId = (state) =>
+  Number(state.autoAttendance?.syncRequestId) || 0;
 
 // Effective on-state: monitoring should run only when both are true.
 export const selectAutoAttendanceActive = (state) =>

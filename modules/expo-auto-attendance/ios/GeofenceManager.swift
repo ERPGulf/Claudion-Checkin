@@ -38,7 +38,54 @@ final class GeofenceManager: NSObject, CLLocationManagerDelegate {
   }
 
   private var pendingStart: PendingStart?
-  private var awaitingInitialState = false
+
+  /// Identifier of the region whose initial state we asked for, or nil when no
+  /// request is outstanding. Deliberately not a Bool: `didDetermineState` also
+  /// fires for reasons we did not ask about, and a bare flag let any of those
+  /// consume the pending request and silently drop the initial check-in.
+  private var awaitingInitialStateFor: String?
+  private var initialStateAttempts = 0
+
+  /// Core Location commonly answers `.unknown` right after registration, before
+  /// it has a usable fix. That is not an answer, so retry a few times with
+  /// backoff instead of treating it as "not inside".
+  private static let maxInitialStateAttempts = 3
+
+  /// What to do with a reported region state. Pure, so the retry policy can be
+  /// reasoned about on its own rather than only observed through Core Location.
+  enum InitialStateOutcome: Equatable {
+    /// No usable answer yet — ask again after this delay.
+    case retry(afterSeconds: Double)
+    /// Device is inside the region: report the synthetic ENTER.
+    case inside
+    /// Final answer, nothing to report.
+    case settled
+  }
+
+  static func decideInitialState(
+    state: CLRegionState,
+    attemptsSoFar: Int,
+    maxAttempts: Int = maxInitialStateAttempts
+  ) -> InitialStateOutcome {
+    switch state {
+    case .inside:
+      return .inside
+    case .outside:
+      return .settled
+    case .unknown:
+      guard attemptsSoFar < maxAttempts else { return .settled }
+      // 2s, 4s, 8s — long enough for a fix to arrive, short enough that the
+      // check-in still lands while the user is walking into the building.
+      return .retry(afterSeconds: pow(2.0, Double(attemptsSoFar + 1)))
+    @unknown default:
+      return .settled
+    }
+  }
+
+  private func clearInitialStateRequest() {
+    awaitingInitialStateFor = nil
+    initialStateAttempts = 0
+  }
 
   private override init() {
     super.init()
@@ -122,6 +169,9 @@ final class GeofenceManager: NSObject, CLLocationManagerDelegate {
     region.notifyOnEntry = true
     region.notifyOnExit = true
 
+    // Any initial-state request for the fence being replaced is now moot.
+    clearInitialStateRequest()
+
     // Replace instead of accumulating regions (iOS allows max 20 per app).
     if let previous = GeofenceStore.shared.getGeofence()?["identifier"] as? String,
       previous != identifier {
@@ -143,6 +193,9 @@ final class GeofenceManager: NSObject, CLLocationManagerDelegate {
   /** Removes the registered geofence and clears the persisted state. */
   func stop(resolve: @escaping () -> Void) {
     let identifier = GeofenceStore.shared.getGeofence()?["identifier"] as? String
+    // Cancel any outstanding initial-state retry: monitoring is going away, so a
+    // late `.inside` must not produce a check-in after the user opted out.
+    clearInitialStateRequest()
     stopMonitoredRegions(withIdentifier: identifier)
     GeofenceStore.shared.clearGeofence()
     NSLog("%@ Geofence removed", Self.logTag)
@@ -215,7 +268,8 @@ final class GeofenceManager: NSObject, CLLocationManagerDelegate {
 
     // Parity with Android's INITIAL_TRIGGER_ENTER: report ENTER immediately
     // when the device is already inside the region at registration time.
-    awaitingInitialState = true
+    awaitingInitialStateFor = region.identifier
+    initialStateAttempts = 0
     manager.requestState(for: region)
 
     pending.resolve()
@@ -238,11 +292,36 @@ final class GeofenceManager: NSObject, CLLocationManagerDelegate {
   }
 
   func locationManager(_ manager: CLLocationManager, didDetermineState state: CLRegionState, for region: CLRegion) {
-    guard awaitingInitialState else { return }
-    awaitingInitialState = false
-    if state == .inside {
+    // Only act on the request we made, for the region we made it for.
+    guard awaitingInitialStateFor == region.identifier else { return }
+
+    switch Self.decideInitialState(state: state, attemptsSoFar: initialStateAttempts) {
+    case .retry(let afterSeconds):
+      initialStateAttempts += 1
+      NSLog(
+        "%@ Initial state unknown for %@; retrying in %.0fs (attempt %d/%d)",
+        Self.logTag, region.identifier, afterSeconds,
+        initialStateAttempts, Self.maxInitialStateAttempts
+      )
+      DispatchQueue.main.asyncAfter(deadline: .now() + afterSeconds) { [weak self] in
+        // Monitoring may have been stopped or replaced in the meantime.
+        guard let self, self.awaitingInitialStateFor == region.identifier else { return }
+        self.locationManager.requestState(for: region)
+      }
+
+    case .inside:
+      clearInitialStateRequest()
       NSLog("%@ Device already inside region at registration", Self.logTag)
       handleTransition("ENTER", eventName: GeofenceEvents.enter, region: region)
+
+    case .settled:
+      let gaveUp = state == .unknown
+      clearInitialStateRequest()
+      NSLog(
+        "%@ Initial state for %@ settled as %@",
+        Self.logTag, region.identifier,
+        gaveUp ? "unknown (giving up; JS presence check is the backstop)" : "outside"
+      )
     }
   }
 

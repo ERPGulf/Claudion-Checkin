@@ -30,6 +30,7 @@ import { COLORS, SIZES } from "../constants";
 import {
   GEOTAGGING,
   GEOTAGGING_LABELS,
+  requestAutoAttendanceSync,
   selectAutoAttendanceActive,
   selectAutoAttendanceAllowed,
   selectAutoAttendanceFullActions,
@@ -150,6 +151,20 @@ const readDevicePosition = async () => {
       error?.message,
     );
     return Location.getLastKnownPositionAsync({ maxAge: 600000 });
+  }
+};
+
+// AutoAttendanceBootstrap owns registration, and it has a GPS fix plus a network
+// round-trip to get through before the fence exists. Poll so the toggle reports
+// the real outcome instead of a stale "Not Monitoring"; a timeout is not an
+// error — the bootstrap keeps retrying on the next launch/focus.
+const waitForMonitoring = async (timeoutMs = 15000, intervalMs = 400) => {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    if (isMonitoring()) return true;
+    if (Date.now() >= deadline) return false;
+    // eslint-disable-next-line no-await-in-loop
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
   }
 };
 
@@ -632,25 +647,28 @@ export default function AutoAttendanceScreen() {
   };
 
   // The administrator sets the policy (server-side geotagging); this is the
-  // user's own opt-in. Turning it on persists `userEnabled` (redux-persist),
-  // so the service stays on across relaunches, then grants location permission
-  // and registers the office geofence. AutoAttendanceBootstrap re-establishes
-  // monitoring on every launch while `userEnabled` remains true, and owns the
-  // ENTER/EXIT listeners that perform the real check-in/checkout.
+  // user's own opt-in. Turning it on persists `userEnabled` (redux-persist), so
+  // the service stays on across relaunches, secures the permissions monitoring
+  // needs, and validates that an office is actually configured.
+  //
+  // It deliberately does NOT call startGeofence. AutoAttendanceBootstrap is the
+  // single registrar: it reacts to `userEnabled` flipping, owns the ENTER/EXIT
+  // listeners that perform the real check-in/checkout, and re-establishes
+  // monitoring on every launch. Registering here as well meant two concurrent
+  // startGeofence calls for the same fence, which on iOS is rejected outright
+  // ("Another geofence registration is already in progress") or cancels the
+  // in-flight registration — losing the initial-state check that produces the
+  // automatic check-in when the user is already inside.
   const handleToggleEnabled = async (value) => {
     if (busy) return;
 
     if (!value) {
+      // Clearing the opt-in is enough to stop monitoring — the bootstrap's
+      // effect calls stopGeofence when it sees the feature go inactive. Reflect
+      // it locally so the Status card updates without waiting for a re-render.
       dispatch(setAutoAttendanceUserEnabled(false));
-      setBusy(true);
-      try {
-        await stopGeofence();
-        setMonitoring(false);
-      } catch (error) {
-        console.log("[AutoAttendance] Failed to stop monitoring:", error);
-      } finally {
-        setBusy(false);
-      }
+      setMonitoring(false);
+      setPresence(null);
       return;
     }
 
@@ -660,11 +678,26 @@ export default function AutoAttendanceScreen() {
 
     setBusy(true);
     try {
+      // Whether permission was already in place decides if the bootstrap needs
+      // nudging: its run triggered by the opt-in above happens before the OS
+      // prompt is answered, so on a first-ever enable it bails at its own
+      // permission check. When permission was already granted that run is
+      // sufficient, and asking for another would only burn a second GPS fix.
+      const [priorForeground, priorBackground] = await Promise.all([
+        Location.getForegroundPermissionsAsync(),
+        Location.getBackgroundPermissionsAsync(),
+      ]);
+      const wasAlreadyGranted =
+        priorForeground.status === "granted" &&
+        priorBackground.status === "granted";
+
       const granted = await requestPermissions();
       setPermissionGranted(granted);
       // Opt-in stays saved even if permission is declined — the user can grant
       // it later (or on the next launch) and monitoring resumes.
       if (!granted) return;
+
+      if (!wasAlreadyGranted) dispatch(requestAutoAttendanceSync());
 
       // Secure notification permission + Android channel now, in the
       // foreground, so the automatic check-out alert can fire later from the
@@ -679,6 +712,9 @@ export default function AutoAttendanceScreen() {
         return;
       }
 
+      // Validation only — the bootstrap resolves the office again for the
+      // registration itself. Catching it here turns an unconfigured account into
+      // an explanation instead of a toggle that silently does nothing.
       const nearest = await getOfficeLocation(employeeCode);
       if (!nearest) {
         Alert.alert(
@@ -688,14 +724,16 @@ export default function AutoAttendanceScreen() {
         return;
       }
 
-      await startGeofence({
-        identifier: OFFICE_GEOFENCE_IDENTIFIER,
-        latitude: nearest.latitude,
-        longitude: nearest.longitude,
-        radius: nearest.radius > 0 ? nearest.radius : 100,
-      });
-      setMonitoring(true);
-      console.log("[AutoAttendance] Monitoring enabled", nearest);
+      // The bootstrap registers asynchronously; poll briefly so the Status card
+      // shows the real outcome rather than a stale "Not Monitoring".
+      const registered = await waitForMonitoring();
+      setMonitoring(registered);
+      console.log(
+        registered
+          ? "[AutoAttendance] Monitoring enabled"
+          : "[AutoAttendance] Monitoring not registered yet",
+        nearest,
+      );
     } catch (error) {
       console.log("[AutoAttendance] Failed to enable monitoring:", error);
       Alert.alert(

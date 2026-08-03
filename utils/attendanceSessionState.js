@@ -304,14 +304,42 @@ export const performSessionTransition = async ({
  *        when the server reports no open session
  * @param {string} [options.origin] origin to record when adopting a session
  *        this device did not open
+ * @param {number} [options.fetchedAt] when the status request that produced
+ *        `activeStartedAt` was issued. Supply it whenever the value came from a
+ *        network call: a session opened after that moment cannot be described by
+ *        the response, so the response must not be allowed to close or backdate
+ *        it (see the guard below).
  */
 export const reconcileSessionFromServer = async ({
   activeStartedAt,
   origin = SESSION_ORIGIN.UNKNOWN,
+  fetchedAt = null,
 }) =>
   withSessionLock(async () => {
     const session = await readSessionUnlocked();
     const startedAt = toTimestampMs(activeStartedAt);
+
+    // A session that opened after the status request was issued cannot appear in
+    // that response, so the response says nothing about it. Without this, an
+    // automatic check-in landing while the request is in flight would be undone
+    // a moment later: the "no open session" branch below clears the record and
+    // the screen dispatches resetCheckin(). The check-out direction has its own
+    // guard (`isStale`) further down; this is the same protection for check-in.
+    //
+    // `>=`, not `>`: a session that started in the same millisecond the request
+    // was issued may or may not be in the response, and the two failure modes are
+    // not symmetric. Keeping it costs at most one stale-looking session until the
+    // next sync — which is issued strictly later, so it resolves it. Dropping it
+    // loses a real check-in.
+    const fetchedAtMs = toTimestampMs(fetchedAt);
+    if (
+      Number.isFinite(fetchedAtMs) &&
+      isSessionActive(session) &&
+      Number.isFinite(session.startedAt) &&
+      session.startedAt >= fetchedAtMs
+    ) {
+      return session;
+    }
 
     // The status this was resolved from was fetched before the lock was taken,
     // so a check-out may have committed in between (a geofence EXIT while the

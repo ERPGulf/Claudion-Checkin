@@ -306,6 +306,66 @@ describe("attendance session state machine", () => {
       expect(outcome.status).toBe(TRANSITION_RESULT.SKIPPED);
       expect(execute).not.toHaveBeenCalled();
     });
+
+    // A status response cannot describe a session that opened after the request
+    // went out. Without the `fetchedAt` guard the attendance screen's launch sync
+    // would undo an automatic check-in that landed while it was in flight.
+    describe("staleness guard", () => {
+      it("does not close a session opened after the status request was issued", async () => {
+        const fetchedAt = Date.now();
+        // The geofence checks in while the status request is still in flight.
+        const { session: opened } = await checkIn(SESSION_ORIGIN.AUTO);
+        expect(opened.startedAt).toBeGreaterThan(fetchedAt - 1);
+
+        const session = await reconcileSessionFromServer({
+          activeStartedAt: null,
+          fetchedAt,
+        });
+
+        expect(session.status).toBe(SESSION_STATUS.CHECKED_IN);
+        expect(session.origin).toBe(SESSION_ORIGIN.AUTO);
+        expect(await AsyncStorage.getItem(CHECKIN_START_TIME_KEY)).toBe(
+          String(opened.startedAt),
+        );
+      });
+
+      it("does not backdate a newer session to an older server start", async () => {
+        const fetchedAt = Date.now();
+        const { session: opened } = await checkIn(SESSION_ORIGIN.AUTO);
+
+        const session = await reconcileSessionFromServer({
+          activeStartedAt: fetchedAt - 3 * 60 * 60 * 1000,
+          fetchedAt,
+        });
+
+        expect(session.startedAt).toBe(opened.startedAt);
+      });
+
+      it("still closes a session that predates the status request", async () => {
+        await checkIn(SESSION_ORIGIN.AUTO);
+        // Request issued after the session was already open, so the response
+        // genuinely speaks to it.
+        const fetchedAt = Date.now() + 1000;
+
+        const session = await reconcileSessionFromServer({
+          activeStartedAt: null,
+          fetchedAt,
+        });
+
+        expect(session.status).toBe(SESSION_STATUS.CHECKED_OUT);
+        expect(await AsyncStorage.getItem(CHECKIN_START_TIME_KEY)).toBeNull();
+      });
+
+      it("is inert when no fetchedAt is supplied", async () => {
+        await checkIn(SESSION_ORIGIN.AUTO);
+
+        const session = await reconcileSessionFromServer({
+          activeStartedAt: null,
+        });
+
+        expect(session.status).toBe(SESSION_STATUS.CHECKED_OUT);
+      });
+    });
   });
 
   it("clears the record for a user switch", async () => {
