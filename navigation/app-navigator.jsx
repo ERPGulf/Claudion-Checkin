@@ -6,6 +6,7 @@ import {
   AttendanceHistory,
   AttendanceHistoryLegacy,
   AttendanceRequest,
+  AttendanceRequestLegacy,
   Notifications,
   SelectQuickAccess,
   SelectQuickAccessLegacy,
@@ -18,7 +19,8 @@ import {
   MyQrCode,
  
   LoanApplication,
-  AutoAttendanceScreen
+  AutoAttendanceScreen,
+  AutoAttendanceLegacy
 } from "../screens";
 import HomeTabGroup from "./home.tabbar";
 // TEMPORARY: New Home Experience experiment — remove with the feature.
@@ -46,8 +48,16 @@ function AppNavigator() {
         name="Attendance history"
         component={newHomeEnabled ? AttendanceHistory : AttendanceHistoryLegacy}
       />
-      <Stack.Screen name="Attendance request" component={AttendanceRequest} />
-      <Stack.Screen name="Auto attendance" component={AutoAttendanceScreen} />
+      <Stack.Screen
+        name="Attendance request"
+        component={newHomeEnabled ? AttendanceRequest : AttendanceRequestLegacy}
+      />
+      <Stack.Screen
+        name="Auto attendance"
+        component={
+          newHomeEnabled ? AutoAttendanceScreen : AutoAttendanceLegacy
+        }
+      />
       <Stack.Screen
         name="Quick access"
         component={

@@ -24,9 +24,13 @@ import Shortcut3 from './Shortcut3';
 import Shortcut2 from './Shortcut2';
 import MyQrCode from './MyQrCode';
 import AttendanceRequest from './AttendanceRequest';
+// TEMPORARY: New Home Experience experiment — remove with the feature.
+import AttendanceRequestLegacy from './AttendanceRequestLegacy';
 import SalaryAdvance from './SalaryAdvance';
 import LoanApplication from './LoanApplication';
 import AutoAttendanceScreen from './AutoAttendance';
+// TEMPORARY: New Home Experience experiment — remove with the feature.
+import AutoAttendanceLegacy from './AutoAttendanceLegacy';
 export {
   Home,
   HomeLegacy,
@@ -38,6 +42,7 @@ export {
   AttendanceHistory,
   AttendanceHistoryLegacy,
   AttendanceRequest,
+  AttendanceRequestLegacy,
   SalaryAdvance,
   LoanApplication,
   SelectQuickAccess,
@@ -53,6 +58,7 @@ export {
   Shortcut1,
   Shortcut3,
   MyQrCode,
-  AutoAttendanceScreen
+  AutoAttendanceScreen,
+  AutoAttendanceLegacy
 
 };

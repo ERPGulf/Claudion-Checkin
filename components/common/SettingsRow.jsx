@@ -9,8 +9,32 @@ import PressableScale from './PressableScale';
 const FAMILIES = { Ionicons, MaterialCommunityIcons };
 
 const CHIP_SIZE = 36;
-/** Row inset + chip + gap — dividers start level with the title, Apple-style. */
-const TEXT_INSET = SPACING.lg + CHIP_SIZE + SPACING.md;
+
+/**
+ * Row rhythms. Each entry is self-consistent: `chip + padV * 2` is the row
+ * height, and the divider indent is derived from the same numbers, so a divider
+ * can never fall out of step with the chip it is supposed to clear.
+ *
+ * `default` is Profile's rhythm and must not change — Profile, Attendance
+ * Action, the appearance setting and the New-UI setting all render at these
+ * numbers today.
+ *
+ * `comfortable` is for property lists read at a glance rather than tapped
+ * through: a larger chip, 16pt gutters on both sides of the text, and a 64pt
+ * row. Opt in per row.
+ */
+const ROW_SIZES = {
+  default: { chip: CHIP_SIZE, gap: SPACING.md, padV: SPACING.md },
+  comfortable: { chip: 44, gap: SPACING.lg, padV: 10 },
+};
+
+const rowMetrics = (size) => ROW_SIZES[size] || ROW_SIZES.default;
+
+/** Divider indent for a given rhythm: row inset + chip + gap. */
+const textInset = (size) => {
+  const { chip, gap } = rowMetrics(size);
+  return SPACING.lg + chip + gap;
+};
 
 /**
  * One line in a settings card: icon chip, title, optional description, and one
@@ -35,25 +59,36 @@ function SettingsRow({
   children,
   disabled,
   accessibilityLabel,
+  size = 'default',
 }) {
   const { colors } = useAppTheme();
   const IconSet = FAMILIES[iconFamily] || Ionicons;
+  const { chip, gap, padV } = rowMetrics(size);
+
+  // Android pads a line box by the font's own ascent/descent on top of an
+  // explicit lineHeight, which lifts a single line optically above the chip it
+  // sits beside. Only applied in the `comfortable` rhythm so the default rows
+  // stay pixel-identical to what Profile ships today.
+  const centredText =
+    size === 'comfortable'
+      ? { includeFontPadding: false, textAlignVertical: 'center' }
+      : null;
 
   const body = (
     <View
       style={{
         flexDirection: 'row',
         alignItems: 'center',
-        minHeight: 60,
-        paddingVertical: SPACING.md,
+        minHeight: chip + padV * 2,
+        paddingVertical: padV,
         paddingHorizontal: SPACING.lg,
       }}
     >
       {!!icon && (
         <View
           style={{
-            width: CHIP_SIZE,
-            height: CHIP_SIZE,
+            width: chip,
+            height: chip,
             borderRadius: RADIUS.md,
             backgroundColor: iconTint || colors.iconBackground,
             alignItems: 'center',
@@ -71,11 +106,18 @@ function SettingsRow({
       <View
         style={{
           flex: 1,
-          marginStart: icon ? SPACING.md : 0,
-          marginEnd: SPACING.md,
+          minWidth: 0,
+          marginStart: icon ? gap : 0,
+          marginEnd: gap,
         }}
       >
-        <Text style={{ ...TYPO.headline, color: titleColor || colors.textPrimary }}>
+        <Text
+          style={{
+            ...TYPO.headline,
+            color: titleColor || colors.textPrimary,
+            ...centredText,
+          }}
+        >
           {title}
         </Text>
         {!!description && (
@@ -83,8 +125,13 @@ function SettingsRow({
             style={{
               ...TYPO.subhead,
               fontWeight: '400',
-              color: colors.textMuted,
+              // `textSecondary` (7.6:1) rather than `textMuted` (4.6:1) in the
+              // comfortable rhythm: a description there is content, not a hint,
+              // and 4.6:1 is only just over the floor for small text.
+              color:
+                size === 'comfortable' ? colors.textSecondary : colors.textMuted,
               marginTop: 2,
+              ...centredText,
             }}
           >
             {description}
@@ -97,11 +144,15 @@ function SettingsRow({
           <Text
             numberOfLines={2}
             style={{
+              // `subhead` is already medium (500), which is the weight a plain
+              // value wants — it reads as a peer of a badge label rather than as
+              // body copy. Spelling it out again here would be dead code.
               ...TYPO.subhead,
               color: colors.textMuted,
               textAlign: 'right',
               flexShrink: 1,
               maxWidth: '46%',
+              ...centredText,
             }}
           >
             {value}
@@ -134,15 +185,22 @@ function SettingsRow({
   );
 }
 
-/** Hairline between rows, inset to align with the titles above and below. */
-export function RowDivider() {
+/**
+ * Hairline between rows, inset to align with the titles above and below.
+ *
+ * Takes the same `size` as the rows it separates, so the indent tracks the chip
+ * width. Spacing above and below comes from the rows' own symmetric
+ * `paddingVertical` — the divider adds no margin of its own, which is what keeps
+ * the gap identical on both sides.
+ */
+export function RowDivider({ size = 'default' }) {
   const { colors } = useAppTheme();
 
   return (
     <View
       style={{
         height: 1,
-        marginStart: TEXT_INSET,
+        marginStart: textInset(size),
         backgroundColor: colors.dividerSubtle,
       }}
     />
