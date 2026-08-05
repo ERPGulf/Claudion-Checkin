@@ -85,10 +85,15 @@ export const HR_FEATURES = [
     icon: "document-text-outline",
     nav: "Leave request",
   },
+  // {
+  //   label: "Salary advance",
+  //   icon: "card-outline",
+  //   nav: "Salary advance",
+  // },
   {
-    label: "Salary advance",
+    label: "Loan application",
     icon: "card-outline",
-    nav: "Salary advance",
+    nav: "Loan application",
   },
   {
     label: "Complaints",

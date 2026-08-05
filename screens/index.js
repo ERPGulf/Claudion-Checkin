@@ -25,6 +25,7 @@ import Shortcut2 from './Shortcut2';
 import MyQrCode from './MyQrCode';
 import AttendanceRequest from './AttendanceRequest';
 import SalaryAdvance from './SalaryAdvance';
+import LoanApplication from './LoanApplication';
 import AutoAttendanceScreen from './AutoAttendance';
 export {
   Home,
@@ -38,6 +39,7 @@ export {
   AttendanceHistoryLegacy,
   AttendanceRequest,
   SalaryAdvance,
+  LoanApplication,
   SelectQuickAccess,
   SelectQuickAccessLegacy,
   LeaveRequest,

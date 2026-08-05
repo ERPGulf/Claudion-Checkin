@@ -222,10 +222,15 @@ function LavaMenu() {
                 bold: true,
               },
               {
-                label: ["Salary", "Advance"],
+                label: ["Loan", "application"],
                 icon: "card-outline",
-                nav: "Salary advance",
+                nav: "Loan application",
               },
+              // {
+              //   label: ["Salary", "Advance"],
+              //   icon: "card-outline",
+              //   nav: "Salary advance",
+              // },
               {
                 label: ["Complaints"],
                 icon: "chatbox-ellipses-outline",
