@@ -27,6 +27,7 @@ function LoanApplicationForm({ onSubmit, isLoading, resetSignal }) {
   const [file2, setFile2] = useState(null);
   const [activeAttachment, setActiveAttachment] = useState(null);
   const [isBottomSheetVisible, setBottomSheetVisible] = useState(false);
+  const [reason, setReason] = useState("");
 
   const { pickFromCamera, pickFromGallery, pickDocument } =
     useAttachmentPicker();
@@ -35,6 +36,7 @@ function LoanApplicationForm({ onSubmit, isLoading, resetSignal }) {
   useEffect(() => {
     setProductName("");
     setAmount("");
+    setReason("");
     setFile1(null);
     setFile2(null);
   }, [resetSignal]);
@@ -129,6 +131,9 @@ function LoanApplicationForm({ onSubmit, isLoading, resetSignal }) {
     if (isNaN(amountValue) || amountValue <= 0) {
       return showToast("Please enter a valid amount.");
     }
+    if (!reason.trim()) {
+      return showToast("Please enter the reason.");
+    }
 
     if (!file1) {
       return showToast("Please upload File 1.");
@@ -137,6 +142,7 @@ function LoanApplicationForm({ onSubmit, isLoading, resetSignal }) {
     const payload = {
       product_name: productName.trim(),
       amount: amountValue,
+      reason: reason.trim(),
       file1,
       file2,
     };
@@ -203,6 +209,20 @@ function LoanApplicationForm({ onSubmit, isLoading, resetSignal }) {
           onChangeText={setAmount}
           keyboardType="numeric"
           className="border border-gray-300 rounded p-2 mb-3 bg-gray-50 text-gray-900"
+        />
+        {/* Reason */}
+        <Label text="Reason" required />
+
+        <TextInput
+          placeholder="Enter reason"
+          placeholderTextColor="#6B7280"
+          value={reason}
+          onChangeText={setReason}
+          multiline
+          numberOfLines={4}
+          textAlignVertical="top"
+          className="border border-gray-300 rounded p-2 mb-3 bg-gray-50 text-gray-900"
+          style={{ height: 100 }}
         />
 
         {/* Attachment 1 */}

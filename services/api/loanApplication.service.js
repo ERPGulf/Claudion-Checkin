@@ -46,6 +46,7 @@ export const LoanApplicationRequest = async (loanData) => {
     formData.append("employee", employeeCode);
     formData.append("product_name", loanData.product_name);
     formData.append("amount", String(loanData.amount));
+    formData.append("reason", loanData.reason);
 
     if (loanData.file1) {
       formData.append("file1", {
@@ -67,6 +68,7 @@ export const LoanApplicationRequest = async (loanData) => {
       employee: employeeCode,
       product_name: loanData.product_name,
       amount: loanData.amount,
+      reason: loanData.reason,
       file1: loanData.file1,
       file2: loanData.file2,
     });

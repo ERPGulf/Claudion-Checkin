@@ -16,7 +16,7 @@ import {
   Shortcut2,
   Shortcut3,
   MyQrCode,
-  SalaryAdvance,
+ 
   LoanApplication,
   AutoAttendanceScreen
 } from "../screens";
@@ -63,7 +63,7 @@ function AppNavigator() {
       <Stack.Screen name="My QR Code" component={MyQrCode} />
       <Stack.Screen name="Notifications" component={Notifications} />
       <Stack.Screen name="comingsoon" component={ComingSoon} />
-      <Stack.Screen name="Salary advance" component={SalaryAdvance} />
+      
       <Stack.Screen name="Loan application" component={LoanApplication} />
     </Stack.Navigator>
   );
