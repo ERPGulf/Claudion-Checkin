@@ -45,6 +45,8 @@ export const SalaryAdvanceRequest = async (advanceData) => {
   }
 };
 
+
 export default {
   SalaryAdvanceRequest,
+  
 };

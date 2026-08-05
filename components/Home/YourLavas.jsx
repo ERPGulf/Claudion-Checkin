@@ -91,6 +91,11 @@ export const HR_FEATURES = [
     nav: "Salary advance",
   },
   {
+    label: "Loan application",
+    icon: "cash-outline",
+    nav: "Loan application",
+  },
+  {
     label: "Complaints",
     icon: "chatbox-ellipses-outline",
     nav: "Complaints",

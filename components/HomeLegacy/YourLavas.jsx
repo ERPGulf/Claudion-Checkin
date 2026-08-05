@@ -222,6 +222,11 @@ function LavaMenu() {
                 bold: true,
               },
               {
+                label: ["Loan", "application"],
+                icon: "cash-outline",
+                nav: "Loan application",
+              },
+              {
                 label: ["Salary", "Advance"],
                 icon: "card-outline",
                 nav: "Salary advance",

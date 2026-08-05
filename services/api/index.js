@@ -11,6 +11,7 @@ export * from "./trip.service";
 export * from "./records.service";
 export * from "./notification.service";
 export * from "./salaryAdvance.service";
+export * from "./loanApplication.service";
 
 
 
@@ -24,6 +25,7 @@ import expense from "./expense.service";
 import leave from "./leave.service";
 import records from "./records.service";
 import salaryAdvance from "./salaryAdvance.service";
+import { LoanApplicationRequest } from "./loanApplication.service";
 import notification from "./notification.service";
 
 export default {
@@ -36,5 +38,7 @@ export default {
   trip,
   records,
   notification,
-  salaryAdvance
+  salaryAdvance,
+  LoanApplicationRequest,
+
 };
