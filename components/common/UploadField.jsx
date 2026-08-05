@@ -4,7 +4,7 @@ import { Animated, Image, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ICON, RADIUS, SPACING, TYPO } from '../../constants';
 import useAppTheme from '../../hooks/useAppTheme';
-import PressableScale from '../common/PressableScale';
+import PressableScale from './PressableScale';
 import { resolveTextAlign } from '../../utils/textDirection';
 
 /**

@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { ICON, RADIUS, SHADOWS, SPACING, TYPO } from '../../constants';
 import useAppTheme from '../../hooks/useAppTheme';
 import PressableScale from '../common/PressableScale';
-import StatusBadge from './StatusBadge';
+import StatusBadge from '../common/StatusBadge';
 
 /**
  * A card whose body folds away behind its header.

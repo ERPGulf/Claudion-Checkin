@@ -1,132 +1,54 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import {
-  ToastAndroid,
   View,
   Text,
   TextInput,
   TouchableOpacity,
   Image,
-  ActivityIndicator,
   ScrollView,
-  Platform,
-  Alert,
 } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Picker } from "@react-native-picker/picker";
 import PropTypes from "prop-types";
-import { COLORS } from "../../constants";
 import SubmitButton from "../common/SubmitButton";
-import { useAttachmentPicker } from "../../hooks/useAttachmentPicker";
 import AttachmentBottomSheet from "../attachment/AttachmentBottomSheet";
-import { getExpenseTypes } from "../../services/api/expense.service";
+import useExpenseClaimForm from "../../hooks/useExpenseClaimForm";
+
+/**
+ * TEMPORARY (New Home Experience experiment) — the classic Expense Claim form.
+ *
+ * The markup is unchanged from what shipped: same labels, same gray-50 inputs,
+ * same @react-native-picker/picker dropdown, same green "Attached" button, same
+ * <SubmitButton>. Only the state moved — every field, the expense-type fetch,
+ * the date handler, the attachment pickers and `handleSubmit` now come from
+ * hooks/useExpenseClaimForm.js, shared with the modern screen, so validation and
+ * the submitted payload are the same on both.
+ *
+ * On removal of the experiment: delete this file along with ExpenseClaimLegacy.
+ */
 function ClaimForm({ onSubmit, isLoading, resetSignal }) {
-  const [expenseDate, setExpenseDate] = useState("");
-  const [expenseType, setExpenseType] = useState("");
-  const [description, setDescription] = useState("");
-  const [amount, setAmount] = useState("");
-  const [fileUrl, setFileUrl] = useState(null);
-  const [showPicker, setShowPicker] = useState(false);
-  const [isBottomSheetVisible, setBottomSheetVisible] = useState(false);
-  const [expenseTypes, setExpenseTypes] = useState([]);
-  const { pickFromCamera, pickFromGallery, pickDocument } =
-    useAttachmentPicker();
-
-  useEffect(() => {
-    setExpenseDate("");
-    setExpenseType("");
-    setDescription("");
-    setAmount("");
-    setFileUrl(null);
-  }, [resetSignal]);
-
-  useEffect(() => {
-    loadExpenseTypes();
-  }, []);
-
-  const loadExpenseTypes = async () => {
-    const res = await getExpenseTypes();
-
-    if (res?.error) {
-      showToast(res.error);
-      return;
-    }
-
-    setExpenseTypes(res.message || []);
-  };
-
-  const handleDateChange = (event, selectedDate) => {
-    setShowPicker(false);
-    if (selectedDate) {
-      const formatted = selectedDate.toISOString().split("T")[0];
-      setExpenseDate(formatted);
-    }
-  };
-
-  const showDatePicker = () => setShowPicker(true);
-
-  const pickFile = () => setBottomSheetVisible(true);
-
-  const handlePickCamera = () => {
-    setBottomSheetVisible(false);
-    setTimeout(async () => {
-      const file = await pickFromCamera();
-      if (file) {
-        setFileUrl(file);
-        showToast(`✅ Photo attached: ${file.name}`);
-      }
-    }, 500);
-  };
-
-  const handlePickGallery = () => {
-    setBottomSheetVisible(false);
-    setTimeout(async () => {
-      const file = await pickFromGallery();
-      if (file) {
-        setFileUrl(file);
-        showToast(`✅ Image attached: ${file.name}`);
-      }
-    }, 500);
-  };
-
-  const handlePickDocument = () => {
-    setBottomSheetVisible(false);
-    setTimeout(async () => {
-      const file = await pickDocument();
-      if (file) {
-        setFileUrl(file);
-        showToast(`✅ File attached: ${file.name}`);
-      }
-    }, 500);
-  };
-
-  const handleRemoveAttachment = () => setFileUrl(null);
-
-  const showToast = (msg) => {
-    if (Platform.OS === "android") ToastAndroid.show(msg, ToastAndroid.SHORT);
-    else Alert.alert("Notice", msg);
-  };
-
-  const handleSubmit = async () => {
-    if (!expenseDate.trim()) return showToast("Please select an expense date.");
-    if (!expenseType) return showToast("Please select an expense type.");
-    if (!amount.trim() || Number.isNaN(Number(amount))) {
-      return showToast("Please enter a valid amount.");
-    }
-
-    const payload = {
-      expense_date: expenseDate.trim(),
-      expense_type: expenseType,
-      description: description.trim(),
-      amount: Number.parseFloat(amount),
-      file_url: fileUrl,
-    };
-
-    try {
-      await onSubmit?.(payload);
-    } catch {
-      showToast("Failed to submit claim. Please try again.");
-    }
-  };
+  const {
+    expenseDate,
+    expenseType,
+    description,
+    amount,
+    fileUrl,
+    expenseTypes,
+    setExpenseType,
+    setDescription,
+    setAmount,
+    showPicker,
+    showDatePicker,
+    handleDateChange,
+    isBottomSheetVisible,
+    pickFile,
+    closeBottomSheet,
+    handlePickCamera,
+    handlePickGallery,
+    handlePickDocument,
+    handleRemoveAttachment,
+    handleSubmit,
+  } = useExpenseClaimForm({ onSubmit, resetSignal });
 
   return (
     <ScrollView
@@ -247,7 +169,7 @@ function ClaimForm({ onSubmit, isLoading, resetSignal }) {
 
       <AttachmentBottomSheet
         visible={isBottomSheetVisible}
-        onClose={() => setBottomSheetVisible(false)}
+        onClose={closeBottomSheet}
         onSelectCamera={handlePickCamera}
         onSelectGallery={handlePickGallery}
         onSelectDocument={handlePickDocument}

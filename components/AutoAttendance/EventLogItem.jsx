@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { ICON, RADIUS, SPACING, TYPO } from '../../constants';
 import useAppTheme from '../../hooks/useAppTheme';
 import { describeTransition, formatTimestamp } from '../../utils/autoAttendance';
-import StatusBadge from './StatusBadge';
+import StatusBadge from '../common/StatusBadge';
 
 /**
  * One geofence event as a timeline row: a tinted glyph on a rail, the

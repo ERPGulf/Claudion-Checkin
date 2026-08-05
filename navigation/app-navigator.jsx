@@ -13,6 +13,7 @@ import {
   LeaveRequest,
   Complaints,
   ExpenseClaim,
+  ExpenseClaimLegacy,
   Shortcut1,
   Shortcut2,
   Shortcut3,
@@ -66,7 +67,10 @@ function AppNavigator() {
       />
       <Stack.Screen name="Leave request" component={LeaveRequest} />
       <Stack.Screen name="Complaints" component={Complaints} />
-      <Stack.Screen name="Expense claim" component={ExpenseClaim} />
+      <Stack.Screen
+        name="Expense claim"
+        component={newHomeEnabled ? ExpenseClaim : ExpenseClaimLegacy}
+      />
       <Stack.Screen name="Shortcut1" component={Shortcut1} />
       <Stack.Screen name="Shortcut2" component={Shortcut2} />
       <Stack.Screen name="Shortcut3" component={Shortcut3} />

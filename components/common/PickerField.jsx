@@ -4,7 +4,7 @@ import { Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ICON, RADIUS, SHADOWS, SPACING, TYPO } from '../../constants';
 import useAppTheme from '../../hooks/useAppTheme';
-import PressableScale from '../common/PressableScale';
+import PressableScale from './PressableScale';
 
 /**
  * Horizontal chrome inside the field: both paddings, the glyph and the chevron
@@ -66,10 +66,16 @@ export function fitsTwoColumns(windowWidth) {
  * the surface lifts from recessed to the card colour, and a soft shadow comes in
  * (light mode only, since a shadow over a near-black page is invisible — the
  * same rule <Card> follows). `borderWidth` never changes, so nothing reflows.
+ *
+ * `placeholder` covers fields that start empty — an expense date is not chosen
+ * for you the way a request's From date is. It renders in the muted colour so an
+ * unset field is distinguishable from a set one at a glance. Callers that always
+ * pass a value never see it.
  */
 function PickerField({
   label,
   value,
+  placeholder,
   icon,
   onPress,
   active = false,
@@ -77,6 +83,9 @@ function PickerField({
   style,
 }) {
   const { colors, isDark } = useAppTheme();
+
+  const empty = !value;
+  const display = empty ? placeholder : value;
 
   // Error stays a distinct signal now that focus no longer borrows the accent.
   const borderColor = invalid
@@ -105,7 +114,7 @@ function PickerField({
         scaleTo={0.98}
         hitSlop={0}
         accessibilityRole="button"
-        accessibilityLabel={`${label}: ${value}`}
+        accessibilityLabel={`${label}: ${display}`}
         accessibilityHint="Opens a picker"
         style={{
           // minHeight, not height — the row grows under a large font scale
@@ -131,11 +140,15 @@ function PickerField({
         />
 
         <Text
-          style={{ ...TYPO.body, color: colors.textPrimary, flex: 1 }}
+          style={{
+            ...TYPO.body,
+            color: empty ? colors.textMuted : colors.textPrimary,
+            flex: 1,
+          }}
           numberOfLines={1}
           ellipsizeMode="tail"
         >
-          {value}
+          {display}
         </Text>
 
         {/* Down, not forward: this opens a picker in place rather than pushing a

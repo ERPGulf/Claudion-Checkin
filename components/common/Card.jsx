@@ -12,12 +12,17 @@ import useAppTheme from '../../hooks/useAppTheme';
  * `padded` adds the default inset — omit it when the card holds full-bleed
  * <SettingsRow> children, which carry their own horizontal padding so their
  * dividers can run edge to edge.
+ *
+ * Remaining props land on the underlying <View>, so a card that represents one
+ * record can carry `accessible` and a combined `accessibilityLabel` and be
+ * announced as a single item rather than as a pile of loose text nodes.
  */
-function Card({ children, style, padded = false }) {
+function Card({ children, style, padded = false, ...rest }) {
   const { colors, isDark } = useAppTheme();
 
   return (
     <View
+      {...rest}
       style={[
         {
           backgroundColor: colors.cardBackground,

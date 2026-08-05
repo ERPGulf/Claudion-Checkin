@@ -12,6 +12,17 @@ import StatusBanner from './StatusBanner';
 import ThemedStatusBar from './ThemedStatusBar';
 import SubmitButton from './SubmitButton';
 import ResetTokenButton from './ResetTokenButton';
+// Shared by more than one modern screen: the date/time field and the upload
+// target came from Attendance Request, the status pill from Automatic
+// Attendance. Expense Claims reuses all three.
+import PickerField, {
+  FIELD_CHROME_WIDTH,
+  FIELD_HEIGHT,
+  MIN_VALUE_WIDTH,
+  fitsTwoColumns,
+} from './PickerField';
+import UploadField from './UploadField';
+import StatusBadge from './StatusBadge';
 
 export {
   PressableScale,
@@ -29,4 +40,11 @@ export {
   ThemedStatusBar,
   SubmitButton,
   ResetTokenButton,
+  PickerField,
+  FIELD_CHROME_WIDTH,
+  FIELD_HEIGHT,
+  MIN_VALUE_WIDTH,
+  fitsTwoColumns,
+  UploadField,
+  StatusBadge,
 };

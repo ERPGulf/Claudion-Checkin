@@ -23,9 +23,9 @@ import PickerField, {
   FIELD_CHROME_WIDTH,
   MIN_VALUE_WIDTH,
   fitsTwoColumns,
-} from '../components/AttendanceRequest/PickerField';
+} from '../components/common/PickerField';
 import ReasonOption from '../components/AttendanceRequest/ReasonOption';
-import UploadField from '../components/AttendanceRequest/UploadField';
+import UploadField from '../components/common/UploadField';
 import { formatLogDate } from '../utils/attendanceHistory';
 import { formatFieldTime, prefers24Hour } from '../utils/attendanceRequest';
 import { COLORS, DARK_COLORS } from '../constants';

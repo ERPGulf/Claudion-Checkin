@@ -31,7 +31,7 @@ jest.mock('expo-location', () => ({
 }));
 
 /* eslint-disable import/first */
-import StatusBadge from '../components/AutoAttendance/StatusBadge';
+import StatusBadge from '../components/common/StatusBadge';
 import CollapsibleCard from '../components/AutoAttendance/CollapsibleCard';
 import PolicyOption from '../components/AutoAttendance/PolicyOption';
 import EventLogItem from '../components/AutoAttendance/EventLogItem';
