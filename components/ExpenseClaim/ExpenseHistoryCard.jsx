@@ -207,4 +207,11 @@ function ExpenseHistoryCard({ claim, baseUrl = '', style }) {
   );
 }
 
-export default ExpenseHistoryCard;
+/**
+ * Memoised because this is a FlatList row: the screen re-renders whenever a page
+ * is revealed or a refresh lands, and without this every card already on screen
+ * would re-render with it. The props are a claim object (stable identity — it
+ * comes straight out of the query cache), a string and a module-level style
+ * constant, so the default shallow comparison is enough.
+ */
+export default React.memo(ExpenseHistoryCard);

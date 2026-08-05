@@ -17,7 +17,7 @@ import useAppTheme from '../../hooks/useAppTheme';
  * gradient library) running on the native driver, so it costs nothing while the
  * request is in flight.
  */
-function ExpenseSkeleton({ count = 2 }) {
+function ExpenseSkeleton({ count = 2, label = 'Loading expense claims' }) {
   const { colors } = useAppTheme();
   const pulse = useRef(new Animated.Value(0)).current;
 
@@ -58,7 +58,7 @@ function ExpenseSkeleton({ count = 2 }) {
   );
 
   return (
-    <View accessible accessibilityLabel="Loading expense claims">
+    <View accessible accessibilityLabel={label}>
       {Array.from({ length: count }).map((_, index) => (
         <View
           key={`claim-skeleton-${index}`}

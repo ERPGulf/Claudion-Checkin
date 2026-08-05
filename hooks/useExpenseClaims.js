@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert } from 'react-native';
 import { useSelector } from 'react-redux';
 import { useMutation, useQuery } from '@tanstack/react-query';
@@ -55,6 +55,7 @@ export default function useExpenseClaims() {
     isLoading: isFetching,
     isError,
     error,
+    isRefetching,
     refetch,
   } = useQuery({
     queryKey: ['expenseClaims', employeeCode],
@@ -101,10 +102,47 @@ export default function useExpenseClaims() {
     },
   });
 
-  const loadMore = useCallback(
-    () => setVisibleCount(prev => prev + PAGE_SIZE),
-    [],
-  );
+  /* ---------------------------------------------------------------------
+   * Pagination
+   *
+   * The reveal itself is unchanged: one page is PAGE_SIZE more rows off the
+   * array the query already holds. What is new is that `loadMore` can now be
+   * called by a scroll position rather than only by a button press, and a
+   * scroll fires it repeatedly — `onEndReached` can come in several times
+   * before React has committed the last increment.
+   *
+   * `pending` blocks everything after the first call until `visibleCount`
+   * actually changes, so a burst of end-of-list events advances exactly one
+   * page. The classic screen's button is unaffected: one press was always one
+   * page, and still is.
+   * ------------------------------------------------------------------- */
+
+  const total = claims.length;
+  const hasMore = visibleCount < total;
+  const pending = useRef(false);
+
+  useEffect(() => {
+    pending.current = false;
+  }, [visibleCount]);
+
+  const loadMore = useCallback(() => {
+    if (pending.current || visibleCount >= total) return;
+    pending.current = true;
+    setVisibleCount(prev => prev + PAGE_SIZE);
+  }, [visibleCount, total]);
+
+  /**
+   * Pull-to-refresh: back to the first page, then refetch.
+   *
+   * The cursor is reset *before* the request so the list can't briefly show
+   * page four of a set that no longer has one. Only the modern screen calls
+   * this — the classic screen has no pull gesture, and the mutation's own
+   * post-submit `refetch()` deliberately keeps the cursor where it was.
+   */
+  const refresh = useCallback(() => {
+    setVisibleCount(PAGE_SIZE);
+    return refetch();
+  }, [refetch]);
 
   const visibleClaims = claims.slice(0, visibleCount);
 
@@ -122,10 +160,12 @@ export default function useExpenseClaims() {
     isError,
     error,
     refetch,
+    isRefetching,
+    refresh,
 
     // Pagination — same client-side slice the classic screen used
     visibleCount,
-    hasMore: visibleCount < claims.length,
+    hasMore,
     loadMore,
 
     // Create
