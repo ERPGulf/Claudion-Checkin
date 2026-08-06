@@ -19,6 +19,12 @@ const FAMILIES = { Ionicons, MaterialCommunityIcons, AntDesign, Octicons };
  *
  * The chevron renders only when `onPress` is supplied — a chevron on a
  * non-actionable header reads as a broken link.
+ *
+ * `dense` tightens the header and the body inset — a 32pt chip, 12/8 header
+ * padding and a 12pt body top rather than 16/12 and 16. It is opt-in per card,
+ * so Home, Attendance Request and Expense Claims keep the rhythm they ship at
+ * today; a long form like Leave Application uses it, where three card headers at
+ * the roomier size cost most of a screenful on their own.
  */
 function ModuleCard({
   icon,
@@ -27,6 +33,7 @@ function ModuleCard({
   subtitle,
   onPress,
   children,
+  dense = false,
   style,
 }) {
   const { colors, isDark } = useAppTheme();
@@ -38,14 +45,14 @@ function ModuleCard({
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: SPACING.lg,
-        paddingTop: SPACING.lg,
-        paddingBottom: SPACING.md,
+        paddingTop: dense ? SPACING.md : SPACING.lg,
+        paddingBottom: dense ? SPACING.sm : SPACING.md,
       }}
     >
       <View
         style={{
-          width: 36,
-          height: 36,
+          width: dense ? 32 : 36,
+          height: dense ? 32 : 36,
           borderRadius: RADIUS.md,
           backgroundColor: colors.iconBackground,
           alignItems: 'center',
@@ -120,7 +127,7 @@ function ModuleCard({
       <View
         style={{
           paddingHorizontal: SPACING.md,
-          paddingTop: SPACING.lg,
+          paddingTop: dense ? SPACING.md : SPACING.lg,
           paddingBottom: SPACING.xs,
         }}
       >

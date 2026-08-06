@@ -5,6 +5,7 @@ import { useNavigation } from '@react-navigation/native';
 import { RADIUS, SHADOWS, SPACING } from '../../constants';
 import useAppTheme from '../../hooks/useAppTheme';
 import { activeButtonsSelector } from '../../redux/Slices/QuickAccessSlice';
+import { filterOfferedShortcuts } from '../../utils/quickAccess';
 import SectionHeader from '../common/SectionHeader';
 import FeatureTile from '../common/FeatureTile';
 import EmptyState from '../common/EmptyState';
@@ -21,7 +22,9 @@ function QuickAccess() {
   const navigation = useNavigation();
   const { colors, isDark } = useAppTheme();
   const activeButtons = useSelector(activeButtonsSelector);
-  const hasShortcuts = activeButtons?.length > 0;
+  // Pins are persisted, so retired shortcuts have to be dropped on read.
+  const shortcuts = filterOfferedShortcuts(activeButtons);
+  const hasShortcuts = shortcuts.length > 0;
 
   const openPicker = () => navigation.navigate('Quick access');
 
@@ -48,7 +51,7 @@ function QuickAccess() {
       >
         {hasShortcuts ? (
           <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-            {activeButtons.map(item => (
+            {shortcuts.map(item => (
               <FeatureTile
                 key={item?.iconName}
                 icon={item?.iconName}

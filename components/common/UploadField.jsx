@@ -23,8 +23,12 @@ import { resolveTextAlign } from '../../utils/textDirection';
  *
  * Picking is unchanged: the press is forwarded straight to the same bottom
  * sheet and the same `useAttachmentPicker` handlers the classic screen uses.
+ *
+ * `compact` trims the empty row from 54pt to 46 and the attached preview from
+ * 120pt to 96 — opt-in, so Attendance Request and Expense Claims keep the size
+ * they ship at today.
  */
-function UploadField({ file, onPick, onRemove }) {
+function UploadField({ file, onPick, onRemove, compact = false }) {
   const { colors } = useAppTheme();
 
   const isImage = !!file?.type?.startsWith('image');
@@ -51,11 +55,11 @@ function UploadField({ file, onPick, onRemove }) {
         accessibilityLabel="Upload supporting document. Optional."
         accessibilityHint="Opens options to take a photo, choose an image or browse files"
         style={{
-          minHeight: 54,
+          minHeight: compact ? 46 : 54,
           flexDirection: 'row',
           alignItems: 'center',
-          paddingHorizontal: SPACING.md,
-          paddingVertical: SPACING.sm,
+          paddingHorizontal: compact ? SPACING.sm + 2 : SPACING.md,
+          paddingVertical: compact ? SPACING.xs : SPACING.sm,
           borderRadius: RADIUS.lg,
           borderWidth: 1,
           borderStyle: 'dashed',
@@ -67,7 +71,7 @@ function UploadField({ file, onPick, onRemove }) {
           name="cloud-upload-outline"
           size={ICON.md}
           color={colors.textSecondary}
-          style={{ marginEnd: SPACING.md }}
+          style={{ marginEnd: compact ? SPACING.sm : SPACING.md }}
         />
 
         <View style={{ flex: 1, minWidth: 0 }}>
@@ -184,7 +188,7 @@ function UploadField({ file, onPick, onRemove }) {
             source={{ uri: file.uri }}
             style={{
               width: '100%',
-              height: 120,
+              height: compact ? 96 : 120,
               borderRadius: RADIUS.md,
               marginTop: SPACING.sm,
             }}

@@ -24,7 +24,22 @@ import {
   uploadComplaintAttachment,
 } from "../services/api/complaint.service";
 
-const Complaints = () => {
+/**
+ * TEMPORARY (New Home Experience experiment) — the classic Complaints screen,
+ * preserved exactly as it shipped.
+ *
+ * Everything below is the original `screens/Complaints.jsx` verbatim: the same
+ * header, the same shadowed <TextInput>, the same <AttachmentPicker> and
+ * <AttachmentBottomSheet>, the same inline `submitComplaint`. Unlike the other
+ * legacy screens it keeps its own state and submit flow inline rather than
+ * reading them from a shared hook, so this file is untouched by the redesign —
+ * hooks/useComplaint.js is a faithful lift of the flow below, used by the modern
+ * screen only.
+ *
+ * On removal of the experiment: delete this file and point the "Complaints"
+ * route at `screens/Complaints.jsx` unconditionally.
+ */
+const ComplaintsLegacy = () => {
   const [message, setMessage] = useState("");
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -191,4 +206,4 @@ const Complaints = () => {
   );
 };
 
-export default Complaints;
+export default ComplaintsLegacy;

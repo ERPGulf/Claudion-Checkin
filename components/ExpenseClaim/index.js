@@ -3,7 +3,9 @@ import ClaimForm from './ClaimForm';
 import ExpenseCard from './ExpenseCard';
 // Modern UI only. The classic screen keeps using @react-native-picker/picker,
 // its own gray-50 TextInputs, its own attachment button and its own "Load More".
-import FormField from './FormField';
+// Lives in components/common/ now — Leave Application uses it too.
+// Re-exported here so existing imports keep working.
+import FormField from '../common/FormField';
 import ExpenseTypeSheet from './ExpenseTypeSheet';
 import ClaimFormSection from './ClaimFormSection';
 import ExpenseHistoryCard from './ExpenseHistoryCard';

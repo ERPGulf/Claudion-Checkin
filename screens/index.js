@@ -16,7 +16,11 @@ import ExpenseClaim from './ExpenseClaim';
 // TEMPORARY: New Home Experience experiment — remove with the feature.
 import ExpenseClaimLegacy from './ExpenseClaimLegacy';
 import LeaveRequest from './LeaveRequest';
+// TEMPORARY: New Home Experience experiment — remove with the feature.
+import LeaveRequestLegacy from './LeaveRequestLegacy';
 import Complaints from './Complaints';
+// TEMPORARY: New Home Experience experiment — remove with the feature.
+import ComplaintsLegacy from './ComplaintsLegacy';
 import AttendanceCamera from './AttendanceCamera';
 import Profile from './Profile';
 import Chat from './Chat';
@@ -50,7 +54,9 @@ export {
   SelectQuickAccess,
   SelectQuickAccessLegacy,
   LeaveRequest,
+  LeaveRequestLegacy,
   Complaints,
+  ComplaintsLegacy,
   ExpenseClaim,
   ExpenseClaimLegacy,
   AttendanceCamera,

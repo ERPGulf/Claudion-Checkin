@@ -75,8 +75,17 @@ describe('SelectQuickAccess (modern)', () => {
     expect(getByText('Trip details')).toBeTruthy();
     // ...plus the ones added for the modern picker.
     ['Attendance request', 'Automatic attendance', 'Leave request',
-      'Expense claim', 'Salary advance', 'Complaints', 'Vacation list',
+      'Expense claim', 'Complaints', 'Vacation list',
       'My QR'].forEach(label => expect(getByText(label)).toBeTruthy());
+  });
+
+  it('no longer offers Salary advance', () => {
+    const { queryByText } = renderScreen();
+
+    expect(queryByText('Salary advance')).toBeNull();
+    expect(QUICK_ACCESS_OPTIONS.map(o => o.url)).not.toContain(
+      'Salary advance',
+    );
   });
 
   it('reports how many are pinned', () => {

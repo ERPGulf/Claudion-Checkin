@@ -15,7 +15,7 @@ import PickerField from '../common/PickerField';
 import UploadField from '../common/UploadField';
 import AttachmentSheet from '../common/AttachmentSheet';
 import ExpenseTypeSheet from './ExpenseTypeSheet';
-import FormField from './FormField';
+import FormField from '../common/FormField';
 // "5 Aug 2026" — the same string Attendance History and Attendance Request
 // render, so a date reads identically wherever it appears in the app.
 import { expenseTypeIcon, formatExpenseDate } from '../../utils/expenseClaims';

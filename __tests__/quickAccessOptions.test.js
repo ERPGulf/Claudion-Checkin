@@ -47,9 +47,27 @@ describe('quick access options', () => {
     expect(new Set(icons).size).toBe(icons.length);
   });
 
-  it('never reuses the retired ids 3, 5 and 6', () => {
+  it('never reuses the retired ids 3, 5, 6 and 13', () => {
+    // 13 was Salary advance: pulled from the picker, so its id is spent too.
     const ids = load().map(o => o.id);
-    [3, 5, 6].forEach(retired => expect(ids).not.toContain(retired));
+    [3, 5, 6, 13].forEach(retired => expect(ids).not.toContain(retired));
+  });
+
+  it('drops pins whose shortcut is no longer offered', () => {
+    // eslint-disable-next-line global-require
+    const { filterOfferedShortcuts } = require('../utils/quickAccess');
+    const salaryAdvancePin = {
+      id: 13,
+      iconName: 'card-outline',
+      text1: 'Salary',
+      text2: 'advance',
+      url: 'Salary advance',
+    };
+
+    expect(
+      filterOfferedShortcuts([salaryAdvancePin, { id: 1 }]),
+    ).toEqual([{ id: 1 }]);
+    expect(filterOfferedShortcuts(undefined)).toEqual([]);
   });
 
   it('gives every option a label and a url', () => {

@@ -71,6 +71,13 @@ export function fitsTwoColumns(windowWidth) {
  * for you the way a request's From date is. It renders in the muted colour so an
  * unset field is distinguishable from a set one at a glance. Callers that always
  * pass a value never see it.
+ *
+ * `readOnly` is for a field the form fills in and the user cannot: Leave
+ * Application's posting date is always today. It drops the chevron and the press
+ * target entirely rather than dimming a control that still looks tappable — the
+ * row keeps its shape so the column stays aligned, but nothing about it invites
+ * a tap, and screen readers are told it is disabled. Defaults off, so every
+ * existing caller is untouched.
  */
 function PickerField({
   label,
@@ -80,6 +87,7 @@ function PickerField({
   onPress,
   active = false,
   invalid = false,
+  readOnly = false,
   style,
 }) {
   const { colors, isDark } = useAppTheme();
@@ -109,13 +117,11 @@ function PickerField({
         {label}
       </Text>
 
-      <PressableScale
+      <Field
+        readOnly={readOnly}
         onPress={onPress}
-        scaleTo={0.98}
-        hitSlop={0}
-        accessibilityRole="button"
-        accessibilityLabel={`${label}: ${display}`}
-        accessibilityHint="Opens a picker"
+        label={label}
+        display={display}
         style={{
           // minHeight, not height — the row grows under a large font scale
           // rather than clipping.
@@ -142,7 +148,7 @@ function PickerField({
         <Text
           style={{
             ...TYPO.body,
-            color: empty ? colors.textMuted : colors.textPrimary,
+            color: empty || readOnly ? colors.textMuted : colors.textPrimary,
             flex: 1,
           }}
           numberOfLines={1}
@@ -152,15 +158,55 @@ function PickerField({
         </Text>
 
         {/* Down, not forward: this opens a picker in place rather than pushing a
-            screen. It also needs no RTL flip. */}
-        <Ionicons
-          name="chevron-down"
-          size={ICON.sm}
-          color={colors.textMuted}
-          style={{ marginStart: SPACING.sm }}
-        />
-      </PressableScale>
+            screen. It also needs no RTL flip. Absent when read-only, since there
+            is nothing to open. */}
+        {!readOnly && (
+          <Ionicons
+            name="chevron-down"
+            size={ICON.sm}
+            color={colors.textMuted}
+            style={{ marginStart: SPACING.sm }}
+          />
+        )}
+      </Field>
     </View>
+  );
+}
+
+/**
+ * The field's body: a pressable normally, a plain view when read-only.
+ *
+ * Swapped at this level rather than by disabling the pressable, so a read-only
+ * field has no press feedback, no button role and no "Opens a picker" hint to
+ * contradict — it is announced as a disabled value instead.
+ */
+function Field({ readOnly, onPress, label, display, style, children }) {
+  if (readOnly) {
+    return (
+      <View
+        accessible
+        accessibilityRole="text"
+        accessibilityLabel={`${label}: ${display}`}
+        accessibilityState={{ disabled: true }}
+        style={style}
+      >
+        {children}
+      </View>
+    );
+  }
+
+  return (
+    <PressableScale
+      onPress={onPress}
+      scaleTo={0.98}
+      hitSlop={0}
+      accessibilityRole="button"
+      accessibilityLabel={`${label}: ${display}`}
+      accessibilityHint="Opens a picker"
+      style={style}
+    >
+      {children}
+    </PressableScale>
   );
 }
 

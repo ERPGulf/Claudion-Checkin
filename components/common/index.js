@@ -27,6 +27,10 @@ import StatusBadge from './StatusBadge';
 import BottomSheet from './BottomSheet';
 import AttachmentSheet from './AttachmentSheet';
 import SearchBar, { SearchCount, SEARCH_BAR_HEIGHT } from './SearchBar';
+// Shared form controls: the text field and the single-choice sheet that stand in
+// for @react-native-picker/picker across the modern forms.
+import FormField from './FormField';
+import OptionSheet from './OptionSheet';
 
 export {
   PressableScale,
@@ -56,4 +60,6 @@ export {
   SearchBar,
   SearchCount,
   SEARCH_BAR_HEIGHT,
+  FormField,
+  OptionSheet,
 };

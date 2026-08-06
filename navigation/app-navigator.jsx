@@ -11,7 +11,9 @@ import {
   SelectQuickAccess,
   SelectQuickAccessLegacy,
   LeaveRequest,
+  LeaveRequestLegacy,
   Complaints,
+  ComplaintsLegacy,
   ExpenseClaim,
   ExpenseClaimLegacy,
   Shortcut1,
@@ -65,8 +67,14 @@ function AppNavigator() {
           newHomeEnabled ? SelectQuickAccess : SelectQuickAccessLegacy
         }
       />
-      <Stack.Screen name="Leave request" component={LeaveRequest} />
-      <Stack.Screen name="Complaints" component={Complaints} />
+      <Stack.Screen
+        name="Leave request"
+        component={newHomeEnabled ? LeaveRequest : LeaveRequestLegacy}
+      />
+      <Stack.Screen
+        name="Complaints"
+        component={newHomeEnabled ? Complaints : ComplaintsLegacy}
+      />
       <Stack.Screen
         name="Expense claim"
         component={newHomeEnabled ? ExpenseClaim : ExpenseClaimLegacy}

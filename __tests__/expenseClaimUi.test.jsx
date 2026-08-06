@@ -34,7 +34,7 @@ import {
   resolveAttachments,
   toWireDate,
 } from '../utils/expenseClaims';
-import FormField from '../components/ExpenseClaim/FormField';
+import FormField from '../components/common/FormField';
 import ExpenseTypeSheet from '../components/ExpenseClaim/ExpenseTypeSheet';
 import ExpenseHistoryCard from '../components/ExpenseClaim/ExpenseHistoryCard';
 import PickerField from '../components/common/PickerField';
