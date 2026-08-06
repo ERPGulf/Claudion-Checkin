@@ -81,7 +81,21 @@ const getIconByType = (type) => {
 
 /* -------------------- SCREEN -------------------- */
 
-function Notifications() {
+/**
+ * TEMPORARY (New Home Experience experiment) — the classic Notifications screen,
+ * preserved exactly as it shipped.
+ *
+ * Everything below is the original `screens/Notifications.jsx` verbatim: the same
+ * header, the same `ICON_REGISTRY` hex colours, the same date grouping, the same
+ * dark-on-light unread cards, the same in-screen detail Modal, and the same
+ * load / mark-as-read flow inline. hooks/useNotifications.js and
+ * utils/notifications.js are faithful lifts of that logic used by the modern
+ * screen only, so this file is unaffected by the redesign.
+ *
+ * On removal of the experiment: delete this file and point the "Notifications"
+ * route at `screens/Notifications.jsx` unconditionally.
+ */
+function NotificationsLegacy() {
   const [list, setList] = useState([]);
   const [selected, setSelected] = useState(null);
 
@@ -413,4 +427,4 @@ function Notifications() {
   );
 }
 
-export default Notifications;
+export default NotificationsLegacy;

@@ -27,9 +27,38 @@ import { resolveTextAlign } from '../../utils/textDirection';
  * `compact` trims the empty row from 54pt to 46 and the attached preview from
  * 120pt to 96 — opt-in, so Attendance Request and Expense Claims keep the size
  * they ship at today.
+ *
+ * `label` draws the caption above the target, so a screen with more than one
+ * upload slot ("Attachment 1" / "Attachment 2") doesn't hand-roll the same Text
+ * twice. `optional={false}` swaps the chip to "Required" and says so to a screen
+ * reader — Loan Application's first attachment is validated, and a field the form
+ * refuses to submit without must not advertise itself as optional. Both default
+ * to what the field rendered before.
  */
-function UploadField({ file, onPick, onRemove, compact = false }) {
+function UploadField({
+  file,
+  onPick,
+  onRemove,
+  compact = false,
+  label,
+  optional = true,
+  style,
+}) {
   const { colors } = useAppTheme();
+
+  const requirement = optional ? 'Optional' : 'Required';
+
+  const caption = !!label && (
+    <Text
+      style={{
+        ...TYPO.caption,
+        color: colors.textSecondary,
+        marginBottom: SPACING.xs,
+      }}
+    >
+      {label}
+    </Text>
+  );
 
   const isImage = !!file?.type?.startsWith('image');
 
@@ -47,84 +76,97 @@ function UploadField({ file, onPick, onRemove, compact = false }) {
 
   if (!file) {
     return (
-      <PressableScale
+      <View style={style}>
+        {caption}
+
+        <PressableScale
         onPress={onPick}
         scaleTo={0.99}
         hitSlop={0}
         accessibilityRole="button"
-        accessibilityLabel="Upload supporting document. Optional."
+        accessibilityLabel={`${
+          label ? `${label}. ` : ''
+        }Upload supporting document. ${requirement}.`}
         accessibilityHint="Opens options to take a photo, choose an image or browse files"
-        style={{
-          minHeight: compact ? 46 : 54,
-          flexDirection: 'row',
-          alignItems: 'center',
-          paddingHorizontal: compact ? SPACING.sm + 2 : SPACING.md,
-          paddingVertical: compact ? SPACING.xs : SPACING.sm,
-          borderRadius: RADIUS.lg,
-          borderWidth: 1,
-          borderStyle: 'dashed',
-          borderColor: colors.cardBorder,
-          backgroundColor: colors.surfaceSecondary,
-        }}
-      >
-        <Ionicons
-          name="cloud-upload-outline"
-          size={ICON.md}
-          color={colors.textSecondary}
-          style={{ marginEnd: compact ? SPACING.sm : SPACING.md }}
-        />
-
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text
-            style={{ ...TYPO.headline, color: colors.textPrimary }}
-            numberOfLines={1}
-          >
-            Upload supporting document
-          </Text>
-          <Text style={{ ...TYPO.caption2, color: colors.textMuted }}>
-            PDF • JPG • PNG
-          </Text>
-        </View>
-
-        <View
           style={{
-            paddingHorizontal: SPACING.sm,
-            paddingVertical: 2,
-            borderRadius: RADIUS.pill,
-            backgroundColor: colors.neutralSurface,
+            minHeight: compact ? 46 : 54,
+            flexDirection: 'row',
+            alignItems: 'center',
+            paddingHorizontal: compact ? SPACING.sm + 2 : SPACING.md,
+            paddingVertical: compact ? SPACING.xs : SPACING.sm,
+            borderRadius: RADIUS.lg,
             borderWidth: 1,
-            borderColor: colors.neutralBorder,
-            marginStart: SPACING.sm,
+            borderStyle: 'dashed',
+            borderColor: colors.cardBorder,
+            backgroundColor: colors.surfaceSecondary,
           }}
         >
-          <Text style={{ ...TYPO.caption2, color: colors.textMuted }}>
-            Optional
-          </Text>
-        </View>
-      </PressableScale>
+          <Ionicons
+            name="cloud-upload-outline"
+            size={ICON.md}
+            color={colors.textSecondary}
+            style={{ marginEnd: compact ? SPACING.sm : SPACING.md }}
+          />
+
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text
+              style={{ ...TYPO.headline, color: colors.textPrimary }}
+              numberOfLines={1}
+            >
+              Upload supporting document
+            </Text>
+            <Text style={{ ...TYPO.caption2, color: colors.textMuted }}>
+              PDF • JPG • PNG
+            </Text>
+          </View>
+
+          <View
+            style={{
+              paddingHorizontal: SPACING.sm,
+              paddingVertical: 2,
+              borderRadius: RADIUS.pill,
+              backgroundColor: colors.neutralSurface,
+              borderWidth: 1,
+              borderColor: colors.neutralBorder,
+              marginStart: SPACING.sm,
+            }}
+          >
+            <Text style={{ ...TYPO.caption2, color: colors.textMuted }}>
+              {requirement}
+            </Text>
+          </View>
+        </PressableScale>
+      </View>
     );
   }
 
   return (
     <Animated.View
-      style={{
-        opacity: enter,
-        transform: [
-          {
-            translateY: enter.interpolate({
-              inputRange: [0, 1],
-              outputRange: [6, 0],
-            }),
-          },
-        ],
-      }}
+      style={[
+        {
+          opacity: enter,
+          transform: [
+            {
+              translateY: enter.interpolate({
+                inputRange: [0, 1],
+                outputRange: [6, 0],
+              }),
+            },
+          ],
+        },
+        style,
+      ]}
     >
+      {caption}
+
       <PressableScale
         onPress={onPick}
         scaleTo={0.99}
         hitSlop={0}
         accessibilityRole="button"
-        accessibilityLabel={`Attached: ${file.name}. Tap to replace.`}
+        accessibilityLabel={`${
+          label ? `${label}. ` : ''
+        }Attached: ${file.name}. Tap to replace.`}
         style={{
           borderRadius: RADIUS.lg,
           borderWidth: 1,

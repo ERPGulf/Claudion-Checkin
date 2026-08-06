@@ -25,6 +25,8 @@ import AttendanceCamera from './AttendanceCamera';
 import Profile from './Profile';
 import Chat from './Chat';
 import Notifications from './Notifications';
+// TEMPORARY: New Home Experience experiment — remove with the feature.
+import NotificationsLegacy from './NotificationsLegacy';
 import Shortcut1 from './Shortcut1';
 import Shortcut3 from './Shortcut3';
 import Shortcut2 from './Shortcut2';
@@ -34,6 +36,8 @@ import AttendanceRequest from './AttendanceRequest';
 import AttendanceRequestLegacy from './AttendanceRequestLegacy';
 import SalaryAdvance from './SalaryAdvance';
 import LoanApplication from './LoanApplication';
+// TEMPORARY: New Home Experience experiment — remove with the feature.
+import LoanApplicationLegacy from './LoanApplicationLegacy';
 import AutoAttendanceScreen from './AutoAttendance';
 // TEMPORARY: New Home Experience experiment — remove with the feature.
 import AutoAttendanceLegacy from './AutoAttendanceLegacy';
@@ -51,6 +55,7 @@ export {
   AttendanceRequestLegacy,
   SalaryAdvance,
   LoanApplication,
+  LoanApplicationLegacy,
   SelectQuickAccess,
   SelectQuickAccessLegacy,
   LeaveRequest,
@@ -63,6 +68,7 @@ export {
   Profile,
   Chat,
   Notifications,
+  NotificationsLegacy,
   Shortcut2,
   Shortcut1,
   Shortcut3,

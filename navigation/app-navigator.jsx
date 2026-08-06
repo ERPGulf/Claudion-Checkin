@@ -8,6 +8,7 @@ import {
   AttendanceRequest,
   AttendanceRequestLegacy,
   Notifications,
+  NotificationsLegacy,
   SelectQuickAccess,
   SelectQuickAccessLegacy,
   LeaveRequest,
@@ -22,6 +23,7 @@ import {
   MyQrCode,
  
   LoanApplication,
+  LoanApplicationLegacy,
   AutoAttendanceScreen,
   AutoAttendanceLegacy
 } from "../screens";
@@ -83,10 +85,16 @@ function AppNavigator() {
       <Stack.Screen name="Shortcut2" component={Shortcut2} />
       <Stack.Screen name="Shortcut3" component={Shortcut3} />
       <Stack.Screen name="My QR Code" component={MyQrCode} />
-      <Stack.Screen name="Notifications" component={Notifications} />
+      <Stack.Screen
+        name="Notifications"
+        component={newHomeEnabled ? Notifications : NotificationsLegacy}
+      />
       <Stack.Screen name="comingsoon" component={ComingSoon} />
       
-      <Stack.Screen name="Loan application" component={LoanApplication} />
+      <Stack.Screen
+        name="Loan application"
+        component={newHomeEnabled ? LoanApplication : LoanApplicationLegacy}
+      />
     </Stack.Navigator>
   );
 }

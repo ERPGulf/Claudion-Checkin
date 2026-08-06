@@ -9,7 +9,21 @@ import LoanApplicationForm from "../components/LoanApplication/LoanApplicationFo
 import { LoanApplicationRequest } from "../services/api/loanApplication.service";
 import { COLORS, SIZES } from "../constants";
 
-export default function LoanApplication() {
+/**
+ * TEMPORARY (New Home Experience experiment) — the classic Loan Application
+ * screen, preserved exactly as it shipped.
+ *
+ * Everything below is the original `screens/LoanApplication.jsx` verbatim: the
+ * same header, the same react-query mutation with the same Alerts, the same
+ * `resetFormFlag` signal and the same <LoanApplicationForm> — which is itself
+ * untouched and still owns the classic form's state, validation and payload.
+ * hooks/useLoanApplication.js is a faithful lift of that flow, used by the modern
+ * screen only, so this file is unaffected by the redesign.
+ *
+ * On removal of the experiment: delete this file and point the "Loan application"
+ * route at `screens/LoanApplication.jsx` unconditionally.
+ */
+export default function LoanApplicationLegacy() {
   const navigation = useNavigation();
   const [resetFormFlag, setResetFormFlag] = useState(false);
 

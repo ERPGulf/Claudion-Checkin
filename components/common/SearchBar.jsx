@@ -133,14 +133,24 @@ function SearchBar({
  * "3 of 42" — how much of a list a query is showing. Rendered next to a section
  * title rather than inside the bar, so a long placeholder never has to share its
  * line with a number.
+ *
+ * `noun` is what the unfiltered total counts ("42 claims", "42 notifications").
+ * It defaults to `claim`, so Expense Claims — the first caller — reads exactly as
+ * it did before. `plural` covers anything that isn't a bare `+s`.
  */
-export function SearchCount({ matches, total, style }) {
+export function SearchCount({
+  matches,
+  total,
+  noun = 'claim',
+  plural = `${noun}s`,
+  style,
+}) {
   const { colors } = useAppTheme();
 
   return (
     <Text style={[{ ...TYPO.caption, color: colors.textMuted }, style]}>
       {matches === total
-        ? `${total} claim${total === 1 ? '' : 's'}`
+        ? `${total} ${total === 1 ? noun : plural}`
         : `${matches} of ${total}`}
     </Text>
   );
