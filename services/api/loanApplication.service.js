@@ -84,8 +84,24 @@ export const LoanApplicationRequest = async (loanData) => {
       },
     });
 
+    console.log(
+      "Loan Application Response:",
+      response.status,
+      JSON.stringify(response.data, null, 2),
+    );
+
     return response.data;
   } catch (error) {
+    console.log(
+      "Loan Application Error:",
+      error?.response?.status ?? error?.code ?? "no status",
+      JSON.stringify(
+        error?.response?.data ?? { message: error?.message },
+        null,
+        2,
+      ),
+    );
+
     throw new Error(parseError(error, "Unable to submit loan application."));
   }
 };
