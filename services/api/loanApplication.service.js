@@ -10,7 +10,6 @@ export const getLoanProducts = async () => {
     const { baseUrl, token } = await getAuthContext();
 
     const url = `${baseUrl}/api/method/employee_app.attendance_api.get_loan_product`;
-    console.log("Loan Product URL:", url);
 
     const response = await apiClient.post(
       url,
@@ -19,9 +18,14 @@ export const getLoanProducts = async () => {
         headers: buildHeaders(token),
       },
     );
-    console.log("Loan Products Response:", response.data);
 
-    return response.data; // Returns [{ product_name: "test" }, { product_name: "car" }]
+    // Endpoint currently returns the array directly, but other employee_app
+    // methods nest it under message/data — accept all three shapes.
+    const payload = response.data;
+
+    if (Array.isArray(payload)) return payload;
+
+    return payload?.message || payload?.data || [];
   } catch (error) {
     console.log("Loan Products Error:", error.response?.data || error);
     throw new Error(parseError(error, "Unable to fetch loan products."));

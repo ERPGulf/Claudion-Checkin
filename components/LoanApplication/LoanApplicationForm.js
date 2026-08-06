@@ -1,21 +1,16 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   ScrollView,
   Text,
   TextInput,
-  TouchableOpacity,
   Platform,
   ToastAndroid,
   Alert,
-  View,
 } from "react-native";
-import * as DocumentPicker from "expo-document-picker";
-import { Ionicons } from "@expo/vector-icons";
 import PropTypes from "prop-types";
-import { COLORS } from "../../constants";
 import SubmitButton from "../common/SubmitButton";
 import { getLoanProducts } from "../../services/api/loanApplication.service";
-import { Picker } from "@react-native-picker/picker";
+import SelectField from "../common/SelectField";
 import AttachmentPicker from "../attachment/AttachmentPicker";
 import AttachmentBottomSheet from "../attachment/AttachmentBottomSheet";
 import { useAttachmentPicker } from "../../hooks/useAttachmentPicker";
@@ -51,9 +46,6 @@ function LoanApplicationForm({ onSubmit, isLoading, resetSignal }) {
 
       const response = await getLoanProducts();
 
-      console.log("Loan Products:", response);
-      console.log(JSON.stringify(response, null, 2));
-
       setLoanProducts(response || []);
     } catch (error) {
       console.log("Loan Products Error:", error);
@@ -62,6 +54,15 @@ function LoanApplicationForm({ onSubmit, isLoading, resetSignal }) {
       setLoadingProducts(false);
     }
   };
+
+  const productOptions = useMemo(
+    () =>
+      loanProducts
+        .map((item) => item?.product_name)
+        .filter(Boolean)
+        .map((name) => ({ label: name, value: name })),
+    [loanProducts],
+  );
 
   const showToast = (msg) => {
     if (Platform.OS === "android") {
@@ -170,57 +171,15 @@ function LoanApplicationForm({ onSubmit, isLoading, resetSignal }) {
 
         <Label text="Loan Product" required />
 
-        {/* <View
-          style={{
-            borderWidth: 1,
-            borderColor: "#D1D5DB",
-            borderRadius: 8,
-            backgroundColor: "#F9FAFB",
-            marginBottom: 12,
-            overflow: "hidden",
-          }}
-        > */}
-          {/* <Picker
-            selectedValue={productName}
-            onValueChange={(value) => setProductName(value)}
-            style={{
-              height: 50,
-              color: "#111827",
-            }}
-          >
-            <Picker.Item label="Select Loan Product" value="" />
-
-            {loanProducts.map((item) => (
-              <Picker.Item
-                key={item.product_name}
-                label={item.product_name}
-                value={item.product_name}
-              />
-            ))}
-          </Picker> */}
-          <View className="border border-gray-300 rounded mb-3 bg-gray-50">
-            <Picker
-              selectedValue={productName}
-              onValueChange={setProductName}
-              style={{ color: "#111827" }}
-            >
-              <Picker.Item
-                label="Select Loan Product"
-                value=""
-                color="#9CA3AF"
-              />
-
-              {loanProducts.map((item, index) => (
-                <Picker.Item
-                  key={index}
-                  label={item.product_name}
-                  value={item.product_name}
-                  color="#111827"
-                />
-              ))}
-            </Picker>
-          </View>
-        
+        <SelectField
+          value={productName}
+          options={productOptions}
+          onChange={setProductName}
+          placeholder="Select Loan Product"
+          title="Loan Product"
+          loading={loadingProducts}
+          emptyText="No loan products available"
+        />
 
         {/* Loan Amount */}
         <Label text="Loan Amount" required />
