@@ -2,9 +2,10 @@
  * Everything a user can pin to Home.
  *
  * `id` is the identity Redux matches on and is persisted inside each pinned
- * entry, so ids must never be reused or renumbered — 3, 5, 6 and 13 stay
+ * entry, so ids must never be reused or renumbered — 3, 5, 6, 8 and 13 stay
  * retired (3, 5 and 6 were the never-shipped Vacation request / My Card /
- * Contacts entries; 13 was Salary advance, pulled from the picker).
+ * Contacts entries; 13 was Salary advance and 8 was Trip details, both pulled
+ * from the picker).
  * `iconName` has to stay unique too: both the picker grid and Home's Quick
  * Access row key their tiles by it.
  *
@@ -55,6 +56,13 @@ export const QUICK_ACCESS_OPTIONS = [
     url: 'Expense claim',
   },
   {
+    id: 15,
+    iconName: 'cash-outline',
+    text1: 'Loan',
+    text2: 'application',
+    url: 'Loan application',
+  },
+  {
     id: 14,
     iconName: 'chatbox-ellipses-outline',
     text1: 'Complaints',
@@ -66,13 +74,6 @@ export const QUICK_ACCESS_OPTIONS = [
     text1: 'Vacation',
     text2: 'list',
     url: 'comingsoon',
-  },
-  {
-    id: 8,
-    iconName: 'trail-sign-outline',
-    text1: 'Trip',
-    text2: 'details',
-    url: 'Trip details',
   },
   {
     id: 7,

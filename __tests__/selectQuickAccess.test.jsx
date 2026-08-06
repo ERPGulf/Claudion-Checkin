@@ -66,26 +66,28 @@ describe('SelectQuickAccess (modern)', () => {
     });
   });
 
-  it('offers more than the original three', () => {
+  it('offers more than the original two', () => {
     const { getByText } = renderScreen();
 
-    // The three that always existed...
+    // The ones that always existed...
     expect(getByText('Attendance action')).toBeTruthy();
     expect(getByText('Attendance history')).toBeTruthy();
-    expect(getByText('Trip details')).toBeTruthy();
     // ...plus the ones added for the modern picker.
     ['Attendance request', 'Automatic attendance', 'Leave request',
-      'Expense claim', 'Complaints', 'Vacation list',
+      'Expense claim', 'Loan application', 'Complaints', 'Vacation list',
       'My QR'].forEach(label => expect(getByText(label)).toBeTruthy());
   });
 
-  it('no longer offers Salary advance', () => {
+  it('no longer offers Salary advance or Trip details', () => {
     const { queryByText } = renderScreen();
 
     expect(queryByText('Salary advance')).toBeNull();
-    expect(QUICK_ACCESS_OPTIONS.map(o => o.url)).not.toContain(
-      'Salary advance',
-    );
+    expect(queryByText('Trip details')).toBeNull();
+
+    const urls = QUICK_ACCESS_OPTIONS.map(o => o.url);
+    expect(urls).not.toContain('Salary advance');
+    // Trip details had no registered screen, so pinning it and tapping it threw.
+    expect(urls).not.toContain('Trip details');
   });
 
   it('reports how many are pinned', () => {
@@ -101,10 +103,10 @@ describe('SelectQuickAccess (modern)', () => {
   it('pins an unpinned shortcut', () => {
     const { store, getByText } = renderScreen();
 
-    fireEvent.press(getByText('Trip details'));
+    fireEvent.press(getByText('Loan application'));
 
     expect(store.getState().quickAccess.activeButtons).toHaveLength(1);
-    expect(store.getState().quickAccess.activeButtons[0].id).toBe(8);
+    expect(store.getState().quickAccess.activeButtons[0].id).toBe(15);
   });
 
   it('unpins an already pinned shortcut', () => {

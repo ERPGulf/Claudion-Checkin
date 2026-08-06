@@ -31,6 +31,8 @@ import Shortcut1 from './Shortcut1';
 import Shortcut3 from './Shortcut3';
 import Shortcut2 from './Shortcut2';
 import MyQrCode from './MyQrCode';
+// TEMPORARY: New Home Experience experiment — remove with the feature.
+import MyQrCodeLegacy from './MyQrCodeLegacy';
 import AttendanceRequest from './AttendanceRequest';
 // TEMPORARY: New Home Experience experiment — remove with the feature.
 import AttendanceRequestLegacy from './AttendanceRequestLegacy';
@@ -73,6 +75,7 @@ export {
   Shortcut1,
   Shortcut3,
   MyQrCode,
+  MyQrCodeLegacy,
   AutoAttendanceScreen,
   AutoAttendanceLegacy
 

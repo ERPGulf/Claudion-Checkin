@@ -100,11 +100,6 @@ export const HR_FEATURES = [
     icon: "chatbox-ellipses-outline",
     nav: "Complaints",
   },
-  {
-    label: "Vacation list",
-    icon: "list-outline",
-    nav: "comingsoon", // or your actual screen name
-  },
 ];
 
 /* ---------------------------------------------------

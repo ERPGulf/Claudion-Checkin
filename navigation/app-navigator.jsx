@@ -21,6 +21,7 @@ import {
   Shortcut2,
   Shortcut3,
   MyQrCode,
+  MyQrCodeLegacy,
  
   LoanApplication,
   LoanApplicationLegacy,
@@ -84,7 +85,10 @@ function AppNavigator() {
       <Stack.Screen name="Shortcut1" component={Shortcut1} />
       <Stack.Screen name="Shortcut2" component={Shortcut2} />
       <Stack.Screen name="Shortcut3" component={Shortcut3} />
-      <Stack.Screen name="My QR Code" component={MyQrCode} />
+      <Stack.Screen
+        name="My QR Code"
+        component={newHomeEnabled ? MyQrCode : MyQrCodeLegacy}
+      />
       <Stack.Screen
         name="Notifications"
         component={newHomeEnabled ? Notifications : NotificationsLegacy}

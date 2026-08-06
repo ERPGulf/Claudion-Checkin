@@ -15,13 +15,14 @@ function registeredRoutes() {
 }
 
 /**
- * `Trip details` predates this work: it was already in the options list with no
- * matching route, so pinning it and tapping it from Home has always thrown.
- * Left as-is deliberately — fixing it changes runtime behaviour, which is the
- * app owner's call. Point it at "comingsoon" (as Vacation list is) or register a
- * real screen, then delete this entry.
+ * Every option now points at a registered route.
+ *
+ * `Trip details` used to be the one exception — it had no matching screen, so
+ * pinning it and tapping it from Home threw. It has since been removed from the
+ * picker, which is what emptied this list. Keep it empty: a new option with no
+ * route is a bug, not something to allowlist.
  */
-const KNOWN_MISSING_ROUTES = ['Trip details'];
+const KNOWN_MISSING_ROUTES = [];
 
 describe('quick access options', () => {
   // Required lazily: the module is a screen, so it drags in the theme hooks.
@@ -47,10 +48,11 @@ describe('quick access options', () => {
     expect(new Set(icons).size).toBe(icons.length);
   });
 
-  it('never reuses the retired ids 3, 5, 6 and 13', () => {
-    // 13 was Salary advance: pulled from the picker, so its id is spent too.
+  it('never reuses the retired ids 3, 5, 6, 8 and 13', () => {
+    // 13 was Salary advance and 8 was Trip details: both were pinnable, so a
+    // reused id would resurface under a persisted pin of the old feature.
     const ids = load().map(o => o.id);
-    [3, 5, 6, 13].forEach(retired => expect(ids).not.toContain(retired));
+    [3, 5, 6, 8, 13].forEach(retired => expect(ids).not.toContain(retired));
   });
 
   it('drops pins whose shortcut is no longer offered', () => {
@@ -88,13 +90,9 @@ describe('quick access options', () => {
     expect(broken).toEqual([]);
   });
 
-  it('still has the known-broken route, so the allowlist stays honest', () => {
-    // Fails loudly if someone fixes `Trip details` without clearing the
-    // allowlist above, rather than letting the exemption rot in place.
-    const urls = load().map(o => o.url);
-    KNOWN_MISSING_ROUTES.forEach(url => expect(urls).toContain(url));
-    KNOWN_MISSING_ROUTES.forEach(url =>
-      expect(registeredRoutes()).not.toContain(url),
-    );
+  it('needs no route exemptions at all', () => {
+    // Fails loudly if an exemption creeps back in, rather than letting one rot
+    // in place the way `Trip details` did.
+    expect(KNOWN_MISSING_ROUTES).toEqual([]);
   });
 });

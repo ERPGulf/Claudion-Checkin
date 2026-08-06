@@ -24,7 +24,21 @@ const HeaderBackButton = ({ onPress }) => (
   </TouchableOpacity>
 );
 
-const MyQrCode = () => {
+/**
+ * TEMPORARY (New Home Experience experiment) — the classic My QR Code screen,
+ * preserved exactly as it shipped.
+ *
+ * Everything below is the original `screens/MyQrCode.jsx` verbatim: the same
+ * header, the same fetch-on-mount with its `isMounted` guard, the same bordered
+ * white card, the same 220pt <Image>, the same red "QR Code not available" text
+ * and the same green ERPGulf.com footer. hooks/useQrCode.js is a faithful lift
+ * of that fetch, used by the modern screen only, so this file is unaffected by
+ * the redesign.
+ *
+ * On removal of the experiment: delete this file and point the "My QR Code"
+ * route at `screens/MyQrCode.jsx` unconditionally.
+ */
+const MyQrCodeLegacy = () => {
   const navigation = useNavigation();
   const [qrData, setQrData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -115,4 +129,4 @@ const MyQrCode = () => {
   );
 };
 
-export default MyQrCode;
+export default MyQrCodeLegacy;
