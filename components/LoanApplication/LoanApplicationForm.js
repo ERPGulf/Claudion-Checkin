@@ -55,12 +55,18 @@ function LoanApplicationForm({ onSubmit, isLoading, resetSignal }) {
     }
   };
 
+  // The backend validates product_name against the Loan Product docname, which
+  // is not always the same string as its product_name label (autonamed sites
+  // fail with "Could not find Loan Product: <label>"). Submit `name` when the
+  // endpoint provides it and keep the label for display.
   const productOptions = useMemo(
     () =>
       loanProducts
-        .map((item) => item?.product_name)
-        .filter(Boolean)
-        .map((name) => ({ label: name, value: name })),
+        .filter((item) => item?.name || item?.product_name)
+        .map((item) => ({
+          label: item.product_name || item.name,
+          value: item.name || item.product_name,
+        })),
     [loanProducts],
   );
 
@@ -152,8 +158,9 @@ function LoanApplicationForm({ onSubmit, isLoading, resetSignal }) {
     try {
       await onSubmit?.(payload);
     } catch (error) {
-      console.log(error);
-      showToast("Failed to submit loan application.");
+      // The caller's mutation onError surfaces the server message; a toast here
+      // would stack a second, vaguer alert on top of it.
+      console.log("Loan submit error:", error);
     }
   };
 
