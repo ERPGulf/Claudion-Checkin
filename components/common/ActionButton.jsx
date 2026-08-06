@@ -20,10 +20,18 @@ const SIZES = {
  *
  * `filled`   — the one primary action. Inverts per palette via `buttonFill`, so
  *              it is near-black on light and near-white on dark.
+ * `accent`   — the brand teal as the action itself, for a screen whose whole job
+ *              is one invitation (Login). Louder than `filled`, so a screen gets
+ *              at most one. Do not hardcode its label colour: `accentFillText`
+ *              is white on light (11.43:1 on the deep ink) and near-black on dark
+ *              (11.28:1 on the mint), because the fill inverts between palettes.
+ *              It used to be near-black in both, back when the fill was one
+ *              orange — that rule died with the orange.
  * `outline`  — secondary. Card surface + hairline, so it reads as the same
  *              material as the cards around it, one step quieter than filled.
  * `tinted`   — semantic/status, driven by `tone` ('accent' | 'success' |
- *              'warning' | 'error' | 'info').
+ *              'warning' | 'error' | 'info'). Note this is the *quiet* accent —
+ *              a pale tint behind a dark label — not the same thing as `accent`.
  *
  * Deliberately not colour-coded by outcome: a filled button means "this is the
  * action", and the label says which. Reserve `tinted tone="error"` for genuinely
@@ -46,6 +54,7 @@ function ActionButton({
 
   const tinted = variant === 'tinted';
   const outline = variant === 'outline';
+  const accent = variant === 'accent';
   const inert = disabled || loading;
 
   const foreground = inert
@@ -54,12 +63,15 @@ function ActionButton({
       ? colors[`${tone}Text`]
       : outline
         ? colors.textPrimary
-        : colors.buttonFillText;
+        : accent
+          ? colors.accentFillText
+          : colors.buttonFillText;
 
   const background = (() => {
     if (tinted) return colors[`${tone}Surface`];
     if (outline) return colors.cardBackground;
-    return inert ? colors.iconBackground : colors.buttonFill;
+    if (inert) return colors.iconBackground;
+    return accent ? colors.accentFill : colors.buttonFill;
   })();
 
   const border = (() => {

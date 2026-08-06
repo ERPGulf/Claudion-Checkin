@@ -15,7 +15,8 @@ import { Toast } from "react-native-toast-message/lib/src/Toast";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import Constants from "expo-constants";
 import * as Updates from "expo-updates";
-import { RADIUS, SPACING, TYPO } from "../constants";
+import { BRAND_TEAL_MINT, RADIUS, SPACING, TYPO } from "../constants";
+import { withAlpha } from "../utils/color";
 import useAppTheme from "../hooks/useAppTheme";
 import Card from "../components/common/Card";
 import SectionHeader from "../components/common/SectionHeader";
@@ -380,7 +381,10 @@ function Profile() {
               // Wider and fainter than the old bleeding circle: without a hard
               // edge cutting it off, a small opaque disc reads as a stray blob,
               // where a large soft one reads as ambient light.
-              backgroundColor: "rgba(248, 118, 39, 0.11)",
+              // The mint end explicitly, not `colors.primary2`: this card is
+              // `colors.primary` in both palettes, so in light mode the accent
+              // token is the deep ink and would vanish against it.
+              backgroundColor: withAlpha(BRAND_TEAL_MINT, 0.11),
             }}
           />
 
@@ -390,10 +394,13 @@ function Profile() {
                 paddingHorizontal: SPACING.md,
                 paddingVertical: SPACING.xs + 2,
                 borderRadius: RADIUS.pill,
-                backgroundColor: "rgba(248, 118, 39, 0.14)",
+                backgroundColor: withAlpha(BRAND_TEAL_MINT, 0.14),
               }}
             >
-              <Text className="text-xs font-semibold uppercase tracking-widest text-orange-300">
+              <Text
+                className="text-xs font-semibold uppercase tracking-widest"
+                style={{ color: BRAND_TEAL_MINT }}
+              >
                 {isProductionChannel ? "Production" : updateChannel}
               </Text>
             </View>

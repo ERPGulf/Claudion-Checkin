@@ -102,8 +102,67 @@ describe('dark palette', () => {
     });
   });
 
-  it('keeps the brand accent so the two palettes stay recognisable', () => {
-    expect(DARK_COLORS.primary2).toBe(COLORS.primary2);
+  it('takes the brand accent from the wordmark at both ends of the palette', () => {
+    // The accent used to be one orange shared by both palettes. It is now the
+    // Claudion teal, and the mark only contains two tones — a deep ink and a
+    // mint, with no mid-tones — so each palette takes the end it can actually
+    // show: the ink is 1.72:1 on the dark page and the mint is 1.70:1 on white.
+    // Same hue, opposite ends, which is what `buttonFill` already does.
+    expect(COLORS.primary2).toBe('#084048');
+    expect(DARK_COLORS.primary2).toBe('#20E0B0');
+    expect(DARK_COLORS.primary2).not.toBe(COLORS.primary2);
+  });
+
+  it('leaves every semantic colour exactly where it was', () => {
+    // The accent swap must not touch meaning. Warning in particular is orange —
+    // the same family as the old accent — so it is the one most likely to be
+    // caught by a careless find-and-replace.
+    expect(COLORS.warningSurface).toBe('#FFF4E5');
+    expect(COLORS.warningBorder).toBe('#FDE4B0');
+    expect(COLORS.warningText).toBe('#9A5B00');
+    expect(COLORS.successText).toBe('#0A7C3E');
+    expect(COLORS.errorText).toBe('#B00E0E');
+    expect(COLORS.infoText).toBe('#1B4FA8');
+
+    expect(DARK_COLORS.warningText).toBe('#EFB35C');
+    expect(DARK_COLORS.successText).toBeDefined();
+    expect(DARK_COLORS.errorText).toBe('#F58A8A');
+    expect(DARK_COLORS.infoText).toBe('#8CB4F5');
+
+    // Success stays green and warning stays orange — not teal, not each other.
+    expect(COLORS.successText).not.toBe(COLORS.accentText);
+    expect(COLORS.warningText).not.toBe(COLORS.accentText);
+  });
+
+  it('keeps the accent legible against its own palette', () => {
+    const lum = ([r, g, b]) => {
+      const f = v => {
+        const c = v / 255;
+        return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+      };
+      return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+    };
+    const rgb = h => [1, 3, 5].map(i => parseInt(h.substr(i, 2), 16));
+    const ratio = (a, b) => {
+      const [x, y] = [lum(rgb(a)), lum(rgb(b))].sort((m, n) => n - m);
+      return (x + 0.05) / (y + 0.05);
+    };
+
+    // AA for text, on the surface each one is actually drawn on.
+    expect(ratio(COLORS.accentText, COLORS.cardBackground)).toBeGreaterThan(4.5);
+    expect(ratio(COLORS.accentText, COLORS.accentSurface)).toBeGreaterThan(4.5);
+    expect(
+      ratio(DARK_COLORS.accentText, DARK_COLORS.surfaceSecondary),
+    ).toBeGreaterThan(4.5);
+    expect(
+      ratio(DARK_COLORS.accentText, DARK_COLORS.accentSurface),
+    ).toBeGreaterThan(4.5);
+
+    // And the filled control's label against its own fill.
+    expect(ratio(COLORS.accentFillText, COLORS.accentFill)).toBeGreaterThan(4.5);
+    expect(
+      ratio(DARK_COLORS.accentFillText, DARK_COLORS.accentFill),
+    ).toBeGreaterThan(4.5);
   });
 });
 

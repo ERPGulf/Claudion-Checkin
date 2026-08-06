@@ -50,7 +50,10 @@ const colorOf = node => StyleSheet.flatten(node.props.style).color;
 describe('design tokens', () => {
   it('keeps the pre-existing tokens that older screens still import', () => {
     expect(COLORS.primary).toBe('#110E11');
-    expect(COLORS.primary2).toBe('#F87627');
+    // `primary2` is the brand accent, and it moved from the orange #F87627 to the
+    // Claudion teal taken off the wordmark. The token itself is what older
+    // screens import, so the name still has to exist — only its value changed.
+    expect(COLORS.primary2).toBe('#084048');
     expect(COLORS.offwhite).toBe('#F3F4F8');
     expect(SHADOWS.small).toBeDefined();
     expect(SHADOWS.medium).toBeDefined();

@@ -23,7 +23,8 @@ export const REASON_ROW_HEIGHT = 46;
  * Selection is carried by three things at once — accent glyph, weighted label
  * and a filled tick — because with the card tint gone, a single cue would be too
  * quiet. The tick fills with `buttonFill` (near-black on light, near-white on
- * dark) instead of the brand orange: a white glyph on #F87627 lands at 2.9:1,
+ * dark) instead of the brand accent: a white glyph on the old orange #F87627
+ * landed at 2.9:1,
  * under the 3:1 WCAG floor for non-text contrast.
  */
 function ReasonOption({ label, icon, selected, onPress, showDivider = false }) {

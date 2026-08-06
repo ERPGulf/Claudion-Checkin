@@ -2,9 +2,32 @@ import { Dimensions, StatusBar } from 'react-native';
 
 const { height, width } = Dimensions.get('window');
 
+/**
+ * The brand accent, taken from the Claudion wordmark rather than picked.
+ *
+ * The mark is deliberately two-tone — sampled from `assets/claudion-wordmark-*`,
+ * it is 32k pixels of one deep teal ink and 7k of one mint, with **no mid-tones
+ * between them**. So these two are the entire brand teal, and every accent token
+ * below is one of them or a tint of one of them. Nothing here is a third green.
+ *
+ * They also happen to be near-perfect mirrors, which is what makes a single
+ * accent work in both palettes: the deep ink is 11.43:1 on white, and the mint is
+ * 11.57:1 on the dark page. Light mode uses the ink for anything that has to be
+ * read and the mint for tints; dark mode swaps to the mint for the same reason
+ * `buttonFill` inverts — the ink is 1.72:1 against a near-black page and would
+ * disappear.
+ *
+ * This replaced `#F87627`, which was the accent everywhere the app wanted to feel
+ * branded. The orange was never the brand's; the teal is in the logo.
+ */
+const BRAND_TEAL_DEEP = '#084048';
+const BRAND_TEAL_MINT = '#20E0B0';
+
 const COLORS = {
   primary: '#110E11',
-  primary2: '#F87627',
+  // The brand accent. Consumed as the decorative accent across the modern UI —
+  // active tabs, accent icons, avatar initials, selected states, the halo.
+  primary2: BRAND_TEAL_DEEP,
   secondary: '#DDF0FF',
   tertiary: '#E9BD21',
 
@@ -59,9 +82,12 @@ const COLORS = {
   infoSurface: '#EAF2FE',
   infoBorder: '#CADBFF',
   infoText: '#1B4FA8',
-  accentSurface: '#FFF0E6', // primary2 (#F87627) at ~8% — brand accent chip
-  accentBorder: '#FFD9BE',
-  accentText: '#A84B0C', // 5.5:1 on white — orange safe as a foreground
+  // Brand accent triad. The tint comes off the **mint**, not the ink: the deep
+  // teal at chip alphas composites to a grey (#EEF2F2 at 7%), which reads as a
+  // disabled surface rather than a branded one. The mint stays visibly teal.
+  accentSurface: '#E2FBF5', // BRAND_TEAL_MINT at 13% on white
+  accentBorder: '#A1F2DE', // BRAND_TEAL_MINT at 42% — parity with the old #FFD9BE
+  accentText: BRAND_TEAL_DEEP, // 11.43:1 on white, 10.53:1 on the chip above
   // Neutral triad, for states that carry no judgement (unknown / other). These
   // are aliases of iconBackground / cardBorder / textSecondary rather than new
   // colours; they exist so a `tone` can always resolve through
@@ -74,6 +100,17 @@ const COLORS = {
   // primary-filled button on a dark card would be invisible.
   buttonFill: '#110E11',
   buttonFillText: '#FFFFFF',
+
+  // Brand-accent fill, for the one place a screen wants the brand colour itself
+  // to be the call to action rather than a tint behind a label.
+  //
+  // The deep ink, with a white label: 11.43:1, and 10.48:1 as a shape against the
+  // page. This one **is** overridden in dark mode, unlike the orange it replaced
+  // — see the note there. The hue does not change between palettes, only which
+  // end of the mark's own two tones is used, which is the same thing `buttonFill`
+  // already does.
+  accentFill: BRAND_TEAL_DEEP,
+  accentFillText: '#FFFFFF',
 };
 
 /**
@@ -110,15 +147,27 @@ const DARK_COLORS = {
   infoSurface: '#132039',
   infoBorder: '#1E3260',
   infoText: '#8CB4F5',
-  accentSurface: '#33200F',
-  accentBorder: '#4A2F14',
-  accentText: '#F89A55',
+  accentSurface: '#0E2924', // BRAND_TEAL_MINT at 14% on the dark page
+  accentBorder: '#125344', // at 34%
+  accentText: BRAND_TEAL_MINT, // 11.57:1 on the page, 9.09:1 on the chip above
   neutralSurface: '#26262B',
   neutralBorder: '#2A2A30',
   neutralText: '#B4B4BE',
   // Inverted: light fill, dark label.
   buttonFill: '#F5F5F7',
   buttonFillText: '#110E11',
+
+  // The decorative accent swaps to the mint here. The deep ink is 1.72:1 against
+  // this palette's page — a teal icon nobody can see is not an accent.
+  primary2: BRAND_TEAL_MINT,
+
+  // And so does the fill, for the same reason `buttonFill` above inverts: a
+  // #084048 button on a #0B0B0D page is a dark rectangle on a dark page. The mint
+  // is 11.57:1 as a shape, and takes the near-black label back (11.28:1) — white
+  // on mint would be 1.70:1 and illegible. Same hue as light mode, other end of
+  // the mark.
+  accentFill: BRAND_TEAL_MINT,
+  accentFillText: '#110E11',
 };
 
 const SIZES = {
@@ -242,6 +291,13 @@ const SHADOWS = {
 };
 
 export {
+  // The two tones the whole accent system is built from. Exported for the one
+  // legitimate case the palette cannot serve: a surface that is dark in *both*
+  // palettes (the Profile hero is `colors.primary`), where `primary2` would hand
+  // light mode the deep ink and make the accent invisible. Such a surface picks
+  // BRAND_TEAL_MINT deliberately. Everything else must use the tokens.
+  BRAND_TEAL_DEEP,
+  BRAND_TEAL_MINT,
   COLORS,
   DARK_COLORS,
   SIZES,

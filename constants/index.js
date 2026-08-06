@@ -1,4 +1,6 @@
 import {
+  BRAND_TEAL_DEEP,
+  BRAND_TEAL_MINT,
   COLORS,
   DARK_COLORS,
   SIZES,
@@ -12,6 +14,8 @@ import {
 import { BUILD_TAG } from './buildTag';
 
 export {
+  BRAND_TEAL_DEEP,
+  BRAND_TEAL_MINT,
   COLORS,
   DARK_COLORS,
   SIZES,

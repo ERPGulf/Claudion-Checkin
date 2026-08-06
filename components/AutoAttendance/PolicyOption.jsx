@@ -15,7 +15,7 @@ import PressableScale from '../common/PressableScale';
  * it to carry one would have meant changing a shipped screen to serve this one.
  *
  * `accessibilityRole="radio"` because the three policies are mutually exclusive.
- * The indicator fills with `buttonFill` rather than the brand orange: a white
+ * The indicator fills with `buttonFill` rather than the brand accent: a white
  * glyph on #F87627 lands at 2.9:1, under the 3:1 WCAG floor for non-text
  * contrast.
  */
