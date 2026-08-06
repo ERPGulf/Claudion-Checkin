@@ -218,14 +218,14 @@ function LavaMenu() {
               },
               {
                 label: ["Loan", "application"],
-                icon: "cash-outline",
+                icon: "card-outline",
                 nav: "Loan application",
               },
-              {
-                label: ["Salary", "Advance"],
-                icon: "card-outline",
-                nav: "Salary advance",
-              },
+              // {
+              //   label: ["Salary", "Advance"],
+              //   icon: "card-outline",
+              //   nav: "Salary advance",
+              // },
               {
                 label: ["Complaints"],
                 icon: "chatbox-ellipses-outline",
