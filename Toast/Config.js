@@ -1,108 +1,50 @@
-import {
-  SuccessToast,
-  ErrorToast,
-  InfoToast,
-} from "react-native-toast-message";
+import React from "react";
+import ToastBanner from "./ToastBanner";
 
-const BASE_TOAST_STYLE = {
-  borderRadius: 15,
-  width: "94%",
-  height: 60,
+/**
+ * Toast type → tone and glyph.
+ *
+ * The keys are the contract with every `Toast.show({ type })` in the app and
+ * must not change: `success`, `error` and `info` are the library's own names,
+ * and `notificationToast` / `announcementToast` are what App.js's
+ * `getForegroundToastType` and Profile's dev tester pass. Only what each one
+ * *looks* like changed.
+ *
+ * Tones resolve through the palette, so every type has a light and a dark
+ * treatment: green for success, red for error, blue for info, the brand orange
+ * for a pushed notification and amber for an announcement. The glyphs are what
+ * keep the last two apart at a glance — a bell versus a megaphone — since both
+ * sit in the warm half of the palette.
+ */
+const TOAST_TYPES = {
+  success: { tone: "success", icon: "checkmark-circle" },
+  error: { tone: "error", icon: "close-circle" },
+  info: { tone: "info", icon: "information-circle" },
+  notificationToast: { tone: "accent", icon: "notifications" },
+  announcementToast: { tone: "warning", icon: "megaphone" },
 };
 
-const TITLE_STYLE = {
-  fontSize: 20,
-  color: "#fff",
-  fontWeight: 500,
-  textAlign: "center",
-};
+/**
+ * The `config` prop handed to <Toast>.
+ *
+ * Every entry renders the same <ToastBanner>; the map above is the only thing
+ * that differs between them, which is what stops the five types from drifting
+ * apart the way five hand-styled blocks did. Each function receives the
+ * library's full params object — `text1`, `text2`, `text1Style`, `text2Style`,
+ * `onPress`, `hide`, `props` — and passes it straight through, so no call site
+ * has to change.
+ *
+ * The dead `tomatoToast` entry that used to sit here is gone: it referenced
+ * `View` and `Text` without importing them, so anything calling it would have
+ * thrown. Nothing in the app ever did.
+ */
+export const toastConfig = Object.fromEntries(
+  Object.entries(TOAST_TYPES).map(([type, { tone, icon }]) => [
+    type,
+    props => <ToastBanner {...props} tone={tone} icon={icon} />,
+  ]),
+);
 
-const BODY_STYLE = {
-  fontSize: 12,
-  color: "#fff",
-  textAlign: "center",
-};
+export { TOAST_TYPES };
 
-export const toastConfig = {
-  /*
-      Overwrite 'success' type,
-      by modifying the existing `BaseToast` component
-    */
-  success: (props) => (
-    <SuccessToast
-      {...props}
-      style={{
-        ...BASE_TOAST_STYLE,
-        backgroundColor: "#22c55e",
-        borderLeftColor: "#22c55e",
-      }}
-      text1Style={TITLE_STYLE}
-      text2Style={BODY_STYLE}
-    />
-  ),
-  /*
-      Overwrite 'error' type,
-      by modifying the existing `ErrorToast` component
-    */
-  error: (props) => (
-    <ErrorToast
-      {...props}
-      style={{
-        ...BASE_TOAST_STYLE,
-        backgroundColor: "rgb(239 68 68)",
-        borderLeftColor: "rgb(239 68 68)",
-      }}
-      text1Style={TITLE_STYLE}
-      text2Style={BODY_STYLE}
-    />
-  ),
-  info: (props) => (
-    <InfoToast
-      {...props}
-      style={{
-        ...BASE_TOAST_STYLE,
-        backgroundColor: "#0096FF",
-        borderLeftColor: "#0096FF",
-      }}
-      text1Style={TITLE_STYLE}
-      text2Style={BODY_STYLE}
-    />
-  ),
-  notificationToast: (props) => (
-    <InfoToast
-      {...props}
-      style={{
-        ...BASE_TOAST_STYLE,
-        backgroundColor: "#0B6E99",
-        borderLeftColor: "#0B6E99",
-      }}
-      text1Style={TITLE_STYLE}
-      text2Style={BODY_STYLE}
-    />
-  ),
-  announcementToast: (props) => (
-    <InfoToast
-      {...props}
-      style={{
-        ...BASE_TOAST_STYLE,
-        backgroundColor: "#B45309",
-        borderLeftColor: "#B45309",
-      }}
-      text1Style={TITLE_STYLE}
-      text2Style={BODY_STYLE}
-    />
-  ),
-  /*
-      Or create a completely new type - `tomatoToast`,
-      building the layout from scratch.
-  
-      I can consume any custom `props` I want.
-      They will be passed when calling the `show` method (see below)
-    */
-  tomatoToast: ({ text1, props }) => (
-    <View style={{ height: 60, width: "100%", backgroundColor: "tomato" }}>
-      <Text>{text1}</Text>
-      <Text>{props.uuid}</Text>
-    </View>
-  ),
-};
+export default toastConfig;

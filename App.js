@@ -7,11 +7,11 @@ import { useState, useEffect, useRef } from "react";
 import * as Font from "expo-font";
 import * as SplashScreen from "expo-splash-screen";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { Platform } from "react-native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useDispatch, useSelector } from "react-redux";
-import { SIZES } from "./constants";
-import { toastConfig } from "./Toast/Config";
+// Hosts the <Toast> instance with a safe-area-derived offset; `Toast.show()`
+// still comes from the library import above.
+import AppToast from "./Toast/AppToast";
 import Navigator from "./navigation/navigator";
 import { navigateSafely } from "./navigation/rootNavigation";
 import * as Updates from "expo-updates";
@@ -155,12 +155,7 @@ export default function App() {
             <Navigator />
             <UpdateBanner />
             <ThemedStatusBar />
-            <Toast
-              topOffset={
-                Platform.OS === "ios" ? SIZES.topOffset + 55 : SIZES.topOffset
-              }
-              config={toastConfig}
-            />
+            <AppToast />
           </QueryClientProvider>
         </PersistGate>
       </Provider>
