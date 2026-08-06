@@ -52,6 +52,7 @@ function LoanApplicationForm({ onSubmit, isLoading, resetSignal }) {
       const response = await getLoanProducts();
 
       console.log("Loan Products:", response);
+      console.log(JSON.stringify(response, null, 2));
 
       setLoanProducts(response || []);
     } catch (error) {
@@ -169,7 +170,7 @@ function LoanApplicationForm({ onSubmit, isLoading, resetSignal }) {
 
         <Label text="Loan Product" required />
 
-        <View
+        {/* <View
           style={{
             borderWidth: 1,
             borderColor: "#D1D5DB",
@@ -178,8 +179,8 @@ function LoanApplicationForm({ onSubmit, isLoading, resetSignal }) {
             marginBottom: 12,
             overflow: "hidden",
           }}
-        >
-          <Picker
+        > */}
+          {/* <Picker
             selectedValue={productName}
             onValueChange={(value) => setProductName(value)}
             style={{
@@ -196,8 +197,30 @@ function LoanApplicationForm({ onSubmit, isLoading, resetSignal }) {
                 value={item.product_name}
               />
             ))}
-          </Picker>
-        </View>
+          </Picker> */}
+          <View className="border border-gray-300 rounded mb-3 bg-gray-50">
+            <Picker
+              selectedValue={productName}
+              onValueChange={setProductName}
+              style={{ color: "#111827" }}
+            >
+              <Picker.Item
+                label="Select Loan Product"
+                value=""
+                color="#9CA3AF"
+              />
+
+              {loanProducts.map((item, index) => (
+                <Picker.Item
+                  key={index}
+                  label={item.product_name}
+                  value={item.product_name}
+                  color="#111827"
+                />
+              ))}
+            </Picker>
+          </View>
+        
 
         {/* Loan Amount */}
         <Label text="Loan Amount" required />
