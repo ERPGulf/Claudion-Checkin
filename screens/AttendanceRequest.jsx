@@ -17,7 +17,9 @@ import ActionButton from "../components/common/ActionButton";
 import Card from "../components/common/Card";
 import ModuleCard from "../components/common/ModuleCard";
 import StatusBanner from "../components/common/StatusBanner";
-import AttachmentBottomSheet from "../components/attachment/AttachmentBottomSheet";
+// The modern picker. components/attachment/AttachmentBottomSheet is hardcoded
+// light and stays where it is — the classic screens still render it.
+import AttachmentSheet from "../components/common/AttachmentSheet";
 import {
   PickerField,
   ReasonOption,
@@ -390,7 +392,7 @@ function AttendanceRequest() {
         />
       </ScrollView>
 
-      <AttachmentBottomSheet
+      <AttachmentSheet
         visible={isBottomSheetVisible}
         onClose={closeBottomSheet}
         onSelectCamera={handlePickCamera}

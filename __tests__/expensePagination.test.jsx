@@ -62,11 +62,12 @@ import HistoryFooter from '../components/ExpenseClaim/HistoryFooter';
 import AppearingItem from '../components/ExpenseClaim/AppearingItem';
 /* eslint-enable import/first */
 
-function claimsFixture(n) {
+function claimsFixture(n, overrides = () => ({})) {
   return Array.from({ length: n }, (_, i) => ({
     name: `HR-EXP-${i}`,
     expense_date: '2026-08-05',
     amount: 100 + i,
+    ...overrides(i),
   }));
 }
 
@@ -187,6 +188,89 @@ describe('useExpenseClaims pagination', () => {
     act(() => hook.current.loadMore());
 
     expect(getByText(`${PAGE_SIZE * 2}/12:more`)).toBeTruthy();
+  });
+});
+
+describe('useExpenseClaims search', () => {
+  beforeEach(() => {
+    // 8 Travel, 4 Medical.
+    mockQueryState.data = claimsFixture(12, i => ({
+      expense_type: i < 8 ? 'Travel' : 'Medical',
+    }));
+    mockRefetch.mockClear();
+  });
+
+  it('is inert until a query is set — which is what the classic screen sees', async () => {
+    const { getByText, hook } = await mountProbe();
+
+    expect(hook.current.isSearching).toBe(false);
+    expect(hook.current.filteredClaims).toHaveLength(12);
+    expect(getByText(`${PAGE_SIZE}/12:more`)).toBeTruthy();
+  });
+
+  it('searches the whole set, not just the page on screen', async () => {
+    const { getByText, hook } = await mountProbe();
+
+    // Medical claims are all at index 8+, well past the first page of five.
+    // Filtering the slice instead of the source would find none of them.
+    act(() => hook.current.setSearchQuery('medical'));
+
+    expect(hook.current.filteredClaims).toHaveLength(4);
+    expect(getByText('4/12:end')).toBeTruthy();
+  });
+
+  it('paginates the matches when a query has more than one page of them', async () => {
+    const { getByText, hook } = await mountProbe();
+
+    act(() => hook.current.setSearchQuery('travel'));
+    expect(getByText(`${PAGE_SIZE}/12:more`)).toBeTruthy();
+
+    act(() => hook.current.loadMore());
+    expect(getByText('8/12:end')).toBeTruthy();
+  });
+
+  it('restarts at page one for a new query', async () => {
+    const { getByText, hook } = await mountProbe();
+
+    act(() => hook.current.loadMore());
+    act(() => hook.current.loadMore());
+
+    act(() => hook.current.setSearchQuery('travel'));
+
+    // Without the reset this would drop all eight matches in at once, having
+    // inherited a cursor from a scroll the user made against a different list.
+    expect(getByText(`${PAGE_SIZE}/12:more`)).toBeTruthy();
+  });
+
+  it('goes back to the full list, page one, when the query is cleared', async () => {
+    const { getByText, hook } = await mountProbe();
+
+    act(() => hook.current.setSearchQuery('medical'));
+    act(() => hook.current.setSearchQuery(''));
+
+    expect(hook.current.isSearching).toBe(false);
+    expect(getByText(`${PAGE_SIZE}/12:more`)).toBeTruthy();
+  });
+
+  it('reports no matches without claiming the history is empty', async () => {
+    const { getByText, hook } = await mountProbe();
+
+    act(() => hook.current.setSearchQuery('zzzz'));
+
+    expect(getByText('0/12:end')).toBeTruthy();
+    // The distinction the empty state depends on: nothing matched, but there
+    // are still twelve claims.
+    expect(hook.current.claims).toHaveLength(12);
+    expect(hook.current.isSearching).toBe(true);
+  });
+
+  it('treats a whitespace-only query as no query at all', async () => {
+    const { hook } = await mountProbe();
+
+    act(() => hook.current.setSearchQuery('   '));
+
+    expect(hook.current.isSearching).toBe(false);
+    expect(hook.current.filteredClaims).toHaveLength(12);
   });
 });
 

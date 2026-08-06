@@ -495,7 +495,9 @@ describe('ExpenseTypeSheet', () => {
       <ExpenseTypeSheet visible types={types} onSelect={jest.fn()} onClose={onClose} />,
     );
 
-    fireEvent.press(getByLabelText('Close expense type list'));
+    // The backdrop's label comes from <BottomSheet>, which names the sheet it
+    // is dismissing rather than saying a bare "Close" twice on one screen.
+    fireEvent.press(getByLabelText('Close Expense type'));
     fireEvent.press(getByLabelText('Close'));
     expect(onClose).toHaveBeenCalledTimes(2);
   });

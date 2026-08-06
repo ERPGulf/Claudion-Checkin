@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert } from 'react-native';
 import { useSelector } from 'react-redux';
 import { useMutation, useQuery } from '@tanstack/react-query';
@@ -9,6 +9,7 @@ import {
   getExpenseClaims,
   uploadExpenseAttachment,
 } from '../services/api';
+import { claimMatchesQuery } from '../utils/expenseClaims';
 
 /** Claims revealed per "Load more" press. Unchanged from the classic screen. */
 export const PAGE_SIZE = 5;
@@ -103,6 +104,39 @@ export default function useExpenseClaims() {
   });
 
   /* ---------------------------------------------------------------------
+   * Search
+   *
+   * Local, over the whole result set. That is not a compromise here: the
+   * endpoint returns every claim in one response, so "the currently loaded
+   * history" and "all of it" are the same list — there is no page of results
+   * hiding on the server for a query to miss, and no new API call to make.
+   *
+   * Filtering happens *before* the page slice below, so a search runs over
+   * everything and pagination then applies to the matches. Filtering the
+   * already-sliced page instead would only ever search the five rows on screen.
+   *
+   * The classic screen never sets a query, so `filteredClaims` is `claims` for
+   * it and every count and cursor below behaves exactly as it always did.
+   * ------------------------------------------------------------------- */
+
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const filteredClaims = useMemo(
+    () =>
+      searchQuery.trim()
+        ? claims.filter(claim => claimMatchesQuery(claim, searchQuery, baseUrl))
+        : claims,
+    [claims, searchQuery, baseUrl],
+  );
+
+  // A new query starts at page one. Without this, searching after three pages
+  // had been revealed would drop fifteen matches in at once, and clearing the
+  // search would leave the cursor somewhere the user never scrolled to.
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [searchQuery]);
+
+  /* ---------------------------------------------------------------------
    * Pagination
    *
    * The reveal itself is unchanged: one page is PAGE_SIZE more rows off the
@@ -117,7 +151,7 @@ export default function useExpenseClaims() {
    * page, and still is.
    * ------------------------------------------------------------------- */
 
-  const total = claims.length;
+  const total = filteredClaims.length;
   const hasMore = visibleCount < total;
   const pending = useRef(false);
 
@@ -144,7 +178,7 @@ export default function useExpenseClaims() {
     return refetch();
   }, [refetch]);
 
-  const visibleClaims = claims.slice(0, visibleCount);
+  const visibleClaims = filteredClaims.slice(0, visibleCount);
 
   return {
     employeeCode,
@@ -152,7 +186,9 @@ export default function useExpenseClaims() {
 
     // History
     claims,
+    filteredClaims,
     visibleClaims,
+
     isFetching,
     // Surfaced for the modern screen, which tells "couldn't load" apart from
     // "nothing yet". The classic screen never read these and still renders its
@@ -162,6 +198,11 @@ export default function useExpenseClaims() {
     refetch,
     isRefetching,
     refresh,
+
+    // Search — local, and only ever driven by the modern screen
+    searchQuery,
+    setSearchQuery,
+    isSearching: !!searchQuery.trim(),
 
     // Pagination — same client-side slice the classic screen used
     visibleCount,

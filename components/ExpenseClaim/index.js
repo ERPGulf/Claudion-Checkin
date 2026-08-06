@@ -9,6 +9,7 @@ import ClaimFormSection from './ClaimFormSection';
 import ExpenseHistoryCard from './ExpenseHistoryCard';
 import ExpenseSkeleton from './ExpenseSkeleton';
 import HistoryFooter from './HistoryFooter';
+import HistorySectionHeader from './HistorySectionHeader';
 import AppearingItem from './AppearingItem';
 
 export {
@@ -20,5 +21,6 @@ export {
   ExpenseHistoryCard,
   ExpenseSkeleton,
   HistoryFooter,
+  HistorySectionHeader,
   AppearingItem,
 };

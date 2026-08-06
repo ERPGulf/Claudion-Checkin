@@ -205,6 +205,71 @@ export function resolveAttachments(fileUrl, baseUrl = '') {
     .filter(Boolean);
 }
 
+/* -------------------------------------------------------------------------
+ * Search
+ * ---------------------------------------------------------------------- */
+
+/**
+ * Every string a claim can be found by, lower-cased.
+ *
+ * Each field is indexed in **both** its stored and its displayed form, because
+ * the user searches for what they can see. A date is matched as `2026-08-05` and
+ * as `5 aug 2026`, so typing "aug" works; an amount as `1250` and as `1,250.00`,
+ * so both "1250" and "1,250" hit. A type is indexed raw as well as capitalised,
+ * which matters for the tenant-configured values the app never rewrites.
+ *
+ * Attachments contribute their filenames. `baseUrl` is optional here — a
+ * filename is the last path segment either way, so search works before the
+ * tenant URL has been read out of AsyncStorage.
+ */
+export function claimSearchIndex(claim, baseUrl = '') {
+  if (!claim) return [];
+
+  const { label: status } = describeExpenseStatus(claim.status);
+  const attachments = resolveAttachments(claim.file_url, baseUrl);
+
+  return [
+    claim.expense_type,
+    formatExpenseType(claim.expense_type),
+    claim.description,
+    claim.title,
+    claim.name,
+    claim.amount == null ? null : String(claim.amount),
+    formatExpenseAmount(claim.amount),
+    claim.expense_date,
+    formatExpenseDate(claim.expense_date),
+    claim.status,
+    status,
+    ...attachments.map(file => file.name),
+  ]
+    .filter(value => typeof value === 'string' && value)
+    .map(value => value.toLowerCase());
+}
+
+/**
+ * Whether a claim matches a query.
+ *
+ * Every whitespace-separated term must appear somewhere in the claim (AND, not
+ * OR), so "travel approved" narrows rather than widens — which is what a second
+ * word is for. Terms match as substrings, so "125" finds "1,250.00" and a
+ * partial type name finds the type.
+ *
+ * An empty or whitespace-only query matches everything, which is what makes
+ * this safe to run unconditionally: the classic screen passes no query at all
+ * and its list is untouched.
+ */
+export function claimMatchesQuery(claim, query, baseUrl = '') {
+  const terms = String(query || '')
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (!terms.length) return true;
+
+  const index = claimSearchIndex(claim, baseUrl);
+  return terms.every(term => index.some(value => value.includes(term)));
+}
+
 /**
  * One combined screen-reader label per claim, so a card is announced as a
  * sentence rather than as six unrelated fragments.

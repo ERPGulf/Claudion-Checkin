@@ -23,6 +23,10 @@ import PickerField, {
 } from './PickerField';
 import UploadField from './UploadField';
 import StatusBadge from './StatusBadge';
+// Shared sheet chrome + the modern attachment picker and search input.
+import BottomSheet from './BottomSheet';
+import AttachmentSheet from './AttachmentSheet';
+import SearchBar, { SearchCount, SEARCH_BAR_HEIGHT } from './SearchBar';
 
 export {
   PressableScale,
@@ -47,4 +51,9 @@ export {
   fitsTwoColumns,
   UploadField,
   StatusBadge,
+  BottomSheet,
+  AttachmentSheet,
+  SearchBar,
+  SearchCount,
+  SEARCH_BAR_HEIGHT,
 };

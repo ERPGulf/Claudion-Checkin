@@ -13,7 +13,7 @@ import SectionHeader from '../common/SectionHeader';
 import StatusBanner from '../common/StatusBanner';
 import PickerField from '../common/PickerField';
 import UploadField from '../common/UploadField';
-import AttachmentBottomSheet from '../attachment/AttachmentBottomSheet';
+import AttachmentSheet from '../common/AttachmentSheet';
 import ExpenseTypeSheet from './ExpenseTypeSheet';
 import FormField from './FormField';
 // "5 Aug 2026" — the same string Attendance History and Attendance Request
@@ -57,14 +57,13 @@ function describeMissing({ dateMissing, typeMissing, amountInvalid }) {
 
 /**
  * Everything above the history list: the introduction, the create-claim form in
- * three grouped cards, the submit button, and the "History" heading the list
- * runs on from.
+ * three grouped cards, and the submit button.
  *
  * This is a component rather than JSX inlined into the screen for one reason:
- * it is the FlatList's `ListHeaderComponent`, and it owns the form state. Typing
- * an amount re-renders *this* subtree only — the screen above it never re-runs,
- * so the claim rows below are untouched between keystrokes. With the state held
- * on the screen instead, every character would re-render the whole list.
+ * it is the list's `ListHeaderComponent`, and it owns the form state. Typing an
+ * amount re-renders *this* subtree only — the screen above it never re-runs, so
+ * the claim rows below are untouched between keystrokes. With the state held on
+ * the screen instead, every character would re-render the whole list.
  *
  * Presentation only. Every field, the expense-type list, the date handler, the
  * attachment pickers and `handleSubmit` come from useExpenseClaimForm, shared
@@ -77,7 +76,7 @@ function describeMissing({ dateMissing, typeMissing, amountInvalid }) {
  * pressing submit still runs the same three validations in the same order and
  * raises the same toasts as the classic form.
  */
-function ClaimFormSection({ addClaim, isCreating, resetFormFlag, claimCount }) {
+function ClaimFormSection({ addClaim, isCreating, resetFormFlag }) {
   const { colors, isDark } = useAppTheme();
 
   const {
@@ -348,19 +347,9 @@ function ClaimFormSection({ addClaim, isCreating, resetFormFlag, claimCount }) {
         onPress={onSubmitPress}
       />
 
-      {/* ================= HISTORY ================= */}
-      {/* The heading lives in the header rather than in a section, because the
-          list below it is a flat list of claims — one section with a sticky
-          header would buy nothing and cost the sticky. */}
-      <SectionHeader
-        title="History"
-        subtitle={
-          claimCount
-            ? `${claimCount} claim${claimCount > 1 ? 's' : ''}`
-            : undefined
-        }
-        style={{ marginTop: SPACING.xxl, marginBottom: SPACING.md }}
-      />
+      {/* The "History" heading is not here — it is the list's sticky section
+          header, so it can pin to the top with its search bar once the form has
+          scrolled away. See <HistorySectionHeader>. */}
 
       {/* Both sheets are <Modal>s — they render above the app rather than in
           this layout, so living inside the list header costs no height. */}
@@ -372,7 +361,10 @@ function ClaimFormSection({ addClaim, isCreating, resetFormFlag, claimCount }) {
         onClose={closeTypeSheet}
       />
 
-      <AttachmentBottomSheet
+      {/* The modern picker, not components/attachment/AttachmentBottomSheet —
+          that one is hardcoded light and is still what the classic form and the
+          four screens that haven't been redesigned render. */}
+      <AttachmentSheet
         visible={isBottomSheetVisible}
         onClose={closeBottomSheet}
         onSelectCamera={handlePickCamera}
