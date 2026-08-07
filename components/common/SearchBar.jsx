@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { ICON, RADIUS, SHADOWS, SPACING, TYPO } from '../../constants';
+import { ICON, RADIUS, SPACING, TYPO } from '../../constants';
 import useAppTheme from '../../hooks/useAppTheme';
 import PressableScale from './PressableScale';
 import { resolveTextAlign } from '../../utils/textDirection';
@@ -37,7 +37,7 @@ function SearchBar({
   autoFocus = false,
   style,
 }) {
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
   const [focused, setFocused] = useState(false);
 
   const hasQuery = !!value;
@@ -56,7 +56,11 @@ function SearchBar({
           backgroundColor: focused
             ? colors.cardBackground
             : colors.surfaceSecondary,
-          ...(focused && !isDark ? SHADOWS.card : null),
+          // **No shadow on focus, on either platform** — same rule, and the same
+          // reason, as <FormField>. A shadow on the container of a focused input
+          // blurs it the instant it focuses: the keyboard opens and shuts again
+          // and no character ever lands. The border stepping up to `textPrimary`
+          // and the fill lifting to `cardBackground` are focus affordance enough.
         },
         style,
       ]}
