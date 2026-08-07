@@ -136,7 +136,10 @@ describe("when online", () => {
     expect(await listAll()).toHaveLength(1);
   });
 
-  it("does not queue when the real call throws a 403", async () => {
+  // A 403 is auth-blocked, not a refusal of the punch — it may well resolve on
+  // the next token refresh. Losing the attendance would be the worse outcome, so
+  // it is preserved and surfaced through the banner rather than discarded.
+  it("queues a 403, because a token refresh may recover it", async () => {
     const online = jest
       .fn()
       .mockRejectedValue({ response: { status: 403, data: { message: "No" } } });
@@ -147,7 +150,25 @@ describe("when online", () => {
       online,
     });
 
+    expect(result.queued).toBe(true);
+    expect(await listAll()).toHaveLength(1);
+  });
+
+  // No HTTP status means our own code failed, not the server. Swallowing that
+  // into a queue would tell the employee "saved" when nothing was recorded.
+  it("surfaces a local error instead of silently queueing it", async () => {
+    const online = jest
+      .fn()
+      .mockRejectedValue(new Error("Location permission denied"));
+
+    const result = await submitAttendance({
+      type: "IN",
+      employeeCode: "TDI0167",
+      online,
+    });
+
     expect(result.allowed).toBe(false);
+    expect(result.message).toMatch(/permission denied/i);
     expect(await listAll()).toHaveLength(0);
   });
 });
@@ -351,6 +372,16 @@ describe("shouldQueueFailure", () => {
     expect(
       shouldQueueFailure({ allowed: false, message: "Reporting locations are not configured" }),
     ).toBe(false);
+  });
+
+  it("queues a server-answered failure it cannot interpret", () => {
+    expect(
+      shouldQueueFailure({ error: { response: { status: 417, data: {} } } }),
+    ).toBe(true);
+  });
+
+  it("does not queue a local error, which has no status", () => {
+    expect(shouldQueueFailure({ error: new TypeError("boom") })).toBe(false);
   });
 
   it("does not queue a nullish failure", () => {

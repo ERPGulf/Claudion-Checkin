@@ -15,6 +15,7 @@ import {
 import {
   addQueueChangeListener,
   getQueueCounts,
+  getUnresolvedRows,
 } from "../services/offline/AttendanceQueueService";
 import {
   describeOfflineStatus,
@@ -39,7 +40,16 @@ export default function useOfflineStatus() {
 
   const [online, setOnline] = useState(() => readIsOnline());
   const [syncing, setSyncing] = useState(() => readIsSyncing());
-  const [pending, setPending] = useState(0);
+  // Each count is named for what it means. They used to be one derived
+  // `unsynced` shared by three callers wanting three different things, which is
+  // exactly how a status added later breaks a consumer silently.
+  const [counts, setCounts] = useState({
+    pendingCount: 0,
+    blockedCount: 0,
+    rejectedCount: 0,
+    unresolvedCount: 0,
+    awaitingServerCount: 0,
+  });
   const [justSyncedAt, setJustSyncedAt] = useState(null);
 
   const isMountedRef = useRef(true);
@@ -53,16 +63,28 @@ export default function useOfflineStatus() {
     };
   }, []);
 
-  const refreshPending = useCallback(async () => {
+  const refreshCounts = useCallback(async () => {
     if (!employeeCode) {
-      setPending(0);
+      setCounts({
+        pendingCount: 0,
+        blockedCount: 0,
+        rejectedCount: 0,
+        unresolvedCount: 0,
+        awaitingServerCount: 0,
+      });
       return;
     }
 
     try {
-      const counts = await getQueueCounts(employeeCode);
+      const next = await getQueueCounts(employeeCode);
       if (!isMountedRef.current) return;
-      setPending(counts?.unsynced ?? 0);
+      setCounts({
+        pendingCount: next?.pendingCount ?? 0,
+        blockedCount: next?.blockedCount ?? 0,
+        rejectedCount: next?.rejectedCount ?? 0,
+        unresolvedCount: next?.unresolvedCount ?? 0,
+        awaitingServerCount: next?.awaitingServerCount ?? 0,
+      });
     } catch {
       // A queue read failing is not worth surfacing here — the banner's job is
       // reassurance, and a count it cannot get is better omitted than guessed.
@@ -112,29 +134,64 @@ export default function useOfflineStatus() {
           }, SYNCED_VISIBLE_MS);
         }
 
-        refreshPending();
+        refreshCounts();
       }),
-    [refreshPending],
+    [refreshCounts],
   );
 
   // Queue depth.
   useEffect(() => {
-    refreshPending();
-    return addQueueChangeListener(refreshPending);
-  }, [refreshPending]);
+    refreshCounts();
+    return addQueueChangeListener(refreshCounts);
+  }, [refreshCounts]);
 
-  const phase = resolveOfflinePhase({ online, syncing, justSyncedAt });
+  const phase = resolveOfflinePhase({
+    online,
+    syncing,
+    blocked: counts.blockedCount,
+    rejected: counts.rejectedCount,
+    justSyncedAt,
+  });
 
   // Logged out there is no queue, no employee and nothing to sync, so a
   // connectivity banner would be noise on top of the login screen.
   const visible = isLoggedIn && phase !== OFFLINE_PHASE.HIDDEN;
 
+  /**
+   * The rows behind the banner, read on demand.
+   *
+   * Exposed here rather than queried by the component so the banner needs no
+   * store access of its own — it is a presentational overlay, and the hook
+   * already knows which employee it is describing.
+   */
+  const loadUnresolvedRows = useCallback(async () => {
+    if (!employeeCode) return [];
+    try {
+      return await getUnresolvedRows(employeeCode);
+    } catch {
+      return [];
+    }
+  }, [employeeCode]);
+
+  const content = visible
+    ? describeOfflineStatus(phase, {
+        pending: counts.pendingCount,
+        blocked: counts.blockedCount,
+        rejected: counts.rejectedCount,
+        awaitingServer: counts.awaitingServerCount,
+      })
+    : null;
+
   return {
     visible,
     phase,
-    pending,
     online,
     syncing,
-    content: visible ? describeOfflineStatus(phase, { pending }) : null,
+    content,
+    /** Whether tapping the banner should open the detail sheet. */
+    actionable: !!content?.actionable,
+    ...counts,
+    refreshCounts,
+    loadUnresolvedRows,
   };
 }

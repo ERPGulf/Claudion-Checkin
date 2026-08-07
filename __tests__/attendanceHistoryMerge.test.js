@@ -38,7 +38,9 @@ describe('resolveQueueSyncStatus', () => {
   it.each([
     ['pending', { status: 'pending' }, SYNC_STATUS.PENDING],
     ['syncing', { status: 'syncing' }, SYNC_STATUS.SYNCING],
-    ['failed', { status: 'failed' }, SYNC_STATUS.FAILED],
+    ['blocked', { status: 'blocked' }, SYNC_STATUS.NEEDS_ADMIN],
+    ['rejected', { status: 'rejected' }, SYNC_STATUS.NEEDS_CORRECTION],
+    ['resolved', { status: 'resolved' }, SYNC_STATUS.RESOLVED],
     ['synced', { status: 'synced', duplicate: false }, SYNC_STATUS.SYNCED],
   ])('maps a %s row', (_label, row, expected) => {
     expect(resolveQueueSyncStatus(row)).toBe(expected);
@@ -63,7 +65,9 @@ describe('describeSyncStatus', () => {
     [SYNC_STATUS.PENDING, 'Pending sync', 'warning'],
     [SYNC_STATUS.SYNCING, 'Syncing', 'info'],
     [SYNC_STATUS.SYNCED, 'Synced', 'success'],
-    [SYNC_STATUS.FAILED, 'Failed', 'error'],
+    [SYNC_STATUS.NEEDS_ADMIN, 'Waiting for administrator', 'warning'],
+    [SYNC_STATUS.NEEDS_CORRECTION, 'Needs correction', 'error'],
+    [SYNC_STATUS.RESOLVED, 'Correction submitted', 'neutral'],
     [SYNC_STATUS.DUPLICATE, 'Already synced', 'info'],
   ])('describes %s as "%s" in the %s tone', (status, label, tone) => {
     expect(describeSyncStatus(status)).toMatchObject({ label, tone });
@@ -149,12 +153,12 @@ describe('mergeQueuedRecords', () => {
 
   it('keeps an unsynced row visible however old it is', () => {
     const server = [serverRecord('2026-07-28 09:00:00')];
-    const rows = [queueRow({ status: 'failed', timestamp: '2020-01-01 09:00:00' })];
+    const rows = [queueRow({ status: 'rejected', timestamp: '2020-01-01 09:00:00' })];
 
     const merged = mergeQueuedRecords(server, rows);
 
     expect(merged).toHaveLength(2);
-    expect(merged[1].syncStatus).toBe(SYNC_STATUS.FAILED);
+    expect(merged[1].syncStatus).toBe(SYNC_STATUS.NEEDS_CORRECTION);
   });
 
   // A synced row older than the loaded pages would invent a day section for a

@@ -1,5 +1,7 @@
 // src/services/offline/BackgroundSyncManager.js
 import { AppState } from "react-native";
+import { addTokenChangeListener } from "../api/apiClient";
+import { FAILURE_CLASS } from "./AttendanceDatabase";
 import { syncPendingAttendance } from "./AttendanceSyncService";
 import {
   refreshAttendanceConfig,
@@ -50,13 +52,23 @@ let started = false;
 let intervalId = null;
 let appStateSubscription = null;
 let removeReconnectListener = null;
+let removeTokenChangeListener = null;
 let lastForegroundRun = 0;
 let currentEmployeeId = null;
 
-const runSync = (trigger) =>
-  syncPendingAttendance({ trigger }).catch((error) => {
-    console.log(`${LOG_PREFIX} Sync (${trigger}) failed:`, error?.message);
-  });
+/**
+ * @param {string} trigger for the log
+ * @param {object} [options]
+ * @param {boolean} [options.wakeAllBlocked] ignore the blocked backoff, for the
+ *        events that genuinely change whether a blocked row can now land
+ * @param {string|null} [options.wakeFailureClass] narrow the wake to one class
+ */
+const runSync = (trigger, { wakeAllBlocked = false, wakeFailureClass = null } = {}) =>
+  syncPendingAttendance({ trigger, wakeAllBlocked, wakeFailureClass }).catch(
+    (error) => {
+      console.log(`${LOG_PREFIX} Sync (${trigger}) failed:`, error?.message);
+    },
+  );
 
 /**
  * Keeps the offline rules current. Never throws and never damages a good cache
@@ -87,6 +99,9 @@ const handleAppStateChange = (nextState) => {
   if (now - lastForegroundRun < FOREGROUND_DEBOUNCE_MS) return;
   lastForegroundRun = now;
 
+  // Foregrounding respects the blocked ladder. It happens dozens of times a day
+  // and nothing about it suggests the server changed, so forcing every blocked
+  // row awake here would be the "hammer the server" failure mode.
   runConfigRefresh("foreground");
   runSync("foreground");
 };
@@ -95,8 +110,24 @@ const handleReconnect = () => {
   // The connection being *reported* back is not the same as it being usable, but
   // an early attempt costs one failed request and one backoff step, and waiting
   // costs the user a punch that looks stuck. Attempt it.
+  //
+  // Blocked rows are forced awake: a different network can mean a different
+  // route to a different (working) host, and the employee has been waiting.
   runConfigRefresh("reconnect");
-  runSync("reconnect");
+  runSync("reconnect", { wakeAllBlocked: true });
+};
+
+/**
+ * A new access token is the one event that makes an auth-blocked row plausible
+ * again, so those are forced awake immediately. Scoped to `AUTH` — a fresh token
+ * says nothing about an endpoint that is still not deployed, and re-attempting
+ * those here would just spend requests.
+ */
+const handleTokenChange = () => {
+  runSync("token-refresh", {
+    wakeAllBlocked: true,
+    wakeFailureClass: FAILURE_CLASS.AUTH,
+  });
 };
 
 /**
@@ -115,6 +146,7 @@ export const startBackgroundSync = ({ employeeId = null } = {}) => {
 
   startNetworkListener();
   removeReconnectListener = addReconnectListener(handleReconnect);
+  removeTokenChangeListener = addTokenChangeListener(handleTokenChange);
 
   appStateSubscription = AppState.addEventListener(
     "change",
@@ -129,8 +161,14 @@ export const startBackgroundSync = ({ employeeId = null } = {}) => {
   // Launch. The config refresh is forced here rather than staleness-gated: this
   // is the one moment we know the app is starting fresh, and a device that has
   // never cached anything cannot do offline attendance until it does.
+  //
+  // Blocked rows are forced awake too. An app launch is the likeliest moment for
+  // the world to have changed underneath a blocked record — the server upgraded
+  // overnight, the endpoint got deployed, a permission was granted — and it is
+  // also the guaranteed backstop if the device clock moved and left a
+  // `nextAttemptAt` stranded in the future.
   runConfigRefresh("launch", { force: true });
-  runSync("launch");
+  runSync("launch", { wakeAllBlocked: true });
 
   console.log(`${LOG_PREFIX} Started`, { employeeId });
 
@@ -152,6 +190,9 @@ export const stopBackgroundSync = () => {
   removeReconnectListener?.();
   removeReconnectListener = null;
 
+  removeTokenChangeListener?.();
+  removeTokenChangeListener = null;
+
   stopNetworkListener();
   currentEmployeeId = null;
 
@@ -167,7 +208,10 @@ export const isBackgroundSyncRunning = () => started;
  */
 export const syncNow = async ({ trigger = "pull-to-refresh" } = {}) => {
   await runConfigRefresh(trigger, { force: true });
-  return syncPendingAttendance({ trigger });
+  // An explicit pull is a person asking "is it done yet?", so every blocked row
+  // is re-attempted regardless of its backoff. This is the closest thing to a
+  // manual retry the design offers, and it is deliberately not a button.
+  return syncPendingAttendance({ trigger, wakeAllBlocked: true });
 };
 
 export default {

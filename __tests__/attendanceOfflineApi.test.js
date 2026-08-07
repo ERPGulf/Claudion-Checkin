@@ -129,7 +129,7 @@ describe("interpretPushResponse", () => {
     expect(outcome.message).toMatch(/already has a log/);
   });
 
-  it("treats a genuine validation failure as a rejection", () => {
+  it("treats a positively-identified validation failure as a rejection", () => {
     const outcome = interpretPushResponse({
       status: "error",
       inserted: [],
@@ -138,6 +138,35 @@ describe("interpretPushResponse", () => {
 
     expect(outcome.result).toBe(PUSH_RESULT.REJECTED);
     expect(outcome.message).toBe("Employee is inactive");
+  });
+
+  // The 417 that started all this. Same shape, same status, opposite handling.
+  it("treats a missing endpoint as blocked, not rejected", () => {
+    const outcome = interpretPushResponse({
+      status: "error",
+      inserted: [],
+      failed: [
+        {
+          error:
+            "module 'employee_app.attendance_api' has no attribute 'add_offline_employee_checkins'",
+        },
+      ],
+    });
+
+    expect(outcome.result).toBe(PUSH_RESULT.BLOCKED);
+    expect(outcome.failureClass).toBe("endpoint-missing");
+  });
+
+  // The fallback the whole design leans on: never abandon what we cannot read.
+  it("blocks an unrecognised per-record failure rather than rejecting it", () => {
+    const outcome = interpretPushResponse({
+      status: "error",
+      inserted: [],
+      failed: [{ error: "something nobody has seen before" }],
+    });
+
+    expect(outcome.result).toBe(PUSH_RESULT.BLOCKED);
+    expect(outcome.failureClass).toBe("unknown");
   });
 
   // With one record per request a partial_success can only be one or the other,
@@ -152,8 +181,8 @@ describe("interpretPushResponse", () => {
     ).toBe(PUSH_RESULT.INSERTED);
   });
 
-  it("rejects an empty body rather than reporting a phantom success", () => {
-    expect(interpretPushResponse({}).result).toBe(PUSH_RESULT.REJECTED);
-    expect(interpretPushResponse(null).result).toBe(PUSH_RESULT.REJECTED);
+  it("blocks an empty body rather than reporting a phantom success", () => {
+    expect(interpretPushResponse({}).result).toBe(PUSH_RESULT.BLOCKED);
+    expect(interpretPushResponse(null).result).toBe(PUSH_RESULT.BLOCKED);
   });
 });

@@ -136,6 +136,79 @@ describe('describeOfflineStatus', () => {
   });
 });
 
+// The two persistent states. They outrank being offline because offline
+// resolves itself and these do not.
+describe('needs administrator', () => {
+  it('never says "failed" — nothing failed and nothing is lost', () => {
+    const content = describeOfflineStatus(OFFLINE_PHASE.NEEDS_ADMIN, {
+      blocked: 1,
+    });
+
+    expect(content.title).toBe('Waiting for your administrator');
+    expect(content.subtitle).toMatch(/keep trying automatically/);
+    expect(`${content.title} ${content.subtitle}`).not.toMatch(/fail/i);
+  });
+
+  // Amber, not red: the record is safe and still being retried.
+  it('uses the warning tone, not the error one', () => {
+    expect(describeOfflineStatus(OFFLINE_PHASE.NEEDS_ADMIN, { blocked: 2 }).tone)
+      .toBe('warning');
+  });
+
+  it('is tappable, because there is something to explain', () => {
+    expect(
+      describeOfflineStatus(OFFLINE_PHASE.NEEDS_ADMIN, { blocked: 1 }).actionable,
+    ).toBe(true);
+  });
+});
+
+describe('needs correction', () => {
+  it('is the one red state — it will not resolve itself', () => {
+    const content = describeOfflineStatus(OFFLINE_PHASE.NEEDS_CORRECTION, {
+      rejected: 1,
+    });
+
+    expect(content.tone).toBe('error');
+    expect(content.title).toBe('1 attendance record needs correction');
+    expect(content.actionable).toBe(true);
+  });
+
+  it('agrees its verb with the count', () => {
+    expect(
+      describeOfflineStatus(OFFLINE_PHASE.NEEDS_CORRECTION, { rejected: 2 }).title,
+    ).toBe('2 attendance records need correction');
+  });
+});
+
+describe('precedence', () => {
+  // A rejected record needs a person; being offline needs only time, and the OS
+  // status bar already says so.
+  it('puts a correction above being offline', () => {
+    expect(resolveOfflinePhase({ online: false, rejected: 1 })).toBe(
+      OFFLINE_PHASE.NEEDS_CORRECTION,
+    );
+  });
+
+  it('puts a correction above an administrator block', () => {
+    expect(resolveOfflinePhase({ online: true, blocked: 2, rejected: 1 })).toBe(
+      OFFLINE_PHASE.NEEDS_CORRECTION,
+    );
+  });
+
+  it('puts an administrator block above being offline', () => {
+    expect(resolveOfflinePhase({ online: false, blocked: 1 })).toBe(
+      OFFLINE_PHASE.NEEDS_ADMIN,
+    );
+  });
+
+  // Persistent by design: these do not time out like the success chip.
+  it('keeps showing while a sync runs', () => {
+    expect(resolveOfflinePhase({ online: true, syncing: true, blocked: 1 })).toBe(
+      OFFLINE_PHASE.NEEDS_ADMIN,
+    );
+  });
+});
+
 describe('describeOfflineStatusForA11y', () => {
   it('joins the two visual lines into one announcement', () => {
     expect(

@@ -1,66 +1,108 @@
 /**
- * What the connectivity banner says, and whether it says anything at all.
+ * What the attendance status banner says, and whether it says anything at all.
  *
- * Pure: given connectivity, the queue depth and whether a drain is running, it
- * returns one phase and the exact words for it. Kept out of the component so the
- * copy can be unit-tested and changed in one place — a status line that says
- * "3 attendance records" when there is one is the kind of thing nobody notices
- * until a user screenshots it.
+ * Pure: given connectivity, the queue's counts and whether a drain is running,
+ * it returns one phase and the exact words for it. Kept out of the component so
+ * the copy can be unit-tested and changed in one place — and because the wording
+ * here does real work. These messages are read by someone who has just
+ * discovered their attendance did not go through, and the difference between
+ * "failed" and "safely saved, still trying" is the difference between a support
+ * ticket and none.
  */
 
 export const OFFLINE_PHASE = {
-  /** Nothing to say — online, idle, nothing queued. */
+  /** Nothing to say. */
   HIDDEN: "hidden",
-  /** No connection. */
+  /** No connection. Transient, self-resolving. */
   OFFLINE: "offline",
   /** Back online and the drain is working through the queue. */
   SYNCING: "syncing",
   /** The drain just finished with something to show for it. */
   SYNCED: "synced",
+  /** Blocked rows — the server cannot accept them yet. Nobody here can fix it. */
+  NEEDS_ADMIN: "needs-admin",
+  /** Rejected rows — only an attendance correction resolves these. */
+  NEEDS_CORRECTION: "needs-correction",
 };
 
 /** How long the success state lingers before the banner retires itself. */
 export const SYNCED_VISIBLE_MS = 2000;
 
+/**
+ * Precedence, most important first.
+ *
+ * The two persistent states outrank being offline, which looks backwards until
+ * you consider how each one ends. Offline resolves itself, is already visible in
+ * the OS status bar, and will come back the moment it matters. A rejected or
+ * blocked record resolves only when somebody does something, and it can sit
+ * there for days — so it gets the one banner slot. Correction outranks
+ * administrator because it is the one the employee can actually act on.
+ */
+const PHASE_PRECEDENCE = [
+  OFFLINE_PHASE.NEEDS_CORRECTION,
+  OFFLINE_PHASE.NEEDS_ADMIN,
+  OFFLINE_PHASE.OFFLINE,
+  OFFLINE_PHASE.SYNCING,
+  OFFLINE_PHASE.SYNCED,
+];
+
 const plural = (count, noun) => `${count} ${noun}${count === 1 ? "" : "s"}`;
 
+const records = (count) => plural(count, "attendance record");
+
 /**
- * Resolves the banner's phase.
+ * Resolves the banner's phase from everything that is simultaneously true.
  *
- * Offline outranks everything, including an in-flight sync: if the connection
- * drops mid-drain, "You're offline" is the more useful and more honest of the
- * two, and the drain is about to stop anyway.
+ * @param {object} state
+ * @param {boolean} state.online
+ * @param {boolean} [state.syncing] a drain is in flight
+ * @param {number} [state.blocked] rows waiting on the server/administrator
+ * @param {number} [state.rejected] rows needing a correction
+ * @param {number|null} [state.justSyncedAt] when a drain last landed something
  */
 export const resolveOfflinePhase = ({
   online,
   syncing = false,
+  blocked = 0,
+  rejected = 0,
   justSyncedAt = null,
   now = Date.now(),
 }) => {
-  if (!online) return OFFLINE_PHASE.OFFLINE;
-  if (syncing) return OFFLINE_PHASE.SYNCING;
+  const active = new Set();
 
+  if (rejected > 0) active.add(OFFLINE_PHASE.NEEDS_CORRECTION);
+  if (blocked > 0) active.add(OFFLINE_PHASE.NEEDS_ADMIN);
+  if (!online) active.add(OFFLINE_PHASE.OFFLINE);
+  if (online && syncing) active.add(OFFLINE_PHASE.SYNCING);
   if (
+    online &&
+    !syncing &&
     Number.isFinite(justSyncedAt) &&
     now - justSyncedAt < SYNCED_VISIBLE_MS
   ) {
-    return OFFLINE_PHASE.SYNCED;
+    active.add(OFFLINE_PHASE.SYNCED);
   }
 
-  return OFFLINE_PHASE.HIDDEN;
+  return (
+    PHASE_PRECEDENCE.find((phase) => active.has(phase)) ?? OFFLINE_PHASE.HIDDEN
+  );
 };
 
 /**
- * Phase + queue depth → everything the component renders.
+ * Phase + counts → everything the component renders.
  *
- * `tone` indexes the palette's status triads (`warningSurface` / `warningBorder`
- * / `warningText`), so the banner can never end up with a success background and
- * a warning glyph, and dark mode comes for free.
+ * `tone` indexes the palette's status triads (`warningSurface` /
+ * `warningBorder` / `warningText`), so the banner can never end up with a
+ * success background and a warning glyph, and dark mode comes for free.
  *
- * `motion` names the right-hand icon's behaviour rather than describing it, so
- * the component decides how a "pulse" or a "spin" is actually drawn.
+ * `motion` names the trailing icon's behaviour rather than describing it, and
+ * `actionable` tells the banner whether tapping it should open the detail sheet
+ * — only the two states with something to explain are.
  */
-export const describeOfflineStatus = (phase, { pending = 0 } = {}) => {
+export const describeOfflineStatus = (
+  phase,
+  { pending = 0, blocked = 0, rejected = 0, awaitingServer = 0 } = {},
+) => {
   switch (phase) {
     case OFFLINE_PHASE.OFFLINE:
       return {
@@ -70,10 +112,11 @@ export const describeOfflineStatus = (phase, { pending = 0 } = {}) => {
         // failure. Nothing has gone wrong and nothing is lost.
         title: "You're offline",
         subtitle: pending
-          ? `${plural(pending, "attendance record")} waiting to sync`
+          ? `${records(pending)} waiting to sync`
           : "Attendance will sync automatically when you're back online.",
         trailingIcon: "cloud-upload-outline",
         motion: "pulse",
+        actionable: false,
       };
 
     case OFFLINE_PHASE.SYNCING:
@@ -81,11 +124,10 @@ export const describeOfflineStatus = (phase, { pending = 0 } = {}) => {
         tone: "info",
         icon: "cloud-upload-outline",
         title: "Syncing attendance…",
-        subtitle: pending
-          ? `${plural(pending, "record")} remaining`
-          : null,
+        subtitle: pending ? `${plural(pending, "record")} remaining` : null,
         trailingIcon: "sync-outline",
         motion: "spin",
+        actionable: false,
       };
 
     case OFFLINE_PHASE.SYNCED:
@@ -96,11 +138,139 @@ export const describeOfflineStatus = (phase, { pending = 0 } = {}) => {
         subtitle: null,
         trailingIcon: null,
         motion: "none",
+        actionable: false,
+      };
+
+    case OFFLINE_PHASE.NEEDS_ADMIN:
+      return {
+        tone: "warning",
+        icon: "shield-outline",
+        // The whole point of this state. The employee did nothing wrong, has
+        // lost nothing, and can do nothing — so the message leads with the
+        // reassurance and never uses the word "failed".
+        //
+        // The count moved to the subtitle after seeing it on a device: with it
+        // in the title the line truncated mid-word at "administrat…", which
+        // reads like a broken string rather than a status.
+        title: "Waiting for your administrator",
+        // Counts everything the server has not taken, not just the row that
+        // happened to be claimed when the drain halted. A blocked row stops the
+        // run, so every punch behind it is waiting on the same fix — reporting
+        // "1" while six sit in the sheet is the kind of small lie that costs
+        // trust in the whole indicator.
+        subtitle: `${records(Math.max(awaitingServer, blocked))} saved on your device — we'll keep trying automatically.`,
+        trailingIcon: "chevron-forward",
+        motion: "none",
+        actionable: true,
+      };
+
+    case OFFLINE_PHASE.NEEDS_CORRECTION:
+      return {
+        tone: "error",
+        icon: "alert-circle",
+        title: `${records(rejected)} ${rejected === 1 ? "needs" : "need"} correction`,
+        subtitle: "Tap to review and submit an attendance request.",
+        trailingIcon: "chevron-forward",
+        motion: "none",
+        actionable: true,
       };
 
     default:
       return null;
   }
+};
+
+/**
+ * Per-row copy for the sync sheet: what happened, and — the question the row
+ * actually raises — whether anyone needs to do anything about it.
+ */
+export const describeQueueRow = (row) => {
+  const failureClass = row?.failureClass;
+
+  // A row that has been blocked before is still waiting on the same person,
+  // even in the moment it sits back in `pending` between attempts. Reporting it
+  // as an ordinary pending row for those windows would flicker the explanation
+  // and, worse, imply the delay is normal queueing rather than a server problem.
+  const status =
+    row?.status === "pending" && row?.blockedSince ? "blocked" : row?.status;
+
+  if (status === "rejected") {
+    const dependent = failureClass === "dependent";
+
+    return {
+      tone: "error",
+      label: "Needs correction",
+      // A cascade is not a rejection of this punch — it is collateral from the
+      // other half of the session, and saying so stops it reading as two
+      // separate problems.
+      reason: dependent
+        ? "Its check-in was rejected, so this check-out was held back to keep the session consistent."
+        : "Your organization's system couldn't accept this attendance record.",
+      willRetry: false,
+      needsAdmin: false,
+      needsEmployee: true,
+      canCorrect: true,
+    };
+  }
+
+  if (status === "blocked") {
+    return {
+      tone: "warning",
+      label: "Waiting for administrator",
+      reason:
+        failureClass === "endpoint-missing"
+          ? "Your organization's server isn't set up to accept offline attendance yet."
+          : failureClass === "auth"
+            ? "Your session needs to be re-established before this can be sent."
+            : failureClass === "configuration"
+              ? "Something is missing in your organization's server configuration."
+              : "Your organization's server can't accept this attendance right now.",
+      willRetry: true,
+      needsAdmin: failureClass !== "auth",
+      needsEmployee: false,
+      canCorrect: false,
+    };
+  }
+
+  if (status === "syncing") {
+    return {
+      tone: "info",
+      label: "Syncing",
+      reason: "Being sent to the server now.",
+      willRetry: true,
+      needsAdmin: false,
+      needsEmployee: false,
+      canCorrect: false,
+    };
+  }
+
+  if (status === "resolved") {
+    return {
+      tone: "neutral",
+      label: "Correction submitted",
+      reason: row?.resolutionDocname
+        ? `Covered by attendance request ${row.resolutionDocname}.`
+        : "Covered by an attendance request.",
+      willRetry: false,
+      needsAdmin: false,
+      needsEmployee: false,
+      canCorrect: false,
+    };
+  }
+
+  return {
+    tone: "warning",
+    label: "Pending sync",
+    // No `row.error` here, on purpose. It holds whatever the server or the
+    // network last said — Frappe returns multi-line Python exception text — and
+    // showing that to an employee is noise they cannot act on. It stays on the
+    // row for logs and support.
+    reason: "Saved on your device, waiting to be sent.",
+    willRetry: true,
+    needsAdmin: false,
+    needsEmployee: false,
+    canCorrect: false,
+  };
 };
 
 /** One string for screen readers, since the row is two visual lines. */
@@ -112,5 +282,6 @@ export default {
   SYNCED_VISIBLE_MS,
   describeOfflineStatus,
   describeOfflineStatusForA11y,
+  describeQueueRow,
   resolveOfflinePhase,
 };

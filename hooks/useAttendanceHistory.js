@@ -12,7 +12,6 @@ import {
   getHistoryRows,
   getQueueCounts,
 } from '../services/offline/AttendanceQueueService';
-import { QUEUE_STATUS } from '../services/offline/AttendanceDatabase';
 import { syncNow } from '../services/offline/BackgroundSyncManager';
 
 /** Server page size. Also the pagination cursor step — kept in one place. */
@@ -141,8 +140,11 @@ export default function useAttendanceHistory() {
     refreshAll,
     reloadQueue,
     queueCounts,
-    pendingCount: queueCounts?.[QUEUE_STATUS.PENDING] ?? 0,
-    failedCount: queueCounts?.[QUEUE_STATUS.FAILED] ?? 0,
-    unsyncedCount: queueCounts?.unsynced ?? 0,
+    pendingCount: queueCounts?.pendingCount ?? 0,
+    blockedCount: queueCounts?.blockedCount ?? 0,
+    rejectedCount: queueCounts?.rejectedCount ?? 0,
+    // Everything without an outcome — the history badge wants the full picture,
+    // unlike the attendance screen's guard, which deliberately excludes rejected.
+    unresolvedCount: queueCounts?.unresolvedCount ?? 0,
   };
 }

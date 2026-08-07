@@ -208,14 +208,19 @@ export default function useAttendanceAction() {
         // sync — reconciling is the pre-existing behaviour and the safer default
         // when the outbox cannot be inspected, since a database that cannot be
         // read is also one nothing could have been queued into.
-        const unsynced = await getQueueCounts(employeeCode)
-          .then((counts) => counts?.unsynced ?? 0)
+        // `awaitingServerCount`, NOT the total unresolved: it excludes REJECTED
+        // rows on purpose. The server has already refused those, so its "no open
+        // session" is correct about them and must be allowed to close the
+        // session — counting them would hold a session open forever on the
+        // strength of a punch that will never land.
+        const awaitingServer = await getQueueCounts(employeeCode)
+          .then((counts) => counts?.awaitingServerCount ?? 0)
           .catch((error) => {
             console.log("Queue count failed, reconciling anyway:", error?.message);
             return 0;
           });
 
-        if (unsynced > 0) {
+        if (awaitingServer > 0) {
           const session = await mirrorLocalSession();
           if (session.status === SESSION_STATUS.CHECKED_IN) return;
         }

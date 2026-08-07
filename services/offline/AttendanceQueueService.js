@@ -3,6 +3,7 @@ import { formatOfflineTimestamp } from "../../utils/serverClock";
 import { DEVICE_ID } from "./AttendanceApi";
 import {
   ATTENDANCE_TYPE,
+  QUEUE_ACTION,
   QUEUE_STATUS,
   clearAttendanceQueue,
   logTypeToAction,
@@ -11,7 +12,9 @@ import {
   countByStatus,
   enqueue,
   listForHistory,
-  retryFailed,
+  listUnresolved,
+  markResolved,
+  pairWithOpenCheckin,
 } from "./AttendanceQueueRepository";
 import {
   clearAttendanceConfig,
@@ -79,14 +82,32 @@ export const notifyQueueChanged = () => {
  * policy refusals (the employee thinks they checked in and did not) or fail to
  * queue genuine outages (the punch is lost).
  */
+/**
+ * Whether a failure reaching THIS path should become a queued row.
+ *
+ * Note the asymmetry with the sync service, which is deliberate. Once a row
+ * exists, an unrecognised error must never discard it, so the sync service
+ * blocks anything it cannot identify. Here no row exists yet, and the question
+ * is the opposite one: is it safe to tell the employee "saved" and walk away?
+ *
+ * So this queues only failures the *server* answered — a transport failure, or a
+ * 4xx/5xx we could not interpret. A failure with no HTTP status is our own code
+ * failing (a denied location permission, a bug building the payload), and
+ * swallowing that into a queue would tell the employee their attendance was
+ * recorded when nothing has been recorded anywhere.
+ */
 export const shouldQueueFailure = (failure) => {
-  if (!failure) return false;
-  if (failure.error) {
-    return classifyAttendanceError(failure.error).kind === FAILURE_KIND.RETRYABLE;
+  if (!failure?.error) {
+    // No error object: the failure came from a code path that made a judgement
+    // rather than from a request. Out of radius, no cached configuration.
+    return false;
   }
 
-  // No error object attached: the failure came from a code path that decided
-  // something itself rather than from a request. Not a network problem.
+  const { kind, status } = classifyAttendanceError(failure.error);
+
+  if (kind === FAILURE_KIND.PENDING) return true;
+  if (kind === FAILURE_KIND.BLOCKED) return !!status;
+
   return false;
 };
 
@@ -129,6 +150,33 @@ const queueAttendance = async ({
       photoUri: photoUri ?? undefined,
     },
   });
+
+  // Link a check-out to the check-in it closes, so a rejection can invalidate
+  // the whole attendance session rather than leaving the server holding an OUT
+  // with no matching IN.
+  //
+  // Derived from the queue, NOT from the session state machine: this runs inside
+  // `performSessionTransition`'s `execute()`, which holds the session lock for
+  // its whole duration, and `readSession()` takes that same lock — reading it
+  // here would deadlock. The queue already knows enough.
+  if (inserted && row && logTypeToAction(type) === QUEUE_ACTION.CHECKOUT) {
+    try {
+      const checkin = await pairWithOpenCheckin({
+        checkoutId: row.id,
+        employeeId: employeeCode,
+        timestamp,
+      });
+      if (checkin) {
+        console.log(
+          `${LOG_PREFIX} Paired check-out #${row.id} with check-in #${checkin.id}`,
+        );
+      }
+    } catch (error) {
+      // An unpaired check-out is degraded, not broken — it simply cannot
+      // cascade. Never fail a punch over it.
+      console.log(`${LOG_PREFIX} Pairing failed:`, error?.message);
+    }
+  }
 
   console.log(
     `${LOG_PREFIX} ${inserted ? "Queued" : "Already queued"} ${type}`,
@@ -199,9 +247,10 @@ export const submitAttendance = async ({
         result?.message,
       );
     } catch (error) {
-      const { kind, message } = classifyAttendanceError(error);
+      const { message } = classifyAttendanceError(error);
 
-      if (kind !== FAILURE_KIND.RETRYABLE) {
+      // Same rule as a returned failure — see shouldQueueFailure.
+      if (!shouldQueueFailure({ error })) {
         return { allowed: false, message, error, location: null };
       }
 
@@ -287,27 +336,39 @@ export const getUnsyncedRows = (employeeId = null) =>
   listForHistory({ employeeId });
 
 /**
- * Rows for the history timeline — the unsynced ones plus the recently synced.
+ * Rows for the history timeline — every state the list draws a chip for.
  *
- * The synced ones are included to cover the seconds between a row uploading and
- * the history query refetching, during which the punch exists in neither place
- * and would otherwise blink out of the list. `mergeQueuedRecords` drops each one
- * the moment the server's own copy arrives.
+ * The status list is the repository's default rather than one spelled out here.
+ * It used to be enumerated at this call site, and when `failed` was split into
+ * `blocked` / `rejected` / `resolved` this array silently kept naming a status
+ * that no longer existed — which would have dropped exactly the records the
+ * employee most needs to see out of their own attendance history.
+ *
+ * Recently-synced rows are included to cover the seconds between a row uploading
+ * and the history query refetching, during which the punch exists in neither
+ * place and would otherwise blink out. `mergeQueuedRecords` drops each one the
+ * moment the server's own copy arrives.
  */
 export const getHistoryRows = (employeeId = null) =>
-  listForHistory({
-    employeeId,
-    statuses: [
-      QUEUE_STATUS.PENDING,
-      QUEUE_STATUS.SYNCING,
-      QUEUE_STATUS.FAILED,
-      QUEUE_STATUS.SYNCED,
-    ],
-  });
+  listForHistory({ employeeId });
 
-/** Requeues failed rows. Backs the manual retry affordance. */
-export const retryFailedRows = async (id = null) => {
-  const changed = await retryFailed({ id });
+/**
+ * Rows the employee still needs an outcome on — what the banner counts and the
+ * sync sheet lists.
+ */
+export const getUnresolvedRows = (employeeId = null) =>
+  listUnresolved({ employeeId });
+
+/**
+ * Marks a rejected record superseded by an attendance correction request.
+ *
+ * Carries the paired punch with it, so one correction resolves the whole
+ * session — which is the counterpart of the cascade that rejected them together.
+ * The rows are preserved for audit; they simply stop being unresolved, which is
+ * what clears the banner.
+ */
+export const resolveWithCorrection = async ({ id, resolutionDocname }) => {
+  const changed = await markResolved({ id, resolutionDocname });
   if (changed) notifyQueueChanged();
   return changed;
 };
@@ -349,10 +410,11 @@ export default {
   clearOfflineAttendance,
   getHistoryRows,
   getQueueCounts,
+  getUnresolvedRows,
   getUnsyncedRows,
   isOnline,
   notifyQueueChanged,
-  retryFailedRows,
+  resolveWithCorrection,
   shouldQueueFailure,
   submitAttendance,
   submitAutoAttendance,

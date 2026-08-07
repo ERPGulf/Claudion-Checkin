@@ -7,6 +7,8 @@ import { ICON, LAYOUT, RADIUS, SHADOWS, SPACING, TYPO } from "../../constants";
 import useAppTheme from "../../hooks/useAppTheme";
 import useOfflineStatus from "../../hooks/useOfflineStatus";
 import { describeOfflineStatusForA11y } from "../../utils/offlineStatus";
+import AttendanceSyncSheet from "./AttendanceSyncSheet";
+import PressableScale from "./PressableScale";
 
 /**
  * The connectivity pill.
@@ -169,7 +171,10 @@ function OfflineBanner() {
   const { colors, isDark } = useAppTheme();
   const insets = useSafeAreaInsets();
   const reduceMotion = useReduceMotion();
-  const { visible, content } = useOfflineStatus();
+  const { visible, content, actionable, loadUnresolvedRows } =
+    useOfflineStatus();
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [rows, setRows] = useState([]);
 
   const progress = useRef(new Animated.Value(0)).current;
 
@@ -205,6 +210,45 @@ function OfflineBanner() {
   const { tone, icon, title, subtitle, trailingIcon, motion } = shown;
   const foreground = colors[`${tone}Text`];
 
+  const openSheet = async () => {
+    // Read at open time rather than held in state: the sheet is rare, the rows
+    // change underneath it, and keeping a live subscription for something almost
+    // never shown would cost a query on every queue change.
+    setRows(await loadUnresolvedRows());
+    setSheetOpen(true);
+  };
+
+  const body = (
+    <>
+      <Ionicons name={icon} size={ICON.md} color={foreground} />
+
+      <View style={{ flex: 1, marginStart: SPACING.sm }}>
+        <Text
+          numberOfLines={1}
+          style={{ ...TYPO.subhead, fontWeight: "600", color: foreground }}
+        >
+          {title}
+        </Text>
+
+        {!!subtitle && (
+          <Text
+            numberOfLines={2}
+            style={{ ...TYPO.caption2, color: foreground, opacity: 0.85 }}
+          >
+            {subtitle}
+          </Text>
+        )}
+      </View>
+
+      <TrailingIcon
+        name={trailingIcon}
+        motion={motion}
+        color={foreground}
+        reduceMotion={reduceMotion}
+      />
+    </>
+  );
+
   return (
     <View
       pointerEvents="box-none"
@@ -218,10 +262,17 @@ function OfflineBanner() {
       }}
     >
       <Animated.View
-        pointerEvents="none"
-        accessible
-        accessibilityRole={Platform.OS === "ios" ? "text" : "alert"}
-        accessibilityLabel={describeOfflineStatusForA11y(shown)}
+        // Only the two states with something to explain accept touches. The
+        // transient ones stay `none`, so an offline or syncing banner still lets
+        // every tap through to the screen underneath.
+        pointerEvents={actionable ? "auto" : "none"}
+        accessible={!actionable}
+        accessibilityRole={
+          actionable ? undefined : Platform.OS === "ios" ? "text" : "alert"
+        }
+        accessibilityLabel={
+          actionable ? undefined : describeOfflineStatusForA11y(shown)
+        }
         // Android announces the change without stealing focus; iOS reads it when
         // the user next lands on it, which is right for a passive status.
         accessibilityLiveRegion="polite"
@@ -252,33 +303,27 @@ function OfflineBanner() {
           ],
         }}
       >
-        <Ionicons name={icon} size={ICON.md} color={foreground} />
-
-        <View style={{ flex: 1, marginStart: SPACING.sm }}>
-          <Text
-            numberOfLines={1}
-            style={{ ...TYPO.subhead, fontWeight: "600", color: foreground }}
+        {actionable ? (
+          <PressableScale
+            onPress={openSheet}
+            scaleTo={0.99}
+            hitSlop={0}
+            accessibilityRole="button"
+            accessibilityLabel={`${describeOfflineStatusForA11y(shown)}. Tap for details.`}
+            style={{ flexDirection: "row", alignItems: "center", flex: 1 }}
           >
-            {title}
-          </Text>
-
-          {!!subtitle && (
-            <Text
-              numberOfLines={2}
-              style={{ ...TYPO.caption2, color: foreground, opacity: 0.85 }}
-            >
-              {subtitle}
-            </Text>
-          )}
-        </View>
-
-        <TrailingIcon
-          name={trailingIcon}
-          motion={motion}
-          color={foreground}
-          reduceMotion={reduceMotion}
-        />
+            {body}
+          </PressableScale>
+        ) : (
+          body
+        )}
       </Animated.View>
+
+      <AttendanceSyncSheet
+        visible={sheetOpen}
+        onClose={() => setSheetOpen(false)}
+        rows={rows}
+      />
     </View>
   );
 }

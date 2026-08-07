@@ -14,7 +14,12 @@ jest.mock("expo-location", () => ({}));
 
 jest.mock("../services/offline/AttendanceApi", () => ({
   __esModule: true,
-  PUSH_RESULT: { INSERTED: "inserted", DUPLICATE: "duplicate", REJECTED: "rejected" },
+  PUSH_RESULT: {
+    INSERTED: "inserted",
+    DUPLICATE: "duplicate",
+    BLOCKED: "blocked",
+    REJECTED: "rejected",
+  },
   pushCheckin: jest.fn(),
 }));
 
@@ -30,6 +35,7 @@ jest.mock("../services/offline/attendancePhotoUpload", () => ({
 }));
 
 import {
+  FAILURE_CLASS,
   QUEUE_ACTION,
   QUEUE_STATUS,
   resetDatabaseHandle,
@@ -37,7 +43,9 @@ import {
 import {
   countByStatus,
   enqueue,
+  findById,
   listAll,
+  pairWithOpenCheckin,
 } from "../services/offline/AttendanceQueueRepository";
 import {
   resetSyncService,
@@ -138,7 +146,8 @@ describe("duplicate handling", () => {
     const summary = await syncPendingAttendance();
 
     expect(summary.duplicates).toBe(1);
-    expect(summary.failed).toBe(0);
+    expect(summary.blocked).toBe(0);
+    expect(summary.rejected).toBe(0);
 
     const [row] = await listAll();
     expect(row.status).toBe(QUEUE_STATUS.SYNCED);
@@ -189,8 +198,10 @@ describe("retry rules", () => {
     expect(row.retryCount).toBe(1);
   });
 
+  // Unrecognised 4xx no longer kills the record — it parks it and keeps trying,
+  // because nothing here can tell "not deployed yet" from "invalid".
   it.each([400, 401, 403, 404])(
-    "does not retry a %i — the answer will not change",
+    "parks an unrecognised %i as blocked rather than discarding it",
     async (status) => {
       await enqueue(punch());
       pushCheckin.mockRejectedValue({
@@ -199,35 +210,36 @@ describe("retry rules", () => {
 
       const summary = await syncPendingAttendance();
 
-      expect(summary.failed).toBe(1);
+      expect(summary.blocked).toBe(1);
       const [row] = await listAll();
-      expect(row.status).toBe(QUEUE_STATUS.FAILED);
-      expect(row.retryCount).toBe(0);
+      expect(row.status).toBe(QUEUE_STATUS.BLOCKED);
+      expect(row.nextAttemptAt).toBeGreaterThan(Date.now());
     },
   );
 
-  it("does not retry a validation rejection returned in the body", async () => {
+  it("rejects only a positively-identified validation failure", async () => {
     await enqueue(punch());
     pushCheckin.mockResolvedValue({
       result: PUSH_RESULT.REJECTED,
+      failureClass: FAILURE_CLASS.VALIDATION,
       message: "Employee is inactive",
       response: { status: "error" },
     });
 
     const summary = await syncPendingAttendance();
 
-    expect(summary.failed).toBe(1);
+    expect(summary.rejected).toBe(1);
     const [row] = await listAll();
-    expect(row.status).toBe(QUEUE_STATUS.FAILED);
+    expect(row.status).toBe(QUEUE_STATUS.REJECTED);
     expect(row.error).toBe("Employee is inactive");
   });
 
-  it("gives up after five retries", async () => {
+  // The cap still exists, but it moves the row to the slow schedule instead of
+  // abandoning it. "Never lose attendance" outranks "stop trying".
+  it("moves a row to the slow schedule after five transient retries", async () => {
     await enqueue(punch());
     pushCheckin.mockRejectedValue(networkError());
 
-    // Each run arms a backoff, so time has to be moved past it to get the next
-    // attempt — which is exactly what proves the backoff is being honoured.
     const realNow = Date.now;
     let clock = realNow();
     Date.now = () => clock;
@@ -243,8 +255,8 @@ describe("retry rules", () => {
     }
 
     const [row] = await listAll();
-    expect(row.status).toBe(QUEUE_STATUS.FAILED);
-    expect(row.error).toMatch(/Gave up after 5 attempts/);
+    expect(row.status).toBe(QUEUE_STATUS.BLOCKED);
+    expect(row.error).toMatch(/Still unreachable after 5 attempts/);
   });
 
   // Nothing after the current row will fare better during the same outage.
@@ -264,6 +276,126 @@ describe("retry rules", () => {
     expect(summary.reason).toBe("connection-lost");
     expect(pushCheckin).toHaveBeenCalledTimes(2);
     expect((await countByStatus()).pending).toBe(2);
+  });
+});
+
+describe("a blocked row halts the run", () => {
+  const endpointMissing = {
+    result: PUSH_RESULT.BLOCKED,
+    failureClass: FAILURE_CLASS.ENDPOINT_MISSING,
+    message: "module 'employee_app.attendance_api' has no attribute …",
+    response: { status: "error" },
+  };
+
+  // The same server will refuse the next row identically, so continuing would
+  // spend one pointless request per queued punch.
+  it("stops after the first blocked row instead of burning the queue", async () => {
+    await enqueue(punch({ timestamp: "2026-07-28 09:00:00" }));
+    await enqueue(punch({ timestamp: "2026-07-28 10:00:00" }));
+    await enqueue(punch({ timestamp: "2026-07-28 11:00:00" }));
+    pushCheckin.mockResolvedValue(endpointMissing);
+
+    const summary = await syncPendingAttendance();
+
+    expect(pushCheckin).toHaveBeenCalledTimes(1);
+    expect(summary.blocked).toBe(1);
+    expect(summary.reason).toBe("blocked");
+  });
+
+  // Halting preserves FIFO: the rows behind it stay pending in order rather
+  // than the drain skipping ahead to a later punch.
+  it("leaves the rest of the queue pending and in order", async () => {
+    await enqueue(punch({ timestamp: "2026-07-28 09:00:00" }));
+    await enqueue(punch({ timestamp: "2026-07-28 10:00:00" }));
+    pushCheckin.mockResolvedValue(endpointMissing);
+
+    await syncPendingAttendance();
+
+    const counts = await countByStatus();
+    expect(counts.blockedCount).toBe(1);
+    expect(counts.pendingCount).toBe(1);
+  });
+
+  it("does not re-attempt it on the next run until its backoff elapses", async () => {
+    await enqueue(punch());
+    pushCheckin.mockResolvedValue(endpointMissing);
+    await syncPendingAttendance();
+
+    resetSyncService();
+    pushCheckin.mockClear();
+    await syncPendingAttendance();
+
+    expect(pushCheckin).not.toHaveBeenCalled();
+  });
+
+  // Launch, reconnect and token refresh. This is what makes recovery automatic:
+  // nobody has to remember that a record is waiting.
+  it("re-attempts every blocked row when the run forces a wake", async () => {
+    await enqueue(punch());
+    pushCheckin.mockResolvedValue(endpointMissing);
+    await syncPendingAttendance();
+
+    resetSyncService();
+    pushCheckin.mockClear();
+    pushCheckin.mockResolvedValue(inserted());
+
+    const summary = await syncPendingAttendance({ wakeAllBlocked: true });
+
+    expect(summary.woken).toBe(1);
+    expect(summary.synced).toBe(1);
+    expect((await listAll())[0].status).toBe(QUEUE_STATUS.SYNCED);
+  });
+
+  it("wakes only the named failure class", async () => {
+    await enqueue(punch());
+    pushCheckin.mockResolvedValue(endpointMissing);
+    await syncPendingAttendance();
+
+    resetSyncService();
+    pushCheckin.mockClear();
+
+    // A fresh token says nothing about a missing endpoint.
+    const summary = await syncPendingAttendance({
+      wakeAllBlocked: true,
+      wakeFailureClass: FAILURE_CLASS.AUTH,
+    });
+
+    expect(summary.woken).toBe(0);
+    expect(pushCheckin).not.toHaveBeenCalled();
+  });
+});
+
+describe("the session cascade, end to end", () => {
+  it("rejects the check-out with its check-in and never uploads it alone", async () => {
+    const { row: checkin } = await enqueue(
+      punch({ timestamp: "2026-07-28 09:00:00" }),
+    );
+    const { row: checkout } = await enqueue(
+      punch({ timestamp: "2026-07-28 17:00:00", action: QUEUE_ACTION.CHECKOUT }),
+    );
+    await pairWithOpenCheckin({
+      checkoutId: checkout.id,
+      employeeId: "TDI0167",
+      timestamp: "2026-07-28 17:00:00",
+    });
+
+    pushCheckin.mockResolvedValue({
+      result: PUSH_RESULT.REJECTED,
+      failureClass: FAILURE_CLASS.VALIDATION,
+      message: "Employee is inactive",
+      response: { status: "error" },
+    });
+
+    const summary = await syncPendingAttendance();
+
+    // One request: the check-in. The check-out was cascaded, never sent.
+    expect(pushCheckin).toHaveBeenCalledTimes(1);
+    expect(summary.rejected).toBe(1);
+
+    expect((await findById(checkin.id)).status).toBe(QUEUE_STATUS.REJECTED);
+    const storedOut = await findById(checkout.id);
+    expect(storedOut.status).toBe(QUEUE_STATUS.REJECTED);
+    expect(storedOut.failureClass).toBe(FAILURE_CLASS.DEPENDENT);
   });
 });
 

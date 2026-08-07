@@ -1,7 +1,11 @@
 // src/services/offline/AttendanceQueueRepository.js
 import {
+  AWAITING_SERVER_STATUSES,
+  FAILURE_CLASS,
+  QUEUE_ACTION,
   QUEUE_STATUS,
   QUEUE_TABLE,
+  UNRESOLVED_STATUSES,
   getDatabase,
 } from "./AttendanceDatabase";
 
@@ -16,26 +20,51 @@ import {
  * JSON-in-TEXT and which are SQLite's 0/1 integers.
  */
 
-/** Retry ceiling from the spec. Past this a row is `failed` and waits for a human. */
+/** Retry ceiling for ordinary transient failures. */
 export const MAX_RETRIES = 5;
 
 /**
- * Backoff schedule, in ms, indexed by the attempt about to be made. The spec
- * fixes the first three; the last two continue the same escalation rather than
- * repeating 10 minutes, so a row that is failing for a reason time will not fix
- * stops costing requests quickly.
+ * Backoff for transient failures, in ms, indexed by the attempt about to be
+ * made. The first three are the specified 30s / 2m / 10m; the last two continue
+ * the escalation rather than repeating, so a row failing for a reason time will
+ * not fix stops costing requests quickly.
  */
 export const RETRY_DELAYS_MS = [
-  30 * 1000, // attempt 1 → 30s
-  2 * 60 * 1000, // attempt 2 → 2m
-  10 * 60 * 1000, // attempt 3 → 10m
-  30 * 60 * 1000, // attempt 4 → 30m
-  60 * 60 * 1000, // attempt 5 → 1h
+  30 * 1000,
+  2 * 60 * 1000,
+  10 * 60 * 1000,
+  30 * 60 * 1000,
+  60 * 60 * 1000,
 ];
 
-/** Delay before the attempt that follows `retryCount` failures. */
+/**
+ * Backoff for BLOCKED rows — a different problem, so a different ladder.
+ *
+ * A blocked row is waiting on a person: someone deploying an endpoint, fixing a
+ * configuration, restoring a permission. That takes hours or days, so the
+ * schedule decays quickly to a floor and stays there. It never terminates —
+ * blocked records are retried forever, because the fix lands server-side with no
+ * client action and the alternative is losing payroll data.
+ *
+ * The floor is what stops "never stop retrying" from meaning "hammer the
+ * server": at steady state one attempt per six hours, per device.
+ */
+export const BLOCKED_DELAYS_MS = [
+  5 * 60 * 1000, // 5m  — a deploy that is already in flight
+  30 * 60 * 1000, // 30m
+  2 * 60 * 60 * 1000, // 2h
+  6 * 60 * 60 * 1000, // 6h — the floor, repeated forever
+];
+
+/** Delay before the attempt that follows `retryCount` transient failures. */
 export const retryDelayFor = (retryCount) =>
   RETRY_DELAYS_MS[Math.min(Math.max(retryCount, 0), RETRY_DELAYS_MS.length - 1)];
+
+/** Delay before the next attempt on a row blocked `blockedCount` times. */
+export const blockedDelayFor = (blockedCount) =>
+  BLOCKED_DELAYS_MS[
+    Math.min(Math.max(blockedCount, 0), BLOCKED_DELAYS_MS.length - 1)
+  ];
 
 const parseJson = (value, fallback = null) => {
   if (typeof value !== "string" || !value) return fallback;
@@ -59,6 +88,8 @@ const hydrate = (row) => {
 };
 
 const hydrateAll = (rows) => (Array.isArray(rows) ? rows.map(hydrate) : []);
+
+const placeholdersFor = (values) => values.map(() => "?").join(", ");
 
 // ----------------------
 // WRITES
@@ -89,6 +120,7 @@ export const enqueue = async ({
   address = null,
   deviceId = null,
   payload = {},
+  sessionId = null,
   now = Date.now(),
 }) => {
   if (!employeeId) throw new Error("enqueue: employeeId is required");
@@ -101,8 +133,8 @@ export const enqueue = async ({
     `INSERT INTO ${QUEUE_TABLE}
        (employeeId, employeeDocname, attendanceType, action, timestamp,
         latitude, longitude, accuracy, address, deviceId, payload,
-        status, retryCount, nextAttemptAt, createdAt, updatedAt)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?)
+        status, retryCount, nextAttemptAt, sessionId, createdAt, updatedAt)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?)
      ON CONFLICT (employeeId, timestamp, action) DO NOTHING;`,
     [
       employeeId,
@@ -117,6 +149,7 @@ export const enqueue = async ({
       deviceId,
       JSON.stringify(payload ?? {}),
       QUEUE_STATUS.PENDING,
+      sessionId,
       now,
       now,
     ],
@@ -135,6 +168,65 @@ export const enqueue = async ({
 };
 
 /**
+ * Links a queued check-out to the check-in it closes.
+ *
+ * Pairing is derived from the queue, deliberately, and NOT from the session
+ * state machine. `performSessionTransition` holds its lock across the whole
+ * `execute()` call, and `readSession()` takes that same lock — reading the
+ * session from inside the enqueue path would deadlock. The queue already knows
+ * everything needed: the most recent unpaired check-in for this employee at or
+ * before this check-out is, by construction, the one it closes.
+ *
+ * A check-out with no local check-in is normal and left unpaired: it means the
+ * check-in synced while online, so the server already has it and there is
+ * nothing to keep consistent.
+ *
+ * @returns {Promise<object|null>} the check-in it was paired with, or null
+ */
+export const pairWithOpenCheckin = async ({
+  checkoutId,
+  employeeId,
+  timestamp,
+  now = Date.now(),
+}) => {
+  const database = await getDatabase();
+
+  const checkin = await database.getFirstAsync(
+    `SELECT * FROM ${QUEUE_TABLE}
+      WHERE employeeId = ?
+        AND action = ?
+        AND pairedAttendanceId IS NULL
+        AND timestamp <= ?
+        AND status IN (${placeholdersFor(UNRESOLVED_STATUSES)})
+      ORDER BY timestamp DESC, id DESC
+      LIMIT 1;`,
+    [employeeId, QUEUE_ACTION.CHECKIN, timestamp, ...UNRESOLVED_STATUSES],
+  );
+
+  if (!checkin) return null;
+
+  // One id for the pair, so the cascade and the correction flow can both address
+  // "this attendance session" rather than two unrelated rows.
+  const sessionId = checkin.sessionId || `s-${employeeId}-${checkin.id}`;
+
+  await database.runAsync(
+    `UPDATE ${QUEUE_TABLE}
+        SET pairedAttendanceId = ?, sessionId = ?, updatedAt = ?
+      WHERE id = ?;`,
+    [checkoutId, sessionId, now, checkin.id],
+  );
+
+  await database.runAsync(
+    `UPDATE ${QUEUE_TABLE}
+        SET pairedAttendanceId = ?, sessionId = ?, updatedAt = ?
+      WHERE id = ?;`,
+    [checkin.id, sessionId, now, checkoutId],
+  );
+
+  return hydrate({ ...checkin, sessionId });
+};
+
+/**
  * Atomically claims the oldest row that is due, flipping it to `syncing` in the
  * same statement that selects it.
  *
@@ -143,8 +235,9 @@ export const enqueue = async ({
  * single-flight lock, but that lock only covers one JS context; this covers the
  * database, which is the thing that actually has to be right.
  *
- * @param {number} now epoch ms; rows whose backoff has not elapsed are skipped
- * @returns {Promise<object|null>} the claimed row, or null when nothing is due
+ * Only `pending` rows are claimable. Blocked rows are woken back to pending by
+ * `wakeBlocked` on their own schedule, which keeps "is it due" in one place and
+ * stops a blocked row being picked up before its backoff has elapsed.
  */
 export const claimNextPending = async (now = Date.now()) => {
   const database = await getDatabase();
@@ -155,7 +248,7 @@ export const claimNextPending = async (now = Date.now()) => {
       WHERE id = (
         SELECT id FROM ${QUEUE_TABLE}
          WHERE status = ? AND nextAttemptAt <= ?
-         ORDER BY id ASC
+         ORDER BY timestamp ASC, id ASC
          LIMIT 1
       )
       RETURNING *;`,
@@ -170,8 +263,7 @@ export const claimNextPending = async (now = Date.now()) => {
  *
  * `duplicate` rows land here too, deliberately: "this punch already exists" is
  * the desired end state, so it is recorded as synced with the flag set rather
- * than as a failure. `error` is cleared — a row that succeeded on its third
- * attempt should not keep showing the first attempt's message.
+ * than as a failure.
  */
 export const markSynced = async ({
   id,
@@ -186,7 +278,8 @@ export const markSynced = async ({
   await database.runAsync(
     `UPDATE ${QUEUE_TABLE}
         SET status = ?, serverCheckinId = ?, serverResponse = ?,
-            duplicate = ?, duplicateMessage = ?, error = NULL, updatedAt = ?
+            duplicate = ?, duplicateMessage = ?, error = NULL,
+            failureClass = NULL, blockedSince = NULL, updatedAt = ?
       WHERE id = ?;`,
     [
       QUEUE_STATUS.SYNCED,
@@ -201,8 +294,7 @@ export const markSynced = async ({
 };
 
 /**
- * Returns a row to `pending` with its backoff armed, after a failure worth
- * repeating.
+ * Returns a row to `pending` with its transient backoff armed.
  *
  * @returns {Promise<{retryCount: number, nextAttemptAt: number}>}
  */
@@ -242,14 +334,73 @@ export const markRetry = async ({
 };
 
 /**
- * Gives up on a row: a terminal server verdict, or the retry cap.
+ * Parks a row the server cannot accept yet.
  *
- * The row is kept, not deleted. It is evidence that the employee tried to punch,
- * it is what the history screen shows as Failed, and it is what a manual retry
- * later resurrects.
+ * `retryCount` is deliberately NOT advanced — that counter drives the transient
+ * ladder and its cap, and a blocked row must never age into a terminal state.
+ * The blocked schedule is driven by how long the row has been blocked instead,
+ * which is what `blockedSince` records.
+ *
+ * @returns {Promise<{nextAttemptAt: number, blockedSince: number}>}
  */
-export const markFailed = async ({
+export const markBlocked = async ({
   id,
+  failureClass = FAILURE_CLASS.UNKNOWN,
+  error = null,
+  serverResponse = null,
+  now = Date.now(),
+}) => {
+  const database = await getDatabase();
+
+  const current = await database.getFirstAsync(
+    `SELECT blockedSince FROM ${QUEUE_TABLE} WHERE id = ?;`,
+    [id],
+  );
+
+  const blockedSince = Number(current?.blockedSince) || now;
+  // Position on the ladder from elapsed blocked time rather than an attempt
+  // counter, so waking a row early (launch, reconnect, token refresh) cannot
+  // walk it down to the floor faster than real time does.
+  const elapsed = now - blockedSince;
+  const step = BLOCKED_DELAYS_MS.findIndex((delay) => elapsed < delay);
+  const nextAttemptAt =
+    now + blockedDelayFor(step === -1 ? BLOCKED_DELAYS_MS.length - 1 : step);
+
+  await database.runAsync(
+    `UPDATE ${QUEUE_TABLE}
+        SET status = ?, failureClass = ?, blockedSince = ?, nextAttemptAt = ?,
+            error = ?, serverResponse = ?, updatedAt = ?
+      WHERE id = ?;`,
+    [
+      QUEUE_STATUS.BLOCKED,
+      failureClass,
+      blockedSince,
+      nextAttemptAt,
+      error,
+      serverResponse ? JSON.stringify(serverResponse) : null,
+      now,
+      id,
+    ],
+  );
+
+  return { nextAttemptAt, blockedSince };
+};
+
+/**
+ * Records a row the server will never accept, and cascades to the rest of its
+ * attendance session.
+ *
+ * The cascade is the data-integrity rule: a check-out whose check-in was
+ * rejected must not be uploaded on its own, or the server ends up holding an OUT
+ * with no matching IN — a session no report can reconcile and no one can
+ * correct cleanly. One rejected punch invalidates the session, and one
+ * correction request resolves the whole thing.
+ *
+ * @returns {Promise<{cascaded: number}>} how many paired rows were also rejected
+ */
+export const markRejected = async ({
+  id,
+  failureClass = FAILURE_CLASS.VALIDATION,
   error = null,
   serverResponse = null,
   now = Date.now(),
@@ -258,43 +409,129 @@ export const markFailed = async ({
 
   await database.runAsync(
     `UPDATE ${QUEUE_TABLE}
-        SET status = ?, error = ?, serverResponse = ?, updatedAt = ?
+        SET status = ?, failureClass = ?, error = ?, serverResponse = ?,
+            nextAttemptAt = 0, updatedAt = ?
       WHERE id = ?;`,
     [
-      QUEUE_STATUS.FAILED,
+      QUEUE_STATUS.REJECTED,
+      failureClass,
       error,
       serverResponse ? JSON.stringify(serverResponse) : null,
       now,
       id,
     ],
   );
+
+  const row = await database.getFirstAsync(
+    `SELECT pairedAttendanceId FROM ${QUEUE_TABLE} WHERE id = ?;`,
+    [id],
+  );
+
+  const pairedId = row?.pairedAttendanceId;
+  if (!pairedId) return { cascaded: 0 };
+
+  // Only rows still awaiting an outcome. A pair already synced is a fact on the
+  // server and cannot be un-sent; a pair already rejected needs no second
+  // rejection.
+  const cascade = await database.runAsync(
+    `UPDATE ${QUEUE_TABLE}
+        SET status = ?, failureClass = ?, error = ?, nextAttemptAt = 0,
+            updatedAt = ?
+      WHERE id = ? AND status IN (${placeholdersFor(AWAITING_SERVER_STATUSES)});`,
+    [
+      QUEUE_STATUS.REJECTED,
+      FAILURE_CLASS.DEPENDENT,
+      "Dependent on rejected check-in.",
+      now,
+      pairedId,
+      ...AWAITING_SERVER_STATUSES,
+    ],
+  );
+
+  return { cascaded: cascade?.changes ?? 0 };
 };
 
 /**
- * Puts failed rows back in the queue, due immediately, with the retry counter
- * cleared. Backs the manual "Retry" affordance.
+ * Marks a rejected record superseded by an attendance correction request, and
+ * carries the whole session with it.
  *
- * @param {number|null} id a single row, or null for every failed row
- * @returns {Promise<number>} how many rows were requeued
+ * The row is kept, not deleted — it is the evidence of what the employee
+ * originally punched, and payroll disputes are settled with exactly that. It
+ * simply stops counting as unresolved, which is what clears the banner.
+ *
+ * @returns {Promise<number>} how many rows were resolved (1, or 2 for a pair)
  */
-export const retryFailed = async ({ id = null, now = Date.now() } = {}) => {
+export const markResolved = async ({
+  id,
+  resolutionDocname = null,
+  now = Date.now(),
+}) => {
   const database = await getDatabase();
 
-  const result = id
-    ? await database.runAsync(
-        `UPDATE ${QUEUE_TABLE}
-            SET status = ?, retryCount = 0, nextAttemptAt = 0,
-                error = NULL, updatedAt = ?
-          WHERE id = ? AND status = ?;`,
-        [QUEUE_STATUS.PENDING, now, id, QUEUE_STATUS.FAILED],
-      )
-    : await database.runAsync(
-        `UPDATE ${QUEUE_TABLE}
-            SET status = ?, retryCount = 0, nextAttemptAt = 0,
-                error = NULL, updatedAt = ?
-          WHERE status = ?;`,
-        [QUEUE_STATUS.PENDING, now, QUEUE_STATUS.FAILED],
-      );
+  const row = await database.getFirstAsync(
+    `SELECT pairedAttendanceId FROM ${QUEUE_TABLE} WHERE id = ?;`,
+    [id],
+  );
+
+  const ids = [id];
+  if (row?.pairedAttendanceId) ids.push(row.pairedAttendanceId);
+
+  const result = await database.runAsync(
+    `UPDATE ${QUEUE_TABLE}
+        SET status = ?, resolutionDocname = ?, resolvedAt = ?, updatedAt = ?
+      WHERE id IN (${placeholdersFor(ids)}) AND status = ?;`,
+    [
+      QUEUE_STATUS.RESOLVED,
+      resolutionDocname,
+      now,
+      now,
+      ...ids,
+      QUEUE_STATUS.REJECTED,
+    ],
+  );
+
+  return result?.changes ?? 0;
+};
+
+/**
+ * Returns blocked rows to the queue.
+ *
+ * `force` ignores the backoff, for the events that genuinely change the odds:
+ * an app launch (the server may have been upgraded since), a reconnect, and a
+ * successful token refresh. The scheduled tick passes `force: false` and
+ * respects the ladder.
+ *
+ * `failureClass` narrows it — a token refresh should wake auth-blocked rows
+ * without also re-attempting rows blocked on a missing endpoint.
+ *
+ * @returns {Promise<number>} how many rows were woken
+ */
+export const wakeBlocked = async ({
+  force = false,
+  failureClass = null,
+  now = Date.now(),
+} = {}) => {
+  const database = await getDatabase();
+
+  const conditions = ["status = ?"];
+  const params = [QUEUE_STATUS.BLOCKED];
+
+  if (!force) {
+    conditions.push("nextAttemptAt <= ?");
+    params.push(now);
+  }
+
+  if (failureClass) {
+    conditions.push("failureClass = ?");
+    params.push(failureClass);
+  }
+
+  const result = await database.runAsync(
+    `UPDATE ${QUEUE_TABLE}
+        SET status = ?, nextAttemptAt = 0, updatedAt = ?
+      WHERE ${conditions.join(" AND ")};`,
+    [QUEUE_STATUS.PENDING, now, ...params],
+  );
 
   return result?.changes ?? 0;
 };
@@ -306,6 +543,10 @@ export const retryFailed = async ({ id = null, now = Date.now() } = {}) => {
  * kill during a background sync, a crash, a force-quit. Nothing would ever claim
  * it again, so the punch would sit invisible and unsent forever. Called at
  * startup, before the first drain.
+ *
+ * `failureClass` and `blockedSince` are preserved: a row that was blocked, woken
+ * and then stranded mid-attempt must not lose its history and restart the
+ * blocked ladder from the top.
  *
  * @returns {Promise<number>} how many rows were released
  */
@@ -325,8 +566,9 @@ export const releaseStuckSyncing = async (now = Date.now()) => {
 /**
  * Drops synced rows older than the retention window.
  *
- * Only `synced` rows: a `failed` row is unresolved business and is never aged
- * out, however old it is.
+ * Only `synced`. Blocked, rejected and resolved rows are never aged out:
+ * the first two are unresolved business however old, and the third is the audit
+ * trail behind a correction request.
  *
  * @returns {Promise<number>} how many rows were removed
  */
@@ -371,24 +613,67 @@ export const findDuplicate = async ({ employeeId, timestamp, action }) => {
   return hydrate(row);
 };
 
+/** Both rows of an attendance session, oldest first. */
+export const findSessionRows = async (sessionId) => {
+  if (!sessionId) return [];
+  const database = await getDatabase();
+  const rows = await database.getAllAsync(
+    `SELECT * FROM ${QUEUE_TABLE}
+      WHERE sessionId = ? ORDER BY timestamp ASC, id ASC;`,
+    [sessionId],
+  );
+  return hydrateAll(rows);
+};
+
+/**
+ * Rows the employee still needs an outcome on, newest first — what the banner
+ * and the sync sheet describe.
+ */
+export const listUnresolved = async ({ employeeId = null, limit = 100 } = {}) => {
+  const database = await getDatabase();
+
+  const params = [...UNRESOLVED_STATUSES];
+  let where = `status IN (${placeholdersFor(UNRESOLVED_STATUSES)})`;
+  if (employeeId) {
+    where += " AND employeeId = ?";
+    params.push(employeeId);
+  }
+  params.push(limit);
+
+  const rows = await database.getAllAsync(
+    `SELECT * FROM ${QUEUE_TABLE}
+      WHERE ${where}
+      ORDER BY timestamp DESC, id DESC
+      LIMIT ?;`,
+    params,
+  );
+
+  return hydrateAll(rows);
+};
+
 /**
  * Rows for the history screen, newest first.
  *
- * Defaults to everything the server does not yet know about. Synced rows are
- * excluded because the server's own record replaces them in the merged
- * timeline — including them would double every punch.
+ * Defaults to every state the timeline draws a chip for. Synced rows are
+ * included so a punch does not blink out between uploading and the history query
+ * refetching; `mergeQueuedRecords` drops each one once the server's copy arrives.
  */
 export const listForHistory = async ({
   employeeId = null,
-  statuses = [QUEUE_STATUS.PENDING, QUEUE_STATUS.SYNCING, QUEUE_STATUS.FAILED],
+  statuses = [
+    QUEUE_STATUS.PENDING,
+    QUEUE_STATUS.SYNCING,
+    QUEUE_STATUS.BLOCKED,
+    QUEUE_STATUS.REJECTED,
+    QUEUE_STATUS.RESOLVED,
+    QUEUE_STATUS.SYNCED,
+  ],
   limit = 200,
 } = {}) => {
   const database = await getDatabase();
 
-  const placeholders = statuses.map(() => "?").join(", ");
   const params = [...statuses];
-
-  let where = `status IN (${placeholders})`;
+  let where = `status IN (${placeholdersFor(statuses)})`;
   if (employeeId) {
     where += " AND employeeId = ?";
     params.push(employeeId);
@@ -417,9 +702,21 @@ export const listAll = async ({ limit = 500 } = {}) => {
 };
 
 /**
- * Row counts per status, as a fully-populated object — every status key is
- * present with 0 rather than absent, so callers can read `counts.failed`
- * without guarding.
+ * Row counts, one named field per status plus the three derived totals the app
+ * actually asks about.
+ *
+ * The old single `unsynced` field served three callers that wanted three
+ * different things, which is exactly the kind of shared derived value that
+ * breaks silently when a status is added. Each consumer now names what it means:
+ *
+ *  - `pendingCount` / `syncingCount` — work in motion, for the sync indicator
+ *  - `blockedCount` — waiting on an administrator
+ *  - `rejectedCount` — waiting on a correction
+ *  - `unresolvedCount` — anything without an outcome, for the history badge
+ *  - `awaitingServerCount` — **excludes rejected.** The attendance screen's
+ *    reconnect guard uses this: the server has already refused rejected rows, so
+ *    its "no open session" is correct about them and must be allowed to close
+ *    the session. Counting them would hold a session open forever.
  */
 export const countByStatus = async (employeeId = null) => {
   const database = await getDatabase();
@@ -438,7 +735,9 @@ export const countByStatus = async (employeeId = null) => {
     [QUEUE_STATUS.PENDING]: 0,
     [QUEUE_STATUS.SYNCING]: 0,
     [QUEUE_STATUS.SYNCED]: 0,
-    [QUEUE_STATUS.FAILED]: 0,
+    [QUEUE_STATUS.BLOCKED]: 0,
+    [QUEUE_STATUS.REJECTED]: 0,
+    [QUEUE_STATUS.RESOLVED]: 0,
     total: 0,
   };
 
@@ -448,42 +747,59 @@ export const countByStatus = async (employeeId = null) => {
     counts.total += value;
   });
 
-  // What the UI actually asks about: "is there anything not on the server yet?"
-  counts.unsynced =
-    counts[QUEUE_STATUS.PENDING] +
-    counts[QUEUE_STATUS.SYNCING] +
-    counts[QUEUE_STATUS.FAILED];
+  counts.pendingCount = counts[QUEUE_STATUS.PENDING];
+  counts.syncingCount = counts[QUEUE_STATUS.SYNCING];
+  counts.syncedCount = counts[QUEUE_STATUS.SYNCED];
+  counts.blockedCount = counts[QUEUE_STATUS.BLOCKED];
+  counts.rejectedCount = counts[QUEUE_STATUS.REJECTED];
+  counts.resolvedCount = counts[QUEUE_STATUS.RESOLVED];
+
+  counts.unresolvedCount =
+    counts.pendingCount +
+    counts.syncingCount +
+    counts.blockedCount +
+    counts.rejectedCount;
+
+  counts.awaitingServerCount =
+    counts.pendingCount + counts.syncingCount + counts.blockedCount;
 
   return counts;
 };
 
-/** Whether a drain has anything to do at `now`. */
+/** Whether a drain has anything to do at `now`, including due blocked rows. */
 export const hasWorkDue = async (now = Date.now()) => {
   const database = await getDatabase();
   const row = await database.getFirstAsync(
     `SELECT 1 AS due FROM ${QUEUE_TABLE}
-      WHERE status = ? AND nextAttemptAt <= ? LIMIT 1;`,
-    [QUEUE_STATUS.PENDING, now],
+      WHERE status IN (?, ?) AND nextAttemptAt <= ? LIMIT 1;`,
+    [QUEUE_STATUS.PENDING, QUEUE_STATUS.BLOCKED, now],
   );
   return !!row;
 };
 
 export default {
+  BLOCKED_DELAYS_MS,
   MAX_RETRIES,
   RETRY_DELAYS_MS,
+  blockedDelayFor,
   claimNextPending,
   countByStatus,
   enqueue,
   findById,
   findDuplicate,
+  findSessionRows,
   hasWorkDue,
   listAll,
   listForHistory,
-  markFailed,
+  listUnresolved,
+  markBlocked,
+  markRejected,
+  markResolved,
   markRetry,
   markSynced,
+  pairWithOpenCheckin,
   purgeSynced,
   releaseStuckSyncing,
   retryDelayFor,
-  retryFailed,
+  wakeBlocked,
 };

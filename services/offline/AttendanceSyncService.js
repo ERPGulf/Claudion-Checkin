@@ -1,14 +1,17 @@
 // src/services/offline/AttendanceSyncService.js
 import { PUSH_RESULT, pushCheckin } from "./AttendanceApi";
-import { MAX_RETRIES } from "./AttendanceQueueRepository";
+import { FAILURE_CLASS } from "./AttendanceDatabase";
 import {
+  MAX_RETRIES,
   claimNextPending,
   countByStatus,
-  markFailed,
+  markBlocked,
+  markRejected,
   markRetry,
   markSynced,
   purgeSynced,
   releaseStuckSyncing,
+  wakeBlocked,
 } from "./AttendanceQueueRepository";
 import { notifyQueueChanged } from "./AttendanceQueueService";
 import { classifyAttendanceError, FAILURE_KIND } from "./attendanceErrors";
@@ -88,17 +91,21 @@ const ROW_OUTCOME = {
   SYNCED: "synced",
   DUPLICATE: "duplicate",
   RETRY: "retry",
-  FAILED: "failed",
+  BLOCKED: "blocked",
+  REJECTED: "rejected",
   OFFLINE: "offline",
 };
+
+/** Outcomes that mean the rest of this run is pointless. */
+const HALTS_RUN = new Set([ROW_OUTCOME.OFFLINE, ROW_OUTCOME.BLOCKED]);
 
 /**
  * Uploads a single claimed row and records the verdict.
  *
  * The row is already `syncing` when it arrives here, so every branch must leave
- * it in a terminal or retryable state — returning without writing would strand
- * it, which is the exact condition `releaseStuckSyncing` exists to clean up
- * after a crash and should never be reached by ordinary control flow.
+ * it in a settled state — returning without writing would strand it, which is
+ * the exact condition `releaseStuckSyncing` exists to clean up after a crash and
+ * should never be reached by ordinary control flow.
  */
 const syncRow = async (row) => {
   try {
@@ -139,17 +146,37 @@ const syncRow = async (row) => {
       return ROW_OUTCOME.DUPLICATE;
     }
 
-    // The server rejected it on its merits. Retrying replays the same rejection,
-    // so this is terminal regardless of how many attempts remain.
-    await markFailed({
+    if (outcome.result === PUSH_RESULT.REJECTED) {
+      const { cascaded } = await markRejected({
+        id: row.id,
+        failureClass: outcome.failureClass,
+        error: outcome.message,
+        serverResponse: outcome.response,
+      });
+      console.log(
+        `${LOG_PREFIX} Rejected #${row.id} (${outcome.failureClass}):`,
+        outcome.message,
+        cascaded ? `— cascaded to ${cascaded} paired row(s)` : "",
+      );
+      return ROW_OUTCOME.REJECTED;
+    }
+
+    // Blocked: the server cannot take it *yet*. Kept, and retried on the slow
+    // ladder until it can.
+    const { nextAttemptAt } = await markBlocked({
       id: row.id,
+      failureClass: outcome.failureClass,
       error: outcome.message,
       serverResponse: outcome.response,
     });
-    console.log(`${LOG_PREFIX} Permanent failure on #${row.id}:`, outcome.message);
-    return ROW_OUTCOME.FAILED;
+    console.log(
+      `${LOG_PREFIX} Blocked #${row.id} (${outcome.failureClass}); next attempt`,
+      new Date(nextAttemptAt).toISOString(),
+    );
+    return ROW_OUTCOME.BLOCKED;
   } catch (error) {
-    const { kind, message, status } = classifyAttendanceError(error);
+    const { kind, failureClass, message, status } =
+      classifyAttendanceError(error);
 
     // A duplicate can also arrive as a thrown 417 rather than a structured
     // per-record failure, depending on how the backend surfaces it.
@@ -164,26 +191,48 @@ const syncRow = async (row) => {
       return ROW_OUTCOME.DUPLICATE;
     }
 
-    if (kind !== FAILURE_KIND.RETRYABLE) {
-      await markFailed({
+    if (kind === FAILURE_KIND.REJECTED) {
+      const { cascaded } = await markRejected({
         id: row.id,
+        failureClass,
         error: message,
         serverResponse: error?.response?.data ?? null,
       });
       console.log(
-        `${LOG_PREFIX} Terminal error on #${row.id} (${status ?? "no status"}):`,
+        `${LOG_PREFIX} Rejected #${row.id} (${status ?? "no status"}):`,
         message,
+        cascaded ? `— cascaded to ${cascaded} paired row(s)` : "",
       );
-      return ROW_OUTCOME.FAILED;
+      return ROW_OUTCOME.REJECTED;
     }
 
-    if (row.retryCount >= MAX_RETRIES) {
-      await markFailed({
+    if (kind === FAILURE_KIND.BLOCKED) {
+      await markBlocked({
         id: row.id,
-        error: `Gave up after ${MAX_RETRIES} attempts: ${message}`,
+        failureClass,
+        error: message,
+        serverResponse: error?.response?.data ?? null,
       });
-      console.log(`${LOG_PREFIX} Retry cap reached on #${row.id}`);
-      return ROW_OUTCOME.FAILED;
+      console.log(
+        `${LOG_PREFIX} Blocked #${row.id} (${status ?? "no status"}):`,
+        message,
+      );
+      return ROW_OUTCOME.BLOCKED;
+    }
+
+    // Transient from here. The cap exists so a row cannot spin on the fast
+    // ladder forever — but it must not become terminal, so it is parked as
+    // blocked and joins the slow schedule instead of being abandoned.
+    if (row.retryCount >= MAX_RETRIES) {
+      await markBlocked({
+        id: row.id,
+        failureClass: FAILURE_CLASS.UNKNOWN,
+        error: `Still unreachable after ${MAX_RETRIES} attempts: ${message}`,
+      });
+      console.log(
+        `${LOG_PREFIX} Retry cap on #${row.id}; moving to the slow schedule`,
+      );
+      return ROW_OUTCOME.BLOCKED;
     }
 
     const { retryCount, nextAttemptAt } = await markRetry({
@@ -213,10 +262,20 @@ const syncRow = async (row) => {
  *
  * @param {object} [options]
  * @param {string} [options.trigger] why the sync ran, for the log
+ * @param {boolean} [options.wakeAllBlocked] ignore the blocked backoff and
+ *        re-attempt every blocked row — for launch, reconnect and token refresh
+ * @param {string|null} [options.wakeFailureClass] wake only this class, so a
+ *        token refresh retries auth-blocked rows without also re-attempting
+ *        rows blocked on a missing endpoint
  * @returns {Promise<{ran: boolean, synced: number, duplicates: number,
- *                     failed: number, remaining: number, reason?: string}>}
+ *                     blocked: number, rejected: number, woken: number,
+ *                     remaining: number, reason?: string}>}
  */
-export const syncPendingAttendance = async ({ trigger = "manual" } = {}) => {
+export const syncPendingAttendance = async ({
+  trigger = "manual",
+  wakeAllBlocked = false,
+  wakeFailureClass = null,
+} = {}) => {
   if (activeRun) return activeRun;
 
   activeRun = (async () => {
@@ -224,7 +283,9 @@ export const syncPendingAttendance = async ({ trigger = "manual" } = {}) => {
       ran: false,
       synced: 0,
       duplicates: 0,
-      failed: 0,
+      blocked: 0,
+      rejected: 0,
+      woken: 0,
       remaining: 0,
       trigger,
     };
@@ -241,6 +302,21 @@ export const syncPendingAttendance = async ({ trigger = "manual" } = {}) => {
         if (released) {
           console.log(`${LOG_PREFIX} Released ${released} stuck row(s)`);
         }
+      }
+
+      // Blocked rows rejoin the queue here. `wakeAllBlocked` ignores the backoff
+      // for the events that genuinely change the odds — a launch (the server may
+      // have been upgraded since), a reconnect, a token refresh — while the
+      // scheduled tick respects the ladder. This is what makes recovery
+      // automatic: nobody has to remember that a record is waiting.
+      summary.woken = await wakeBlocked({
+        force: wakeAllBlocked,
+        failureClass: wakeFailureClass,
+      });
+      if (summary.woken) {
+        console.log(
+          `${LOG_PREFIX} Woke ${summary.woken} blocked row(s) for ${trigger}`,
+        );
       }
 
       if (!(await fetchIsOnline())) {
@@ -265,10 +341,19 @@ export const syncPendingAttendance = async ({ trigger = "manual" } = {}) => {
 
         if (outcome === ROW_OUTCOME.SYNCED) summary.synced += 1;
         if (outcome === ROW_OUTCOME.DUPLICATE) summary.duplicates += 1;
-        if (outcome === ROW_OUTCOME.FAILED) summary.failed += 1;
+        if (outcome === ROW_OUTCOME.BLOCKED) summary.blocked += 1;
+        if (outcome === ROW_OUTCOME.REJECTED) summary.rejected += 1;
 
-        if (outcome === ROW_OUTCOME.OFFLINE) {
-          summary.reason = "connection-lost";
+        // Stop the run — and note that this also preserves FIFO. Everything
+        // behind this row is older-first by construction, so halting leaves the
+        // queue in order rather than skipping ahead to a later punch.
+        //
+        // OFFLINE: the network went away; nothing after it will fare better.
+        // BLOCKED: the same server will refuse the next row identically, so
+        // continuing would spend one pointless request per queued punch.
+        if (HALTS_RUN.has(outcome)) {
+          summary.reason =
+            outcome === ROW_OUTCOME.OFFLINE ? "connection-lost" : "blocked";
           break;
         }
       }
@@ -281,9 +366,15 @@ export const syncPendingAttendance = async ({ trigger = "manual" } = {}) => {
       }
 
       const counts = await countByStatus();
-      summary.remaining = counts.unsynced;
+      summary.remaining = counts.unresolvedCount;
 
-      if (summary.synced || summary.duplicates || summary.failed) {
+      if (
+        summary.synced ||
+        summary.duplicates ||
+        summary.blocked ||
+        summary.rejected ||
+        summary.woken
+      ) {
         console.log(`${LOG_PREFIX} Run complete (${trigger})`, summary);
         notifyQueueChanged();
       }

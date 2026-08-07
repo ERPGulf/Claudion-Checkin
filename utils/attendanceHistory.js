@@ -127,7 +127,12 @@ export const SYNC_STATUS = {
   PENDING: 'pending',
   SYNCING: 'syncing',
   SYNCED: 'synced',
-  FAILED: 'failed',
+  /** The server can't accept it yet. Still retrying; nobody here can help. */
+  NEEDS_ADMIN: 'needs-admin',
+  /** The server never will. Only an attendance correction resolves it. */
+  NEEDS_CORRECTION: 'needs-correction',
+  /** Superseded by a correction request. Kept for audit. */
+  RESOLVED: 'resolved',
   DUPLICATE: 'duplicate',
 };
 
@@ -147,10 +152,24 @@ const SYNC_STATUS_DESCRIPTIONS = {
     tone: 'success',
     icon: 'cloud-done-outline',
   },
-  [SYNC_STATUS.FAILED]: {
-    label: 'Failed',
+  // Amber, not red. Nothing is lost and nothing failed — the record is saved and
+  // still being retried. Red here would have every employee reporting a bug the
+  // moment an endpoint is late being deployed.
+  [SYNC_STATUS.NEEDS_ADMIN]: {
+    label: 'Waiting for administrator',
+    tone: 'warning',
+    icon: 'shield-outline',
+  },
+  // The only red one: this is the single state that will not resolve itself.
+  [SYNC_STATUS.NEEDS_CORRECTION]: {
+    label: 'Needs correction',
     tone: 'error',
     icon: 'alert-circle-outline',
+  },
+  [SYNC_STATUS.RESOLVED]: {
+    label: 'Correction submitted',
+    tone: 'neutral',
+    icon: 'document-text-outline',
   },
   [SYNC_STATUS.DUPLICATE]: {
     label: 'Already synced',
@@ -177,7 +196,9 @@ export function resolveQueueSyncStatus(row) {
     return row.duplicate ? SYNC_STATUS.DUPLICATE : SYNC_STATUS.SYNCED;
   }
   if (row?.status === 'syncing') return SYNC_STATUS.SYNCING;
-  if (row?.status === 'failed') return SYNC_STATUS.FAILED;
+  if (row?.status === 'blocked') return SYNC_STATUS.NEEDS_ADMIN;
+  if (row?.status === 'rejected') return SYNC_STATUS.NEEDS_CORRECTION;
+  if (row?.status === 'resolved') return SYNC_STATUS.RESOLVED;
   return SYNC_STATUS.PENDING;
 }
 

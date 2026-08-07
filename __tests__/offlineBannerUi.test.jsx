@@ -28,7 +28,14 @@ jest.mock('react-native-safe-area-context', () => ({
 
 // The hook has its own subscriptions and is exercised separately; this suite is
 // about what the pill renders for a given status.
-let mockStatus = { visible: false, phase: 'hidden', pending: 0, content: null };
+let mockStatus = {
+  visible: false,
+  phase: 'hidden',
+  pendingCount: 0,
+  content: null,
+  actionable: false,
+  loadUnresolvedRows: async () => [],
+};
 jest.mock('../hooks/useOfflineStatus', () => ({
   __esModule: true,
   default: () => mockStatus,
@@ -45,17 +52,27 @@ import {
 
 const flatten = style => StyleSheet.flatten(style) || {};
 
-const showPhase = (phase, pending = 0) => {
+const showPhase = (phase, counts = {}) => {
+  const content = describeOfflineStatus(phase, counts);
   mockStatus = {
     visible: true,
     phase,
-    pending,
-    content: describeOfflineStatus(phase, { pending }),
+    ...counts,
+    content,
+    actionable: !!content?.actionable,
+    loadUnresolvedRows: async () => [],
   };
 };
 
 const hide = () => {
-  mockStatus = { visible: false, phase: 'hidden', pending: 0, content: null };
+  mockStatus = {
+    visible: false,
+    phase: 'hidden',
+    pendingCount: 0,
+    content: null,
+    actionable: false,
+    loadUnresolvedRows: async () => [],
+  };
 };
 
 beforeEach(() => {
@@ -83,7 +100,7 @@ describe('visibility', () => {
 
 describe('content per phase', () => {
   it('reports the queue depth', () => {
-    showPhase(OFFLINE_PHASE.OFFLINE, 3);
+    showPhase(OFFLINE_PHASE.OFFLINE, { pending: 3 });
     const { getByText } = render(<OfflineBanner />);
 
     expect(getByText('3 attendance records waiting to sync')).toBeTruthy();
@@ -149,7 +166,7 @@ describe('appearance', () => {
   });
 
   it('stays compact', () => {
-    showPhase(OFFLINE_PHASE.OFFLINE, 3);
+    showPhase(OFFLINE_PHASE.OFFLINE, { pending: 3 });
     const style = pillStyle(render(<OfflineBanner />));
 
     expect(style.minHeight).toBeGreaterThanOrEqual(44);
@@ -181,7 +198,7 @@ describe('it never gets in the way', () => {
   });
 
   it('announces itself politely rather than stealing focus', () => {
-    showPhase(OFFLINE_PHASE.OFFLINE, 2);
+    showPhase(OFFLINE_PHASE.OFFLINE, { pending: 2 });
     const host = render(<OfflineBanner />).toJSON();
     const pill = host.children[0].props;
 

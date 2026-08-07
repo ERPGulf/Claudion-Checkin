@@ -95,7 +95,7 @@ describe("the reconnect race", () => {
 
     const counts = await getQueueCounts("TDI0167");
 
-    expect(counts.unsynced).toBe(1);
+    expect(counts.awaitingServerCount).toBe(1);
     expect((await readSession()).status).toBe(SESSION_STATUS.CHECKED_IN);
   });
 
@@ -111,7 +111,7 @@ describe("the reconnect race", () => {
     await markSynced({ id: row.id, serverCheckinId: "EMP-CKIN-1" });
 
     // From here the server's answer IS admissible, and reconciliation resumes.
-    expect((await getQueueCounts("TDI0167")).unsynced).toBe(0);
+    expect((await getQueueCounts("TDI0167")).awaitingServerCount).toBe(0);
   });
 
   it("counts only this employee's rows", async () => {
@@ -122,8 +122,8 @@ describe("the reconnect race", () => {
       timestamp: "2026-07-28 09:00:00",
     });
 
-    expect((await getQueueCounts("TDI0167")).unsynced).toBe(0);
-    expect((await getQueueCounts("TDI0999")).unsynced).toBe(1);
+    expect((await getQueueCounts("TDI0167")).awaitingServerCount).toBe(0);
+    expect((await getQueueCounts("TDI0999")).awaitingServerCount).toBe(1);
   });
 });
 

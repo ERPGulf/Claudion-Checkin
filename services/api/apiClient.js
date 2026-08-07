@@ -112,6 +112,32 @@ async function loadTokens() {
   return { access: memoryAccessToken, refresh: memoryRefreshToken };
 }
 
+// ----------------------
+// CREDENTIAL-CHANGE LISTENERS
+// ----------------------
+// A successful token change is the moment an auth failure elsewhere in the app
+// might have become recoverable. The offline attendance queue parks such rows as
+// `blocked` and needs to re-attempt them here rather than waiting hours for its
+// own schedule — but this module must not import that one (it would close an
+// apiClient → offline → apiClient cycle), so listeners register instead. Same
+// shape as `registerSessionCleanupHandler` below.
+const tokenChangeListeners = new Set();
+
+export const addTokenChangeListener = (listener) => {
+  tokenChangeListeners.add(listener);
+  return () => tokenChangeListeners.delete(listener);
+};
+
+const notifyTokenChanged = () => {
+  tokenChangeListeners.forEach((listener) => {
+    try {
+      listener();
+    } catch (error) {
+      console.log("[apiClient] Token change listener failed:", error?.message);
+    }
+  });
+};
+
 export async function saveTokens(access, refresh) {
   const nextAccess =
     access ?? memoryAccessToken ?? (await AsyncStorage.getItem("access_token"));
@@ -125,6 +151,8 @@ export async function saveTokens(access, refresh) {
     throw new Error("Access token missing");
   }
 
+  const changed = nextAccess !== memoryAccessToken;
+
   memoryAccessToken = nextAccess;
   memoryRefreshToken = nextRefresh;
   hasTerminalSessionFailure = false;
@@ -133,6 +161,11 @@ export async function saveTokens(access, refresh) {
     ["access_token", String(nextAccess)],
     ["refresh_token", String(nextRefresh)],
   ]);
+
+  // Only on an actual change of credential — `saveTokens` is also called to
+  // rewrite the same token, and that changes nothing for anyone waiting.
+  // Fire-and-forget: a listener must never be able to fail a token save.
+  if (changed) notifyTokenChanged();
 }
 export function clearStore() {
   store.dispatch(setSignOut());

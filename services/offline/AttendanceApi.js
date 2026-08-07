@@ -2,9 +2,10 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import apiClient from "../api/apiClient";
 import { cleanBaseUrl } from "../api/utils";
-import { actionToLogType } from "./AttendanceDatabase";
+import { FAILURE_CLASS, actionToLogType } from "./AttendanceDatabase";
 import {
   FAILURE_KIND,
+  classifyServerMessage,
   cleanServerMessage,
   isDuplicateMessage,
 } from "./attendanceErrors";
@@ -37,6 +38,9 @@ export const DEVICE_ID = "MobileAPP";
 export const PUSH_RESULT = {
   INSERTED: "inserted",
   DUPLICATE: "duplicate",
+  /** The server cannot accept it yet — keep it and retry slowly. */
+  BLOCKED: "blocked",
+  /** The server never will — keep it, stop trying, offer a correction. */
   REJECTED: "rejected",
 };
 
@@ -128,13 +132,29 @@ export const interpretPushResponse = (body) => {
     };
   }
 
+  // A per-record failure is still only a *message*, and the same endpoint
+  // returns "Employee is inactive" and "no attribute add_offline_..." through
+  // the identical shape. Read it, and fall back to BLOCKED when it is not
+  // positively a validation failure — never to REJECTED.
+  const classified = classifyServerMessage(failureMessage);
+  const message =
+    cleanServerMessage(failureMessage) ||
+    cleanServerMessage(response?.message) ||
+    "The server could not record this attendance";
+
+  if (classified?.kind === FAILURE_KIND.REJECTED) {
+    return {
+      result: PUSH_RESULT.REJECTED,
+      failureClass: classified.failureClass,
+      message,
+      response,
+    };
+  }
+
   return {
-    result: PUSH_RESULT.REJECTED,
-    kind: FAILURE_KIND.TERMINAL,
-    message:
-      cleanServerMessage(failureMessage) ||
-      cleanServerMessage(response?.message) ||
-      "The server rejected this attendance record",
+    result: PUSH_RESULT.BLOCKED,
+    failureClass: classified?.failureClass ?? FAILURE_CLASS.UNKNOWN,
+    message,
     response,
   };
 };

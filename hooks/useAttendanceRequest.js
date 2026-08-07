@@ -1,7 +1,9 @@
 import { useCallback, useState } from 'react';
 import { Alert } from 'react-native';
+import { useRoute } from '@react-navigation/native';
 import { useSelector } from 'react-redux';
 import { selectEmployeeCode } from '../redux/Slices/UserSlice';
+import { resolveWithCorrection } from '../services/offline/AttendanceQueueService';
 import {
   createAttendanceRequest,
   uploadAttendanceAttachment,
@@ -42,13 +44,30 @@ export function formatTime(date) {
 export default function useAttendanceRequest() {
   const employeeCode = useSelector(selectEmployeeCode);
 
-  const [fromDate, setFromDate] = useState(new Date());
-  const [toDate, setToDate] = useState(new Date());
+  /**
+   * Optional prefill, from the offline sync sheet's "Submit attendance request".
+   *
+   * The app knows the exact instant of the punch that was refused, so asking the
+   * employee to retype it from memory would be both tedious and a source of
+   * mismatches between what they punched and what HR receives.
+   *
+   * `queueRowId` is carried through so a successful submission can mark the
+   * rejected record — and its paired punch — resolved, which is what finally
+   * clears the banner.
+   */
+  const route = useRoute();
+  const prefill = route?.params?.prefill ?? null;
+
+  const initialDate = prefill?.date instanceof Date ? prefill.date : new Date();
+  const initialTime = prefill?.time instanceof Date ? prefill.time : new Date();
+
+  const [fromDate, setFromDate] = useState(initialDate);
+  const [toDate, setToDate] = useState(initialDate);
 
   const [showFromPicker, setShowFromPicker] = useState(false);
   const [showToPicker, setShowToPicker] = useState(false);
-  const [fromTime, setFromTime] = useState(new Date());
-  const [toTime, setToTime] = useState(new Date());
+  const [fromTime, setFromTime] = useState(initialTime);
+  const [toTime, setToTime] = useState(initialTime);
 
   const [showFromTimePicker, setShowFromTimePicker] = useState(false);
   const [showToTimePicker, setShowToTimePicker] = useState(false);
@@ -184,6 +203,22 @@ export default function useAttendanceRequest() {
         }
       }
 
+      // The correction now covers the rejected punch, so the queue rows stop
+      // counting as unresolved and the banner clears. They are kept, not
+      // deleted — they are the evidence of what was originally punched.
+      if (prefill?.queueRowId) {
+        try {
+          await resolveWithCorrection({
+            id: prefill.queueRowId,
+            resolutionDocname: docname,
+          });
+        } catch (resolveError) {
+          // The request itself succeeded; failing to tidy the local record must
+          // not report the submission as failed.
+          console.log('Failed to resolve queued attendance:', resolveError?.message);
+        }
+      }
+
       Alert.alert('Success', 'Attendance request submitted!');
 
       // Reset
@@ -198,7 +233,16 @@ export default function useAttendanceRequest() {
     } finally {
       setLoading(false);
     }
-  }, [employeeCode, toDate, fromDate, selectedReason, fromTime, toTime, attachment]);
+  }, [
+    employeeCode,
+    toDate,
+    fromDate,
+    selectedReason,
+    fromTime,
+    toTime,
+    attachment,
+    prefill,
+  ]);
 
   return {
     employeeCode,
