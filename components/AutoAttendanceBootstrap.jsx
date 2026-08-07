@@ -40,6 +40,7 @@ import {
   markEventProcessed,
   PENDING_EVENT,
 } from "../utils/geofenceEventLog";
+import { submitAutoAttendance } from "../services/offline/AttendanceQueueService";
 
 const LOG_PREFIX = "[AutoAttendanceBootstrap]";
 
@@ -189,16 +190,26 @@ export default function AutoAttendanceBootstrap() {
       if (!code) return;
 
       try {
+        // Same queue the manual screens use, differing only in `attendanceType`
+        // and in which API call it wraps. A geofence crossing is precisely when
+        // the network is least reliable — a car park, a basement, a site with no
+        // signal — so this is the path that most needs to survive being offline.
         const outcome = await performSessionTransition({
           type,
           origin: SESSION_ORIGIN.AUTO,
           at: occurredAt,
           execute: () =>
-            autoCheckInOut({
-              employeeCode: code,
+            submitAutoAttendance({
               type,
-              office: officeRef.current,
+              employeeCode: code,
               occurredAt,
+              online: () =>
+                autoCheckInOut({
+                  employeeCode: code,
+                  type,
+                  office: officeRef.current,
+                  occurredAt,
+                }),
             }),
         });
 

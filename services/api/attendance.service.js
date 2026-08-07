@@ -1,6 +1,5 @@
 // src/services/api/attendance.service.js
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { getPreciseDistance } from "geolib";
 import * as Location from "expo-location";
 import { format } from "date-fns";
 import apiClient from "./apiClient";
@@ -9,6 +8,12 @@ import {
   normalizeCustomIn,
   toTimestampMs,
 } from "../../utils/attendanceSession";
+import { scoreLocations, pickNearest } from "../../utils/attendanceLocations";
+import {
+  parseServerWallClock,
+  rememberServerOffset,
+  SERVER_TIMESTAMP_FORMAT,
+} from "../../utils/serverClock";
 
 export const getServerTime = async () => {
   const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
@@ -17,6 +22,7 @@ export const getServerTime = async () => {
 
   const url = `${baseUrl}/api/method/employee_app.attendance_api.get_server_time`;
 
+  const requestedAt = Date.now();
   const response = await apiClient.get(url, {
     headers: {
       Authorization: `Bearer ${token}`,
@@ -24,27 +30,15 @@ export const getServerTime = async () => {
   });
 
   // Extract correct field from API response
-  return response.data?.message?.server_time;
-};
+  const serverTime = response.data?.message?.server_time;
 
-/** Frappe naive-datetime format used by the attendance endpoints. */
-const SERVER_TIMESTAMP_FORMAT = "yyyy-MM-dd HH:mm:ss";
-const SERVER_TIME_PATTERN = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})/;
+  // Every successful call is a free measurement of how far the device clock has
+  // drifted from the server's. Offline check-ins are stamped with device time
+  // plus this offset, so a wrong phone clock cannot shift a queued punch.
+  // Fire-and-forget: a storage failure must never fail a check-in.
+  rememberServerOffset(serverTime, requestedAt).catch(() => {});
 
-/**
- * Reads the server's wall clock into a local Date carrying the SAME digits.
- * The server sends a naive datetime with no offset, and engines disagree on how
- * to parse that, so the components are read explicitly rather than via
- * Date.parse.
- */
-const parseServerWallClock = (value) => {
-  const match = SERVER_TIME_PATTERN.exec(String(value ?? "").trim());
-  if (!match) return null;
-
-  const [, year, month, day, hours, minutes, seconds] = match.map(Number);
-  const parsed = new Date(year, month - 1, day, hours, minutes, seconds);
-
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
+  return serverTime;
 };
 
 /**
@@ -192,86 +186,30 @@ export const getOfficeLocation = async (employeeCode) => {
     longitude: userLng,
   });
 
-  const parseCoordinateValue = (value) => {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : null;
-  };
-
-  const resolveCoordinates = (loc) => {
-    try {
-      const parsed = JSON.parse(loc?.reporting_location || "{}");
-      const coords = parsed?.features?.[0]?.geometry?.coordinates;
-
-      if (Array.isArray(coords) && coords.length === 2) {
-        const [lng, lat] = coords;
-        const longitude = parseCoordinateValue(lng);
-        const latitude = parseCoordinateValue(lat);
-
-        if (latitude !== null && longitude !== null) {
-          return { latitude, longitude, source: "reporting_location" };
-        }
-      }
-    } catch (err) {
-      console.warn(`${logPrefix} Failed to parse reporting_location JSON`, {
-        locationName: loc?.location,
-        error: err?.message,
-      });
-    }
-
-    const latitude = parseCoordinateValue(loc?.latitude);
-    const longitude = parseCoordinateValue(loc?.longitude);
-
-    if (latitude !== null && longitude !== null) {
-      return { latitude, longitude, source: "lat_lng_fields" };
-    }
-
-    return null;
-  };
-
-  const candidates = locations
-    .map((loc, index) => {
-      const resolvedCoords = resolveCoordinates(loc);
-
-      if (!resolvedCoords) {
-        console.warn(`${logPrefix} Invalid coordinates for location`, {
-          index,
-          locationName: loc?.location,
-        });
-        return null;
-      }
-
-      const distance = getPreciseDistance(
-        { latitude: userLat, longitude: userLng },
-        {
-          latitude: resolvedCoords.latitude,
-          longitude: resolvedCoords.longitude,
-        },
-      );
-
-      // const radius = Number(loc?.reporting_radius) || 0;
-      const radius = sanitizeNumber(loc?.reporting_radius);
-
-      const candidate = {
-        locationName: loc?.location || `location-${index + 1}`,
-        latitude: resolvedCoords.latitude,
-        longitude: resolvedCoords.longitude,
-        distance,
-        radius,
-        withinRadius: radius > 0 ? distance <= radius : false,
-      };
-
-      console.log(`${logPrefix} Candidate distance`, {
+  // The distance arithmetic lives in utils/attendanceLocations.js so the offline
+  // gate can run exactly the same rules against the cached configuration. Two
+  // copies would agree in the office and disagree at the boundary — the only
+  // place the answer matters.
+  const candidates = scoreLocations(
+    { latitude: userLat, longitude: userLng },
+    locations,
+    ({ index, locationName }) =>
+      console.warn(`${logPrefix} Invalid coordinates for location`, {
         index,
-        locationName: candidate.locationName,
-        source: resolvedCoords.source,
-        distance: candidate.distance,
-        radius: candidate.radius,
-        withinRadius: candidate.withinRadius,
-      });
+        locationName,
+      }),
+  );
 
-      return candidate;
-    })
-    .filter(Boolean);
+  candidates.forEach((candidate, index) =>
+    console.log(`${logPrefix} Candidate distance`, {
+      index,
+      locationName: candidate.locationName,
+      source: candidate.source,
+      distance: candidate.distance,
+      radius: candidate.radius,
+      withinRadius: candidate.withinRadius,
+    }),
+  );
 
   if (!candidates.length) {
     console.warn(`${logPrefix} No valid nearest location found`, {
@@ -280,10 +218,7 @@ export const getOfficeLocation = async (employeeCode) => {
     return null;
   }
 
-  const nearest = candidates.reduce((picked, current) => {
-    if (!picked) return current;
-    return current.distance < picked.distance ? current : picked;
-  }, null);
+  const nearest = pickNearest(candidates);
 
   console.log(`${logPrefix} Nearest location resolved`, nearest);
   return nearest;
@@ -437,6 +372,11 @@ export const userCheckIn = async ({ employeeCode, type, locationData }) => {
       distance: null,
       radius: null,
       location: null,
+      // The original error, so a caller can tell a dropped connection from a
+      // refusal. Flattening everything to a string made those indistinguishable,
+      // which is the difference between queueing a punch for later and silently
+      // swallowing a real policy rejection. Nothing else reads this field.
+      error,
     };
   }
 };
@@ -530,6 +470,9 @@ export const autoCheckInOut = async ({
       allowed: false,
       message: error?.message || "Automatic attendance failed",
       location: office,
+      // See the note on userCheckIn's catch — lets the offline queue distinguish
+      // a transport failure from a rejection.
+      error,
     };
   }
 };
@@ -611,6 +554,16 @@ export const getAttendanceStatus = async () => {
 
     console.log("ATTENDANCE LIST:", list);
 
+    // `getUserAttendance` swallows every failure into `{ error }`, which used to
+    // arrive here indistinguishable from "no records" and become custom_in: 0 —
+    // i.e. "the server says you are checked out". Offline that is a lie, and
+    // callers act on it by CLOSING an open session, so an offline check-in was
+    // silently reverted the next time this ran. `unavailable` lets a caller tell
+    // "no session" from "no answer".
+    if (list?.error) {
+      return { custom_in: 0, unavailable: true, error: list.error };
+    }
+
     if (!Array.isArray(list) || list.length === 0) {
       return { custom_in: 0 };
     }
@@ -654,7 +607,9 @@ export const getAttendanceStatus = async () => {
     };
   } catch (e) {
     console.log("STATUS ERROR:", e);
-    return { custom_in: 0 };
+    // Same reasoning as the `list.error` branch above: a thrown failure is not
+    // the server reporting a closed session.
+    return { custom_in: 0, unavailable: true, error: e?.message };
   }
 };
 // Get daily worked hours

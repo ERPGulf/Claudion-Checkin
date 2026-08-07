@@ -96,6 +96,8 @@ PODS:
     - Yoga
   - ExpoSplashScreen (31.0.13):
     - ExpoModulesCore
+  - ExpoSQLite (16.0.10):
+    - ExpoModulesCore
   - EXStructuredHeaders (5.0.0)
   - EXUpdates (29.0.17):
     - EASClient
@@ -1488,6 +1490,8 @@ PODS:
     - React-RCTFBReactNativeSpec
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
+  - react-native-netinfo (11.4.1):
+    - React-Core
   - react-native-safe-area-context (5.6.2):
     - hermes-engine
     - RCTRequired
@@ -2278,6 +2282,7 @@ DEPENDENCIES:
   - ExpoLocation (from `../node_modules/expo-location/ios`)
   - ExpoModulesCore (from `../node_modules/expo-modules-core`)
   - ExpoSplashScreen (from `../node_modules/expo-splash-screen/ios`)
+  - ExpoSQLite (from `../node_modules/expo-sqlite/ios`)
   - EXStructuredHeaders (from `../node_modules/expo-structured-headers/ios`)
   - EXUpdates (from `../node_modules/expo-updates/ios`)
   - EXUpdatesInterface (from `../node_modules/expo-updates-interface/ios`)
@@ -2317,6 +2322,7 @@ DEPENDENCIES:
   - React-logger (from `../node_modules/react-native/ReactCommon/logger`)
   - React-Mapbuffer (from `../node_modules/react-native/ReactCommon`)
   - React-microtasksnativemodule (from `../node_modules/react-native/ReactCommon/react/nativemodule/microtasks`)
+  - "react-native-netinfo (from `../node_modules/@react-native-community/netinfo`)"
   - react-native-safe-area-context (from `../node_modules/react-native-safe-area-context`)
   - React-NativeModulesApple (from `../node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios`)
   - React-oscompat (from `../node_modules/react-native/ReactCommon/oscompat`)
@@ -2429,6 +2435,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/expo-modules-core"
   ExpoSplashScreen:
     :path: "../node_modules/expo-splash-screen/ios"
+  ExpoSQLite:
+    :path: "../node_modules/expo-sqlite/ios"
   EXStructuredHeaders:
     :path: "../node_modules/expo-structured-headers/ios"
   EXUpdates:
@@ -2506,6 +2514,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native/ReactCommon"
   React-microtasksnativemodule:
     :path: "../node_modules/react-native/ReactCommon/react/nativemodule/microtasks"
+  react-native-netinfo:
+    :path: "../node_modules/@react-native-community/netinfo"
   react-native-safe-area-context:
     :path: "../node_modules/react-native-safe-area-context"
   React-NativeModulesApple:
@@ -2615,6 +2625,7 @@ SPEC CHECKSUMS:
   ExpoLocation: d5b61cb4970fa982e39ca94246a206a0c3b812ca
   ExpoModulesCore: b0bd53ca36654854eca93afbd73547c4553c9ba7
   ExpoSplashScreen: bc3cffefca2716e5f22350ca109badd7e50ec14d
+  ExpoSQLite: 7eedbe476870a5f18d6b89c817c4ac6f299830ad
   EXStructuredHeaders: c951e77f2d936f88637421e9588c976da5827368
   EXUpdates: b0ed598797ce5a9dc34082804e63b84c6e9686d7
   EXUpdatesInterface: 5adf50cb41e079c861da6d9b4b954c3db9a50734
@@ -2667,6 +2678,7 @@ SPEC CHECKSUMS:
   React-logger: 50fdb9a8236da90c0b1072da5c32ee03aeb5bf28
   React-Mapbuffer: 0164bc6ba0866e6314d86851620e6f1f95a1b4fb
   React-microtasksnativemodule: f5972fb404f7c363ff34b2292e72a716956c590c
+  react-native-netinfo: cec9c4e86083cb5b6aba0e0711f563e2fbbff187
   react-native-safe-area-context: c5d42c4294aa175415947e23c2ac956253abfc7d
   React-NativeModulesApple: 8969913947d5b576de4ed371a939455a8daf28aa
   React-oscompat: ce47230ed20185e91de62d8c6d139ae61763d09c

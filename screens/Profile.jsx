@@ -28,6 +28,7 @@ import HomeExperienceSetting from "../components/experimental/HomeExperienceSett
 import user from "../assets/images/user.png";
 import { hapticsMessage } from "../utils/HapticsMessage";
 import { clearTokens, clearStore } from "../services/api/apiClient";
+import { clearOfflineAttendance } from "../services/offline/AttendanceQueueService";
 import apiClient from "../services/api/apiClient";
 import { clearAuthCache } from "../services/api/authHelper";
 import {
@@ -316,6 +317,11 @@ function Profile() {
 
       // 1. Remove FCM registration to avoid cross-user push delivery.
       await clearFcmRegistration();
+
+      // 1b. Drop queued punches and the cached attendance rules, for the same
+      // reason: they belong to this employee, and would otherwise sync — or
+      // govern offline check-ins — under whoever logs in next.
+      await clearOfflineAttendance();
 
       // 2. Clear tokens from storage
       await clearTokens();

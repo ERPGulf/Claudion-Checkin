@@ -19,6 +19,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import UpdateBanner from "./components/UpdateBanner";
 import ThemedStatusBar from "./components/common/ThemedStatusBar";
 import AutoAttendanceBootstrap from "./components/AutoAttendanceBootstrap";
+import OfflineAttendanceBootstrap from "./components/OfflineAttendanceBootstrap";
 import { selectIsLoggedIn } from "./redux/Slices/AuthSlice";
 import {
   initializeFcm,
@@ -26,6 +27,7 @@ import {
   clearFcmRegistration,
 } from "./services/notifications/fcm.service";
 import { registerSessionCleanupHandler } from "./services/api/apiClient";
+import { clearOfflineAttendance } from "./services/offline/AttendanceQueueService";
 import { hydrate as hydrateAppearance } from "./settings/appearance";
 // TEMPORARY: New Home Experience experiment — remove with the feature.
 import { hydrate as hydrateHomeExperience } from "./settings/homeExperience";
@@ -35,8 +37,13 @@ function cacheFonts(fonts) {
 }
 const queryClient = new QueryClient();
 registerBackgroundMessageHandler();
-// Forced logout (session expiry) reuses the same FCM cleanup as manual logout.
-registerSessionCleanupHandler(clearFcmRegistration);
+// Forced logout (session expiry) reuses the same teardown as manual logout: the
+// FCM registration, and the offline attendance queue plus its cached rules. A
+// session that expires mid-outage would otherwise leave queued punches behind to
+// sync under the next user's token.
+registerSessionCleanupHandler(async () => {
+  await Promise.allSettled([clearFcmRegistration(), clearOfflineAttendance()]);
+});
 
 const getForegroundToastType = (type) => {
   if (typeof type !== "string") {
@@ -152,6 +159,7 @@ export default function App() {
           <QueryClientProvider client={queryClient}>
             <FcmBootstrap />
             <AutoAttendanceBootstrap />
+            <OfflineAttendanceBootstrap />
             <Navigator />
             <UpdateBanner />
             <ThemedStatusBar />

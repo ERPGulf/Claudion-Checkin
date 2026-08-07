@@ -29,7 +29,6 @@ import {
   userCheckIn,
   userFileUpload,
   userStatusPut,
-  getOfficeLocation,
 } from "../services/api";
 import {
   performSessionTransition,
@@ -37,6 +36,8 @@ import {
   SESSION_STATUS,
   TRANSITION_RESULT,
 } from "../utils/attendanceSessionState";
+import { submitManualAttendance } from "../services/offline/AttendanceQueueService";
+import { resolveNearestOffice } from "../services/offline/offlineAttendanceGate";
 
 function AttendanceCamera() {
   const navigation = useNavigation();
@@ -113,10 +114,13 @@ function AttendanceCamera() {
       const shouldSkipLocationRestriction =
         type === "OUT" && unrestrictedCheckout === "1";
 
-      // 📍 Only call location API if restriction is enabled
+      // 📍 Only resolve the location if restriction is enabled.
+      // `resolveNearestOffice` falls back to the cached configuration when
+      // offline; the previous `getOfficeLocation` threw, and the throw surfaced
+      // as "Check-in failed" before the offline queue was ever reached.
       let locationData = null;
       if (!shouldSkipLocationRestriction && restrictLocation === "1") {
-        locationData = await getOfficeLocation(employeeCode);
+        locationData = await resolveNearestOffice(employeeCode);
 
         // If not within radius, block
         if (locationData && !locationData.withinRadius) {
@@ -142,10 +146,22 @@ function AttendanceCamera() {
 
       // Same session state machine the geofence drives, so a photo check-in is
       // an ordinary open session that an office EXIT can close automatically.
+      //
+      // `photoUri` rides along on the queued row so an offline photo check-in
+      // does not silently drop the photo: the sync service uploads it once the
+      // server returns a docname. Best-effort — the camera writes to the cache
+      // directory, so a long outage under storage pressure can still lose the
+      // file. The punch itself is never lost, which is the part that matters.
       const outcome = await performSessionTransition({
         type,
         origin: SESSION_ORIGIN.MANUAL,
-        execute: () => userCheckIn(dataField),
+        execute: () =>
+          submitManualAttendance({
+            type,
+            employeeCode,
+            photoUri: photo?.uri ?? null,
+            online: () => userCheckIn(dataField),
+          }),
       });
 
       if (outcome.status === TRANSITION_RESULT.SKIPPED) {
@@ -184,8 +200,15 @@ function AttendanceCamera() {
       }
 
       const { session } = outcome;
+      const queued = outcome.response?.queued === true;
       const docname = outcome.response?.name;
-      if (!docname) throw new Error("Check-in failed: Missing Checkin ID");
+
+      // A queued punch has no docname yet — there is no server record to name.
+      // That is expected, not the "Missing Checkin ID" failure below, which
+      // means the server accepted the request and answered without one.
+      if (!queued && !docname) {
+        throw new Error("Check-in failed: Missing Checkin ID");
+      }
 
       // Redux update. The attendance log now exists on the server, so the
       // session is committed before the photo work: if the upload fails the
@@ -205,6 +228,21 @@ function AttendanceCamera() {
         );
       } else {
         dispatch(setCheckout({ checkoutTime: session.endedAt }));
+      }
+
+      // Offline: the status update and the photo upload both need the server,
+      // and the photo needs a docname that does not exist yet. Both are deferred
+      // to the sync service, which uploads the photo once the row lands and the
+      // server names it.
+      if (queued) {
+        hapticsMessage("success");
+        Toast.show({
+          type: "success",
+          text1: `CHECKED ${type} offline`,
+          text2: "Saved on your device — it'll sync when you're back online.",
+        });
+        navigation.navigate("Attendance action");
+        return;
       }
 
       try {

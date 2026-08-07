@@ -112,6 +112,166 @@ export function formatDayTitle(date, now = new Date()) {
   return format(date, 'd MMM yyyy');
 }
 
+// ----------------------
+// OFFLINE QUEUE MERGE
+// ----------------------
+
+/**
+ * Sync state of a row that this device created but the server may not have yet.
+ *
+ * Server records carry no sync state at all — they are, by definition, synced —
+ * so `null` means "came from the server" and renders no chip. That is the common
+ * case and the one that must stay visually unchanged.
+ */
+export const SYNC_STATUS = {
+  PENDING: 'pending',
+  SYNCING: 'syncing',
+  SYNCED: 'synced',
+  FAILED: 'failed',
+  DUPLICATE: 'duplicate',
+};
+
+const SYNC_STATUS_DESCRIPTIONS = {
+  [SYNC_STATUS.PENDING]: {
+    label: 'Pending sync',
+    tone: 'warning',
+    icon: 'cloud-offline-outline',
+  },
+  [SYNC_STATUS.SYNCING]: {
+    label: 'Syncing',
+    tone: 'info',
+    icon: 'sync-outline',
+  },
+  [SYNC_STATUS.SYNCED]: {
+    label: 'Synced',
+    tone: 'success',
+    icon: 'cloud-done-outline',
+  },
+  [SYNC_STATUS.FAILED]: {
+    label: 'Failed',
+    tone: 'error',
+    icon: 'alert-circle-outline',
+  },
+  [SYNC_STATUS.DUPLICATE]: {
+    label: 'Already synced',
+    tone: 'info',
+    icon: 'checkmark-done-outline',
+  },
+};
+
+/** Chip label, tone and glyph for a sync state, or null for a server record. */
+export function describeSyncStatus(syncStatus) {
+  if (!syncStatus) return null;
+  return SYNC_STATUS_DESCRIPTIONS[syncStatus] ?? null;
+}
+
+/**
+ * The sync state a queue row should be shown as.
+ *
+ * A synced row that the server reported as an existing log reads as "Already
+ * synced" rather than plain "Synced" — the distinction matters to anyone
+ * checking why a punch they made twice only appears once.
+ */
+export function resolveQueueSyncStatus(row) {
+  if (row?.status === 'synced') {
+    return row.duplicate ? SYNC_STATUS.DUPLICATE : SYNC_STATUS.SYNCED;
+  }
+  if (row?.status === 'syncing') return SYNC_STATUS.SYNCING;
+  if (row?.status === 'failed') return SYNC_STATUS.FAILED;
+  return SYNC_STATUS.PENDING;
+}
+
+/** Queue row → the record shape the list already renders. */
+export function toHistoryRecord(row) {
+  return {
+    // Distinct from a server docname so React keys never collide, and so a
+    // local row is recognisable in a log.
+    name: `local-${row.id}`,
+    localId: row.id,
+    log_type: row.action === 'checkout' ? 'OUT' : 'IN',
+    time: row.timestamp,
+    device_id: row.deviceId,
+    employee: row.employeeId,
+    syncStatus: resolveQueueSyncStatus(row),
+    syncError: row.error ?? row.duplicateMessage ?? null,
+    attendanceType: row.attendanceType,
+  };
+}
+
+/** Second-precision epoch, so two spellings of one instant compare equal. */
+const identityOf = (time, logType) => {
+  const parsed = parseLogTime(time);
+  const at = parsed ? Math.floor(parsed.getTime() / 1000) : String(time ?? '');
+  return `${at}|${String(logType ?? '').toUpperCase()}`;
+};
+
+/**
+ * Folds queued rows into the server's history so the screen shows one timeline
+ * rather than a local list and a remote list.
+ *
+ * Three rules, in order:
+ *
+ *  1. **The server wins.** Once a punch comes back from
+ *     `get_attendance_details`, the local row for it is dropped entirely — same
+ *     instant, same log type, so it is the same punch. This is what makes the
+ *     chip disappear on its own after a sync, with no extra bookkeeping.
+ *
+ *  2. **Unsynced rows always show**, however old. They are the whole point: a
+ *     punch the server has never heard of must be visible until it has.
+ *
+ *  3. **Synced rows show only inside the loaded window.** They exist to cover
+ *     the gap between "uploaded" and "the history query has refetched", which is
+ *     seconds. Past the oldest loaded server record they would appear as lone
+ *     rows for days the user has not paged back to yet, inventing sections — so
+ *     below that floor they are dropped and the server's copy is awaited.
+ *
+ * Sorting is newest-first over the merged set. The server already returns that
+ * order, and `groupRecordsByDay` deliberately does not sort, so interleaving a
+ * local row correctly has to happen here.
+ */
+export function mergeQueuedRecords(serverRecords, queueRows) {
+  const server = Array.isArray(serverRecords) ? serverRecords : [];
+  const rows = Array.isArray(queueRows) ? queueRows : [];
+
+  if (!rows.length) return server;
+
+  const seen = new Set(
+    server.map(record => identityOf(record?.time, record?.log_type)),
+  );
+
+  // Rule 3's floor. With no server records at all there is no window to be
+  // outside of, so everything local shows — the first-launch-offline case.
+  const oldestServerAt = server.reduce((oldest, record) => {
+    const parsed = parseLogTime(record?.time);
+    if (!parsed) return oldest;
+    const at = parsed.getTime();
+    return oldest === null || at < oldest ? at : oldest;
+  }, null);
+
+  const locals = rows
+    .map(toHistoryRecord)
+    .filter(record => {
+      if (seen.has(identityOf(record.time, record.log_type))) return false;
+
+      if (
+        record.syncStatus === SYNC_STATUS.SYNCED ||
+        record.syncStatus === SYNC_STATUS.DUPLICATE
+      ) {
+        if (oldestServerAt === null) return true;
+        const parsed = parseLogTime(record.time);
+        return !!parsed && parsed.getTime() >= oldestServerAt;
+      }
+
+      return true;
+    });
+
+  if (!locals.length) return server;
+
+  const timeOf = record => parseLogTime(record?.time)?.getTime() ?? 0;
+
+  return [...server, ...locals].sort((a, b) => timeOf(b) - timeOf(a));
+}
+
 /**
  * Groups records into SectionList sections, one per calendar day.
  *

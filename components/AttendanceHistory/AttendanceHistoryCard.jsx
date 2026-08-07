@@ -8,10 +8,44 @@ import PressableScale from '../common/PressableScale';
 import {
   describeLogSource,
   describeLogType,
+  describeSyncStatus,
   formatLogDate,
   formatLogTime,
   parseLogTime,
 } from '../../utils/attendanceHistory';
+
+/**
+ * A small tinted pill under the row's label.
+ *
+ * Two of these can sit side by side — the sync state and the source device —
+ * so the row they live in wraps rather than truncating one of them. Extracted
+ * because the sync chip and the device badge are the same object with different
+ * words in it, and drifting apart would read as two unrelated affordances.
+ */
+function Chip({ icon, label, surface, text }) {
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginEnd: SPACING.xs,
+        marginTop: 2,
+        paddingHorizontal: SPACING.sm,
+        paddingVertical: 2,
+        borderRadius: RADIUS.pill,
+        backgroundColor: surface,
+      }}
+    >
+      <Ionicons name={icon} size={11} color={text} />
+      <Text
+        numberOfLines={1}
+        style={{ ...TYPO.caption2, color: text, marginStart: 3 }}
+      >
+        {label}
+      </Text>
+    </View>
+  );
+}
 
 /**
  * One attendance punch.
@@ -30,11 +64,17 @@ import {
  * every row but the last draws a hairline. `showDate` is on by default so the row
  * stands alone anywhere, and the grouped screen turns it off because its section
  * header already names the day.
+ *
+ * `syncStatus` marks a punch this device made that the server may not have yet.
+ * It is null for every server record — which is nearly all of them — so the
+ * ordinary row is untouched and the chip is genuinely exceptional, in the same
+ * slot and the same shape as the device badge.
  */
 function AttendanceHistoryCard({
   logType,
   time,
   deviceId,
+  syncStatus = null,
   position = 'single',
   showDate = true,
   onPress,
@@ -44,6 +84,7 @@ function AttendanceHistoryCard({
   const date = parseLogTime(time);
   const { label, tone, icon } = describeLogType(logType);
   const source = describeLogSource(deviceId);
+  const sync = describeSyncStatus(syncStatus);
 
   const isFirst = position === 'first' || position === 'single';
   const isLast = position === 'last' || position === 'single';
@@ -80,34 +121,31 @@ function AttendanceHistoryCard({
           {label}
         </Text>
 
-        {!!source && (
+        {(!!source || !!sync) && (
           <View
             style={{
-              alignSelf: 'flex-start',
               flexDirection: 'row',
               alignItems: 'center',
+              flexWrap: 'wrap',
               marginTop: 3,
-              paddingHorizontal: SPACING.sm,
-              paddingVertical: 2,
-              borderRadius: RADIUS.pill,
-              backgroundColor: colors.neutralSurface,
             }}
           >
-            <Ionicons
-              name="hardware-chip-outline"
-              size={11}
-              color={colors.neutralText}
-            />
-            <Text
-              numberOfLines={1}
-              style={{
-                ...TYPO.caption2,
-                color: colors.neutralText,
-                marginStart: 3,
-              }}
-            >
-              {source}
-            </Text>
+            {!!sync && (
+              <Chip
+                icon={sync.icon}
+                label={sync.label}
+                surface={colors[`${sync.tone}Surface`]}
+                text={colors[`${sync.tone}Text`]}
+              />
+            )}
+            {!!source && (
+              <Chip
+                icon="hardware-chip-outline"
+                label={source}
+                surface={colors.neutralSurface}
+                text={colors.neutralText}
+              />
+            )}
           </View>
         )}
       </View>

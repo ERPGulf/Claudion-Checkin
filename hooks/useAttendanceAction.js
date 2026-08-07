@@ -17,7 +17,6 @@ import {
 import { updateDateTime } from "../utils/TimeServices";
 import { saveTokens } from "../services/api/apiClient";
 import {
-  getOfficeLocation,
   userCheckIn,
   getAttendanceStatus,
   getDailyWorkedHours,
@@ -32,6 +31,7 @@ import {
 } from "../utils/attendanceSession";
 import {
   performSessionTransition,
+  readSession,
   reconcileSessionFromServer,
   SESSION_ORIGIN,
   SESSION_STATUS,
@@ -41,6 +41,8 @@ import {
   selectAutoAttendanceActive,
   selectAutoAttendanceFullActions,
 } from "../redux/Slices/AutoAttendanceSlice";
+import { submitManualAttendance } from "../services/offline/AttendanceQueueService";
+import { resolveNearestOffice } from "../services/offline/offlineAttendanceGate";
 
 /**
  * All Attendance Action behaviour: session/break state, the location gate, the
@@ -140,6 +142,27 @@ export default function useAttendanceAction() {
 
   const syncCheckinFromStatus = useCallback(
     async (status, fetchedAt) => {
+      // The status request never reached the server, so it says nothing about
+      // the session and must not be used to close one. Without this an offline
+      // check-in was reverted the moment this screen refocused: the UI went back
+      // to "Check in", the durable record went CHECKED_OUT, a second tap queued a
+      // duplicate punch, and a later geofence EXIT found no session to close.
+      // Mirror the local record instead — it is the source of truth offline.
+      if (status?.unavailable) {
+        const session = await readSession();
+
+        if (session.status === SESSION_STATUS.CHECKED_IN) {
+          dispatch(
+            setCheckin({
+              checkinTime: session.startedAt,
+              location: checkinLocation,
+              sessionOrigin: session.origin,
+            }),
+          );
+        }
+        return;
+      }
+
       const { checkinStartTime, lastCheckoutTime } =
         await getPersistedSessionTimes();
 
@@ -210,7 +233,12 @@ export default function useAttendanceAction() {
       //   return;
       // }
 
-      const nearest = await getOfficeLocation(employeeCode);
+      // Resolved from the cached configuration when there is no connection.
+      // This used to be `getOfficeLocation`, a network call, whose failure left
+      // `inTarget` false — which disables the check-in button under
+      // `restrict_location`, putting offline attendance out of reach on exactly
+      // the tenants that need it. A permission denial still throws.
+      const nearest = await resolveNearestOffice(employeeCode);
       if (!isMountedRef.current) return;
       if (!nearest) {
         setInTarget(false);
@@ -422,14 +450,24 @@ export default function useAttendanceAction() {
       try {
         setActionLoading(true);
 
+        // `submitManualAttendance` runs `userCheckIn` unchanged when there is a
+        // connection, and queues the punch locally when there is not. Either way
+        // it returns the same `{ allowed }` contract, so the session state
+        // machine treats an offline check-in as an ordinary open session — which
+        // is what lets a geofence EXIT still close it hours later.
         const outcome = await performSessionTransition({
           type,
           origin: SESSION_ORIGIN.MANUAL,
           execute: () =>
-            userCheckIn({
-              employeeCode,
+            submitManualAttendance({
               type,
-              locationData: distanceInfo,
+              employeeCode,
+              online: () =>
+                userCheckIn({
+                  employeeCode,
+                  type,
+                  locationData: distanceInfo,
+                }),
             }),
         });
 
@@ -490,6 +528,19 @@ export default function useAttendanceAction() {
 
         const breakData = await refreshAttendanceData();
         syncBreakState(breakData);
+
+        // A queued punch is a success, not a warning — the employee's day is
+        // recorded and nothing more is required of them. It is labelled as
+        // offline only so the absence of it in the web desk for a while is not a
+        // surprise.
+        if (response?.queued) {
+          Toast.show({
+            type: "success",
+            text1: type === "IN" ? "Checked in offline" : "Checked out offline",
+            text2: "Saved on your device — it'll sync when you're back online.",
+          });
+          return;
+        }
 
         Toast.show({
           type: "success",
