@@ -32,6 +32,7 @@ import { clearOfflineAttendance } from "./services/offline/AttendanceQueueServic
 import { hydrate as hydrateAppearance } from "./settings/appearance";
 // TEMPORARY: New Home Experience experiment — remove with the feature.
 import { hydrate as hydrateHomeExperience } from "./settings/homeExperience";
+import { hydrate as hydrateOfflineSyncAlerts } from "./settings/offlineSyncAlerts";
 
 function cacheFonts(fonts) {
   return fonts.map((font) => Font.loadAsync(font));
@@ -126,6 +127,11 @@ export default function App() {
         // component mounts, and getting it wrong remounts Home and fires its
         // focus effects (and their network calls) twice.
         await Promise.all([hydrateAppearance(), hydrateHomeExperience()]);
+
+        // Not awaited with the two above: the banner is an overlay, so the worst
+        // case is one frame before the preference lands. Blocking the splash on
+        // it would be the worse trade.
+        hydrateOfflineSyncAlerts().catch(() => {});
 
         if (!__DEV__ && Updates.isEnabled) {
           try {

@@ -32,6 +32,11 @@ import {
 import { fetchIsOnline } from "../services/offline/NetworkListener";
 import { evaluateOfflineAttendance } from "../services/offline/offlineAttendanceGate";
 import { NO_CONFIG_MESSAGE } from "../services/offline/attendanceConfigCache";
+import { OFFLINE_UNSUPPORTED_MESSAGE } from "../services/offline/AttendanceQueueService";
+import {
+  markOfflineSyncUnsupported,
+  resetOfflineCapability,
+} from "../services/offline/offlineCapability";
 
 const { __resetAll } = require("../test-utils/expoSqliteMock");
 
@@ -60,6 +65,46 @@ beforeEach(() => {
   jest.clearAllMocks();
   fetchIsOnline.mockResolvedValue(true);
   evaluateOfflineAttendance.mockResolvedValue(acceptedGate);
+  resetOfflineCapability();
+});
+
+/**
+ * A server with no offline endpoint is a property of the deployment, not of a
+ * punch. Queueing into it would be a promise the app cannot keep.
+ */
+describe("when the server has no offline endpoint", () => {
+  beforeEach(async () => {
+    fetchIsOnline.mockResolvedValue(false);
+    await markOfflineSyncUnsupported();
+  });
+
+  it("refuses honestly instead of queueing into a hole", async () => {
+    const result = await submitAttendance({
+      type: "IN",
+      employeeCode: "TDI0167",
+      online: jest.fn(),
+    });
+
+    expect(result.allowed).toBe(false);
+    expect(result.reason).toBe("unsupported");
+    expect(result.message).toBe(OFFLINE_UNSUPPORTED_MESSAGE);
+    expect(await listAll()).toHaveLength(0);
+  });
+
+  it("names the constraint without blaming the employee", () => {
+    expect(OFFLINE_UNSUPPORTED_MESSAGE).toMatch(/organization's server/i);
+    expect(OFFLINE_UNSUPPORTED_MESSAGE).not.toMatch(/fail|error/i);
+  });
+
+  it("never refuses the online path — only queueing", async () => {
+    fetchIsOnline.mockResolvedValue(true);
+    const online = jest.fn().mockResolvedValue({ allowed: true, name: "X" });
+
+    expect(
+      (await submitAttendance({ type: "IN", employeeCode: "TDI0167", online }))
+        .allowed,
+    ).toBe(true);
+  });
 });
 
 describe("when online", () => {

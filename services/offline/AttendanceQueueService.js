@@ -23,6 +23,10 @@ import {
 import { classifyAttendanceError, FAILURE_KIND } from "./attendanceErrors";
 import { fetchIsOnline, isOnline } from "./NetworkListener";
 import { evaluateOfflineAttendance } from "./offlineAttendanceGate";
+import {
+  clearOfflineCapability,
+  isOfflineSyncUnsupported,
+} from "./offlineCapability";
 
 /**
  * The write side of the offline queue, and the single seam every attendance
@@ -54,6 +58,18 @@ import { evaluateOfflineAttendance } from "./offlineAttendanceGate";
 
 const LOG_PREFIX = "[AttendanceQueueService]";
 
+/**
+ * Shown when the server has no offline attendance endpoint.
+ *
+ * Names the constraint without blaming the employee or asking them to fix
+ * something they cannot. It is deliberately different from NO_CONFIG_MESSAGE:
+ * that one is "this device hasn't downloaded the rules yet" and resolves by
+ * going online once; this one resolves only when an administrator deploys
+ * something.
+ */
+export const OFFLINE_UNSUPPORTED_MESSAGE =
+  "Offline attendance isn't enabled on your organization's server yet. Please check in while you have a connection.";
+
 /** Change notifications for the UI. */
 const changeListeners = new Set();
 
@@ -72,16 +88,6 @@ export const notifyQueueChanged = () => {
   });
 };
 
-/**
- * Whether a failed online attempt should become a queued row.
- *
- * `userCheckIn` and `autoCheckInOut` flatten every failure into
- * `{ allowed: false, message }`, which makes "you are 300m away" and "the
- * request timed out" indistinguishable — so they now also carry the original
- * `error`, and this reads it. Without it the queue would either swallow real
- * policy refusals (the employee thinks they checked in and did not) or fail to
- * queue genuine outages (the punch is lost).
- */
 /**
  * Whether a failure reaching THIS path should become a queued row.
  *
@@ -258,6 +264,24 @@ export const submitAttendance = async ({
     }
   }
 
+  // This server has already told us it has no offline endpoint, so queueing
+  // would be a promise the app cannot keep: the punch would sit in a queue that
+  // can never drain while the employee walks away believing it was recorded.
+  // Refusing is the honest answer, and it is also what the app did before
+  // offline attendance existed.
+  //
+  // Already-queued rows are untouched and still retried — the moment someone
+  // deploys the endpoint, one success flips this back and everything drains.
+  if (isOfflineSyncUnsupported()) {
+    console.log(`${LOG_PREFIX} Offline ${type} refused: server has no offline endpoint`);
+    return {
+      allowed: false,
+      reason: "unsupported",
+      message: OFFLINE_UNSUPPORTED_MESSAGE,
+      location: null,
+    };
+  }
+
   // Queueing from here. The gate still applies: an out-of-radius punch is
   // refused offline exactly as it is online, or aeroplane mode becomes a bypass.
   //
@@ -393,6 +417,11 @@ export const clearOfflineAttendance = async () => {
   const results = await Promise.allSettled([
     clearAttendanceQueue(),
     clearAttendanceConfig(),
+    // The capability is a fact about the server this account was on, and the
+    // next login may be a different tenant entirely. Carrying "unsupported"
+    // across would silently disable offline attendance on a server that
+    // supports it perfectly well.
+    clearOfflineCapability(),
   ]);
 
   results

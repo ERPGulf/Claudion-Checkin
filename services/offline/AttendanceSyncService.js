@@ -16,6 +16,10 @@ import {
 import { notifyQueueChanged } from "./AttendanceQueueService";
 import { classifyAttendanceError, FAILURE_KIND } from "./attendanceErrors";
 import { uploadQueuedPhoto } from "./attendancePhotoUpload";
+import {
+  markOfflineSyncSupported,
+  markOfflineSyncUnsupported,
+} from "./offlineCapability";
 import { fetchIsOnline } from "./NetworkListener";
 
 /**
@@ -117,6 +121,9 @@ const syncRow = async (row) => {
         serverCheckinId: outcome.serverCheckinId,
         serverResponse: outcome.response,
       });
+      // Proof the endpoint is there and answering, which is what turns offline
+      // attendance back on after a deploy — nobody has to tell the app.
+      markOfflineSyncSupported();
       console.log(`${LOG_PREFIX} Synced #${row.id}`, outcome.serverCheckinId);
 
       // The row is already committed as synced before this runs, and
@@ -140,6 +147,8 @@ const syncRow = async (row) => {
         duplicate: true,
         duplicateMessage: outcome.message,
       });
+      // A duplicate is still the endpoint answering.
+      markOfflineSyncSupported();
       console.log(
         `${LOG_PREFIX} Duplicate detected for #${row.id}; treating as synced`,
       );
@@ -163,6 +172,10 @@ const syncRow = async (row) => {
 
     // Blocked: the server cannot take it *yet*. Kept, and retried on the slow
     // ladder until it can.
+    if (outcome.failureClass === FAILURE_CLASS.ENDPOINT_MISSING) {
+      markOfflineSyncUnsupported();
+    }
+
     const { nextAttemptAt } = await markBlocked({
       id: row.id,
       failureClass: outcome.failureClass,
@@ -207,6 +220,10 @@ const syncRow = async (row) => {
     }
 
     if (kind === FAILURE_KIND.BLOCKED) {
+      if (failureClass === FAILURE_CLASS.ENDPOINT_MISSING) {
+        markOfflineSyncUnsupported();
+      }
+
       await markBlocked({
         id: row.id,
         failureClass,

@@ -23,6 +23,12 @@ import {
   resolveOfflinePhase,
   SYNCED_VISIBLE_MS,
 } from "../utils/offlineStatus";
+import {
+  addCapabilityListener,
+  getOfflineCapability,
+  hydrateOfflineCapability,
+} from "../services/offline/offlineCapability";
+import useOfflineSyncAlerts from "./useOfflineSyncAlerts";
 
 /**
  * Drives the connectivity banner.
@@ -37,6 +43,8 @@ import {
 export default function useOfflineStatus() {
   const isLoggedIn = useSelector(selectIsLoggedIn);
   const employeeCode = useSelector(selectEmployeeCode);
+  const { enabled: alertsEnabled } = useOfflineSyncAlerts();
+  const [capability, setCapability] = useState(() => getOfflineCapability());
 
   const [online, setOnline] = useState(() => readIsOnline());
   const [syncing, setSyncing] = useState(() => readIsSyncing());
@@ -90,6 +98,19 @@ export default function useOfflineStatus() {
       // reassurance, and a count it cannot get is better omitted than guessed.
     }
   }, [employeeCode]);
+
+  // Whether this server supports offline attendance at all.
+  useEffect(() => {
+    hydrateOfflineCapability()
+      .then((value) => {
+        if (isMountedRef.current) setCapability(value);
+      })
+      .catch(() => {});
+
+    return addCapabilityListener((value) => {
+      if (isMountedRef.current) setCapability(value);
+    });
+  }, []);
 
   // Connectivity. Seeded from a real fetch because the cached value can predate
   // the listener starting, and the banner's whole point is being correct at the
@@ -145,10 +166,22 @@ export default function useOfflineStatus() {
     return addQueueChangeListener(refreshCounts);
   }, [refreshCounts]);
 
+  /**
+   * Two reasons the administrator banner goes quiet, and neither hides a
+   * correction — that one is the employee's to act on and always shows.
+   *
+   *  - The server has no offline endpoint at all. Then the banner is not a
+   *    warning, it is a permanent property of the deployment that every
+   *    employee sees forever and none of them can clear. The queue still keeps
+   *    and retries the records, and Attendance History still shows each one.
+   *  - The employee turned the alerts off in Profile.
+   */
+  const suppressAdminBanner = capability === false || !alertsEnabled;
+
   const phase = resolveOfflinePhase({
     online,
     syncing,
-    blocked: counts.blockedCount,
+    blocked: suppressAdminBanner ? 0 : counts.blockedCount,
     rejected: counts.rejectedCount,
     justSyncedAt,
   });
@@ -190,6 +223,9 @@ export default function useOfflineStatus() {
     content,
     /** Whether tapping the banner should open the detail sheet. */
     actionable: !!content?.actionable,
+    /** null until something has been learned; false = no offline endpoint. */
+    offlineSyncSupported: capability,
+    adminBannerSuppressed: suppressAdminBanner && counts.blockedCount > 0,
     ...counts,
     refreshCounts,
     loadUnresolvedRows,
