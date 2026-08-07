@@ -49,6 +49,40 @@ let activeRun = null;
 /** Set once per app session, so stuck rows are released exactly once. */
 let hasReleasedStuckRows = false;
 
+/** Lifecycle phases a listener is told about. */
+export const SYNC_PHASE = {
+  START: "start",
+  FINISH: "finish",
+};
+
+const syncListeners = new Set();
+
+/**
+ * Registers a callback for the drain's lifecycle.
+ *
+ * `notifyQueueChanged` already reports that rows changed, but not that a run is
+ * *in progress* — and "Syncing…" is a state the UI has to be able to enter and
+ * leave, not infer. START fires only once real work is claimed, so a run that
+ * finds nothing due stays invisible instead of flickering a spinner.
+ *
+ * @param {(event: {phase: string, summary?: object}) => void} listener
+ * @returns {() => void} unsubscribe
+ */
+export const addSyncListener = (listener) => {
+  syncListeners.add(listener);
+  return () => syncListeners.delete(listener);
+};
+
+const notifySync = (event) => {
+  syncListeners.forEach((listener) => {
+    try {
+      listener(event);
+    } catch (error) {
+      console.log(`${LOG_PREFIX} Sync listener failed:`, error?.message);
+    }
+  });
+};
+
 /** Outcome of one row. */
 const ROW_OUTCOME = {
   SYNCED: "synced",
@@ -195,6 +229,8 @@ export const syncPendingAttendance = async ({ trigger = "manual" } = {}) => {
       trigger,
     };
 
+    let announcedStart = false;
+
     try {
       // Rows left `syncing` by a killed process would otherwise never be
       // claimed again. Once per session is enough — within a session the
@@ -217,6 +253,13 @@ export const syncPendingAttendance = async ({ trigger = "manual" } = {}) => {
       for (let processed = 0; processed < MAX_ROWS_PER_RUN; processed += 1) {
         const row = await claimNextPending();
         if (!row) break;
+
+        // Announced on the first claimed row, not at the top of the run: a drain
+        // that finds nothing due should not flash "Syncing…" at the user.
+        if (processed === 0) {
+          announcedStart = true;
+          notifySync({ phase: SYNC_PHASE.START });
+        }
 
         const outcome = await syncRow(row);
 
@@ -252,6 +295,9 @@ export const syncPendingAttendance = async ({ trigger = "manual" } = {}) => {
       return summary;
     } finally {
       activeRun = null;
+      // Paired with START, and only when START was sent — a listener must never
+      // be left holding a "syncing" state it was never told to leave.
+      if (announcedStart) notifySync({ phase: SYNC_PHASE.FINISH, summary });
     }
   })();
 
@@ -265,10 +311,13 @@ export const isSyncing = () => activeRun !== null;
 export const resetSyncService = () => {
   activeRun = null;
   hasReleasedStuckRows = false;
+  syncListeners.clear();
 };
 
 export default {
   SYNCED_RETENTION_MS,
+  SYNC_PHASE,
+  addSyncListener,
   isSyncing,
   resetSyncService,
   syncPendingAttendance,

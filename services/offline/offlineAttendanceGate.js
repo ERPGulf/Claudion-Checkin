@@ -165,9 +165,18 @@ export const evaluateOfflineAttendance = async ({
 }) => {
   const config = await readAttendanceConfig();
 
-  // Never been online: there are no rules to check against, so there is nothing
-  // to accept. This is the one case where offline attendance says no outright.
-  if (!config?.locations?.length) {
+  // Never been online: no rules were ever downloaded, so there is nothing to
+  // validate against and nothing to accept. This is the one case where offline
+  // attendance says no outright.
+  //
+  // The test is "was configuration downloaded", NOT "are there any locations in
+  // it". Those are different facts and conflating them was a real bug: an
+  // employee with `restrict_location = 0` has no reporting locations *by
+  // design*, so their perfectly good cached configuration carries an empty
+  // `locations` array — and every one of them was told to go online and
+  // download a configuration they already had. Whether locations are needed is
+  // decided below, by the policy, not here.
+  if (!config) {
     return {
       allowed: false,
       reason: "no-config",

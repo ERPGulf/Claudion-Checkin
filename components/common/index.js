@@ -9,6 +9,8 @@ import FeatureTile from './FeatureTile';
 import ModuleCard from './ModuleCard';
 import EmptyState from './EmptyState';
 import StatusBanner from './StatusBanner';
+// App-wide connectivity chip. Mounted once in App.js, not per screen.
+import OfflineBanner from './OfflineBanner';
 import ThemedStatusBar from './ThemedStatusBar';
 import SubmitButton from './SubmitButton';
 import ResetTokenButton from './ResetTokenButton';
@@ -45,6 +47,7 @@ export {
   ModuleCard,
   EmptyState,
   StatusBanner,
+  OfflineBanner,
   ThemedStatusBar,
   SubmitButton,
   ResetTokenButton,

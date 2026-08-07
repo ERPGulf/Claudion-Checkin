@@ -41,8 +41,12 @@ import {
   selectAutoAttendanceActive,
   selectAutoAttendanceFullActions,
 } from "../redux/Slices/AutoAttendanceSlice";
-import { submitManualAttendance } from "../services/offline/AttendanceQueueService";
+import {
+  getQueueCounts,
+  submitManualAttendance,
+} from "../services/offline/AttendanceQueueService";
 import { resolveNearestOffice } from "../services/offline/offlineAttendanceGate";
+import { formatOfflineTimestamp } from "../utils/serverClock";
 
 /**
  * All Attendance Action behaviour: session/break state, the location gate, the
@@ -140,6 +144,30 @@ export default function useAttendanceAction() {
     [checkinLocation, dispatch],
   );
 
+  /**
+   * Paints the UI from the durable local record — the device's own answer to
+   * "am I checked in?", which does not depend on a request succeeding.
+   *
+   * Only ever opens the session in Redux, never closes it: the callers below use
+   * this when the server's answer is not admissible evidence, and in that
+   * situation the absence of a session is not a fact either.
+   */
+  const mirrorLocalSession = useCallback(async () => {
+    const session = await readSession();
+
+    if (session.status === SESSION_STATUS.CHECKED_IN) {
+      dispatch(
+        setCheckin({
+          checkinTime: session.startedAt,
+          location: checkinLocation,
+          sessionOrigin: session.origin,
+        }),
+      );
+    }
+
+    return session;
+  }, [checkinLocation, dispatch]);
+
   const syncCheckinFromStatus = useCallback(
     async (status, fetchedAt) => {
       // The status request never reached the server, so it says nothing about
@@ -147,19 +175,8 @@ export default function useAttendanceAction() {
       // check-in was reverted the moment this screen refocused: the UI went back
       // to "Check in", the durable record went CHECKED_OUT, a second tap queued a
       // duplicate punch, and a later geofence EXIT found no session to close.
-      // Mirror the local record instead — it is the source of truth offline.
       if (status?.unavailable) {
-        const session = await readSession();
-
-        if (session.status === SESSION_STATUS.CHECKED_IN) {
-          dispatch(
-            setCheckin({
-              checkinTime: session.startedAt,
-              location: checkinLocation,
-              sessionOrigin: session.origin,
-            }),
-          );
-        }
+        await mirrorLocalSession();
         return;
       }
 
@@ -172,6 +189,37 @@ export default function useAttendanceAction() {
         reduxCheckinTime: checkinTime,
         lastCheckoutTime,
       });
+
+      // The server answered, and it said there is no open session — but it
+      // cannot have seen punches still sitting in the outbox, so that answer is
+      // not evidence about them. This is the reconnect race, and it is nastier
+      // than the offline case because everything looks healthy: the network is
+      // back, the request succeeds, and it legitimately returns "checked out"
+      // simply because the drain has not uploaded the check-in yet. Reconciling
+      // on it closes the session, the button flips back to "Check in", and the
+      // next tap files a duplicate at a fresh timestamp — a different dedupe key,
+      // so the UNIQUE index does not catch it either.
+      //
+      // Only the closing direction needs this. A queued check-OUT cannot be
+      // undone by a stale "still checked in", because `reconcileSessionFromServer`
+      // already rejects a start that predates `lastCheckoutTime`.
+      if (!resolvedStart) {
+        // Fail open. A queue read that throws must not abort the whole status
+        // sync — reconciling is the pre-existing behaviour and the safer default
+        // when the outbox cannot be inspected, since a database that cannot be
+        // read is also one nothing could have been queued into.
+        const unsynced = await getQueueCounts(employeeCode)
+          .then((counts) => counts?.unsynced ?? 0)
+          .catch((error) => {
+            console.log("Queue count failed, reconciling anyway:", error?.message);
+            return 0;
+          });
+
+        if (unsynced > 0) {
+          const session = await mirrorLocalSession();
+          if (session.status === SESSION_STATUS.CHECKED_IN) return;
+        }
+      }
 
       // Push the server's verdict into the session state machine before
       // mirroring it into Redux, so the geofence listeners — which read the
@@ -198,7 +246,7 @@ export default function useAttendanceAction() {
 
       dispatch(resetCheckin());
     },
-    [checkinLocation, checkinTime, dispatch],
+    [checkinLocation, checkinTime, dispatch, employeeCode, mirrorLocalSession],
   );
 
   useEffect(() => {
@@ -254,7 +302,7 @@ export default function useAttendanceAction() {
       if (!isMountedRef.current) return;
       Toast.show({
         type: "error",
-        text1: ":warning: Location error",
+        text1: "Location error",
         text2: error.message,
       });
       setInTarget(false);
@@ -270,9 +318,26 @@ export default function useAttendanceAction() {
   // Update date & time every 10 seconds
   useEffect(() => {
     const loadServerTime = async () => {
-      const server = await getServerTime();
+      // `getServerTime` was previously called bare: offline it rejects, the
+      // rejection escapes the interval callback unhandled, and the row renders
+      // blank forever. A clock is the one thing on this screen the device can
+      // always answer, so it falls back to the device clock corrected by the
+      // last measured server offset — the same value a queued punch is stamped
+      // with, so the row and the record agree.
+      try {
+        const server = await getServerTime();
+        if (!isMountedRef.current) return;
+        if (server) {
+          setDateTime(updateDateTime(server));
+          return;
+        }
+      } catch {
+        // Fall through to the local clock.
+      }
+
+      const local = await formatOfflineTimestamp();
       if (!isMountedRef.current) return;
-      if (server) setDateTime(updateDateTime(server));
+      setDateTime(updateDateTime(local));
     };
 
     loadServerTime();
@@ -494,7 +559,7 @@ export default function useAttendanceAction() {
         if (outcome.status === TRANSITION_RESULT.FAILED) {
           Toast.show({
             type: "error",
-            text1: ":warning: Action blocked",
+            text1: "Action blocked",
             text2: outcome.response?.message,
           });
           return;
@@ -555,7 +620,7 @@ export default function useAttendanceAction() {
 
         Toast.show({
           type: "error",
-          text1: ":warning: Failed",
+          text1: "Failed",
           text2:
             error?.response?.data?.message ||
             error?.response?.data ||
@@ -854,7 +919,7 @@ export default function useAttendanceAction() {
     } catch (error) {
       Toast.show({
         type: "error",
-        text1: ":warning: Action failed",
+        text1: "Action failed",
         text2: error.message,
       });
     }

@@ -26,6 +26,7 @@ let currentState = {
 
 let unsubscribe = null;
 const reconnectListeners = new Set();
+const changeListeners = new Set();
 
 /** Reachability if NetInfo has determined it, connectivity otherwise. */
 export const isStateOnline = (state) => {
@@ -88,6 +89,34 @@ const notifyReconnect = (state) => {
 };
 
 /**
+ * Registers a callback for connectivity changes in BOTH directions.
+ *
+ * `addReconnectListener` fires only on offline → online, because that is all the
+ * sync triggers need. The UI needs the other edge too — something has to be told
+ * when to *show* the offline banner, not just when to hide it.
+ *
+ * Also edge-triggered: a wifi handover that emits several events without
+ * changing the answer notifies nobody.
+ *
+ * @param {(online: boolean, state: object) => void} listener
+ * @returns {() => void} unsubscribe
+ */
+export const addNetworkChangeListener = (listener) => {
+  changeListeners.add(listener);
+  return () => changeListeners.delete(listener);
+};
+
+const notifyChange = (online, state) => {
+  changeListeners.forEach((listener) => {
+    try {
+      listener(online, state);
+    } catch (error) {
+      console.log("[NetworkListener] Change listener failed:", error?.message);
+    }
+  });
+};
+
+/**
  * Starts watching. Idempotent — a second call while already started is a no-op
  * rather than a second subscription, so it is safe to call from a component
  * effect that re-runs.
@@ -112,12 +141,16 @@ export const startNetworkListener = () => {
 
     const nowOnline = isStateOnline(currentState);
 
-    if (!wasOnline && nowOnline) {
-      console.log("[NetworkListener] Back online", currentState.type);
-      notifyReconnect(currentState);
-    } else if (wasOnline && !nowOnline) {
-      console.log("[NetworkListener] Offline");
+    if (wasOnline !== nowOnline) {
+      console.log(
+        nowOnline
+          ? `[NetworkListener] Back online (${currentState.type})`
+          : "[NetworkListener] Offline",
+      );
+      notifyChange(nowOnline, currentState);
     }
+
+    if (!wasOnline && nowOnline) notifyReconnect(currentState);
   });
 
   return stopNetworkListener;
@@ -134,6 +167,7 @@ export const stopNetworkListener = () => {
 export const resetNetworkListener = () => {
   stopNetworkListener();
   reconnectListeners.clear();
+  changeListeners.clear();
   currentState = {
     isConnected: true,
     isInternetReachable: null,
@@ -142,6 +176,7 @@ export const resetNetworkListener = () => {
 };
 
 export default {
+  addNetworkChangeListener,
   addReconnectListener,
   fetchIsOnline,
   getNetworkState,

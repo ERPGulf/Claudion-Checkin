@@ -18,6 +18,7 @@ import * as Updates from "expo-updates";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import UpdateBanner from "./components/UpdateBanner";
 import ThemedStatusBar from "./components/common/ThemedStatusBar";
+import OfflineBanner from "./components/common/OfflineBanner";
 import AutoAttendanceBootstrap from "./components/AutoAttendanceBootstrap";
 import OfflineAttendanceBootstrap from "./components/OfflineAttendanceBootstrap";
 import { selectIsLoggedIn } from "./redux/Slices/AuthSlice";
@@ -161,6 +162,9 @@ export default function App() {
             <AutoAttendanceBootstrap />
             <OfflineAttendanceBootstrap />
             <Navigator />
+            {/* Above the navigator so it floats over any screen, below AppToast
+                so a transient toast still wins the top of the screen. */}
+            <OfflineBanner />
             <UpdateBanner />
             <ThemedStatusBar />
             <AppToast />

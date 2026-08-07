@@ -139,13 +139,18 @@ describe("refreshAttendanceConfig", () => {
     expect((await readAttendanceConfig()).locations).toHaveLength(1);
   });
 
-  it("does cache an empty list when there was nothing to protect", async () => {
+  // An employee with `restrict_location = 0` has no reporting locations by
+  // design, so their cached configuration carries an empty array. Reading that
+  // as "nothing downloaded" locked every unrestricted employee out of offline
+  // attendance — they were told to go online and fetch a configuration they
+  // already had.
+  it("caches an empty list, and still counts it as configuration", async () => {
     fetchEmployeeData.mockResolvedValue(employeeResponse({ employee_locations: [] }));
 
     const result = await refreshAttendanceConfig("TDI0167");
 
     expect(result.refreshed).toBe(true);
-    expect(await hasAttendanceConfig()).toBe(false);
+    expect(await hasAttendanceConfig()).toBe(true);
   });
 
   it("does not spend a request with no employee code", async () => {

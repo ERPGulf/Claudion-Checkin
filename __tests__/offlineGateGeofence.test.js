@@ -40,6 +40,80 @@ beforeEach(async () => {
   await AsyncStorage.setItem(CONFIG_KEY, JSON.stringify(restrictedConfig));
 });
 
+/**
+ * The tenant that does not restrict location at all.
+ *
+ * Reproduces a real failure from an Android emulator: check in online, enable
+ * aeroplane mode, try to check out — and get "Offline attendance is unavailable
+ * until attendance configuration has been downloaded". The configuration WAS
+ * downloaded. It just contained no reporting locations, because
+ * `restrict_location = 0` means there are none to configure, and the guard read
+ * an empty array as "nothing cached".
+ */
+describe("an employee with no location restriction", () => {
+  const unrestrictedConfig = {
+    employeeId: "TDI0167",
+    employeeDocname: "HR-EMP-00011",
+    locations: [],
+    rules: { restrictLocation: 0, unrestrictedCheckoutLocation: 0 },
+    lastUpdated: Date.now(),
+  };
+
+  beforeEach(async () => {
+    await AsyncStorage.setItem(CONFIG_KEY, JSON.stringify(unrestrictedConfig));
+  });
+
+  it("can check out offline", async () => {
+    const gate = await evaluateOfflineAttendance({ type: "OUT" });
+
+    expect(gate.allowed).toBe(true);
+    expect(gate.reason).toBe("unrestricted");
+  });
+
+  it("can check in offline", async () => {
+    expect((await evaluateOfflineAttendance({ type: "IN" })).allowed).toBe(true);
+  });
+
+  it("is not blocked when no position can be obtained either", async () => {
+    // Nothing to measure against, so a missing fix is not a blocker — the log
+    // just goes out untagged, exactly as the online path allows.
+    Location.getCurrentPositionAsync.mockRejectedValue(new Error("no fix"));
+
+    const gate = await evaluateOfflineAttendance({ type: "OUT" });
+
+    expect(gate.allowed).toBe(true);
+    expect(gate.location).toBeNull();
+  });
+
+  it("still refuses when nothing was ever downloaded", async () => {
+    await AsyncStorage.clear();
+
+    const gate = await evaluateOfflineAttendance({ type: "OUT" });
+
+    expect(gate.allowed).toBe(false);
+    expect(gate.reason).toBe("no-config");
+  });
+});
+
+/**
+ * The mirror case: the policy DOES require a location, but none are configured.
+ * That is a misconfiguration, not an uncached device, and it says so.
+ */
+describe("a restricted employee with no locations configured", () => {
+  it("refuses, but blames the configuration rather than the download", async () => {
+    await AsyncStorage.setItem(
+      CONFIG_KEY,
+      JSON.stringify({ ...restrictedConfig, locations: [] }),
+    );
+
+    const gate = await evaluateOfflineAttendance({ type: "IN" });
+
+    expect(gate.allowed).toBe(false);
+    expect(gate.reason).toBe("no-usable-location");
+    expect(gate.message).toBe("Reporting locations are not configured");
+  });
+});
+
 describe("a manual punch outside the radius", () => {
   it("is refused, which is the whole point of the gate", async () => {
     const gate = await evaluateOfflineAttendance({ type: "OUT" });

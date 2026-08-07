@@ -144,11 +144,16 @@ export const readAttendanceConfig = async () => {
   }
 };
 
-/** Whether offline attendance is possible at all on this device. */
-export const hasAttendanceConfig = async () => {
-  const config = await readAttendanceConfig();
-  return !!config?.locations?.length;
-};
+/**
+ * Whether configuration has ever been downloaded — the precondition for offline
+ * attendance.
+ *
+ * Deliberately NOT "are there locations". An employee with
+ * `restrict_location = 0` has none by design, and their configuration is
+ * complete without them; whether locations are *required* is a policy question
+ * the gate answers, not a completeness question this answers.
+ */
+export const hasAttendanceConfig = async () => !!(await readAttendanceConfig());
 
 /**
  * Downloads the configuration and replaces the cache — but only if the download
