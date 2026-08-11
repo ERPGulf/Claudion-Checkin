@@ -101,11 +101,11 @@ export const LoanApplicationRequest = async (loanData) => {
       file2: loanData.file2,
     });
 
+    // Do not set Content-Type here. React Native derives it from the FormData
+    // body along with the multipart boundary; on iOS an explicit header is sent
+    // verbatim, so the boundary is missing and the server parses no fields.
     const response = await apiClient.post(url, formData, {
-      headers: {
-        ...buildHeaders(token),
-        "Content-Type": "multipart/form-data",
-      },
+      headers: buildHeaders(token),
     });
 
     console.log(
