@@ -19,8 +19,6 @@ export const getLoanProducts = async () => {
       },
     );
 
-    // Endpoint currently returns the array directly, but other employee_app
-    // methods nest it under message/data — accept all three shapes.
     const payload = response.data;
 
     if (Array.isArray(payload)) return payload;
@@ -28,6 +26,7 @@ export const getLoanProducts = async () => {
     return payload?.message || payload?.data || [];
   } catch (error) {
     console.log("Loan Products Error:", error.response?.data || error);
+
     throw new Error(parseError(error, "Unable to fetch loan products."));
   }
 };
@@ -52,6 +51,25 @@ export const LoanApplicationRequest = async (loanData) => {
     formData.append("amount", String(loanData.amount));
     formData.append("reason", loanData.reason);
 
+    // ===========================
+    // Repayment Details
+    // ===========================
+
+    if (
+      loanData.repayment_amount !== undefined &&
+      loanData.repayment_amount !== null
+    ) {
+      formData.append("repayment_amount", String(loanData.repayment_amount));
+    }
+
+    if (loanData.repayment_method) {
+      formData.append("repayment_method", loanData.repayment_method);
+    }
+
+    // ===========================
+    // File 1
+    // ===========================
+
     if (loanData.file1) {
       formData.append("file1", {
         uri: loanData.file1.uri,
@@ -60,7 +78,10 @@ export const LoanApplicationRequest = async (loanData) => {
       });
     }
 
-    // Keep "file 2" because that's what your backend/Postman currently uses.
+    // ===========================
+    // File 2
+    // ===========================
+
     if (loanData.file2) {
       formData.append("file 2", {
         uri: loanData.file2.uri,
@@ -68,11 +89,14 @@ export const LoanApplicationRequest = async (loanData) => {
         type: loanData.file2.mimeType || "application/octet-stream",
       });
     }
+
     console.log("Loan Payload:", {
       employee: employeeCode,
       product_name: loanData.product_name,
       amount: loanData.amount,
       reason: loanData.reason,
+      repayment_amount: loanData.repayment_amount,
+      repayment_method: loanData.repayment_method,
       file1: loanData.file1,
       file2: loanData.file2,
     });
@@ -96,7 +120,9 @@ export const LoanApplicationRequest = async (loanData) => {
       "Loan Application Error:",
       error?.response?.status ?? error?.code ?? "no status",
       JSON.stringify(
-        error?.response?.data ?? { message: error?.message },
+        error?.response?.data ?? {
+          message: error?.message,
+        },
         null,
         2,
       ),
