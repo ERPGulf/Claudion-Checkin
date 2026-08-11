@@ -11,7 +11,12 @@ import { COLORS, SIZES } from "../constants";
 
 export default function LoanApplication() {
   const navigation = useNavigation();
+
   const [resetFormFlag, setResetFormFlag] = useState(false);
+
+  /* ===========================
+     Header
+  =========================== */
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -19,8 +24,12 @@ export default function LoanApplication() {
       headerShadowVisible: false,
       headerTitle: "Loan Application",
       headerTitleAlign: "center",
+
       headerLeft: () => (
-        <TouchableOpacity onPress={() => navigation.goBack()}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={{ paddingLeft: 8 }}
+        >
           <Entypo
             name="chevron-left"
             size={SIZES.xxxLarge - 5}
@@ -31,34 +40,51 @@ export default function LoanApplication() {
     });
   }, [navigation]);
 
+  /* ===========================
+     Submit Loan Application
+  =========================== */
+
   const { mutateAsync: submitRequest, isPending } = useMutation({
     mutationFn: LoanApplicationRequest,
 
-    onSuccess: () => {
+    onSuccess: (response) => {
+      console.log(
+        "Loan application success:",
+        JSON.stringify(response, null, 2),
+      );
+
       Alert.alert("Success", "Loan application submitted successfully.", [
         {
           text: "OK",
-          onPress: () => setResetFormFlag((prev) => !prev),
+          onPress: () => {
+            setResetFormFlag((prev) => !prev);
+          },
         },
       ]);
     },
 
     onError: (err) => {
-      Alert.alert(
-        "Error",
-        err.message || "Failed to submit loan application."
-      );
+      console.log("Loan application mutation error:", err);
+
+      Alert.alert("Error", err.message || "Failed to submit loan application.");
     },
   });
 
   return (
     <SafeAreaView
-      style={{ flex: 1, backgroundColor: COLORS.white }}
+      style={{
+        flex: 1,
+        backgroundColor: COLORS.white,
+      }}
       edges={["bottom"]}
     >
       <ScrollView
         className="flex-1 bg-white"
-        contentContainerStyle={{ padding: 16 }}
+        contentContainerStyle={{
+          padding: 16,
+          paddingBottom: 30,
+        }}
+        showsVerticalScrollIndicator={false}
       >
         <LoanApplicationForm
           onSubmit={submitRequest}
