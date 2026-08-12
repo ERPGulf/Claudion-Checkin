@@ -1,6 +1,7 @@
 import apiClient from "./apiClient";
 import { getAuthContext, buildHeaders } from "./authHelper";
 import { parseError } from "./errorHelper";
+import { sanitizeAttachment } from "../../utils/fileName";
 
 /* ===========================
    Get Loan Products
@@ -70,11 +71,17 @@ export const LoanApplicationRequest = async (loanData) => {
     // File 1
     // ===========================
 
-    if (loanData.file1) {
+    // Frappe caps File.file_name at 140 characters and measures the
+    // percent-encoded form, so names are sanitized and truncated here before
+    // they reach the server.
+    const file1 = sanitizeAttachment(loanData.file1, "attachment-1");
+    const file2 = sanitizeAttachment(loanData.file2, "attachment-2");
+
+    if (file1) {
       formData.append("file1", {
-        uri: loanData.file1.uri,
-        name: loanData.file1.name,
-        type: loanData.file1.mimeType || "application/octet-stream",
+        uri: file1.uri,
+        name: file1.name,
+        type: file1.type,
       });
     }
 
@@ -82,11 +89,11 @@ export const LoanApplicationRequest = async (loanData) => {
     // File 2
     // ===========================
 
-    if (loanData.file2) {
+    if (file2) {
       formData.append("file 2", {
-        uri: loanData.file2.uri,
-        name: loanData.file2.name,
-        type: loanData.file2.mimeType || "application/octet-stream",
+        uri: file2.uri,
+        name: file2.name,
+        type: file2.type,
       });
     }
 
@@ -97,8 +104,8 @@ export const LoanApplicationRequest = async (loanData) => {
       reason: loanData.reason,
       repayment_amount: loanData.repayment_amount,
       repayment_method: loanData.repayment_method,
-      file1: loanData.file1,
-      file2: loanData.file2,
+      file1,
+      file2,
     });
 
     // Do not set Content-Type here. React Native derives it from the FormData
