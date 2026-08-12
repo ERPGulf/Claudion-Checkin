@@ -275,7 +275,7 @@ function LoanApplicationForm({ onSubmit, isLoading, resetSignal }) {
 
         {/* Repayment Amount */}
 
-        <Label text="Repayment Amount" required />
+        <Label text="Repayment Amount (per month)" required />
 
         <TextInput
           placeholder="Enter repayment amount"
