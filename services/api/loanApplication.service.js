@@ -52,10 +52,6 @@ export const LoanApplicationRequest = async (loanData) => {
     formData.append("amount", String(loanData.amount));
     formData.append("reason", loanData.reason);
 
-    // ===========================
-    // Repayment Details
-    // ===========================
-
     if (
       loanData.repayment_amount !== undefined &&
       loanData.repayment_amount !== null
@@ -67,14 +63,8 @@ export const LoanApplicationRequest = async (loanData) => {
       formData.append("repayment_method", loanData.repayment_method);
     }
 
-    // ===========================
-    // File 1
-    // ===========================
-
-    // Frappe caps File.file_name at 140 characters and measures the
-    // percent-encoded form, so names are sanitized and truncated here before
-    // they reach the server.
     const file1 = sanitizeAttachment(loanData.file1, "attachment-1");
+
     const file2 = sanitizeAttachment(loanData.file2, "attachment-2");
 
     if (file1) {
@@ -85,10 +75,6 @@ export const LoanApplicationRequest = async (loanData) => {
       });
     }
 
-    // ===========================
-    // File 2
-    // ===========================
-
     if (file2) {
       formData.append("file 2", {
         uri: file2.uri,
@@ -97,48 +83,46 @@ export const LoanApplicationRequest = async (loanData) => {
       });
     }
 
-    console.log("Loan Payload:", {
-      employee: employeeCode,
-      product_name: loanData.product_name,
-      amount: loanData.amount,
-      reason: loanData.reason,
-      repayment_amount: loanData.repayment_amount,
-      repayment_method: loanData.repayment_method,
-      file1,
-      file2,
+    console.log("Loan Request URL:", url);
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      body: formData,
     });
 
-    // Do not set Content-Type here. React Native derives it from the FormData
-    // body along with the multipart boundary; on iOS an explicit header is sent
-    // verbatim, so the boundary is missing and the server parses no fields.
-    const response = await apiClient.post(url, formData, {
-      headers: buildHeaders(token),
-    });
+    const responseText = await response.text();
 
-    console.log(
-      "Loan Application Response:",
-      response.status,
-      JSON.stringify(response.data, null, 2),
-    );
+    console.log("Loan HTTP Status:", response.status);
+    console.log("Loan Response:", responseText);
 
-    return response.data;
+    let data;
+
+    try {
+      data = JSON.parse(responseText);
+    } catch {
+      throw new Error("Invalid response from server.");
+    }
+
+    if (!response.ok) {
+      throw new Error(
+        data?.message || `Loan request failed with status ${response.status}`,
+      );
+    }
+
+    if (data?.status === "error") {
+      throw new Error(data?.message || "Loan application failed.");
+    }
+
+    return data;
   } catch (error) {
-    console.log(
-      "Loan Application Error:",
-      error?.response?.status ?? error?.code ?? "no status",
-      JSON.stringify(
-        error?.response?.data ?? {
-          message: error?.message,
-        },
-        null,
-        2,
-      ),
-    );
+    console.log("Loan Application Error:", error);
 
-    throw new Error(parseError(error, "Unable to submit loan application."));
+    throw new Error(error?.message || "Unable to submit loan application.");
   }
 };
-
 export default {
   getLoanProducts,
   LoanApplicationRequest,
