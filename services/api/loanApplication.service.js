@@ -111,8 +111,14 @@ export const LoanApplicationRequest = async (loanData) => {
     // Do not set Content-Type here. React Native derives it from the FormData
     // body along with the multipart boundary; on iOS an explicit header is sent
     // verbatim, so the boundary is missing and the server parses no fields.
+    // const response = await apiClient.post(url, formData, {
+    //   headers: buildHeaders(token),
+    // });
     const response = await apiClient.post(url, formData, {
-      headers: buildHeaders(token),
+      headers: {
+        ...buildHeaders(token),
+        "Content-Type": "multipart/form-data",
+      },
     });
 
     console.log(
@@ -123,19 +129,18 @@ export const LoanApplicationRequest = async (loanData) => {
 
     return response.data;
   } catch (error) {
-    console.log(
-      "Loan Application Error:",
-      error?.response?.status ?? error?.code ?? "no status",
-      JSON.stringify(
-        error?.response?.data ?? {
-          message: error?.message,
-        },
-        null,
-        2,
-      ),
-    );
+    console.log("========== LOAN API ERROR ==========");
+    console.log("message:", error?.message);
+    console.log("code:", error?.code);
+    console.log("status:", error?.response?.status);
+    console.log("response:", error?.response?.data);
+    console.log("url:", error?.config?.url);
+    console.log("method:", error?.config?.method);
+    console.log("headers:", error?.config?.headers);
+    console.log("request exists:", !!error?.request);
+    console.log("====================================");
 
-    throw new Error(parseError(error, "Unable to submit loan application."));
+    throw error;
   }
 };
 
