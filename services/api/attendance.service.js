@@ -2,9 +2,10 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getPreciseDistance } from "geolib";
 import * as Location from "expo-location";
-import { format } from "date-fns";
 import apiClient from "./apiClient";
 import { cleanBaseUrl } from "./utils";
+import { getAuthContext, buildHeaders } from "./authHelper";
+import { parseError } from "./errorHelper";
 import {
   normalizeCustomIn,
   toTimestampMs,
@@ -309,7 +310,6 @@ export const userCheckIn = async ({ employeeCode, type, locationData }) => {
         currentLocation.locationName = nearest.locationName;
       } else {
         currentLocation.locationName = `${currentLocation.latitude.toFixed(6)}, ${currentLocation.longitude.toFixed(6)}`;
-        
       }
     }
     // Build base payload
@@ -770,6 +770,41 @@ export const uploadAttendanceAttachment = async (file, docname) => {
     };
   }
 };
+export const getAttendanceRequests = async () => {
+  try {
+    const { baseUrl, token, employeeCode } = await getAuthContext();
+
+    if (!employeeCode) {
+      return {
+        error: "Session expired. Please login again.",
+      };
+    }
+
+    const url = `${baseUrl}/api/method/employee_app.employee_list.list_attendance_request`;
+
+    const response = await apiClient.get(url, {
+      headers: buildHeaders(token),
+    });
+
+    if (!Array.isArray(response.data?.message)) {
+      return {
+        error: "Invalid attendance request response.",
+      };
+    }
+
+    return {
+      message: response.data.message,
+    };
+  } catch (error) {
+    console.log("GET ATTENDANCE REQUESTS ERROR:", error);
+
+    console.log("GET ATTENDANCE REQUESTS RESPONSE:", error?.response?.data);
+
+    return {
+      error: parseError(error, "Unable to load attendance requests."),
+    };
+  }
+};
 export default {
   getServerTime,
   getOfficeLocation,
@@ -782,4 +817,5 @@ export default {
   getTodayBreaks,
   createAttendanceRequest,
   uploadAttendanceAttachment,
+  getAttendanceRequests,
 };

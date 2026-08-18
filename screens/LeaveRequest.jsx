@@ -23,7 +23,15 @@ import Checkbox from "expo-checkbox";
 import { useSelector } from "react-redux";
 import { selectEmployeeCode } from "../redux/Slices/UserSlice";
 import { COLORS, SIZES } from "../constants";
-import { createLeaveApplication, getLeaveTypes } from "../services/api";
+import {
+  createLeaveApplication,
+  getLeaveTypes,
+  getLeaveApplications,
+} from "../services/api";
+import LeaveApplicationCard from "../components/LeaveApplication/LeaveApplicationCard";
+
+const PAGE_SIZE = 5;
+
 const REMOTE_AGREEMENT_TEXT = `I acknowledge and agree to the proposed remote work arrangement.
 
 I understand and agree to fulfil all my job responsibilities while working remotely, as outlined in my job description or as assigned by the Company.
@@ -57,6 +65,9 @@ export default function LeaveRequestScreen() {
   const [loading, setLoading] = useState(false);
   const [leaveTypes, setLeaveTypes] = useState([]);
   const [attachment, setAttachment] = useState(null);
+  const [leaveApplications, setLeaveApplications] = useState([]);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [isFetchingLeaves, setIsFetchingLeaves] = useState(false);
   const { pickFromCamera, pickFromGallery, pickDocument } =
     useAttachmentPicker();
 
@@ -66,6 +77,9 @@ export default function LeaveRequestScreen() {
   useEffect(() => {
     fetchLeaveTypes();
   }, []);
+  useEffect(() => {
+    fetchLeaveApplications();
+  }, [employeeCode]);
   useEffect(() => {
     if (leaveType !== "Remote") {
       setAgreed(false);
@@ -123,6 +137,36 @@ export default function LeaveRequestScreen() {
         setAttachment(file);
       }
     }, 400);
+  };
+  const fetchLeaveApplications = async () => {
+    if (!employeeCode) return;
+
+    try {
+      setIsFetchingLeaves(true);
+
+      const res = await getLeaveApplications();
+
+      if (res?.error) {
+        Alert.alert("Error", res.error);
+        return;
+      }
+
+      const sortedLeaves = (res?.message || []).sort(
+        (a, b) => new Date(b.posting_date) - new Date(a.posting_date),
+      );
+
+      setLeaveApplications(sortedLeaves);
+      setVisibleCount(PAGE_SIZE);
+    } catch (error) {
+      console.log("GET LEAVE APPLICATIONS ERROR:", error);
+
+      Alert.alert(
+        "Error",
+        error.message || "Unable to load leave applications.",
+      );
+    } finally {
+      setIsFetchingLeaves(false);
+    }
   };
 
   const handlePickGallery = () => {
@@ -253,6 +297,8 @@ export default function LeaveRequestScreen() {
           );
         }
       }
+
+      await fetchLeaveApplications();
 
       Alert.alert("Success", "Leave request submitted successfully!", [
         {
@@ -411,6 +457,42 @@ export default function LeaveRequestScreen() {
           loading={loading}
           onPress={handleSubmit}
         />
+        {/* Leave Application History */}
+
+        <Text className="text-lg font-semibold mt-6 mb-3 text-gray-800">
+          Leave Application History
+        </Text>
+
+        {isFetchingLeaves ? (
+          <View className="items-center py-6">
+            <ActivityIndicator size="small" color={COLORS.primary} />
+
+            <Text className="text-gray-500 mt-2">
+              Loading leave applications...
+            </Text>
+          </View>
+        ) : leaveApplications.length === 0 ? (
+          <Text className="text-gray-500 text-center mt-6">
+            No leave applications yet.
+          </Text>
+        ) : (
+          <>
+            {leaveApplications.slice(0, visibleCount).map((item, index) => (
+              <View key={item?.name || index} className="mb-4">
+                <LeaveApplicationCard leave={item} />
+              </View>
+            ))}
+
+            {visibleCount < leaveApplications.length && (
+              <TouchableOpacity
+                onPress={() => setVisibleCount((prev) => prev + PAGE_SIZE)}
+                className="p-3 mb-6 rounded bg-gray-300"
+              >
+                <Text className="text-center font-semibold">Load More</Text>
+              </TouchableOpacity>
+            )}
+          </>
+        )}
       </ScrollView>
       <AttachmentBottomSheet
         visible={isBottomSheetVisible}
