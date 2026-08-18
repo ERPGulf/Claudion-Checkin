@@ -143,8 +143,42 @@ export const LoanApplicationRequest = async (loanData) => {
     throw error;
   }
 };
+/**
+ * Get Loan Applications
+ */
+export const getLoanApplications = async () => {
+  try {
+    const { baseUrl, token, employeeCode } = await getAuthContext();
+
+    if (!employeeCode) {
+      return { error: "Session expired. Please login again." };
+    }
+
+    const url = `${baseUrl}/api/method/employee_app.employee_list.list_loan_application`;
+
+    const response = await apiClient.get(url, {
+      headers: buildHeaders(token),
+    });
+
+    if (!Array.isArray(response.data?.message)) {
+      return { error: "Invalid loan application response." };
+    }
+
+    return {
+      message: response.data.message,
+    };
+  } catch (error) {
+    console.log("GET LOAN APPLICATIONS ERROR:", error);
+    console.log("GET LOAN APPLICATIONS RESPONSE:", error?.response?.data);
+
+    return {
+      error: parseError(error, "Unable to load loan applications."),
+    };
+  }
+};
 
 export default {
   getLoanProducts,
   LoanApplicationRequest,
+  getLoanApplications,
 };

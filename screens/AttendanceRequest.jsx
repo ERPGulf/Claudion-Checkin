@@ -1,4 +1,4 @@
-import { useState, useLayoutEffect } from "react";
+import { useState, useLayoutEffect, useEffect } from "react";
 import { useNavigation } from "@react-navigation/native";
 import {
   View,
@@ -7,6 +7,7 @@ import {
   ScrollView,
   Platform,
   Alert,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Entypo from "@expo/vector-icons/Entypo";
@@ -14,13 +15,19 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import Checkbox from "expo-checkbox";
 import { COLORS, SIZES } from "../constants";
 import SubmitButton from "../components/common/SubmitButton";
-import { createAttendanceRequest } from "../services/api/attendance.service";
+import {
+  createAttendanceRequest,
+  uploadAttendanceAttachment,
+  getAttendanceRequests,
+} from "../services/api/attendance.service";
 import { useSelector } from "react-redux";
 import { selectEmployeeCode } from "../redux/Slices/UserSlice";
 import { useAttachmentPicker } from "../hooks/useAttachmentPicker";
 import AttachmentBottomSheet from "../components/attachment/AttachmentBottomSheet";
 import AttachmentPicker from "../components/attachment/AttachmentPicker";
-import { uploadAttendanceAttachment } from "../services/api/attendance.service";
+import AttendanceRequestCard from "../components/AttendanceRequest/AttendanceRequestCard";
+
+const PAGE_SIZE = 5;
 
 export default function AttendanceRequestScreen() {
   const navigation = useNavigation();
@@ -46,8 +53,47 @@ export default function AttendanceRequestScreen() {
   const [attachment, setAttachment] = useState(null);
   const [isBottomSheetVisible, setBottomSheetVisible] = useState(false);
 
+  const [attendanceRequests, setAttendanceRequests] = useState([]);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [isFetchingRequests, setIsFetchingRequests] = useState(false);
+
   const { pickFromCamera, pickFromGallery, pickDocument } =
     useAttachmentPicker();
+
+  useEffect(() => {
+    fetchAttendanceRequests();
+  }, [employeeCode]);
+
+  const fetchAttendanceRequests = async () => {
+    if (!employeeCode) return;
+
+    try {
+      setIsFetchingRequests(true);
+
+      const res = await getAttendanceRequests();
+
+      if (res?.error) {
+        Alert.alert("Error", res.error);
+        return;
+      }
+
+      const sortedRequests = (res?.message || []).sort(
+        (a, b) => new Date(b.from_date) - new Date(a.from_date),
+      );
+
+      setAttendanceRequests(sortedRequests);
+      setVisibleCount(PAGE_SIZE);
+    } catch (error) {
+      console.log("GET ATTENDANCE REQUESTS ERROR:", error);
+
+      Alert.alert(
+        "Error",
+        error.message || "Unable to load attendance requests.",
+      );
+    } finally {
+      setIsFetchingRequests(false);
+    }
+  };
 
   // ✅ SAME HEADER
   useLayoutEffect(() => {
@@ -154,6 +200,8 @@ export default function AttendanceRequestScreen() {
           );
         }
       }
+
+      await fetchAttendanceRequests();
 
       Alert.alert("Success", "Attendance request submitted!");
 
@@ -314,6 +362,43 @@ export default function AttendanceRequestScreen() {
             disabled={loading}
           />
         </View>
+
+        {/* Attendance Request History */}
+
+        <Text className="text-lg font-semibold mt-6 mb-3 text-gray-800">
+          Attendance Request History
+        </Text>
+
+        {isFetchingRequests ? (
+          <View className="items-center py-6">
+            <ActivityIndicator size="small" color={COLORS.primary} />
+
+            <Text className="text-gray-500 mt-2">
+              Loading attendance requests...
+            </Text>
+          </View>
+        ) : attendanceRequests.length === 0 ? (
+          <Text className="text-gray-500 text-center mt-6">
+            No attendance requests yet.
+          </Text>
+        ) : (
+          <>
+            {attendanceRequests.slice(0, visibleCount).map((item, index) => (
+              <View key={item?.name || index} className="mb-4">
+                <AttendanceRequestCard request={item} />
+              </View>
+            ))}
+
+            {visibleCount < attendanceRequests.length && (
+              <TouchableOpacity
+                onPress={() => setVisibleCount((prev) => prev + PAGE_SIZE)}
+                className="p-3 mb-6 rounded bg-gray-300"
+              >
+                <Text className="text-center font-semibold">Load More</Text>
+              </TouchableOpacity>
+            )}
+          </>
+        )}
       </ScrollView>
       <AttachmentBottomSheet
         visible={isBottomSheetVisible}
