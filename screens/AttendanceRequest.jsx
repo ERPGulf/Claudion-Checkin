@@ -164,6 +164,17 @@ export default function AttendanceRequestScreen() {
         return;
       }
 
+      const isSameDay =
+        fromDate.getFullYear() === toDate.getFullYear() &&
+        fromDate.getMonth() === toDate.getMonth() &&
+        fromDate.getDate() === toDate.getDate();
+      const toMinutes = (d) => d.getHours() * 60 + d.getMinutes();
+
+      if (isSameDay && toMinutes(toTime) <= toMinutes(fromTime)) {
+        Alert.alert("Invalid Time", "To time must be after From time.");
+        return;
+      }
+
       if (!selectedReason) {
         Alert.alert("Missing Field", "Please select a reason.");
         return;
@@ -241,16 +252,26 @@ export default function AttendanceRequestScreen() {
         </TouchableOpacity>
 
         {showFromPicker && (
-          <DateTimePicker
-            value={fromDate}
-            mode="date"
-            maximumDate={today}
-            display={Platform.OS === "ios" ? "spinner" : "default"}
-            onChange={(e, selected) => {
-              setShowFromPicker(false);
-              if (selected) setFromDate(selected);
-            }}
-          />
+          <>
+            <DateTimePicker
+              value={fromDate}
+              mode="date"
+              maximumDate={today}
+              display={Platform.OS === "ios" ? "spinner" : "default"}
+              onChange={(e, selected) => {
+                if (Platform.OS === "android") setShowFromPicker(false);
+                if (selected) setFromDate(selected);
+              }}
+            />
+            {Platform.OS === "ios" && (
+              <TouchableOpacity
+                onPress={() => setShowFromPicker(false)}
+                className="self-end px-3 py-2 mb-2"
+              >
+                <Text className="text-blue-600 font-medium">Done</Text>
+              </TouchableOpacity>
+            )}
+          </>
         )}
 
         {/* TO DATE */}
@@ -263,17 +284,27 @@ export default function AttendanceRequestScreen() {
         </TouchableOpacity>
 
         {showToPicker && (
-          <DateTimePicker
-            value={toDate}
-            mode="date"
-            maximumDate={today}
-            minimumDate={fromDate}
-            display={Platform.OS === "ios" ? "spinner" : "default"}
-            onChange={(e, selected) => {
-              setShowToPicker(false);
-              if (selected) setToDate(selected);
-            }}
-          />
+          <>
+            <DateTimePicker
+              value={toDate}
+              mode="date"
+              maximumDate={today}
+              minimumDate={fromDate}
+              display={Platform.OS === "ios" ? "spinner" : "default"}
+              onChange={(e, selected) => {
+                if (Platform.OS === "android") setShowToPicker(false);
+                if (selected) setToDate(selected);
+              }}
+            />
+            {Platform.OS === "ios" && (
+              <TouchableOpacity
+                onPress={() => setShowToPicker(false)}
+                className="self-end px-3 py-2 mb-2"
+              >
+                <Text className="text-blue-600 font-medium">Done</Text>
+              </TouchableOpacity>
+            )}
+          </>
         )}
         {/* FROM TIME */}
         <Text className="text-sm font-medium text-gray-700 mb-1">
@@ -292,15 +323,25 @@ export default function AttendanceRequestScreen() {
         </TouchableOpacity>
 
         {showFromTimePicker && (
-          <DateTimePicker
-            value={fromTime}
-            mode="time"
-            display="default"
-            onChange={(e, selected) => {
-              setShowFromTimePicker(false);
-              if (selected) setFromTime(selected);
-            }}
-          />
+          <>
+            <DateTimePicker
+              value={fromTime}
+              mode="time"
+              display={Platform.OS === "ios" ? "spinner" : "default"}
+              onChange={(e, selected) => {
+                if (Platform.OS === "android") setShowFromTimePicker(false);
+                if (selected) setFromTime(selected);
+              }}
+            />
+            {Platform.OS === "ios" && (
+              <TouchableOpacity
+                onPress={() => setShowFromTimePicker(false)}
+                className="self-end px-3 py-2 mb-2"
+              >
+                <Text className="text-blue-600 font-medium">Done</Text>
+              </TouchableOpacity>
+            )}
+          </>
         )}
 
         {/* TO TIME */}
@@ -318,15 +359,25 @@ export default function AttendanceRequestScreen() {
         </TouchableOpacity>
 
         {showToTimePicker && (
-          <DateTimePicker
-            value={toTime}
-            mode="time"
-            display="default"
-            onChange={(e, selected) => {
-              setShowToTimePicker(false);
-              if (selected) setToTime(selected);
-            }}
-          />
+          <>
+            <DateTimePicker
+              value={toTime}
+              mode="time"
+              display={Platform.OS === "ios" ? "spinner" : "default"}
+              onChange={(e, selected) => {
+                if (Platform.OS === "android") setShowToTimePicker(false);
+                if (selected) setToTime(selected);
+              }}
+            />
+            {Platform.OS === "ios" && (
+              <TouchableOpacity
+                onPress={() => setShowToTimePicker(false)}
+                className="self-end px-3 py-2 mb-2"
+              >
+                <Text className="text-blue-600 font-medium">Done</Text>
+              </TouchableOpacity>
+            )}
+          </>
         )}
         {/* REASON */}
         <Text className="text-sm font-medium text-gray-700 mb-2">
