@@ -14,6 +14,10 @@ import {
   RefreshControl,
   Alert,
   StyleSheet,
+  Modal,
+  TextInput,
+  Platform,
+  KeyboardAvoidingView,
 } from "react-native";
 import { Entypo, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useDispatch, useSelector } from "react-redux";
@@ -88,6 +92,9 @@ function AttendanceAction() {
   const [breakCompleted, setBreakCompleted] = useState(false);
   const [monthlyCapMessage, setMonthlyCapMessage] = useState("");
   const [devBreakMockMode, setDevBreakMockMode] = useState(false);
+  const [breakReasonModalVisible, setBreakReasonModalVisible] =
+    useState(false);
+  const [breakReasonInput, setBreakReasonInput] = useState("");
   const isBreakCompleted = (breakData) => {
     if (!breakData?.breaks?.length) return false;
 
@@ -593,7 +600,7 @@ function AttendanceAction() {
     [dispatch],
   );
 
-  const handleBreak = useCallback(async () => {
+  const handleBreak = useCallback(async (reason = "") => {
     if (!checkin) {
       Toast.show({ type: "error", text1: "Please check-in first" });
       return;
@@ -675,7 +682,7 @@ function AttendanceAction() {
 
     try {
       setActionLoading(true);
-      const response = await employeeBreak({ employeeCode, type });
+      const response = await employeeBreak({ employeeCode, type, reason });
 
       if (!response.allowed) {
         // ✅ Handle monthly limit from backend
@@ -1002,7 +1009,14 @@ function AttendanceAction() {
                       breakCompleted ||
                       breakMinutes >= 120
                     }
-                    onPress={handleBreak}
+                    onPress={() => {
+                      if (onBreak) {
+                        handleBreak();
+                      } else {
+                        setBreakReasonInput("");
+                        setBreakReasonModalVisible(true);
+                      }
+                    }}
                   >
                     <Text className="text-xl font-bold text-white">
                       {actionLoading ||
@@ -1027,6 +1041,58 @@ function AttendanceAction() {
               )}
             </View>
           </View>
+
+          <Modal
+            visible={breakReasonModalVisible}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setBreakReasonModalVisible(false)}
+          >
+            <KeyboardAvoidingView
+              style={{ flex: 1 }}
+              behavior={Platform.OS === "ios" ? "padding" : undefined}
+            >
+              <View className="flex-1 items-center justify-center bg-black/40 px-6">
+                <View className="w-full rounded-2xl bg-white p-5">
+                  <Text className="text-lg font-bold text-gray-900 mb-1">
+                    Take a break
+                  </Text>
+                  <Text className="text-sm text-gray-500 mb-3">
+                    Add a reason for this break (optional)
+                  </Text>
+                  <TextInput
+                    value={breakReasonInput}
+                    onChangeText={setBreakReasonInput}
+                    placeholder="Enter reason"
+                    placeholderTextColor="#6B7280"
+                    multiline
+                    className="border border-gray-300 rounded-lg px-3 py-2 mb-4 text-gray-900"
+                  />
+                  <View className="flex-row justify-end">
+                    <TouchableOpacity
+                      className="px-4 py-2 mr-2 rounded-xl"
+                      onPress={() => setBreakReasonModalVisible(false)}
+                    >
+                      <Text className="text-base font-semibold text-gray-500">
+                        Cancel
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      className="px-4 py-2 rounded-xl bg-blue-400"
+                      onPress={() => {
+                        setBreakReasonModalVisible(false);
+                        handleBreak(breakReasonInput.trim());
+                      }}
+                    >
+                      <Text className="text-base font-semibold text-white">
+                        Start Break
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+            </KeyboardAvoidingView>
+          </Modal>
         </View>
       </ScrollView>
     </SafeAreaView>

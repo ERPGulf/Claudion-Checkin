@@ -570,7 +570,7 @@ export const getTodayBreaks = async (employeeCode, date) => {
   }
 };
 
-export const employeeBreak = async ({ employeeCode, type }) => {
+export const employeeBreak = async ({ employeeCode, type, reason }) => {
   try {
     if (!employeeCode) throw new Error("Employee ID is required");
 
@@ -592,6 +592,7 @@ export const employeeBreak = async ({ employeeCode, type }) => {
     formData.append("timestamp", timestamp);
     formData.append("device_id", "09267");
     formData.append("log_type", type);
+    formData.append("reason", reason || "");
 
     const response = await apiClient.post(
       `${baseUrl}/api/method/employee_app.attendance_api.Employee_break`,
