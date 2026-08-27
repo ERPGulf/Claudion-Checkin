@@ -1,3 +1,5 @@
+import { isRouteEnabled } from './featureSettings';
+
 /**
  * Everything a user can pin to Home.
  *
@@ -90,8 +92,35 @@ const OFFERED_IDS = new Set(QUICK_ACCESS_OPTIONS.map(option => option.id));
  * otherwise sit on Home forever — visible, still navigating, and impossible to
  * unpin because the picker no longer lists it. Drop those on read instead of
  * migrating the persisted state.
+ *
+ * `settings` applies the same treatment to a shortcut whose feature the server
+ * has since turned off. That case is exactly the retired-pin problem again: the
+ * pin was saved while the feature was on, and without this it would sit on Home
+ * pointing at a route that now refuses to open. Omitting `settings` leaves the
+ * original behaviour untouched, which is what the option-list tests rely on.
  */
-export function filterOfferedShortcuts(pinned) {
+export function filterOfferedShortcuts(pinned, settings) {
   if (!Array.isArray(pinned)) return [];
-  return pinned.filter(item => OFFERED_IDS.has(item?.id));
+
+  return pinned.filter(item => {
+    if (!OFFERED_IDS.has(item?.id)) return false;
+    if (settings === undefined) return true;
+
+    return isRouteEnabled(settings, item?.url);
+  });
+}
+
+/**
+ * The picker's list, minus anything the server has disabled.
+ *
+ * Kept separate from the constant so `QUICK_ACCESS_OPTIONS` stays the complete
+ * catalogue — ids must never be renumbered, and a feature coming back on has to
+ * restore its option rather than shift everything after it.
+ */
+export function availableQuickAccessOptions(settings) {
+  if (settings === undefined) return QUICK_ACCESS_OPTIONS;
+
+  return QUICK_ACCESS_OPTIONS.filter(option =>
+    isRouteEnabled(settings, option.url),
+  );
 }

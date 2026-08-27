@@ -2,6 +2,11 @@ import { useEffect } from "react";
 import { useSelector } from "react-redux";
 import { selectIsLoggedIn } from "../redux/Slices/AuthSlice";
 import { selectEmployeeCode } from "../redux/Slices/UserSlice";
+import { selectFeatureSettings } from "../redux/Slices/FeatureSettingsSlice";
+import {
+  ATTENDANCE_FEATURES,
+  isFeatureEnabled,
+} from "../utils/featureSettings";
 import {
   startBackgroundSync,
   stopBackgroundSync,
@@ -27,8 +32,21 @@ export default function OfflineAttendanceBootstrap() {
   const isLoggedIn = useSelector(selectIsLoggedIn);
   const employeeCode = useSelector(selectEmployeeCode);
 
+  // `attendance_action.offline_attendance` is the administrator's switch for the
+  // whole mechanism. Turning it off stops the NetInfo listener and the interval
+  // as well as the UI, so a tenant that does not want offline attendance is not
+  // paying for its background work either. Anything already queued is left
+  // alone — it is the employee's attendance, and it syncs if the feature comes
+  // back on. Clearing the queue happens on logout, not here.
+  const offlineEnabled = useSelector(state =>
+    isFeatureEnabled(
+      selectFeatureSettings(state),
+      ATTENDANCE_FEATURES.OFFLINE_ATTENDANCE,
+    ),
+  );
+
   useEffect(() => {
-    if (!isLoggedIn) {
+    if (!isLoggedIn || !offlineEnabled) {
       stopBackgroundSync();
       return undefined;
     }
@@ -36,7 +54,7 @@ export default function OfflineAttendanceBootstrap() {
     startBackgroundSync({ employeeId: employeeCode });
 
     return () => stopBackgroundSync();
-  }, [isLoggedIn, employeeCode]);
+  }, [isLoggedIn, employeeCode, offlineEnabled]);
 
   return null;
 }

@@ -47,6 +47,11 @@ import {
 } from "../services/offline/AttendanceQueueService";
 import { resolveNearestOffice } from "../services/offline/offlineAttendanceGate";
 import { formatOfflineTimestamp } from "../utils/serverClock";
+import { selectFeatureSettings } from "../redux/Slices/FeatureSettingsSlice";
+import {
+  ATTENDANCE_FEATURES,
+  isFeatureEnabled,
+} from "../utils/featureSettings";
 
 /**
  * All Attendance Action behaviour: session/break state, the location gate, the
@@ -917,6 +922,42 @@ export default function useAttendanceAction() {
   // meant every hook below it had to stay above — a rules-of-hooks trap.
   const allowCheckoutAnywhere = checkin === true && unrestrictedCheckout === 1;
 
+  /* ---------------------------------------------------------------------
+   * Server-driven attendance sub-features.
+   *
+   * Read once here so the classic and modern screens agree, and so the
+   * decisions live beside the rest of the attendance rules rather than being
+   * re-derived per screen.
+   *
+   * NOTE on what is deliberately NOT read from here:
+   * `attendance_action.restrict_location`, `unrestricted_checkout_location`
+   * and `geo_tagging` also appear in the settings payload, but this app already
+   * resolves those per employee (QR provisioning → `get_employee_data` →
+   * services/offline/attendanceConfigCache.js → the legacy AsyncStorage keys
+   * this hook reads above). That pipeline is what the offline gate and the
+   * geofence bootstrap validate punches against, and it is per-employee where
+   * the settings payload is per-tenant. They are exposed through
+   * `useFeatureSettings` for display, but the enforcement path is left alone —
+   * overriding it here would change who may check in and from where, which is
+   * not a UI concern.
+   * ------------------------------------------------------------------- */
+  const featureSettings = useSelector(selectFeatureSettings);
+
+  const breakFeatureEnabled = isFeatureEnabled(
+    featureSettings,
+    ATTENDANCE_FEATURES.EMPLOYEE_CHECKIN_BREAK,
+  );
+
+  const photoUploadEnabled = isFeatureEnabled(
+    featureSettings,
+    ATTENDANCE_FEATURES.PHOTO_UPLOAD,
+  );
+
+  const offlineAttendanceEnabled = isFeatureEnabled(
+    featureSettings,
+    ATTENDANCE_FEATURES.OFFLINE_ATTENDANCE,
+  );
+
 
   /**
    * Check-in / check-out entry point. Photo mode ("photo" === "1") diverts to
@@ -928,7 +969,11 @@ export default function useAttendanceAction() {
       const photoValue = await AsyncStorage.getItem("photo");
       const actionType = checkin ? "OUT" : "IN";
 
-      if (photoValue !== "1") {
+      // Two independent conditions, and both must hold: the employee's HR record
+      // asks for a photo, AND the tenant still has photo capture switched on.
+      // Turning the feature off must not strand an employee whose record says
+      // "photo" behind a camera step the admin has disabled.
+      if (photoValue !== "1" || !photoUploadEnabled) {
         await handleDirectCheckInOut(actionType);
       } else {
         navigation.navigate("Attendance camera", {
@@ -942,7 +987,7 @@ export default function useAttendanceAction() {
         text2: error.message,
       });
     }
-  }, [checkin, handleDirectCheckInOut, navigation]);
+  }, [checkin, handleDirectCheckInOut, navigation, photoUploadEnabled]);
 
 
   return {
@@ -976,6 +1021,11 @@ export default function useAttendanceAction() {
     handlePrimaryAction,
     handleBreak,
     // dev-only helpers
+    // server-driven availability
+    breakFeatureEnabled,
+    photoUploadEnabled,
+    offlineAttendanceEnabled,
+
     devBreakMockMode,
     setDevBreakMockMode,
     applyDevBreakPreset,

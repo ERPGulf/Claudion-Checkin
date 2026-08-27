@@ -53,6 +53,7 @@ function AttendanceActionLegacy() {
     liveBreakTime,
     breakMinutes,
     breakCompleted,
+    breakFeatureEnabled,
     monthlyCapMessage,
     actionLoading,
     refresh,
@@ -322,7 +323,10 @@ function AttendanceActionLegacy() {
                 </Text>
               </TouchableOpacity>
               {/* BREAK BUTTON */}
-              {checkin && (
+              {/* Hidden, not disabled, when the tenant has breaks switched off:
+                  a greyed-out "BREAK NOT ALLOWED" reads as a rule the employee
+                  has hit, when the feature does not exist for them at all. */}
+              {checkin && breakFeatureEnabled && (
                 <View>
                   <TouchableOpacity
                     className={`justify-center items-center h-16 w-full mt-4 rounded-2xl ${

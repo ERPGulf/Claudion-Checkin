@@ -34,6 +34,8 @@ import {
   getShortcut3,
 } from "../../services/api/records.service";
 import SectionHeader from "../common/SectionHeader";
+import { selectFeatureSettings } from "../../redux/Slices/FeatureSettingsSlice";
+import { isFeatureEnabled, isRouteEnabled } from "../../utils/featureSettings";
 import ModuleCard from "../common/ModuleCard";
 import FeatureTile from "../common/FeatureTile";
 import PressableScale from "../common/PressableScale";
@@ -183,6 +185,21 @@ function LavaMenu() {
   const employeeCode = useSelector(
     (state) => state.user?.userDetails?.employeeCode,
   );
+
+  /**
+   * Server-driven availability.
+   *
+   * The tiles are filtered by the same route→flag table the navigator's guard
+   * uses, so a tile can never be shown for a route that would refuse to open —
+   * and there is no second list of "which features are gated" to keep in sync.
+   * Filtering the array (rather than rendering a disabled tile) is what keeps
+   * the 4-up grid from developing holes.
+   */
+  const featureSettings = useSelector(selectFeatureSettings);
+  const visibleFeatures = HR_FEATURES.filter((item) =>
+    isRouteEnabled(featureSettings, item.nav),
+  );
+  const recordsEnabled = isFeatureEnabled(featureSettings, "employee_records");
   const recordsToShow =
     !loadingShortcuts && shortcuts.length === 0 ? DEFAULT_RECORDS : shortcuts;
 
@@ -267,7 +284,7 @@ function LavaMenu() {
         style={{ marginBottom: SPACING.lg }}
       >
         <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
-          {HR_FEATURES.map((item) => (
+          {visibleFeatures.map((item) => (
             <FeatureTile
               key={item.nav + item.label}
               icon={item.icon}
@@ -280,26 +297,42 @@ function LavaMenu() {
       </ModuleCard>
 
       {/* -------------------- YOUR RECORDS -------------------- */}
+      {/* `employee_records` governs the company documents, NOT My QR — which has
+          no flag of its own and simply happens to live in this card. So the card
+          stays and re-titles itself rather than disappearing: hiding it wholesale
+          would take My QR down with it, and rendering it with the shortcuts
+          removed would leave a card headed "Documents held by the company" with
+          nothing in it but a QR tile. */}
       <ModuleCard
-        icon="card-account-details-outline"
+        icon={recordsEnabled ? "card-account-details-outline" : "qrcode"}
         iconFamily="MaterialCommunityIcons"
-        title="Your Records"
-        subtitle="Documents held by the company"
+        title={recordsEnabled ? "Your Records" : "Your Code"}
+        subtitle={
+          recordsEnabled
+            ? "Documents held by the company"
+            : "Your personal check-in code"
+        }
       >
         <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
-          {/* Skeleton */}
-          {loadingShortcuts && shortcuts.length === 0 && <ShortcutSkeleton />}
+          {recordsEnabled && (
+            <>
+              {/* Skeleton */}
+              {loadingShortcuts && shortcuts.length === 0 && (
+                <ShortcutSkeleton />
+              )}
 
-          {/* Dynamic shortcuts */}
-          {recordsToShow.map((shortcut, index) => (
-            <ShortcutButton
-              key={shortcut.shortcut || index}
-              shortcut={shortcut}
-              navigation={navigation}
-            />
-          ))}
+              {/* Dynamic shortcuts */}
+              {recordsToShow.map((shortcut, index) => (
+                <ShortcutButton
+                  key={shortcut.shortcut || index}
+                  shortcut={shortcut}
+                  navigation={navigation}
+                />
+              ))}
+            </>
+          )}
 
-          {/* Static QR */}
+          {/* Static QR — never gated. */}
           <FeatureTile
             icon="qr-code-outline"
             label="My QR"

@@ -24,6 +24,7 @@ import SettingsRow, { RowDivider } from "../components/common/SettingsRow";
 import ActionButton from "../components/common/ActionButton";
 import AppearanceSetting from "../components/settings/AppearanceSetting";
 import OfflineSyncSetting from "../components/settings/OfflineSyncSetting";
+import FeatureSettingsStatus from "../components/settings/FeatureSettingsStatus";
 // TEMPORARY: New Home Experience experiment — remove with the feature.
 import HomeExperienceSetting from "../components/experimental/HomeExperienceSetting";
 import user from "../assets/images/user.png";
@@ -522,6 +523,9 @@ function Profile() {
         <AppearanceSetting />
 
         <OfflineSyncSetting />
+
+        {/* Renders nothing unless the feature-settings fetch has failed. */}
+        <FeatureSettingsStatus />
 
         {/* TEMPORARY: New Home Experience experiment — delete this line and
             its import when the experiment ends. */}

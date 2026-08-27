@@ -21,6 +21,7 @@ import ThemedStatusBar from "./components/common/ThemedStatusBar";
 import OfflineBanner from "./components/common/OfflineBanner";
 import AutoAttendanceBootstrap from "./components/AutoAttendanceBootstrap";
 import OfflineAttendanceBootstrap from "./components/OfflineAttendanceBootstrap";
+import FeatureSettingsBootstrap from "./components/FeatureSettingsBootstrap";
 import { selectIsLoggedIn } from "./redux/Slices/AuthSlice";
 import {
   initializeFcm,
@@ -167,6 +168,10 @@ export default function App() {
             <FcmBootstrap />
             <AutoAttendanceBootstrap />
             <OfflineAttendanceBootstrap />
+            {/* Fetches server-driven feature availability for the session. The
+                navigator below does not wait on it — it renders off the
+                persisted settings and re-renders if they change. */}
+            <FeatureSettingsBootstrap />
             <Navigator />
             {/* Above the navigator so it floats over any screen, below AppToast
                 so a transient toast still wins the top of the screen. */}

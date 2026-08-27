@@ -61,6 +61,7 @@ function AttendanceAction() {
     liveBreakTime,
     breakMinutes,
     breakCompleted,
+    breakFeatureEnabled,
     monthlyCapMessage,
     actionLoading,
     refresh,
@@ -289,7 +290,10 @@ function AttendanceAction() {
             />
           )}
 
-          {checkin && (
+          {/* Hidden, not disabled, when the tenant has breaks switched off: a
+              greyed-out "Break not allowed" button reads as a rule the employee
+              has hit, when in fact the feature does not exist for them. */}
+          {checkin && breakFeatureEnabled && (
             <>
               <ActionButton
                 size="lg"

@@ -14,7 +14,11 @@ import {
   setAdd,
   setRemove,
 } from '../redux/Slices/QuickAccessSlice';
-import { QUICK_ACCESS_OPTIONS } from '../utils/quickAccess';
+import {
+  QUICK_ACCESS_OPTIONS,
+  availableQuickAccessOptions,
+} from '../utils/quickAccess';
+import { selectFeatureSettings } from '../redux/Slices/FeatureSettingsSlice';
 
 /** Three across keeps the two-word labels on two lines at 11pt. */
 const COLUMNS = 3;
@@ -68,7 +72,12 @@ function SelectQuickAccess() {
     }
   };
 
-  const pinnedCount = QUICK_ACCESS_OPTIONS.filter(item =>
+  // The catalogue minus anything the server has disabled, so a feature that is
+  // off cannot be pinned back onto Home from here.
+  const featureSettings = useSelector(selectFeatureSettings);
+  const options = availableQuickAccessOptions(featureSettings);
+
+  const pinnedCount = options.filter(item =>
     activeButtons?.some(button => button?.id === item.id),
   ).length;
 
@@ -84,12 +93,12 @@ function SelectQuickAccess() {
       >
         <SectionHeader
           title="Available shortcuts"
-          subtitle={`${pinnedCount} of ${QUICK_ACCESS_OPTIONS.length} pinned to your Home screen`}
+          subtitle={`${pinnedCount} of ${options.length} pinned to your Home screen`}
         />
 
         <Card style={{ paddingHorizontal: SPACING.md, paddingTop: SPACING.lg }}>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-            {QUICK_ACCESS_OPTIONS.map(item => {
+            {options.map(item => {
               const isPinned = activeButtons?.some(
                 button => button?.id === item?.id,
               );

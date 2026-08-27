@@ -29,6 +29,11 @@ import {
   hydrateOfflineCapability,
 } from "../services/offline/offlineCapability";
 import useOfflineSyncAlerts from "./useOfflineSyncAlerts";
+import { selectFeatureSettings } from "../redux/Slices/FeatureSettingsSlice";
+import {
+  ATTENDANCE_FEATURES,
+  isFeatureEnabled,
+} from "../utils/featureSettings";
 
 /**
  * Drives the connectivity banner.
@@ -45,6 +50,26 @@ export default function useOfflineStatus() {
   const employeeCode = useSelector(selectEmployeeCode);
   const { enabled: alertsEnabled } = useOfflineSyncAlerts();
   const [capability, setCapability] = useState(() => getOfflineCapability());
+
+  /**
+   * Two different questions, deliberately kept apart and then combined:
+   *
+   *  - `capability` — CAN this server do offline attendance (does the bulk
+   *    endpoint exist)? Learned by trying.
+   *  - `adminEnabled` — SHOULD it, for this tenant? Declared by the admin.
+   *
+   * Either one saying no means no. They are reported through the single
+   * `offlineSyncSupported` value the UI already understands, so every existing
+   * consumer — the banner, the sync sheet, the Profile row — handles an
+   * administratively disabled tenant with the copy it already has, rather than
+   * needing a second "disabled" state threaded through all of them.
+   */
+  const adminEnabled = useSelector(state =>
+    isFeatureEnabled(
+      selectFeatureSettings(state),
+      ATTENDANCE_FEATURES.OFFLINE_ATTENDANCE,
+    ),
+  );
 
   const [online, setOnline] = useState(() => readIsOnline());
   const [syncing, setSyncing] = useState(() => readIsSyncing());
@@ -223,8 +248,12 @@ export default function useOfflineStatus() {
     content,
     /** Whether tapping the banner should open the detail sheet. */
     actionable: !!content?.actionable,
-    /** null until something has been learned; false = no offline endpoint. */
-    offlineSyncSupported: capability,
+    /**
+     * null until something has been learned; false = unavailable, either
+     * because the server has no offline endpoint or because the administrator
+     * has switched offline attendance off for this tenant.
+     */
+    offlineSyncSupported: adminEnabled ? capability : false,
     adminBannerSuppressed: suppressAdminBanner && counts.blockedCount > 0,
     ...counts,
     refreshCounts,

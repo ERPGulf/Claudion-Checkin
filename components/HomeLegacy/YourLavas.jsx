@@ -43,6 +43,11 @@ import {
   getShortcut2,
   getShortcut3,
 } from "../../services/api/records.service";
+import { selectFeatureSettings } from "../../redux/Slices/FeatureSettingsSlice";
+import {
+  isFeatureEnabled,
+  isRouteEnabled,
+} from "../../utils/featureSettings";
 
 const SHORTCUT_CACHE_KEY = "user_shortcuts_cache_v2";
 
@@ -90,6 +95,69 @@ const ShortcutButton = React.memo(({ shortcut, navigation }) => {
 /* ---------------------------------------------------
  * Main Component
  * --------------------------------------------------- */
+/**
+ * The classic Home strip. Hoisted out of the JSX so the list can be filtered
+ * by server-driven availability before it is rendered — filtering the array
+ * (rather than skipping tiles inside the map) is what keeps the horizontal
+ * strip from showing a gap where a disabled feature used to be.
+ *
+ * Contents and order are unchanged from the inline array this replaces.
+ */
+const LEGACY_HR_FEATURES = [
+              {
+                label: ["Attendance", "action"],
+                icon: "calendar-outline",
+                nav: "Attendance action",
+              },
+              {
+                label: ["Attendance", "history"],
+                icon: "receipt-outline",
+                nav: "Attendance history",
+              },
+              {
+                label: ["Attendance", "Request"],
+                icon: "clipboard-outline",
+                nav: "Attendance request",
+                bold: true,
+              },
+              {
+                label: ["Automatic", "Attendance"],
+                icon: "location-outline",
+                nav: "Auto attendance",
+              },
+              {
+                label: ["Expense", "claim"],
+                icon: "wallet-outline",
+                nav: "Expense claim",
+              },
+              {
+                label: ["Leave", "Request"],
+                icon: "document-text-outline",
+                nav: "Leave request",
+                bold: true,
+              },
+              {
+                label: ["Loan", "application"],
+                icon: "card-outline",
+                nav: "Loan application",
+              },
+              // {
+              //   label: ["Salary", "Advance"],
+              //   icon: "card-outline",
+              //   nav: "Salary advance",
+              // },
+              {
+                label: ["Complaints"],
+                icon: "chatbox-ellipses-outline",
+                nav: "Complaints",
+              },
+              {
+                label: ["Vacation", "list"],
+                icon: "list-outline",
+                nav: "comingsoon", // or your actual screen name
+              },
+];
+
 function LavaMenu() {
   const navigation = useNavigation();
   const [shortcuts, setShortcuts] = useState([]);
@@ -100,6 +168,17 @@ function LavaMenu() {
   );
   const recordsToShow =
     !loadingShortcuts && shortcuts.length === 0 ? DEFAULT_RECORDS : shortcuts;
+
+  /**
+   * Server-driven availability, read from the same route→flag table the
+   * navigator's guard uses so a tile can never point at a route that would
+   * refuse to open.
+   */
+  const featureSettings = useSelector(selectFeatureSettings);
+  const visibleFeatures = LEGACY_HR_FEATURES.filter((item) =>
+    isRouteEnabled(featureSettings, item.nav),
+  );
+  const recordsEnabled = isFeatureEnabled(featureSettings, "employee_records");
 
   /* ---------------------------------------------------
    * Load cached shortcuts immediately
@@ -188,60 +267,7 @@ function LavaMenu() {
 
         <View className="bg-white rounded-b-xl py-3 px-2 mb-4">
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            {[
-              {
-                label: ["Attendance", "action"],
-                icon: "calendar-outline",
-                nav: "Attendance action",
-              },
-              {
-                label: ["Attendance", "history"],
-                icon: "receipt-outline",
-                nav: "Attendance history",
-              },
-              {
-                label: ["Attendance", "Request"],
-                icon: "clipboard-outline",
-                nav: "Attendance request",
-                bold: true,
-              },
-              {
-                label: ["Automatic", "Attendance"],
-                icon: "location-outline",
-                nav: "Auto attendance",
-              },
-              {
-                label: ["Expense", "claim"],
-                icon: "wallet-outline",
-                nav: "Expense claim",
-              },
-              {
-                label: ["Leave", "Request"],
-                icon: "document-text-outline",
-                nav: "Leave request",
-                bold: true,
-              },
-              {
-                label: ["Loan", "application"],
-                icon: "card-outline",
-                nav: "Loan application",
-              },
-              // {
-              //   label: ["Salary", "Advance"],
-              //   icon: "card-outline",
-              //   nav: "Salary advance",
-              // },
-              {
-                label: ["Complaints"],
-                icon: "chatbox-ellipses-outline",
-                nav: "Complaints",
-              },
-              {
-                label: ["Vacation", "list"],
-                icon: "list-outline",
-                nav: "comingsoon", // or your actual screen name
-              },
-            ].map((item, index) => (
+            {visibleFeatures.map((item, index) => (
               <TouchableOpacity
                 key={index}
                 className="mr-4"
@@ -284,32 +310,39 @@ function LavaMenu() {
             color="#fff"
           />
           <Text className="text-lg font-medium text-white">
-            Your Records In The Company
+            {recordsEnabled ? "Your Records In The Company" : "Your Code"}
           </Text>
           <AntDesign name="right" size={SIZES.xxLarge + 4} color="#fff" />
         </View>
 
         <View className="flex-row bg-white flex-wrap py-4 px-2 rounded-b-xl">
-          {/* Skeleton */}
-          {loadingShortcuts && shortcuts.length === 0 && (
-            <View className="flex-row px-2">
-              {[1, 2, 3].map((i) => (
-                <View key={i} className="w-16 mr-4 items-center">
-                  <View className="bg-gray-200 h-14 w-14 rounded-lg" />
-                  <View className="h-8 mt-1 bg-gray-200 w-14 rounded" />
+          {/* `employee_records` governs the company documents only. My QR below
+              has no flag of its own and simply lives in this card, so the card
+              stays (retitled) rather than disappearing and taking QR with it. */}
+          {recordsEnabled && (
+            <>
+              {/* Skeleton */}
+              {loadingShortcuts && shortcuts.length === 0 && (
+                <View className="flex-row px-2">
+                  {[1, 2, 3].map((i) => (
+                    <View key={i} className="w-16 mr-4 items-center">
+                      <View className="bg-gray-200 h-14 w-14 rounded-lg" />
+                      <View className="h-8 mt-1 bg-gray-200 w-14 rounded" />
+                    </View>
+                  ))}
                 </View>
-              ))}
-            </View>
-          )}
+              )}
 
-          {/* Dynamic shortcuts */}
-          {recordsToShow.map((shortcut, index) => (
-            <ShortcutButton
-              key={shortcut.shortcut || index}
-              shortcut={shortcut}
-              navigation={navigation}
-            />
-          ))}
+              {/* Dynamic shortcuts */}
+              {recordsToShow.map((shortcut, index) => (
+                <ShortcutButton
+                  key={shortcut.shortcut || index}
+                  shortcut={shortcut}
+                  navigation={navigation}
+                />
+              ))}
+            </>
+          )}
 
           {/* Static QR */}
           <TouchableOpacity
