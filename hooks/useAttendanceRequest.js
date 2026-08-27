@@ -1,14 +1,44 @@
 import { useCallback, useState } from 'react';
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import { useRoute } from '@react-navigation/native';
 import { useSelector } from 'react-redux';
 import { selectEmployeeCode } from '../redux/Slices/UserSlice';
 import { resolveWithCorrection } from '../services/offline/AttendanceQueueService';
 import {
   createAttendanceRequest,
+  getAttendanceRequests,
   uploadAttendanceAttachment,
 } from '../services/api/attendance.service';
 import { useAttachmentPicker } from './useAttachmentPicker';
+import useRequestHistory from './useRequestHistory';
+
+/**
+ * Minutes since midnight — used to compare two times that carry their own,
+ * irrelevant, date component.
+ */
+const minutesOfDay = date => date.getHours() * 60 + date.getMinutes();
+
+/** Whether two Dates fall on the same calendar day, locally. */
+export function isSameCalendarDay(a, b) {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+/**
+ * The production rule: on a single-day request, To time must be after From time.
+ *
+ * Deliberately scoped to same-day only. A request spanning two or more days is
+ * legitimately "17:00 → 09:00", and rejecting that would break the overnight
+ * case the date range already expresses.
+ */
+export function timeRangeInvalid(fromDate, toDate, fromTime, toTime) {
+  if (!isSameCalendarDay(fromDate, toDate)) return false;
+
+  return minutesOfDay(toTime) <= minutesOfDay(fromTime);
+}
 
 /** The reasons the backend accepts. Order is the order they render in. */
 export const ATTENDANCE_REQUEST_REASONS = ['Work From Home', 'On Duty'];
@@ -86,35 +116,66 @@ export default function useAttendanceRequest() {
   const today = new Date();
 
   /* ---------------------------------------------------------------------
-   * Date & time pickers. Each `onChange` closes the picker first and only
-   * commits a value when one came back — the Android dialog fires with
-   * `undefined` on dismiss.
+   * Date & time pickers.
+   *
+   * Android presents a modal dialog that dismisses itself once a value is
+   * picked, and fires `onChange` with `undefined` when it is cancelled — so
+   * there, closing on the first event is correct.
+   *
+   * iOS presents an inline spinner that stays on screen, and fires `onChange`
+   * on *every* tick as the wheel moves. Closing on the first event therefore
+   * tore the picker away the instant it was touched, committing whichever value
+   * happened to be under the finger — you could not scroll to a date at all.
+   * On iOS the picker stays open and the screens render an explicit Done, which
+   * calls `closeFromPicker` and friends.
    * ------------------------------------------------------------------- */
+
+  const isIOS = Platform.OS === 'ios';
 
   const openFromPicker = useCallback(() => setShowFromPicker(true), []);
   const openToPicker = useCallback(() => setShowToPicker(true), []);
   const openFromTimePicker = useCallback(() => setShowFromTimePicker(true), []);
   const openToTimePicker = useCallback(() => setShowToTimePicker(true), []);
 
-  const onFromDateChange = useCallback((event, selected) => {
-    setShowFromPicker(false);
-    if (selected) setFromDate(selected);
-  }, []);
+  const closeFromPicker = useCallback(() => setShowFromPicker(false), []);
+  const closeToPicker = useCallback(() => setShowToPicker(false), []);
+  const closeFromTimePicker = useCallback(
+    () => setShowFromTimePicker(false),
+    [],
+  );
+  const closeToTimePicker = useCallback(() => setShowToTimePicker(false), []);
 
-  const onToDateChange = useCallback((event, selected) => {
-    setShowToPicker(false);
-    if (selected) setToDate(selected);
-  }, []);
+  const onFromDateChange = useCallback(
+    (event, selected) => {
+      if (!isIOS) setShowFromPicker(false);
+      if (selected) setFromDate(selected);
+    },
+    [isIOS],
+  );
 
-  const onFromTimeChange = useCallback((event, selected) => {
-    setShowFromTimePicker(false);
-    if (selected) setFromTime(selected);
-  }, []);
+  const onToDateChange = useCallback(
+    (event, selected) => {
+      if (!isIOS) setShowToPicker(false);
+      if (selected) setToDate(selected);
+    },
+    [isIOS],
+  );
 
-  const onToTimeChange = useCallback((event, selected) => {
-    setShowToTimePicker(false);
-    if (selected) setToTime(selected);
-  }, []);
+  const onFromTimeChange = useCallback(
+    (event, selected) => {
+      if (!isIOS) setShowFromTimePicker(false);
+      if (selected) setFromTime(selected);
+    },
+    [isIOS],
+  );
+
+  const onToTimeChange = useCallback(
+    (event, selected) => {
+      if (!isIOS) setShowToTimePicker(false);
+      if (selected) setToTime(selected);
+    },
+    [isIOS],
+  );
 
   /* ---------------------------------------------------------------------
    * Attachment. The sheet is dismissed before the picker opens, then the
@@ -151,6 +212,22 @@ export default function useAttendanceRequest() {
   }, [pickDocument]);
 
   /* ---------------------------------------------------------------------
+   * Submitted requests — the shared history, newest first.
+   * ------------------------------------------------------------------- */
+
+  const history = useRequestHistory({
+    queryKey: 'attendanceRequests',
+    fetcher: getAttendanceRequests,
+    sortBy: 'from_date',
+  });
+
+  // Both stable — react-query's refetch and a useCallback([]) — so
+  // handleSubmit is not rebuilt on every render the way depending on the
+  // wrapper object would force.
+  const { refetch: refetchHistory, resetPagination: resetHistoryPage } =
+    history;
+
+  /* ---------------------------------------------------------------------
    * Submit
    * ------------------------------------------------------------------- */
 
@@ -163,6 +240,11 @@ export default function useAttendanceRequest() {
 
       if (toDate < fromDate) {
         Alert.alert('Invalid Date', 'To date cannot be before From date.');
+        return;
+      }
+
+      if (timeRangeInvalid(fromDate, toDate, fromTime, toTime)) {
+        Alert.alert('Invalid Time', 'To time must be after From time.');
         return;
       }
 
@@ -219,6 +301,11 @@ export default function useAttendanceRequest() {
         }
       }
 
+      // Refresh before the Alert, so the new request is already in the list
+      // behind it rather than appearing a beat after "OK".
+      await refetchHistory();
+      resetHistoryPage();
+
       Alert.alert('Success', 'Attendance request submitted!');
 
       // Reset
@@ -242,6 +329,8 @@ export default function useAttendanceRequest() {
     toTime,
     attachment,
     prefill,
+    refetchHistory,
+    resetHistoryPage,
   ]);
 
   return {
@@ -276,6 +365,13 @@ export default function useAttendanceRequest() {
     onFromTimeChange,
     onToTimeChange,
 
+    // iOS keeps the spinner open until an explicit Done; Android never shows it.
+    needsDoneAffordance: isIOS,
+    closeFromPicker,
+    closeToPicker,
+    closeFromTimePicker,
+    closeToTimePicker,
+
     // Reason
     setSelectedReason,
 
@@ -291,8 +387,19 @@ export default function useAttendanceRequest() {
     // Submit
     handleSubmit,
 
+    // History
+    attendanceRequests: history.items,
+    visibleRequests: history.visible,
+    hasMoreRequests: history.hasMore,
+    showMoreRequests: history.showMore,
+    isFetchingHistory: history.isLoading,
+    isHistoryError: history.isError,
+    historyError: history.error,
+    refetchHistory: history.refetch,
+
     // Display-only mirrors of handleSubmit's checks (modern screen)
     dateRangeInvalid: toDate < fromDate,
+    timeRangeInvalid: timeRangeInvalid(fromDate, toDate, fromTime, toTime),
     reasonMissing: !selectedReason,
   };
 }

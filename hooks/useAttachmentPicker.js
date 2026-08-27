@@ -2,6 +2,10 @@ import { useState } from 'react';
 import { Alert } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
+// Frappe caps File.file_name at 140 characters and measures the percent-encoded
+// form, so names are sanitized at the point they are picked — every feature that
+// uploads an attachment goes through this hook.
+import { sanitizeFileName } from '../utils/fileName';
 
 export const useAttachmentPicker = () => {
   const [isPicking, setIsPicking] = useState(false);
@@ -48,7 +52,7 @@ export const useAttachmentPicker = () => {
         const fileName = asset.fileName || asset.uri.split('/').pop() || 'photo.jpg';
         return {
           uri: asset.uri,
-          name: fileName,
+          name: sanitizeFileName(fileName, 'photo.jpg'),
           type: asset.mimeType || 'image/jpeg',
           size: asset.fileSize,
         };
@@ -80,7 +84,7 @@ export const useAttachmentPicker = () => {
         const fileName = asset.fileName || asset.uri.split('/').pop() || 'image.jpg';
         return {
           uri: asset.uri,
-          name: fileName,
+          name: sanitizeFileName(fileName, 'image.jpg'),
           type: asset.mimeType || 'image/jpeg',
           size: asset.fileSize,
         };
@@ -112,13 +116,13 @@ export const useAttachmentPicker = () => {
         const file = result.assets[0];
         return {
           uri: file.uri,
-          name: file.name || "receipt",
+          name: sanitizeFileName(file.name, "receipt"),
           type: file.mimeType || "application/octet-stream"
         };
       } else if (result?.uri) {
         return {
           uri: result.uri,
-          name: result.name || "receipt",
+          name: sanitizeFileName(result.name, "receipt"),
           type: result.mimeType || "application/octet-stream"
         };
       }

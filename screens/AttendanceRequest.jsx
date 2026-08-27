@@ -15,8 +15,14 @@ import useModernScreenHeader from "../hooks/useModernScreenHeader";
 import useAttendanceRequest from "../hooks/useAttendanceRequest";
 import ActionButton from "../components/common/ActionButton";
 import Card from "../components/common/Card";
+import EmptyState from "../components/common/EmptyState";
 import ModuleCard from "../components/common/ModuleCard";
+import PressableScale from "../components/common/PressableScale";
+import RecordCard from "../components/common/RecordCard";
+import SectionHeader from "../components/common/SectionHeader";
 import StatusBanner from "../components/common/StatusBanner";
+import ExpenseSkeleton from "../components/ExpenseClaim/ExpenseSkeleton";
+import { describeRecordStatus, formatDateRange } from "../utils/records";
 // The modern picker. components/attachment/AttachmentBottomSheet is hardcoded
 // light and stays where it is — the classic screens still render it.
 import AttachmentSheet from "../components/common/AttachmentSheet";
@@ -59,6 +65,47 @@ const pickerValue = (value) =>
  * (two columns), because on iOS `display="spinner"` lays out inline: the wheel
  * has to stay next to the field it edits.
  */
+/**
+ * A native picker and, on iOS only, the Done that dismisses it.
+ *
+ * Android's picker is a modal dialog that closes itself, so it needs nothing
+ * here. iOS renders an inline spinner that stays put and reports every tick of
+ * the wheel — the screen used to close on the first of those, which snatched the
+ * picker away the instant it was touched and committed whichever value was under
+ * the finger. The spinner now stays open and this is how it is closed.
+ */
+function PickerWithDone({ needsDone, onDone, children }) {
+  const { colors } = useAppTheme();
+
+  if (!needsDone) return children;
+
+  return (
+    <View>
+      {children}
+
+      <PressableScale
+        onPress={onDone}
+        accessibilityRole="button"
+        accessibilityLabel="Done"
+        hitSlop={8}
+        style={{
+          alignSelf: "flex-end",
+          paddingHorizontal: SPACING.md,
+          paddingVertical: SPACING.xs + 2,
+          minHeight: 44,
+          justifyContent: "center",
+        }}
+      >
+        <Text
+          style={{ ...TYPO.body, fontWeight: "600", color: colors.primary2 }}
+        >
+          Done
+        </Text>
+      </PressableScale>
+    </View>
+  );
+}
+
 function FieldGroup({ fields, twoColumns }) {
   if (twoColumns) {
     return (
@@ -135,6 +182,19 @@ function AttendanceRequest() {
     openToPicker,
     openFromTimePicker,
     openToTimePicker,
+    needsDoneAffordance,
+    closeFromPicker,
+    closeToPicker,
+    closeFromTimePicker,
+    closeToTimePicker,
+    visibleRequests,
+    hasMoreRequests,
+    showMoreRequests,
+    isFetchingHistory,
+    isHistoryError,
+    historyError,
+    refetchHistory,
+    attendanceRequests,
     onFromDateChange,
     onToDateChange,
     onFromTimeChange,
@@ -153,7 +213,8 @@ function AttendanceRequest() {
 
   // iOS-only. Keeps the native wheel on the same palette as the screen; has no
   // bearing on how a value is picked.
-  const pickerTheme = Platform.OS === "ios" ? (isDark ? "dark" : "light") : undefined;
+  const pickerTheme =
+    Platform.OS === "ios" ? (isDark ? "dark" : "light") : undefined;
 
   /** ModuleCard's body already ends with a 4pt inset; this takes it to 12. */
   const cardBody = { paddingBottom: SPACING.sm };
@@ -237,14 +298,19 @@ function AttendanceRequest() {
                   active: showFromPicker,
                   invalid: dateRangeInvalid,
                   picker: showFromPicker && (
-                    <DateTimePicker
-                      value={pickerValue(fromDate)}
-                      mode="date"
-                      maximumDate={today}
-                      themeVariant={pickerTheme}
-                      display={Platform.OS === "ios" ? "spinner" : "default"}
-                      onChange={onFromDateChange}
-                    />
+                    <PickerWithDone
+                      needsDone={needsDoneAffordance}
+                      onDone={closeFromPicker}
+                    >
+                      <DateTimePicker
+                        value={pickerValue(fromDate)}
+                        mode="date"
+                        maximumDate={today}
+                        themeVariant={pickerTheme}
+                        display={Platform.OS === "ios" ? "spinner" : "default"}
+                        onChange={onFromDateChange}
+                      />
+                    </PickerWithDone>
                   ),
                 },
                 {
@@ -256,15 +322,20 @@ function AttendanceRequest() {
                   active: showToPicker,
                   invalid: dateRangeInvalid,
                   picker: showToPicker && (
-                    <DateTimePicker
-                      value={pickerValue(toDate)}
-                      mode="date"
-                      maximumDate={today}
-                      minimumDate={fromDate}
-                      themeVariant={pickerTheme}
-                      display={Platform.OS === "ios" ? "spinner" : "default"}
-                      onChange={onToDateChange}
-                    />
+                    <PickerWithDone
+                      needsDone={needsDoneAffordance}
+                      onDone={closeToPicker}
+                    >
+                      <DateTimePicker
+                        value={pickerValue(toDate)}
+                        mode="date"
+                        maximumDate={today}
+                        minimumDate={fromDate}
+                        themeVariant={pickerTheme}
+                        display={Platform.OS === "ios" ? "spinner" : "default"}
+                        onChange={onToDateChange}
+                      />
+                    </PickerWithDone>
                   ),
                 },
               ]}
@@ -294,13 +365,20 @@ function AttendanceRequest() {
                     onPress: openFromTimePicker,
                     active: showFromTimePicker,
                     picker: showFromTimePicker && (
-                      <DateTimePicker
-                        value={pickerValue(fromTime)}
-                        mode="time"
-                        display={Platform.OS === "ios" ? "spinner" : "default"}
-                        themeVariant={pickerTheme}
-                        onChange={onFromTimeChange}
-                      />
+                      <PickerWithDone
+                        needsDone={needsDoneAffordance}
+                        onDone={closeFromTimePicker}
+                      >
+                        <DateTimePicker
+                          value={pickerValue(fromTime)}
+                          mode="time"
+                          display={
+                            Platform.OS === "ios" ? "spinner" : "default"
+                          }
+                          themeVariant={pickerTheme}
+                          onChange={onFromTimeChange}
+                        />
+                      </PickerWithDone>
                     ),
                   },
                   {
@@ -311,13 +389,20 @@ function AttendanceRequest() {
                     onPress: openToTimePicker,
                     active: showToTimePicker,
                     picker: showToTimePicker && (
-                      <DateTimePicker
-                        value={pickerValue(toTime)}
-                        mode="time"
-                        display={Platform.OS === "ios" ? "spinner" : "default"}
-                        themeVariant={pickerTheme}
-                        onChange={onToTimeChange}
-                      />
+                      <PickerWithDone
+                        needsDone={needsDoneAffordance}
+                        onDone={closeToTimePicker}
+                      >
+                        <DateTimePicker
+                          value={pickerValue(toTime)}
+                          mode="time"
+                          display={
+                            Platform.OS === "ios" ? "spinner" : "default"
+                          }
+                          themeVariant={pickerTheme}
+                          onChange={onToTimeChange}
+                        />
+                      </PickerWithDone>
                     ),
                   },
                 ]}
@@ -390,6 +475,76 @@ function AttendanceRequest() {
           message="Your manager will review this request. You'll be notified once it's approved or rejected."
           style={{ marginTop: SPACING.md }}
         />
+
+        {/* ---------- History ---------- */}
+        <SectionHeader
+          title="Your requests"
+          subtitle={
+            attendanceRequests.length > 0
+              ? `${attendanceRequests.length} submitted`
+              : undefined
+          }
+          style={{ marginTop: SPACING.xxl }}
+        />
+
+        {isFetchingHistory ? (
+          <ExpenseSkeleton count={2} label="Loading attendance requests" />
+        ) : isHistoryError ? (
+          <Card>
+            <EmptyState
+              compact
+              icon="cloud-offline-outline"
+              title="Couldn't load your requests"
+              description={
+                historyError?.message || "Unable to load attendance requests."
+              }
+              actionLabel="Retry"
+              onActionPress={refetchHistory}
+            />
+          </Card>
+        ) : visibleRequests.length === 0 ? (
+          <Card>
+            <EmptyState
+              compact
+              icon="calendar-outline"
+              title="No attendance requests yet"
+              description="Once you submit a request it will appear here with its approval status."
+            />
+          </Card>
+        ) : (
+          <>
+            {visibleRequests.map((item, index) => (
+              <RecordCard
+                key={item?.name || index}
+                icon="calendar-outline"
+                title={item?.reason || "Attendance request"}
+                subtitle={item?.name}
+                status={describeRecordStatus(item?.status)}
+                headline={formatDateRange(item?.from_date, item?.to_date)}
+                rows={[
+                  { label: "From time", value: item?.from_time },
+                  { label: "To time", value: item?.to_time },
+                  {
+                    label: "Half day",
+                    value: item?.half_day ? "Yes" : null,
+                  },
+                ]}
+                note={item?.explanation}
+                accessibilityLabel={`${item?.reason || "Attendance request"}, ${formatDateRange(item?.from_date, item?.to_date)}, ${describeRecordStatus(item?.status).label}.`}
+                style={{ marginBottom: SPACING.md }}
+              />
+            ))}
+
+            {hasMoreRequests && (
+              <ActionButton
+                variant="outline"
+                icon="chevron-down"
+                label="Load more"
+                onPress={showMoreRequests}
+              />
+            )}
+          </>
+        )}
       </ScrollView>
 
       <AttachmentSheet

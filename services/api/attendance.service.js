@@ -4,6 +4,8 @@ import * as Location from "expo-location";
 import { format } from "date-fns";
 import apiClient from "./apiClient";
 import { cleanBaseUrl } from "./utils";
+import { getAuthContext, buildHeaders } from "./authHelper";
+import { parseError } from "./errorHelper";
 import {
   normalizeCustomIn,
   toTimestampMs,
@@ -679,7 +681,7 @@ export const getTodayBreaks = async (employeeCode, date) => {
   }
 };
 
-export const employeeBreak = async ({ employeeCode, type }) => {
+export const employeeBreak = async ({ employeeCode, type, reason }) => {
   try {
     if (!employeeCode) throw new Error("Employee ID is required");
 
@@ -701,6 +703,9 @@ export const employeeBreak = async ({ employeeCode, type }) => {
     formData.append("timestamp", timestamp);
     formData.append("device_id", "09267");
     formData.append("log_type", type);
+    // Optional, and only ever supplied when a break is started — ending one
+    // stays a single tap.
+    formData.append("reason", reason || "");
 
     const response = await apiClient.post(
       `${baseUrl}/api/method/employee_app.attendance_api.Employee_break`,
@@ -879,6 +884,35 @@ export const uploadAttendanceAttachment = async (file, docname) => {
     };
   }
 };
+/* ===========================
+   Get Attendance Requests
+=========================== */
+export const getAttendanceRequests = async () => {
+  try {
+    const { baseUrl, token, employeeCode } = await getAuthContext();
+
+    if (!employeeCode) {
+      return { error: "Session expired. Please login again." };
+    }
+
+    const url = `${baseUrl}/api/method/employee_app.employee_list.list_attendance_request`;
+
+    const response = await apiClient.get(url, {
+      headers: buildHeaders(token),
+    });
+
+    if (!Array.isArray(response.data?.message)) {
+      return { error: "Invalid attendance request response." };
+    }
+
+    return { message: response.data.message };
+  } catch (error) {
+    return {
+      error: parseError(error, "Unable to load attendance requests."),
+    };
+  }
+};
+
 export default {
   getServerTime,
   getOfficeLocation,
@@ -892,4 +926,5 @@ export default {
   getTodayBreaks,
   createAttendanceRequest,
   uploadAttendanceAttachment,
+  getAttendanceRequests,
 };

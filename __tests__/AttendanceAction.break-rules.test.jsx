@@ -207,7 +207,15 @@ describe("AttendanceAction break rules", () => {
       expect(screen.getByText("Take break")).toBeTruthy();
     });
 
+    // Starting a break now asks for an optional reason first; the request is
+    // sent from the sheet's "Start break", not from the button that opens it.
     fireEvent.press(screen.getByText("Take break"));
+
+    await waitFor(() => {
+      expect(screen.getByText("Start break")).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByText("Start break"));
 
     await waitFor(() => {
       expect(Toast.show).toHaveBeenCalledWith(
@@ -217,6 +225,11 @@ describe("AttendanceAction break rules", () => {
         }),
       );
     });
+
+    // Optional means optional: an untouched reason box still submits.
+    expect(attendanceService.employeeBreak).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "IN", reason: "" }),
+    );
 
     await waitFor(() => {
       expect(screen.getByText("Break not allowed")).toBeTruthy();

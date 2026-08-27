@@ -1,6 +1,13 @@
 import { useLayoutEffect } from "react";
 import { useNavigation } from "@react-navigation/native";
-import { View, Text, TouchableOpacity, ScrollView, Platform } from "react-native";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  ScrollView,
+  Platform,
+  ActivityIndicator,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Entypo from "@expo/vector-icons/Entypo";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -10,6 +17,7 @@ import SubmitButton from "../components/common/SubmitButton";
 import useAttendanceRequest from "../hooks/useAttendanceRequest";
 import AttachmentBottomSheet from "../components/attachment/AttachmentBottomSheet";
 import AttachmentPicker from "../components/attachment/AttachmentPicker";
+import AttendanceRequestCard from "../components/AttendanceRequest/AttendanceRequestCard";
 
 /**
  * Classic Attendance Request — the original screen, kept for users on Classic UI.
@@ -45,6 +53,15 @@ export default function AttendanceRequestScreen() {
     openToPicker,
     openFromTimePicker,
     openToTimePicker,
+    needsDoneAffordance,
+    closeFromPicker,
+    closeToPicker,
+    closeFromTimePicker,
+    closeToTimePicker,
+    visibleRequests,
+    hasMoreRequests,
+    showMoreRequests,
+    isFetchingHistory,
     onFromDateChange,
     onToDateChange,
     onFromTimeChange,
@@ -102,13 +119,23 @@ export default function AttendanceRequestScreen() {
         </TouchableOpacity>
 
         {showFromPicker && (
-          <DateTimePicker
-            value={fromDate}
-            mode="date"
-            maximumDate={today}
-            display={Platform.OS === "ios" ? "spinner" : "default"}
-            onChange={onFromDateChange}
-          />
+          <>
+            <DateTimePicker
+              value={fromDate}
+              mode="date"
+              maximumDate={today}
+              display={Platform.OS === "ios" ? "spinner" : "default"}
+              onChange={onFromDateChange}
+            />
+            {needsDoneAffordance && (
+              <TouchableOpacity
+                onPress={closeFromPicker}
+                className="self-end px-3 py-2 mb-2"
+              >
+                <Text className="text-blue-600 font-medium">Done</Text>
+              </TouchableOpacity>
+            )}
+          </>
         )}
 
         {/* TO DATE */}
@@ -121,14 +148,24 @@ export default function AttendanceRequestScreen() {
         </TouchableOpacity>
 
         {showToPicker && (
-          <DateTimePicker
-            value={toDate}
-            mode="date"
-            maximumDate={today}
-            minimumDate={fromDate}
-            display={Platform.OS === "ios" ? "spinner" : "default"}
-            onChange={onToDateChange}
-          />
+          <>
+            <DateTimePicker
+              value={toDate}
+              mode="date"
+              maximumDate={today}
+              minimumDate={fromDate}
+              display={Platform.OS === "ios" ? "spinner" : "default"}
+              onChange={onToDateChange}
+            />
+            {needsDoneAffordance && (
+              <TouchableOpacity
+                onPress={closeToPicker}
+                className="self-end px-3 py-2 mb-2"
+              >
+                <Text className="text-blue-600 font-medium">Done</Text>
+              </TouchableOpacity>
+            )}
+          </>
         )}
         {/* FROM TIME */}
         <Text className="text-sm font-medium text-gray-700 mb-1">
@@ -147,12 +184,22 @@ export default function AttendanceRequestScreen() {
         </TouchableOpacity>
 
         {showFromTimePicker && (
-          <DateTimePicker
-            value={fromTime}
-            mode="time"
-            display="default"
-            onChange={onFromTimeChange}
-          />
+          <>
+            <DateTimePicker
+              value={fromTime}
+              mode="time"
+              display="default"
+              onChange={onFromTimeChange}
+            />
+            {needsDoneAffordance && (
+              <TouchableOpacity
+                onPress={closeFromTimePicker}
+                className="self-end px-3 py-2 mb-2"
+              >
+                <Text className="text-blue-600 font-medium">Done</Text>
+              </TouchableOpacity>
+            )}
+          </>
         )}
 
         {/* TO TIME */}
@@ -170,12 +217,22 @@ export default function AttendanceRequestScreen() {
         </TouchableOpacity>
 
         {showToTimePicker && (
-          <DateTimePicker
-            value={toTime}
-            mode="time"
-            display="default"
-            onChange={onToTimeChange}
-          />
+          <>
+            <DateTimePicker
+              value={toTime}
+              mode="time"
+              display="default"
+              onChange={onToTimeChange}
+            />
+            {needsDoneAffordance && (
+              <TouchableOpacity
+                onPress={closeToTimePicker}
+                className="self-end px-3 py-2 mb-2"
+              >
+                <Text className="text-blue-600 font-medium">Done</Text>
+              </TouchableOpacity>
+            )}
+          </>
         )}
         {/* REASON */}
         <Text className="text-sm font-medium text-gray-700 mb-2">
@@ -211,6 +268,41 @@ export default function AttendanceRequestScreen() {
             disabled={loading}
           />
         </View>
+
+        {/* HISTORY */}
+        <Text className="text-lg font-semibold mt-6 mb-3 text-gray-800">
+          Attendance Request History
+        </Text>
+
+        {isFetchingHistory ? (
+          <View className="items-center py-6">
+            <ActivityIndicator size="small" color={COLORS.primary} />
+            <Text className="text-gray-500 mt-2">
+              Loading attendance requests...
+            </Text>
+          </View>
+        ) : visibleRequests.length === 0 ? (
+          <Text className="text-gray-500 text-center mt-6">
+            No attendance requests yet.
+          </Text>
+        ) : (
+          <>
+            {visibleRequests.map((item, index) => (
+              <View key={item?.name || index} className="mb-4">
+                <AttendanceRequestCard request={item} />
+              </View>
+            ))}
+
+            {hasMoreRequests && (
+              <TouchableOpacity
+                onPress={showMoreRequests}
+                className="p-3 mb-6 rounded bg-gray-300"
+              >
+                <Text className="text-center font-semibold">Load More</Text>
+              </TouchableOpacity>
+            )}
+          </>
+        )}
       </ScrollView>
       <AttachmentBottomSheet
         visible={isBottomSheetVisible}

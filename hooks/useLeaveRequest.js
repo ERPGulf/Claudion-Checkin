@@ -2,10 +2,12 @@ import { useCallback, useEffect, useState } from 'react';
 import { Alert } from 'react-native';
 import {
   createLeaveApplication,
+  getLeaveApplications,
   getLeaveTypes,
   uploadLeaveAttachment,
 } from '../services/api';
 import { useAttachmentPicker } from './useAttachmentPicker';
+import useRequestHistory from './useRequestHistory';
 
 /**
  * The sentinel the picker uses for "nothing chosen". Part of the contract with
@@ -94,6 +96,22 @@ export default function useLeaveRequest() {
 
   const { pickFromCamera, pickFromGallery, pickDocument } =
     useAttachmentPicker();
+
+  /* ---------------------------------------------------------------------
+   * Submitted leave applications — the shared history, newest first.
+   * ------------------------------------------------------------------- */
+
+  const history = useRequestHistory({
+    queryKey: 'leaveApplications',
+    fetcher: getLeaveApplications,
+    sortBy: 'posting_date',
+  });
+
+  // Both stable — react-query's refetch and a useCallback([]) — so
+  // handleSubmit is not rebuilt on every render the way depending on the
+  // wrapper object would force.
+  const { refetch: refetchHistory, resetPagination: resetHistoryPage } =
+    history;
 
   useEffect(() => {
     const fetchLeaveTypes = async () => {
@@ -282,6 +300,11 @@ export default function useLeaveRequest() {
         }
       }
 
+      // Refresh before the Alert, so the new request is already in the list
+      // behind it rather than appearing a beat after "OK".
+      await refetchHistory();
+      resetHistoryPage();
+
       Alert.alert('Success', 'Leave request submitted successfully!', [
         {
           text: 'OK',
@@ -293,11 +316,31 @@ export default function useLeaveRequest() {
     } finally {
       setLoading(false);
     }
-  }, [fromDate, toDate, leaveType, agreed, reason, attachment, resetForm]);
+  }, [
+    fromDate,
+    toDate,
+    leaveType,
+    agreed,
+    reason,
+    attachment,
+    resetForm,
+    refetchHistory,
+    resetHistoryPage,
+  ]);
 
   const isRemote = leaveType === REMOTE_LEAVE_TYPE;
 
   return {
+    // History
+    leaveApplications: history.items,
+    visibleLeaves: history.visible,
+    hasMoreLeaves: history.hasMore,
+    showMoreLeaves: history.showMore,
+    isFetchingHistory: history.isLoading,
+    isHistoryError: history.isError,
+    historyError: history.error,
+    refetchHistory: history.refetch,
+
     // Values
     leaveType,
     reason,

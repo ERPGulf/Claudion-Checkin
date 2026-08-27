@@ -45,6 +45,12 @@ jest.mock('@react-navigation/native', () => ({
 jest.mock('../services/api/loanApplication.service', () => ({
   getLoanProducts: jest.fn(),
   LoanApplicationRequest: jest.fn(),
+  getLoanApplications: jest.fn(),
+}));
+
+// The history query is gated on the employee code, exactly as Expense Claims is.
+jest.mock('react-redux', () => ({
+  useSelector: () => 'EMP-001',
 }));
 
 // Dereferenced at render time, so the const is initialised by then.
@@ -62,10 +68,12 @@ import LoanApplication from '../screens/LoanApplication';
 import useLoanApplication from '../hooks/useLoanApplication';
 import UploadField from '../components/common/UploadField';
 import {
+  describeLoanStatus,
   describeMissingLoanFields,
   loanProductIcon,
 } from '../utils/loanApplication';
 import {
+  getLoanApplications,
   getLoanProducts,
   LoanApplicationRequest,
 } from '../services/api/loanApplication.service';
@@ -75,6 +83,20 @@ import { COLORS, DARK_COLORS } from '../constants';
 const flatten = style => StyleSheet.flatten(style) || {};
 
 const PRODUCTS = [{ product_name: 'Car Loan' }, { product_name: 'Personal' }];
+
+const REPAYMENT_METHOD = 'Repay Fixed Amount per Period';
+
+/** Six, so a PAGE_SIZE of five leaves exactly one behind "Load more". */
+const LOANS = Array.from({ length: 6 }, (_, i) => ({
+  name: `LA-000${i + 1}`,
+  loan_product: 'Car Loan',
+  loan_amount: 5000 + i,
+  repayment_amount: 500,
+  repayment_method: REPAYMENT_METHOD,
+  reason: 'New car',
+  status: 'Open',
+  posting_date: `2026-08-0${i + 1}`,
+}));
 
 const FILE = {
   uri: 'file:///tmp/payslip.pdf',
@@ -92,7 +114,10 @@ const toast = message => ['Notice', message];
 /** The screen mounts a react-query mutation, so it needs a client. */
 function renderScreen() {
   const queryClient = new QueryClient({
-    defaultOptions: { mutations: { retry: false } },
+    defaultOptions: {
+      mutations: { retry: false },
+      queries: { retry: false },
+    },
   });
 
   return render(<LoanApplication />, {
@@ -104,7 +129,10 @@ function renderScreen() {
 
 function renderLoanHook() {
   const queryClient = new QueryClient({
-    defaultOptions: { mutations: { retry: false } },
+    defaultOptions: {
+      mutations: { retry: false },
+      queries: { retry: false },
+    },
   });
 
   return renderHook(() => useLoanApplication(), {
@@ -118,6 +146,7 @@ beforeEach(() => {
   mockScheme = 'light';
   jest.clearAllMocks();
   getLoanProducts.mockResolvedValue(PRODUCTS);
+  getLoanApplications.mockResolvedValue({ message: [] });
   jest.spyOn(Alert, 'alert').mockImplementation(() => {});
 });
 
@@ -154,12 +183,32 @@ describe('modern Loan Application screen', () => {
     await waitFor(() => expect(getLoanProducts).toHaveBeenCalled());
   });
 
-  it('offers the three inputs the payload is built from', async () => {
+  it('offers the five inputs the payload is built from', async () => {
     const { getByLabelText, getByText } = renderScreen();
 
     expect(getByText('Loan product *')).toBeTruthy();
     expect(getByLabelText('Loan amount')).toBeTruthy();
+    expect(getByLabelText('Repayment amount')).toBeTruthy();
+    expect(getByText('Repayment method *')).toBeTruthy();
     expect(getByLabelText('Reason')).toBeTruthy();
+
+    await waitFor(() => expect(getLoanProducts).toHaveBeenCalled());
+  });
+
+  it('says the repayment amount is per month, not the loan total', async () => {
+    const { getByText } = renderScreen();
+
+    expect(getByText('Repayment amount (per month) *')).toBeTruthy();
+
+    await waitFor(() => expect(getLoanProducts).toHaveBeenCalled());
+  });
+
+  it('keeps the repayment amount right-aligned and numeric too', async () => {
+    const { getByLabelText } = renderScreen();
+
+    const input = getByLabelText('Repayment amount');
+    expect(input.props.keyboardType).toBe('numeric');
+    expect(flatten(input.props.style).textAlign).toBe('right');
 
     await waitFor(() => expect(getLoanProducts).toHaveBeenCalled());
   });
@@ -317,7 +366,7 @@ describe('submitting from the modern screen', () => {
 
     submit();
     expect(Alert.alert).toHaveBeenLastCalledWith(
-      ...toast('Please enter loan product.'),
+      ...toast('Please select loan product.'),
     );
 
     fireEvent.press(getByLabelText('Loan product *: Select loan product'));
@@ -332,6 +381,27 @@ describe('submitting from the modern screen', () => {
     );
 
     fireEvent.changeText(getByLabelText('Loan amount'), '5000');
+    submit();
+    expect(Alert.alert).toHaveBeenLastCalledWith(
+      ...toast('Please enter repayment amount.'),
+    );
+
+    fireEvent.changeText(getByLabelText('Repayment amount'), '0');
+    submit();
+    expect(Alert.alert).toHaveBeenLastCalledWith(
+      ...toast('Please enter a valid repayment amount.'),
+    );
+
+    fireEvent.changeText(getByLabelText('Repayment amount'), '500');
+    submit();
+    expect(Alert.alert).toHaveBeenLastCalledWith(
+      ...toast('Please select repayment method.'),
+    );
+
+    fireEvent.press(
+      getByLabelText('Repayment method *: Select repayment method'),
+    );
+    fireEvent.press(getByLabelText(REPAYMENT_METHOD));
     submit();
     expect(Alert.alert).toHaveBeenLastCalledWith(
       ...toast('Please enter the reason.'),
@@ -359,7 +429,10 @@ describe('submitting from the modern screen', () => {
 
     expect(getByText('Finish the form first')).toBeTruthy();
     expect(
-      getByText('Add a loan product, an amount, a reason and Attachment 1.'),
+      getByText(
+        'Add a loan product, an amount, a repayment amount, a repayment ' +
+          'method, a reason and Attachment 1.',
+      ),
     ).toBeTruthy();
   });
 
@@ -383,6 +456,8 @@ describe('useLoanApplication', () => {
   const fill = result => {
     act(() => result.current.selectProduct('Car Loan'));
     act(() => result.current.setAmount('  7500 '));
+    act(() => result.current.setRepaymentAmount(' 625 '));
+    act(() => result.current.selectRepaymentMethod(REPAYMENT_METHOD));
     act(() => result.current.setReason('  New car  '));
   };
 
@@ -399,7 +474,7 @@ describe('useLoanApplication', () => {
     jest.useRealTimers();
   };
 
-  it('sends the classic payload: trimmed strings and a numeric amount', async () => {
+  it('sends the payload: trimmed strings and numeric amounts', async () => {
     LoanApplicationRequest.mockResolvedValue({ message: 'ok' });
 
     const { result } = renderLoanHook();
@@ -418,6 +493,8 @@ describe('useLoanApplication', () => {
     expect(LoanApplicationRequest.mock.calls[0][0]).toEqual({
       product_name: 'Car Loan',
       amount: 7500,
+      repayment_amount: 625,
+      repayment_method: REPAYMENT_METHOD,
       reason: 'New car',
       file1: FILE,
       file2: null,
@@ -452,6 +529,8 @@ describe('useLoanApplication', () => {
 
     expect(result.current.productName).toBe('');
     expect(result.current.amount).toBe('');
+    expect(result.current.repaymentAmount).toBe('');
+    expect(result.current.repaymentMethod).toBe('');
     expect(result.current.reason).toBe('');
     expect(result.current.file1).toBeNull();
     expect(result.current.file2).toBeNull();
@@ -536,6 +615,93 @@ describe('useLoanApplication', () => {
 
     act(() => result.current.setAmount('250'));
     expect(result.current.amountInvalid).toBe(false);
+
+    // The repayment pair mirrors the amount pair exactly.
+    expect(result.current.repaymentAmountMissing).toBe(true);
+    expect(result.current.repaymentAmountInvalid).toBe(false);
+    expect(result.current.repaymentMethodMissing).toBe(true);
+
+    act(() => result.current.setRepaymentAmount('0'));
+    expect(result.current.repaymentAmountInvalid).toBe(true);
+
+    act(() => result.current.setRepaymentAmount('25'));
+    expect(result.current.repaymentAmountInvalid).toBe(false);
+
+    act(() => result.current.selectRepaymentMethod(REPAYMENT_METHOD));
+    expect(result.current.repaymentMethodMissing).toBe(false);
+  });
+
+  /* ------------------------------------------------------------------
+   * History
+   * ---------------------------------------------------------------- */
+
+  it('sorts submitted applications newest first', async () => {
+    getLoanApplications.mockResolvedValue({ message: LOANS });
+
+    const { result } = renderLoanHook();
+
+    await waitFor(() =>
+      expect(result.current.loanApplications).toHaveLength(6),
+    );
+
+    expect(result.current.loanApplications[0].posting_date).toBe('2026-08-06');
+    expect(result.current.loanApplications[5].posting_date).toBe('2026-08-01');
+  });
+
+  it('reveals five at a time behind Load more', async () => {
+    getLoanApplications.mockResolvedValue({ message: LOANS });
+
+    const { result } = renderLoanHook();
+
+    await waitFor(() => expect(result.current.visibleLoans).toHaveLength(5));
+    expect(result.current.hasMoreLoans).toBe(true);
+
+    act(() => result.current.showMoreLoans());
+
+    expect(result.current.visibleLoans).toHaveLength(6);
+    expect(result.current.hasMoreLoans).toBe(false);
+  });
+
+  it('surfaces a history failure instead of rendering an empty list', async () => {
+    getLoanApplications.mockResolvedValue({ error: 'Session expired.' });
+
+    const { result } = renderLoanHook();
+
+    await waitFor(() => expect(result.current.isHistoryError).toBe(true));
+    expect(result.current.historyError?.message).toBe('Session expired.');
+  });
+
+  it('refreshes the history before the success alert is raised', async () => {
+    getLoanApplications.mockResolvedValue({ message: [] });
+    LoanApplicationRequest.mockResolvedValue({ message: 'ok' });
+
+    const { result } = renderLoanHook();
+    await waitFor(() => expect(getLoanProducts).toHaveBeenCalled());
+    await waitFor(() => expect(getLoanApplications).toHaveBeenCalledTimes(1));
+
+    fill(result);
+    await attachFile1(result);
+    await act(async () => {
+      await result.current.handleSubmit();
+    });
+
+    // Once on mount, once after the submission landed.
+    expect(getLoanApplications).toHaveBeenCalledTimes(2);
+    expect(Alert.alert).toHaveBeenCalledWith(
+      'Success',
+      'Loan application submitted successfully.',
+      expect.any(Array),
+    );
+  });
+
+  it('does not ask for products in a shape that could crash the picker', async () => {
+    // A tenant that wraps the list; the service unwraps, the hook guards.
+    getLoanProducts.mockResolvedValue({ not: 'an array' });
+
+    const { result } = renderLoanHook();
+
+    await waitFor(() => expect(getLoanProducts).toHaveBeenCalled());
+    expect(Array.isArray(result.current.loanProducts)).toBe(true);
   });
 });
 
@@ -578,14 +744,56 @@ describe('describeMissingLoanFields', () => {
     );
   });
 
+  it('tells an empty repayment amount apart from an unusable one', () => {
+    expect(
+      describeMissingLoanFields({ repaymentAmountMissing: true }),
+    ).toBe('Add a repayment amount.');
+    expect(
+      describeMissingLoanFields({ repaymentAmountInvalid: true }),
+    ).toBe('Add a valid repayment amount.');
+  });
+
+  it('names the repayment method gap', () => {
+    expect(describeMissingLoanFields({ repaymentMethodMissing: true })).toBe(
+      'Add a repayment method.',
+    );
+  });
+
   it('joins several gaps in submit order', () => {
     expect(
       describeMissingLoanFields({
         productMissing: true,
         amountInvalid: true,
+        repaymentMethodMissing: true,
         file1Missing: true,
       }),
-    ).toBe('Add a loan product, a valid amount and Attachment 1.');
+    ).toBe(
+      'Add a loan product, a valid amount, a repayment method and Attachment 1.',
+    );
+  });
+});
+
+describe('describeLoanStatus', () => {
+  it('gives a rejection its own tone rather than a neutral pill', () => {
+    // The classic card painted everything that was not "Open" grey, so a
+    // rejection looked like an ordinary state.
+    expect(describeLoanStatus('Rejected')).toEqual({
+      label: 'Rejected',
+      tone: 'error',
+      icon: 'close-circle',
+    });
+    expect(describeLoanStatus('Approved').tone).toBe('success');
+    expect(describeLoanStatus('Open').tone).toBe('info');
+  });
+
+  it('keeps an unfamiliar status neutral, never red', () => {
+    const described = describeLoanStatus('Escalated');
+    expect(described.label).toBe('Escalated');
+    expect(described.tone).toBe('neutral');
+  });
+
+  it('says Unknown for a missing status', () => {
+    expect(describeLoanStatus(undefined).label).toBe('Unknown');
   });
 });
 

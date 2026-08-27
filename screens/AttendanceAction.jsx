@@ -22,6 +22,8 @@ import ActionButton from "../components/common/ActionButton";
 import SectionHeader from "../components/common/SectionHeader";
 import SettingsRow, { RowDivider } from "../components/common/SettingsRow";
 import StatusBanner from "../components/common/StatusBanner";
+import BottomSheet from "../components/common/BottomSheet";
+import FormField from "../components/common/FormField";
 import StatusCard from "../components/AttendanceAction/StatusCard";
 import { SESSION_ORIGIN } from "../utils/attendanceSessionState";
 
@@ -39,6 +41,10 @@ function AttendanceAction() {
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useAppTheme();
   const [devOpen, setDevOpen] = useState(false);
+
+  // Break reason — collected when a break is started, optional throughout.
+  const [isBreakSheetVisible, setBreakSheetVisible] = useState(false);
+  const [breakReasonInput, setBreakReasonInput] = useState("");
 
   const {
     checkin,
@@ -302,7 +308,16 @@ function AttendanceAction() {
                       ? "End break"
                       : "Take break"
                 }
-                onPress={handleBreak}
+                onPress={() => {
+                  // A reason is asked for when starting a break and never when
+                  // ending one — the same rule the classic screen follows.
+                  if (onBreak) {
+                    handleBreak();
+                  } else {
+                    setBreakReasonInput("");
+                    setBreakSheetVisible(true);
+                  }
+                }}
                 disabled={breakBlocked}
                 style={{ marginTop: SPACING.lg }}
               />
@@ -334,7 +349,7 @@ function AttendanceAction() {
                 iconColor={colors.warningText}
                 title="Developer tools"
                 description={devOpen ? "Tap to collapse" : "Tap to expand"}
-                onPress={() => setDevOpen(open => !open)}
+                onPress={() => setDevOpen((open) => !open)}
               >
                 <Ionicons
                   name={devOpen ? "chevron-up" : "chevron-down"}
@@ -359,7 +374,7 @@ function AttendanceAction() {
                   />
 
                   <PressableScale
-                    onPress={() => setDevBreakMockMode(prev => !prev)}
+                    onPress={() => setDevBreakMockMode((prev) => !prev)}
                     scaleTo={0.98}
                     hitSlop={0}
                     accessibilityRole="switch"
@@ -414,7 +429,7 @@ function AttendanceAction() {
                   </Text>
 
                   <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
-                    {DEV_BREAK_PRESETS.map(preset => (
+                    {DEV_BREAK_PRESETS.map((preset) => (
                       <PressableScale
                         key={preset.key}
                         onPress={() => applyDevBreakPreset(preset.key)}
@@ -452,6 +467,44 @@ function AttendanceAction() {
           </>
         )}
       </ScrollView>
+
+      {/* The modern equivalent of the classic screen's reason Modal: the same
+          shared sheet the attachment and option pickers use, so it dismisses,
+          animates and themes like everything else here. */}
+      <BottomSheet
+        visible={isBreakSheetVisible}
+        onClose={() => setBreakSheetVisible(false)}
+        title="Take a break"
+        subtitle="Add a reason for this break (optional)"
+        closeLabel="Cancel"
+        maxHeightRatio={0.6}
+      >
+        <View style={{ paddingBottom: SPACING.md }}>
+          <FormField
+            label="Reason"
+            optional
+            value={breakReasonInput}
+            onChangeText={setBreakReasonInput}
+            placeholder="What's the break for?"
+            multiline
+            minLines={3}
+            align="auto"
+            accessibilityLabel="Break reason"
+          />
+
+          <ActionButton
+            label="Start break"
+            icon="cafe-outline"
+            variant="filled"
+            size="lg"
+            onPress={() => {
+              setBreakSheetVisible(false);
+              handleBreak(breakReasonInput.trim());
+            }}
+            style={{ marginTop: SPACING.md }}
+          />
+        </View>
+      </BottomSheet>
     </SafeAreaView>
   );
 }

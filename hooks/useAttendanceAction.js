@@ -756,7 +756,16 @@ export default function useAttendanceAction() {
     [dispatch],
   );
 
-  const handleBreak = useCallback(async () => {
+  /**
+   * `reason` is collected by the screens when a break is *started* and is
+   * optional throughout — the backend stores an empty string happily.
+   *
+   * Only this interactive path ever carries one. The other two `employeeBreak`
+   * call sites in this hook are both `type: "OUT"` — the 2-hour auto-end and the
+   * break that checkout closes — and ending a break is never something the
+   * employee is asked to justify.
+   */
+  const handleBreak = useCallback(async (reason = "") => {
     if (!checkin) {
       Toast.show({ type: "error", text1: "Please check-in first" });
       return;
@@ -838,7 +847,12 @@ export default function useAttendanceAction() {
 
     try {
       setActionLoading(true);
-      const response = await employeeBreak({ employeeCode, type });
+      const response = await employeeBreak({
+        employeeCode,
+        type,
+        // Starting only. Ending a break stays a single tap.
+        reason: type === "IN" ? reason : "",
+      });
 
       if (!response.allowed) {
         // ✅ Handle monthly limit from backend

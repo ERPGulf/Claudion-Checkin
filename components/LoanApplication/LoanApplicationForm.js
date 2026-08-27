@@ -16,6 +16,7 @@ import { COLORS } from "../../constants";
 import SubmitButton from "../common/SubmitButton";
 import { getLoanProducts } from "../../services/api/loanApplication.service";
 import { Picker } from "@react-native-picker/picker";
+import { LOAN_REPAYMENT_METHODS } from "../../utils/loanApplication";
 import AttachmentPicker from "../attachment/AttachmentPicker";
 import AttachmentBottomSheet from "../attachment/AttachmentBottomSheet";
 import { useAttachmentPicker } from "../../hooks/useAttachmentPicker";
@@ -23,6 +24,8 @@ import { useAttachmentPicker } from "../../hooks/useAttachmentPicker";
 function LoanApplicationForm({ onSubmit, isLoading, resetSignal }) {
   const [productName, setProductName] = useState("");
   const [amount, setAmount] = useState("");
+  const [repaymentAmount, setRepaymentAmount] = useState("");
+  const [repaymentMethod, setRepaymentMethod] = useState("");
   const [file1, setFile1] = useState(null);
   const [file2, setFile2] = useState(null);
   const [activeAttachment, setActiveAttachment] = useState(null);
@@ -36,6 +39,8 @@ function LoanApplicationForm({ onSubmit, isLoading, resetSignal }) {
   useEffect(() => {
     setProductName("");
     setAmount("");
+    setRepaymentAmount("");
+    setRepaymentMethod("");
     setReason("");
     setFile1(null);
     setFile2(null);
@@ -51,9 +56,10 @@ function LoanApplicationForm({ onSubmit, isLoading, resetSignal }) {
 
       const response = await getLoanProducts();
 
-      console.log("Loan Products:", response);
-
-      setLoanProducts(response || []);
+      // The service unwraps `{ message }` / `{ data }`; this is the last guard,
+      // so an unexpected shape leaves the Picker empty rather than throwing on
+      // `.map()` below.
+      setLoanProducts(Array.isArray(response) ? response : []);
     } catch (error) {
       console.log("Loan Products Error:", error);
       showToast("Unable to load loan products.");
@@ -119,9 +125,10 @@ function LoanApplicationForm({ onSubmit, isLoading, resetSignal }) {
 
   const handleSubmit = async () => {
     const amountValue = Number(amount);
+    const repaymentAmountValue = Number(repaymentAmount);
 
     if (!productName.trim()) {
-      return showToast("Please enter loan product.");
+      return showToast("Please select loan product.");
     }
 
     if (!amount.trim()) {
@@ -131,6 +138,19 @@ function LoanApplicationForm({ onSubmit, isLoading, resetSignal }) {
     if (isNaN(amountValue) || amountValue <= 0) {
       return showToast("Please enter a valid amount.");
     }
+
+    if (!repaymentAmount.trim()) {
+      return showToast("Please enter repayment amount.");
+    }
+
+    if (isNaN(repaymentAmountValue) || repaymentAmountValue <= 0) {
+      return showToast("Please enter a valid repayment amount.");
+    }
+
+    if (!repaymentMethod) {
+      return showToast("Please select repayment method.");
+    }
+
     if (!reason.trim()) {
       return showToast("Please enter the reason.");
     }
@@ -142,6 +162,8 @@ function LoanApplicationForm({ onSubmit, isLoading, resetSignal }) {
     const payload = {
       product_name: productName.trim(),
       amount: amountValue,
+      repayment_amount: repaymentAmountValue,
+      repayment_method: repaymentMethod,
       reason: reason.trim(),
       file1,
       file2,
@@ -210,6 +232,47 @@ function LoanApplicationForm({ onSubmit, isLoading, resetSignal }) {
           keyboardType="numeric"
           className="border border-gray-300 rounded p-2 mb-3 bg-gray-50 text-gray-900"
         />
+        {/* Repayment Amount */}
+        <Label text="Repayment Amount (per month)" required />
+
+        <TextInput
+          placeholder="Enter repayment amount"
+          placeholderTextColor="#6B7280"
+          value={repaymentAmount}
+          onChangeText={setRepaymentAmount}
+          keyboardType="numeric"
+          className="border border-gray-300 rounded p-2 mb-3 bg-gray-50 text-gray-900"
+        />
+
+        {/* Repayment Method */}
+        <Label text="Repayment Method" required />
+
+        <View
+          style={{
+            borderWidth: 1,
+            borderColor: "#D1D5DB",
+            borderRadius: 8,
+            backgroundColor: "#F9FAFB",
+            marginBottom: 12,
+            overflow: "hidden",
+          }}
+        >
+          <Picker
+            selectedValue={repaymentMethod}
+            onValueChange={(value) => setRepaymentMethod(value)}
+            style={{
+              height: 50,
+              color: "#111827",
+            }}
+          >
+            <Picker.Item label="Select Repayment Method" value="" />
+
+            {LOAN_REPAYMENT_METHODS.map((method) => (
+              <Picker.Item key={method} label={method} value={method} />
+            ))}
+          </Picker>
+        </View>
+
         {/* Reason */}
         <Label text="Reason" required />
 

@@ -139,8 +139,38 @@ export const uploadLeaveAttachment = async (file, docname) => {
     };
   }
 };
+/* ===========================
+   Get Leave Applications
+=========================== */
+export const getLeaveApplications = async () => {
+  try {
+    const { baseUrl, token, employeeCode } = await getAuthContext();
+
+    if (!employeeCode) {
+      return { error: "Session expired. Please login again." };
+    }
+
+    const url = `${baseUrl}/api/method/employee_app.employee_list.list_leave_application`;
+
+    const response = await apiClient.get(url, {
+      headers: buildHeaders(token),
+    });
+
+    if (!Array.isArray(response.data?.message)) {
+      return { error: "Invalid leave application response." };
+    }
+
+    return { message: response.data.message };
+  } catch (error) {
+    return {
+      error: parseError(error, "Unable to load leave applications."),
+    };
+  }
+};
+
 export default {
   createLeaveApplication,
   getLeaveTypes,
   uploadLeaveAttachment,
+  getLeaveApplications,
 };

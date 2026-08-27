@@ -7,8 +7,10 @@ import {
   TouchableOpacity,
   ScrollView,
   Platform,
+  ActivityIndicator,
 } from "react-native";
 import AttachmentBottomSheet from "../components/attachment/AttachmentBottomSheet";
+import LeaveApplicationCard from "../components/LeaveApplication/LeaveApplicationCard";
 import AttachmentPicker from "../components/attachment/AttachmentPicker";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Entypo from "@expo/vector-icons/Entypo";
@@ -66,6 +68,10 @@ export default function LeaveRequestLegacy() {
     handlePickGallery,
     handlePickDocument,
     handleSubmit,
+    visibleLeaves,
+    hasMoreLeaves,
+    showMoreLeaves,
+    isFetchingHistory,
   } = useLeaveRequest();
 
   useLayoutEffect(() => {
@@ -231,6 +237,41 @@ export default function LeaveRequestLegacy() {
           loading={loading}
           onPress={handleSubmit}
         />
+
+        {/* Leave Application History */}
+        <Text className="text-lg font-semibold mt-6 mb-3 text-gray-800">
+          Leave Application History
+        </Text>
+
+        {isFetchingHistory ? (
+          <View className="items-center py-6">
+            <ActivityIndicator size="small" color={COLORS.primary} />
+            <Text className="text-gray-500 mt-2">
+              Loading leave applications...
+            </Text>
+          </View>
+        ) : visibleLeaves.length === 0 ? (
+          <Text className="text-gray-500 text-center mt-6">
+            No leave applications yet.
+          </Text>
+        ) : (
+          <>
+            {visibleLeaves.map((item, index) => (
+              <View key={item?.name || index} className="mb-4">
+                <LeaveApplicationCard leave={item} />
+              </View>
+            ))}
+
+            {hasMoreLeaves && (
+              <TouchableOpacity
+                onPress={showMoreLeaves}
+                className="p-3 mb-6 rounded bg-gray-300"
+              >
+                <Text className="text-center font-semibold">Load More</Text>
+              </TouchableOpacity>
+            )}
+          </>
+        )}
       </ScrollView>
       <AttachmentBottomSheet
         visible={isBottomSheetVisible}

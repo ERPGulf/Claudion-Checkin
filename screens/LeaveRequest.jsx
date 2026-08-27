@@ -11,6 +11,11 @@ import ActionButton from "../components/common/ActionButton";
 import Card from "../components/common/Card";
 import ModuleCard from "../components/common/ModuleCard";
 import StatusBanner from "../components/common/StatusBanner";
+import EmptyState from "../components/common/EmptyState";
+import RecordCard from "../components/common/RecordCard";
+import SectionHeader from "../components/common/SectionHeader";
+import ExpenseSkeleton from "../components/ExpenseClaim/ExpenseSkeleton";
+import { describeRecordStatus, formatDateRange } from "../utils/records";
 import PickerField from "../components/common/PickerField";
 import FormField from "../components/common/FormField";
 import UploadField from "../components/common/UploadField";
@@ -88,6 +93,14 @@ function LeaveRequest() {
     handlePickDocument,
     handleSubmit,
     dateRangeInvalid,
+    leaveApplications,
+    visibleLeaves,
+    hasMoreLeaves,
+    showMoreLeaves,
+    isFetchingHistory,
+    isHistoryError,
+    historyError,
+    refetchHistory,
   } = useLeaveRequest();
 
   // iOS-only. Keeps the native wheel on the same palette as the screen; has no
@@ -423,6 +436,82 @@ function LeaveRequest() {
           message="Your leave request will be sent to your manager for approval. You'll be notified once it has been approved or rejected."
           style={{ marginTop: SPACING.md }}
         />
+
+        {/* ---------- History ---------- */}
+        <SectionHeader
+          title="Your leave"
+          subtitle={
+            leaveApplications.length > 0
+              ? `${leaveApplications.length} submitted`
+              : undefined
+          }
+          style={{ marginTop: SPACING.xxl }}
+        />
+
+        {isFetchingHistory ? (
+          <ExpenseSkeleton count={2} label="Loading leave applications" />
+        ) : isHistoryError ? (
+          <Card>
+            <EmptyState
+              compact
+              icon="cloud-offline-outline"
+              title="Couldn't load your leave"
+              description={
+                historyError?.message || "Unable to load leave applications."
+              }
+              actionLabel="Retry"
+              onActionPress={refetchHistory}
+            />
+          </Card>
+        ) : visibleLeaves.length === 0 ? (
+          <Card>
+            <EmptyState
+              compact
+              icon="calendar-outline"
+              title="No leave applications yet"
+              description="Once you submit a request it will appear here with its approval status."
+            />
+          </Card>
+        ) : (
+          <>
+            {visibleLeaves.map((item, index) => (
+              <RecordCard
+                key={item?.name || index}
+                icon={leaveTypeIcon(item?.leave_type)}
+                title={item?.leave_type || "Leave"}
+                subtitle={item?.name}
+                status={describeRecordStatus(item?.status)}
+                headline={formatDateRange(item?.from_date, item?.to_date)}
+                rows={[
+                  {
+                    label: "Days",
+                    value:
+                      item?.total_leave_days === null ||
+                      item?.total_leave_days === undefined
+                        ? null
+                        : String(item.total_leave_days),
+                  },
+                  { label: "Half day", value: item?.half_day ? "Yes" : null },
+                ]}
+                note={item?.reason}
+                accessibilityLabel={`${item?.leave_type || "Leave"}, ${formatDateRange(
+                  item?.from_date,
+                  item?.to_date,
+                )}, ${describeRecordStatus(item?.status).label}.`}
+                style={{ marginBottom: SPACING.md }}
+              />
+            ))}
+
+            {hasMoreLeaves && (
+              <ActionButton
+                variant="outline"
+                icon="chevron-down"
+                label="Load more"
+                onPress={showMoreLeaves}
+              />
+            )}
+          </>
+        )}
       </ScrollView>
 
       <OptionSheet

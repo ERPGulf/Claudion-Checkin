@@ -8,13 +8,17 @@ import useModernScreenHeader from "../hooks/useModernScreenHeader";
 import useLoanApplication from "../hooks/useLoanApplication";
 import ActionButton from "../components/common/ActionButton";
 import Card from "../components/common/Card";
+import EmptyState from "../components/common/EmptyState";
 import ModuleCard from "../components/common/ModuleCard";
+import SectionHeader from "../components/common/SectionHeader";
 import StatusBanner from "../components/common/StatusBanner";
 import PickerField from "../components/common/PickerField";
 import FormField from "../components/common/FormField";
 import UploadField from "../components/common/UploadField";
 import OptionSheet from "../components/common/OptionSheet";
 import AttachmentSheet from "../components/common/AttachmentSheet";
+import LoanHistoryCard from "../components/LoanApplication/LoanHistoryCard";
+import ExpenseSkeleton from "../components/ExpenseClaim/ExpenseSkeleton";
 // The app's one amount formatter — "10,000.00", grouped and pinned to two
 // decimals, and deliberately without a currency symbol: the backend is
 // provisioned per device by QR scan and no endpoint reports a currency code, so a
@@ -60,6 +64,14 @@ function LoanApplication() {
     productName,
     amount,
     setAmount,
+    repaymentAmount,
+    setRepaymentAmount,
+    repaymentMethod,
+    repaymentMethods,
+    isRepaymentSheetVisible,
+    openRepaymentSheet,
+    closeRepaymentSheet,
+    selectRepaymentMethod,
     reason,
     setReason,
     file1,
@@ -84,9 +96,20 @@ function LoanApplication() {
     productMissing,
     amountMissing,
     amountInvalid,
+    repaymentAmountMissing,
+    repaymentAmountInvalid,
+    repaymentMethodMissing,
     reasonMissing,
     file1Missing,
     attachmentCount,
+    visibleLoans,
+    hasMoreLoans,
+    showMoreLoans,
+    isFetchingHistory,
+    isHistoryError,
+    historyError,
+    refetchHistory,
+    loanApplications,
   } = useLoanApplication();
 
   const [attempted, setAttempted] = useState(false);
@@ -99,10 +122,24 @@ function LoanApplication() {
   // The hook blanks the form once a submission is acknowledged; clear the error
   // marks with it, so a fresh form isn't pre-marked as invalid.
   useEffect(() => {
-    if (productMissing && amountMissing && reasonMissing && file1Missing) {
+    if (
+      productMissing &&
+      amountMissing &&
+      repaymentAmountMissing &&
+      repaymentMethodMissing &&
+      reasonMissing &&
+      file1Missing
+    ) {
       setAttempted(false);
     }
-  }, [productMissing, amountMissing, reasonMissing, file1Missing]);
+  }, [
+    productMissing,
+    amountMissing,
+    repaymentAmountMissing,
+    repaymentMethodMissing,
+    reasonMissing,
+    file1Missing,
+  ]);
 
   /** ModuleCard's body already ends with a 4pt inset; this takes it to 12. */
   const cardBody = { paddingBottom: SPACING.sm };
@@ -112,6 +149,9 @@ function LoanApplication() {
         productMissing,
         amountMissing,
         amountInvalid,
+        repaymentAmountMissing,
+        repaymentAmountInvalid,
+        repaymentMethodMissing,
         reasonMissing,
         file1Missing,
       })
@@ -220,6 +260,39 @@ function LoanApplication() {
               style={{ marginTop: SPACING.md }}
             />
 
+            {/* The instalment, not the total — labelled "per month" because
+                the backend reads it as the fixed per-period deduction, and an
+                employee typing the full loan amount here again would produce an
+                application that repays in one month. */}
+            <FormField
+              label="Repayment amount (per month) *"
+              value={repaymentAmount}
+              onChangeText={setRepaymentAmount}
+              placeholder="0.00"
+              icon="repeat-outline"
+              keyboardType="numeric"
+              align="right"
+              invalid={
+                attempted && (repaymentAmountMissing || repaymentAmountInvalid)
+              }
+              accessibilityLabel="Repayment amount"
+              style={{ marginTop: SPACING.md }}
+            />
+
+            {/* One option today, but still a picker rather than a fixed label:
+                the field has to appear in the payload, and a sheet is how every
+                other choice on this screen is made. */}
+            <PickerField
+              label="Repayment method *"
+              value={repaymentMethod}
+              placeholder="Select repayment method"
+              icon={repaymentMethod ? "calendar-outline" : "list-outline"}
+              onPress={openRepaymentSheet}
+              active={isRepaymentSheetVisible}
+              invalid={attempted && repaymentMethodMissing}
+              style={{ marginTop: SPACING.md }}
+            />
+
             <FormField
               label="Reason *"
               value={reason}
@@ -281,6 +354,10 @@ function LoanApplication() {
               productMissing ? "No product selected" : productName
             }, ${
               amountMissing ? "no amount entered" : formatExpenseAmount(amount)
+            }, ${
+              repaymentAmountMissing
+                ? "no repayment entered"
+                : `${formatExpenseAmount(repaymentAmount)} per month`
             }, ${attachmentCount} of 2 attachments.`}
           >
             <View style={{ flexDirection: "row", alignItems: "center" }}>
@@ -329,6 +406,37 @@ function LoanApplication() {
                 marginVertical: SPACING.md,
               }}
             />
+
+            {/* The repayment line only once there is a figure to show, so an
+                untouched form isn't padded with a dash. */}
+            {!repaymentAmountMissing && (
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  marginBottom: SPACING.md,
+                }}
+              >
+                <Ionicons
+                  name="repeat-outline"
+                  size={ICON.sm}
+                  color={colors.textMuted}
+                  style={{ marginEnd: SPACING.sm }}
+                />
+                <Text
+                  style={{
+                    ...TYPO.subhead,
+                    fontWeight: "400",
+                    flex: 1,
+                    minWidth: 0,
+                    color: colors.textSecondary,
+                  }}
+                  numberOfLines={1}
+                >
+                  {`${formatExpenseAmount(repaymentAmount)} per month`}
+                </Text>
+              </View>
+            )}
 
             <View style={{ flexDirection: "row", alignItems: "center" }}>
               <Ionicons
@@ -389,6 +497,69 @@ function LoanApplication() {
           message="Your request goes through your company's loan approval workflow. You'll be notified once it has been approved or rejected."
           style={{ marginTop: SPACING.md }}
         />
+
+        {/* ---------- History ---------- */}
+        {/* Below the form rather than above it: this screen exists to make an
+            application, and the record of past ones is what you check after.
+            A plain section on the same ScrollView, not a FlatList — the list is
+            paged client-side at five and the whole response is already in
+            memory, so there is nothing to virtualise. */}
+        <SectionHeader
+          title="Your applications"
+          subtitle={
+            loanApplications.length > 0
+              ? `${loanApplications.length} submitted`
+              : undefined
+          }
+          style={{ marginTop: SPACING.xxl }}
+        />
+
+        {isFetchingHistory ? (
+          // Only the history waits — the form above does not depend on this
+          // query, so it stays usable while the list loads.
+          <ExpenseSkeleton count={2} label="Loading loan applications" />
+        ) : isHistoryError ? (
+          <Card>
+            <EmptyState
+              compact
+              icon="cloud-offline-outline"
+              title="Couldn't load your applications"
+              description={
+                historyError?.message || "Unable to load loan applications."
+              }
+              actionLabel="Retry"
+              onActionPress={refetchHistory}
+            />
+          </Card>
+        ) : visibleLoans.length === 0 ? (
+          <Card>
+            <EmptyState
+              compact
+              icon="wallet-outline"
+              title="No loan applications yet"
+              description="Once you submit an application it will appear here with its approval status."
+            />
+          </Card>
+        ) : (
+          <>
+            {visibleLoans.map((item, index) => (
+              <LoanHistoryCard
+                key={item?.name || index}
+                loan={item}
+                style={{ marginBottom: SPACING.md }}
+              />
+            ))}
+
+            {hasMoreLoans && (
+              <ActionButton
+                variant="outline"
+                icon="chevron-down"
+                label="Load more"
+                onPress={showMoreLoans}
+              />
+            )}
+          </>
+        )}
       </ScrollView>
 
       <OptionSheet
@@ -403,6 +574,18 @@ function LoanApplication() {
         emptyIcon="wallet-outline"
         emptyTitle="No loan products"
         emptyDescription="Your administrator hasn't configured any loan products yet."
+      />
+
+      <OptionSheet
+        visible={isRepaymentSheetVisible}
+        onClose={closeRepaymentSheet}
+        title="Repayment method"
+        subtitle="How should this loan be repaid?"
+        options={repaymentMethods}
+        selected={repaymentMethod}
+        onSelect={selectRepaymentMethod}
+        emptyIcon="calendar-outline"
+        emptyTitle="No repayment methods"
       />
 
       <AttachmentSheet
