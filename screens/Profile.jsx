@@ -38,6 +38,7 @@ import {
   getClientFcmToken,
 } from "../services/notifications/fcm.service";
 import * as Device from "expo-device";
+import { describeRunningUpdate } from "../utils/otaUpdate";
 
 const maskToken = (token) => {
   if (!token) {
@@ -49,14 +50,6 @@ const maskToken = (token) => {
   }
 
   return `${token.slice(0, 12)}...${token.slice(-8)}`;
-};
-
-const formatUpdateId = (updateId) => {
-  if (!updateId) {
-    return "embedded";
-  }
-
-  return `${updateId.slice(0, 8)}...`;
 };
 
 function Profile() {
@@ -90,9 +83,18 @@ function Profile() {
   // `||`, not `??`: a dev build reports the channel as "" rather than null, and
   // an empty string rendered an empty pill in the hero.
   const updateChannel = Updates.channel || "none";
-  const runtimeVersion = Updates.runtimeVersion ?? "unknown";
-  const updateId = formatUpdateId(Updates.updateId);
   const isProductionChannel = updateChannel === "production";
+  // Which JS this device is actually running. The native version above answers
+  // which binary is installed, which an OTA does not change — so two devices can
+  // both report 1.2.0 (12) and be weeks apart. See utils/otaUpdate.js.
+  const runningUpdate = describeRunningUpdate({
+    updateId: Updates.updateId,
+    createdAt: Updates.createdAt,
+    channel: Updates.channel,
+    runtimeVersion: Updates.runtimeVersion,
+    isEmbeddedLaunch: Updates.isEmbeddedLaunch,
+    isEnabled: Updates.isEnabled,
+  });
   const isIosSimulator = Platform.OS === "ios" && !Device.isDevice;
   const tokenDisplayText = isIosSimulator
     ? "Unavailable on iOS Simulator. Use a physical iPhone to generate an FCM token."
@@ -500,6 +502,23 @@ function Profile() {
         />
 
         <Card>
+          {/* What is running, before what could be. Someone diagnosing "have you
+              got the fix?" needs this row, and until now the screen computed it
+              and rendered nothing. */}
+          <SettingsRow
+            icon="cloud-download-outline"
+            title="Running"
+            value={runningUpdate.label}
+            description={runningUpdate.detail}
+          />
+          <RowDivider />
+          <SettingsRow
+            icon="git-branch-outline"
+            title="Runtime version"
+            value={runningUpdate.runtimeVersion}
+            description="Which builds this update can reach"
+          />
+          <RowDivider />
           <SettingsRow
             icon={statusTone.icon}
             iconTint={statusTone.backgroundColor}
