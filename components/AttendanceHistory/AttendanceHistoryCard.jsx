@@ -7,6 +7,7 @@ import useAppTheme from '../../hooks/useAppTheme';
 import PressableScale from '../common/PressableScale';
 import {
   describeLogSource,
+  describeLogTrigger,
   describeLogType,
   describeSyncStatus,
   formatLogDate,
@@ -69,11 +70,16 @@ function Chip({ icon, label, surface, text }) {
  * It is null for every server record — which is nearly all of them — so the
  * ordinary row is untouched and the chip is genuinely exceptional, in the same
  * slot and the same shape as the device badge.
+ *
+ * `auto` marks a punch the office geofence made rather than the employee. It
+ * shares that same chip row, ordered sync → trigger → device: how urgent it is,
+ * then how it happened, then where it came from.
  */
 function AttendanceHistoryCard({
   logType,
   time,
   deviceId,
+  auto = false,
   syncStatus = null,
   position = 'single',
   showDate = true,
@@ -84,6 +90,7 @@ function AttendanceHistoryCard({
   const date = parseLogTime(time);
   const { label, tone, icon } = describeLogType(logType);
   const source = describeLogSource(deviceId);
+  const trigger = describeLogTrigger(auto);
   const sync = describeSyncStatus(syncStatus);
 
   const isFirst = position === 'first' || position === 'single';
@@ -121,7 +128,7 @@ function AttendanceHistoryCard({
           {label}
         </Text>
 
-        {(!!source || !!sync) && (
+        {(!!source || !!sync || !!trigger) && (
           <View
             style={{
               flexDirection: 'row',
@@ -136,6 +143,14 @@ function AttendanceHistoryCard({
                 label={sync.label}
                 surface={colors[`${sync.tone}Surface`]}
                 text={colors[`${sync.tone}Text`]}
+              />
+            )}
+            {!!trigger && (
+              <Chip
+                icon={trigger.icon}
+                label={trigger.label}
+                surface={colors[`${trigger.tone}Surface`]}
+                text={colors[`${trigger.tone}Text`]}
               />
             )}
             {!!source && (
@@ -190,6 +205,7 @@ function AttendanceHistoryCard({
   // 28 Jul 2026" as a single row instead of three unrelated fragments.
   const a11yLabel = [
     label,
+    trigger ? 'automatic' : null,
     formatLogTime(date),
     formatLogDate(date),
     source ? `from ${source}` : null,

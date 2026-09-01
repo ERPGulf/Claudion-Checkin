@@ -63,12 +63,26 @@ let currentEmployeeId = null;
  *        events that genuinely change whether a blocked row can now land
  * @param {string|null} [options.wakeFailureClass] narrow the wake to one class
  */
-const runSync = (trigger, { wakeAllBlocked = false, wakeFailureClass = null } = {}) =>
-  syncPendingAttendance({ trigger, wakeAllBlocked, wakeFailureClass }).catch(
-    (error) => {
-      console.log(`${LOG_PREFIX} Sync (${trigger}) failed:`, error?.message);
-    },
-  );
+const runSync = (trigger, { wakeAllBlocked = false, wakeFailureClass = null } = {}) => {
+  // No authenticated employee means no way to prove who a queued row belongs
+  // to, and a row is uploaded under whatever token the device holds. Waiting is
+  // free — `employeeCode` lands a moment after login and restarts this manager,
+  // and the rows are kept, not dropped — whereas guessing files one employee's
+  // attendance against another.
+  if (!currentEmployeeId) {
+    console.log(`${LOG_PREFIX} Sync (${trigger}) skipped: no authenticated employee`);
+    return Promise.resolve();
+  }
+
+  return syncPendingAttendance({
+    trigger,
+    wakeAllBlocked,
+    wakeFailureClass,
+    employeeId: currentEmployeeId,
+  }).catch((error) => {
+    console.log(`${LOG_PREFIX} Sync (${trigger}) failed:`, error?.message);
+  });
+};
 
 /**
  * Keeps the offline rules current. Never throws and never damages a good cache
@@ -206,12 +220,36 @@ export const isBackgroundSyncRunning = () => started;
  * await both. The other triggers are fire-and-forget; this one the user is
  * watching.
  */
-export const syncNow = async ({ trigger = "pull-to-refresh" } = {}) => {
+export const syncNow = async ({
+  trigger = "pull-to-refresh",
+  employeeId = null,
+} = {}) => {
+  // `employeeId` overrides the manager's own idea of who is logged in, for
+  // callers that know it independently. Without it a drain requested while the
+  // manager is not running — the offline feature switched off, or the employee
+  // code not yet through — would find no scope and refuse forever, which for
+  // `reconcilePresence` would mean automatic check-in never resuming.
+  const scope = employeeId || currentEmployeeId;
+
   await runConfigRefresh(trigger, { force: true });
   // An explicit pull is a person asking "is it done yet?", so every blocked row
   // is re-attempted regardless of its backoff. This is the closest thing to a
   // manual retry the design offers, and it is deliberately not a button.
-  return syncPendingAttendance({ trigger, wakeAllBlocked: true });
+  //
+  // Scoped like every other trigger: a pull-to-refresh is still not permission
+  // to upload somebody else's punches, and with nobody authenticated there is
+  // no scope to apply. Shaped like a real (empty) run so the caller's
+  // `await syncNow()` needs no special case.
+  if (!scope) {
+    console.log(`${LOG_PREFIX} Sync (${trigger}) skipped: no authenticated employee`);
+    return { ran: false, reason: "no-employee", trigger };
+  }
+
+  return syncPendingAttendance({
+    trigger,
+    wakeAllBlocked: true,
+    employeeId: scope,
+  });
 };
 
 export default {

@@ -11,6 +11,7 @@ import {
   startBackgroundSync,
   stopBackgroundSync,
 } from "../services/offline/BackgroundSyncManager";
+import { applySessionOwner } from "../utils/attendanceSessionState";
 
 /**
  * Runs the offline attendance machinery for the length of a session.
@@ -24,9 +25,15 @@ import {
  * is restarted when it arrives (it lands a moment after `isLoggedIn` on a fresh
  * QR provisioning) and whenever it changes.
  *
- * The queue itself is NOT cleared here — that happens in the logout path
- * alongside the session state, because a queued punch outliving its employee is
- * a punch that would sync under the next user's token.
+ * The queue itself is NOT cleared here, and no longer on logout either: a
+ * queued punch is payroll data, and an expired token is not a reason to destroy
+ * it. The concern that used to justify clearing — a punch syncing under the next
+ * user's token — is handled by scoping the drain to the authenticated employee
+ * (`syncPendingAttendance({ employeeId })`), which skips another employee's rows
+ * instead of deleting them.
+ *
+ * This component also owns the one piece of teardown that genuinely is keyed to
+ * *who* is logged in: the attendance session record. See `applySessionOwner`.
  */
 export default function OfflineAttendanceBootstrap() {
   const isLoggedIn = useSelector(selectIsLoggedIn);
@@ -44,6 +51,33 @@ export default function OfflineAttendanceBootstrap() {
       ATTENDANCE_FEATURES.OFFLINE_ATTENDANCE,
     ),
   );
+
+  // The session record is a device-level key with no employee on it, so a
+  // session left open by one employee would otherwise be inherited by the next
+  // — and a geofence EXIT would close a stranger's shift. Deliberately NOT
+  // gated on `offlineEnabled`: whose session it is has nothing to do with the
+  // offline feature flag. Deliberately keyed on the employee changing rather
+  // than on logout, because a session expiry is usually the same person coming
+  // back mid-shift, and clearing then would lose the check-in that their
+  // automatic check-out depends on.
+  useEffect(() => {
+    if (!isLoggedIn || !employeeCode) return;
+
+    applySessionOwner(employeeCode)
+      .then((cleared) => {
+        if (cleared) {
+          console.log(
+            "[OfflineAttendanceBootstrap] Cleared a previous employee's attendance session",
+          );
+        }
+      })
+      .catch((error) => {
+        console.log(
+          "[OfflineAttendanceBootstrap] Session owner check failed:",
+          error?.message,
+        );
+      });
+  }, [isLoggedIn, employeeCode]);
 
   useEffect(() => {
     if (!isLoggedIn || !offlineEnabled) {

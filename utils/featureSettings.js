@@ -13,16 +13,21 @@
  *   booleans  offline_attendance, photo_upload, restrict_location,
  *             unrestricted_checkout_location, employee_shift,
  *             employee_checkin_break, attendance_request, attendance_history,
- *             loan_application, leave_request, employee_records, complaints
+ *             auto_attendance, loan_application, leave_request,
+ *             employee_records, complaints, expense_claim
  *
  *   strings   offline_attendance_version ("1")
- *             geo_tagging ("Enable geotagging for all attendance actions")
  *
- * The two strings are carried through untouched. `geo_tagging` in particular is
- * the ERPNext select *label*, whereas the rest of this app already models the
- * same policy as the 0/1/2 enum in redux/Slices/AutoAttendanceSlice. Both are
- * exposed — the raw label, and a best-effort numeric reading — so no caller has
- * to parse the sentence itself. See `geoTaggingLevel`.
+ *   enum      geo_tagging — 0 disabled, 1 warnings only, 2 all attendance
+ *             actions. Older builds send the ERPNext select *label* instead
+ *             ("Enable geotagging for all attendance actions").
+ *
+ * `geo_tagging` is read into `geo_tagging_level`, the 0/1/2 enum the rest of the
+ * app already speaks (redux/Slices/AutoAttendanceSlice). Both forms are accepted
+ * — see `geoTaggingLevel` — because a tenant on an older `employee_app` still
+ * sends prose, and reading their sentence as "unknown" would be a silent
+ * downgrade. The raw value is exposed too, but `geo_tagging_level` is the one to
+ * read: it is the only form that is comparable.
  *
  * ---------------------------------------------------------------------------
  * Default when a value is unknown: AVAILABLE
@@ -61,6 +66,7 @@ export const FEATURES = {
   LEAVE_REQUEST: 'leave_request',
   EMPLOYEE_RECORDS: 'employee_records',
   COMPLAINTS: 'complaints',
+  EXPENSE_CLAIM: 'expense_claim',
 };
 
 /** Nested under `attendance_action`. Addressed as `attendance_action.<key>`. */
@@ -74,6 +80,7 @@ export const ATTENDANCE_FEATURES = {
   EMPLOYEE_CHECKIN_BREAK: 'attendance_action.employee_checkin_break',
   ATTENDANCE_REQUEST: 'attendance_action.attendance_request',
   ATTENDANCE_HISTORY: 'attendance_action.attendance_history',
+  AUTO_ATTENDANCE: 'attendance_action.auto_attendance',
 };
 
 /** Every boolean the payload may carry, by its path. */
@@ -121,20 +128,43 @@ function normalizeString(value) {
   return null;
 }
 
-/**
- * `geo_tagging` as the 0/1/2 level the rest of the app speaks, read from the
- * ERPNext select label.
- *
- * Matched on substrings rather than exact equality because the label is admin-
- * facing prose that varies between builds. Returns null when the sentence is not
- * recognised, so callers fall back to the per-employee `geotagging` value that
- * `attendanceConfigCache` already stores — this never overrides it.
- */
-export function geoTaggingLevel(label) {
-  if (typeof label !== 'string') return null;
+/** The three geotagging policies, matching redux/Slices/AutoAttendanceSlice. */
+export const GEO_TAGGING_LEVELS = { DISABLED: 0, WARNINGS_ONLY: 1, ALL_ACTIONS: 2 };
 
-  const text = label.trim().toLowerCase();
+/**
+ * `geo_tagging` as the 0/1/2 level the rest of the app speaks.
+ *
+ * Two wire formats, because the backend changed and not every tenant has:
+ *
+ *  - **the enum** — `0` / `1` / `2`, as a number or as a numeric string. This is
+ *    what current builds send, and it is unambiguous.
+ *  - **the ERPNext select label** — "Enable geotagging for all attendance
+ *    actions" and friends. Matched on substrings rather than exact equality
+ *    because it is admin-facing prose that varies between builds.
+ *
+ * The enum is tested first and separately from the prose. That order matters:
+ * `"0"` and `"1"` carry no words for the label patterns to match, so before this
+ * they fell through to `null` — and `null` means "the server did not say", which
+ * is the opposite of what `0` means. An administrator turning geotagging off
+ * would have read as no answer at all.
+ *
+ * Still returns null for anything unrecognised, so a caller falls back to the
+ * per-employee `geotagging` value `attendanceConfigCache` stores rather than
+ * inventing a policy.
+ */
+export function geoTaggingLevel(value) {
+  if (typeof value === 'number') {
+    return Number.isInteger(value) && value >= 0 && value <= 2 ? value : null;
+  }
+
+  if (typeof value !== 'string') return null;
+
+  const text = value.trim().toLowerCase();
   if (!text) return null;
+
+  // `/^[012]$/` rather than Number(): "2 warnings" must not read as 2, and an
+  // empty or whitespace string must not read as 0.
+  if (/^[012]$/.test(text)) return Number(text);
 
   if (/disab|off|none/.test(text)) return 0;
   if (/all attendance|all action/.test(text)) return 2;
@@ -155,6 +185,7 @@ export function emptyFeatureSettings() {
     leave_request: null,
     employee_records: null,
     complaints: null,
+    expense_claim: null,
     attendance_action: {
       offline_attendance: null,
       offline_attendance_version: null,
@@ -167,6 +198,7 @@ export function emptyFeatureSettings() {
       employee_checkin_break: null,
       attendance_request: null,
       attendance_history: null,
+      auto_attendance: null,
     },
   };
 }
@@ -213,12 +245,15 @@ export function normalizeFeatureSettings(raw) {
     target[key] = normalizeBoolean(attendance[key]);
   }
 
-  // The two that are not booleans, kept as the strings they are.
+  // The two that are not booleans.
   target.offline_attendance_version = normalizeString(
     attendance.offline_attendance_version,
   );
   target.geo_tagging = normalizeString(attendance.geo_tagging);
-  target.geo_tagging_level = geoTaggingLevel(target.geo_tagging);
+  // From the raw value, not from the normalised string above: `normalizeString`
+  // is lossy for this field (it renders a numeric 0 as "0"), and the level is
+  // the form every caller actually uses.
+  target.geo_tagging_level = geoTaggingLevel(attendance.geo_tagging);
 
   return settings;
 }
@@ -289,8 +324,10 @@ export const ROUTE_FEATURES = {
   'Loan application': FEATURES.LOAN_APPLICATION,
   'Leave request': FEATURES.LEAVE_REQUEST,
   Complaints: FEATURES.COMPLAINTS,
+  'Expense claim': FEATURES.EXPENSE_CLAIM,
   'Attendance request': ATTENDANCE_FEATURES.ATTENDANCE_REQUEST,
   'Attendance history': ATTENDANCE_FEATURES.ATTENDANCE_HISTORY,
+  'Auto attendance': ATTENDANCE_FEATURES.AUTO_ATTENDANCE,
   Shortcut1: FEATURES.EMPLOYEE_RECORDS,
   Shortcut2: FEATURES.EMPLOYEE_RECORDS,
   Shortcut3: FEATURES.EMPLOYEE_RECORDS,
@@ -299,7 +336,7 @@ export const ROUTE_FEATURES = {
 /** Whether a route may be entered under the given settings. */
 export function isRouteEnabled(settings, routeName) {
   const feature = ROUTE_FEATURES[routeName];
-  // Routes with no flag (Home, Profile, QR, Expense claim…) are always open.
+  // Routes with no flag (Home, Profile, QR, Attendance action…) are always open.
   if (!feature) return true;
 
   return isFeatureEnabled(settings, feature);
@@ -309,6 +346,7 @@ export default {
   DEFAULT_WHEN_UNKNOWN,
   FEATURES,
   ATTENDANCE_FEATURES,
+  GEO_TAGGING_LEVELS,
   ROUTE_FEATURES,
   buildSettingsScope,
   emptyFeatureSettings,

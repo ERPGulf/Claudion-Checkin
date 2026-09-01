@@ -18,7 +18,12 @@ import { format, isToday, isYesterday } from 'date-fns';
  *     employee: 'TDI0167',
  *     skip_auto_attendance: 0,
  *     creation: '2026-07-28 17:39:45.894330',
+ *     auto: false,
  *   }
+ *
+ * `auto` is recent. Servers that have not been updated omit it entirely, which
+ * is why every reader below treats "absent" as "not automatic" rather than as
+ * unknown — an older tenant keeps exactly the history rows it has today.
  */
 
 /**
@@ -100,6 +105,30 @@ export function describeLogSource(deviceId) {
   const trimmed = deviceId.trim();
   if (!trimmed || trimmed.toUpperCase() === 'MOBILEAPP') return null;
   return trimmed;
+}
+
+/**
+ * Whether a punch was made by the office geofence rather than by the employee,
+ * or `null` when it was not (which is also what an older server's missing field
+ * reads as).
+ *
+ * Only the automatic case gets a chip, for the same reason `describeLogSource`
+ * only labels foreign devices: a "Manual" pill on the other rows would state the
+ * default twice per line and make the exception harder to spot, not easier.
+ *
+ * The value is normalised rather than trusted as a boolean. This endpoint
+ * returns real JSON booleans, but Frappe Check fields reach other callers as
+ * 0/1 — and a bare truthiness test would read the string "false" as automatic.
+ */
+export function describeLogTrigger(auto) {
+  const isAuto =
+    auto === true ||
+    auto === 1 ||
+    (typeof auto === 'string' && ['1', 'true'].includes(auto.trim().toLowerCase()));
+
+  if (!isAuto) return null;
+
+  return { label: 'Automatic', tone: 'info', icon: 'flash-outline' };
 }
 
 /** "Today" / "Yesterday" / "28 Jul 2026". */
@@ -216,6 +245,10 @@ export function toHistoryRecord(row) {
     syncStatus: resolveQueueSyncStatus(row),
     syncError: row.error ?? row.duplicateMessage ?? null,
     attendanceType: row.attendanceType,
+    // The queue records the same distinction under its own name, so a punch
+    // still waiting to sync is described exactly as its server copy will be —
+    // the chip does not appear or change when the row finally uploads.
+    auto: row.attendanceType === 'auto',
   };
 }
 

@@ -102,8 +102,11 @@ const ShortcutButton = React.memo(({ shortcut, navigation }) => {
  * strip from showing a gap where a disabled feature used to be.
  *
  * Contents and order are unchanged from the inline array this replaces.
+ *
+ * Exported for the feature-gate tests, which assert against the real menu
+ * rather than a copy — a second copy would drift and stop catching anything.
  */
-const LEGACY_HR_FEATURES = [
+export const LEGACY_HR_FEATURES = [
               {
                 label: ["Attendance", "action"],
                 icon: "calendar-outline",

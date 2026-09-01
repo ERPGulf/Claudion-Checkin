@@ -37,7 +37,33 @@ jest.mock("expo-location", () => ({
   ),
 }));
 
+// What the server says about the open session. `custom_in: 0` is "no open
+// session", which is the state every pre-existing test here assumed.
+let mockServerStatus = { custom_in: 0 };
+
+// The outbox, as reconcilePresence sees it. All zero means "the server has seen
+// everything this device did", which is what every pre-existing test assumes.
+//
+// Both fields are supplied because they differ in exactly the case that matters:
+// an `endpoint-missing` row is awaiting the server but can never reach it, so it
+// is counted by the first and not the second.
+let mockQueueCounts = { awaitingServerCount: 0, mayAffectServerCount: 0 };
+
+jest.mock("../services/offline/AttendanceQueueService", () => ({
+  getQueueCounts: jest.fn(() => Promise.resolve(mockQueueCounts)),
+  // Pass-through by default, so these tests keep exercising the real API call.
+  // A test that wants the offline path overrides it to return `queued: true`.
+  submitAutoAttendance: jest.fn(({ online }) => online()),
+}));
+
+jest.mock("../services/offline/BackgroundSyncManager", () => ({
+  syncNow: jest.fn(() => Promise.resolve({ ran: false })),
+}));
+
 jest.mock("../services/api/attendance.service", () => ({
+  // Server-side session authority. `reconcilePresence` consults it before
+  // opening a session, so every suite that mounts the bootstrap has to answer.
+  getAttendanceStatus: jest.fn(() => Promise.resolve(mockServerStatus)),
   autoCheckInOut: jest.fn(() =>
     Promise.resolve({ allowed: true, name: "EMP-CHKIN-001", location: null }),
   ),
@@ -59,6 +85,7 @@ import { autoCheckInOut } from "../services/api/attendance.service";
 import { fetchEmployeeData } from "../services/api/employee.service";
 import { stopGeofence } from "../modules/expo-auto-attendance";
 import { presentLocalNotification } from "../services/notifications/localNotifications";
+import { submitAutoAttendance } from "../services/offline/AttendanceQueueService";
 import {
   performSessionTransition,
   readSession,
@@ -157,8 +184,11 @@ describe("AutoAttendanceBootstrap geofence transitions", () => {
     listeners.onGeofenceEnter = [];
     listeners.onGeofenceExit = [];
     mockNativeLastEvent = null;
+    mockQueueCounts = { awaitingServerCount: 0, mayAffectServerCount: 0 };
+    mockServerStatus = { custom_in: 0 };
     // clearAllMocks keeps implementations, so restore the policy baseline.
     fetchEmployeeData.mockResolvedValue({ geotagging: GEOTAGGING.ALL_ACTIONS });
+    submitAutoAttendance.mockImplementation(({ online }) => online());
     await AsyncStorage.clear();
   });
 
@@ -513,6 +543,118 @@ describe("AutoAttendanceBootstrap geofence transitions", () => {
 
       expect(autoCheckInOut).toHaveBeenCalledTimes(1);
       expect((await readSession()).status).toBe(SESSION_STATUS.CHECKED_OUT);
+    });
+  });
+
+  /**
+   * What the check-out notification is allowed to claim.
+   *
+   * The queue returns `allowed: true` for a punch it has merely accepted
+   * locally, and the old copy read that as "the server has it". An employee
+   * therefore saw "you've been checked out automatically" for a punch that was
+   * still in SQLite, and had no way to know the difference — which is how a lost
+   * check-out went unnoticed until payroll.
+   */
+  describe("check-out notification", () => {
+    beforeEach(mountBootstrap);
+
+    it("says the punch is pending when it was only queued", async () => {
+      await fireGeofence("ENTER");
+
+      submitAutoAttendance.mockResolvedValueOnce({
+        allowed: true,
+        queued: true,
+        message: "Checked out offline — this will sync when you're back online.",
+      });
+
+      await fireGeofence("EXIT");
+
+      expect(presentLocalNotification).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          title: "Checked out offline",
+          body: expect.stringContaining("will sync when you're back online"),
+          data: expect.objectContaining({ pendingSync: true }),
+        }),
+      );
+      // And it must not also claim the server has it.
+      const [{ body }] = presentLocalNotification.mock.calls.at(-1);
+      expect(body).not.toContain("checked out automatically");
+    });
+
+    it("keeps the plain wording when the server confirmed it", async () => {
+      await fireGeofence("ENTER");
+      await fireGeofence("EXIT");
+
+      expect(presentLocalNotification).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          title: "Checked out",
+          body: expect.stringContaining("you've been checked out automatically"),
+          data: expect.objectContaining({ pendingSync: false }),
+        }),
+      );
+    });
+  });
+
+  /**
+   * The ENTER-versus-drain race.
+   *
+   * At login the fence is re-registered and the OS answers with an immediate
+   * ENTER from its initial-state check. If the employee still has an undelivered
+   * check-out, sending this check-in straight to the server would put an IN on
+   * top of a session the server has not been told to close.
+   *
+   * The decision is made here; the ordering it depends on is enforced by the
+   * queue's head-of-line claim, and the submitted order is asserted in
+   * attendanceAuthRecovery.integration.test.js.
+   */
+  describe("an automatic IN behind an undelivered punch", () => {
+    beforeEach(mountBootstrap);
+
+    it("takes the queue so it cannot overtake the earlier punch", async () => {
+      mockQueueCounts = { awaitingServerCount: 1, mayAffectServerCount: 1 };
+
+      await fireGeofence("ENTER");
+
+      expect(submitAutoAttendance).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "IN", forceQueue: true }),
+      );
+    });
+
+    it("goes online as usual when nothing is outstanding", async () => {
+      await fireGeofence("ENTER");
+
+      expect(submitAutoAttendance).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "IN", forceQueue: false }),
+      );
+      expect(autoCheckInOut).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "IN" }),
+      );
+    });
+
+    // An `endpoint-missing` row can never reach the server, so ordering behind
+    // it is meaningless and waiting on it would divert every check-in into a
+    // queue that cannot drain.
+    it("is not diverted by a punch that can never be delivered", async () => {
+      mockQueueCounts = { awaitingServerCount: 1, mayAffectServerCount: 0 };
+
+      await fireGeofence("ENTER");
+
+      expect(submitAutoAttendance).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "IN", forceQueue: false }),
+      );
+    });
+
+    // Only the IN direction. A check-out closes a session; the queue's own
+    // ordering already puts it behind anything earlier.
+    it("never forces the queue for a check-out", async () => {
+      mockQueueCounts = { awaitingServerCount: 1, mayAffectServerCount: 1 };
+
+      await fireGeofence("ENTER");
+      await fireGeofence("EXIT");
+
+      expect(submitAutoAttendance).toHaveBeenLastCalledWith(
+        expect.objectContaining({ type: "OUT", forceQueue: false }),
+      );
     });
   });
 });

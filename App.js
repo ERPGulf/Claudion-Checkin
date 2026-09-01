@@ -41,9 +41,14 @@ function cacheFonts(fonts) {
 const queryClient = new QueryClient();
 registerBackgroundMessageHandler();
 // Forced logout (session expiry) reuses the same teardown as manual logout: the
-// FCM registration, and the offline attendance queue plus its cached rules. A
-// session that expires mid-outage would otherwise leave queued punches behind to
-// sync under the next user's token.
+// FCM registration and the cached attendance rules.
+//
+// It does NOT touch the offline attendance queue, and that is load-bearing. It
+// used to: a queued automatic check-out whose upload was interrupted by the
+// token expiring was deleted right here, so the server never learned the
+// employee had left and the app went on to file a second check-in on top of the
+// still-open session. Authentication state and attendance data are independent —
+// see clearOfflineAttendance.
 registerSessionCleanupHandler(async () => {
   await Promise.allSettled([clearFcmRegistration(), clearOfflineAttendance()]);
 });

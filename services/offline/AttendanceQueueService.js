@@ -217,6 +217,13 @@ const queueAttendance = async ({
  *        connection
  * @param {number|null} [options.occurredAt] device epoch ms the punch actually
  *        happened, for a replayed geofence crossing
+ * @param {boolean} [options.forceQueue] skip the online attempt and queue the
+ *        punch even though there is a connection. **Ordering, not connectivity.**
+ *        Set when an older punch for this employee has not reached the server
+ *        yet: sending this one directly would overtake it, and the server would
+ *        see a check-in before the check-out that precedes it. Queueing puts it
+ *        behind that punch in the employee's FIFO instead. See
+ *        `claimNextPending` for the ordering guarantee this relies on.
  * @returns {Promise<object>} the `performSessionTransition` execute contract
  */
 export const submitAttendance = async ({
@@ -226,6 +233,7 @@ export const submitAttendance = async ({
   online,
   occurredAt = null,
   photoUri = null,
+  forceQueue = false,
 }) => {
   if (type !== "IN" && type !== "OUT") {
     throw new Error(`submitAttendance: invalid type ${type}`);
@@ -235,34 +243,70 @@ export const submitAttendance = async ({
   // queue a punch that could have gone straight through, and the round-trip is
   // cheap next to the request it is deciding about.
   const connected = await fetchIsOnline();
+  const canGoOnline = connected && typeof online === "function";
 
-  if (connected && typeof online === "function") {
+  /**
+   * One online attempt.
+   *
+   * `{ done: true }` means the caller should return `result` — the server had an
+   * opinion and it stands. `{ done: false }` means the failure was transient and
+   * the punch should be queued.
+   */
+  const attemptOnline = async () => {
     try {
       const result = await online();
 
-      if (result?.allowed) return result;
+      if (result?.allowed) return { done: true, result };
 
       if (!shouldQueueFailure(result)) {
         // A real refusal — out of radius, missing configuration, a rejected
         // payload. Surfacing it is the correct behaviour, online or not.
-        return result;
+        return { done: true, result };
       }
 
       console.log(
         `${LOG_PREFIX} Online attempt failed transiently, queueing:`,
         result?.message,
       );
+      return { done: false };
     } catch (error) {
       const { message } = classifyAttendanceError(error);
 
       // Same rule as a returned failure — see shouldQueueFailure.
       if (!shouldQueueFailure({ error })) {
-        return { allowed: false, message, error, location: null };
+        return { done: true, result: { allowed: false, message, error, location: null } };
       }
 
       console.log(`${LOG_PREFIX} Online attempt threw, queueing:`, message);
+      return { done: false };
     }
+  };
+
+  if (canGoOnline && !forceQueue) {
+    const attempt = await attemptOnline();
+    if (attempt.done) return attempt.result;
   }
+
+  /**
+   * What to do when the queue will not take a punch that `forceQueue` sent here.
+   *
+   * `forceQueue` chose the queue for ordering, not because the punch could not
+   * be sent — the connection is fine. If the queue then refuses it (no offline
+   * endpoint on this server, no cached rules), returning that refusal would
+   * throw away a real crossing the OS will not deliver again. Losing attendance
+   * is worse than the ordering risk we were avoiding, so fall back to sending
+   * it. Ordinary punches are unaffected: they have already had their online
+   * attempt by this point.
+   */
+  const refuseOrFallBack = async (refusal) => {
+    if (!forceQueue || !canGoOnline) return refusal;
+
+    console.log(
+      `${LOG_PREFIX} Queue refused a forced ${type} (${refusal.reason}); sending it rather than losing it`,
+    );
+    const attempt = await attemptOnline();
+    return attempt.done ? attempt.result : refusal;
+  };
 
   // This server has already told us it has no offline endpoint, so queueing
   // would be a promise the app cannot keep: the punch would sit in a queue that
@@ -274,12 +318,12 @@ export const submitAttendance = async ({
   // deploys the endpoint, one success flips this back and everything drains.
   if (isOfflineSyncUnsupported()) {
     console.log(`${LOG_PREFIX} Offline ${type} refused: server has no offline endpoint`);
-    return {
+    return refuseOrFallBack({
       allowed: false,
       reason: "unsupported",
       message: OFFLINE_UNSUPPORTED_MESSAGE,
       location: null,
-    };
+    });
   }
 
   // Queueing from here. The gate still applies: an out-of-radius punch is
@@ -298,12 +342,12 @@ export const submitAttendance = async ({
 
   if (!gate.allowed) {
     console.log(`${LOG_PREFIX} Offline ${type} refused:`, gate.reason);
-    return {
+    return refuseOrFallBack({
       allowed: false,
       message: gate.message,
       reason: gate.reason,
       location: null,
-    };
+    });
   }
 
   return queueAttendance({
@@ -340,6 +384,7 @@ export const submitAutoAttendance = ({
   employeeCode,
   online,
   occurredAt,
+  forceQueue = false,
 }) =>
   submitAttendance({
     type,
@@ -347,6 +392,7 @@ export const submitAutoAttendance = ({
     attendanceType: ATTENDANCE_TYPE.AUTO,
     online,
     occurredAt,
+    forceQueue,
   });
 
 // ----------------------
@@ -398,13 +444,38 @@ export const resolveWithCorrection = async ({ id, resolutionDocname }) => {
 };
 
 /**
- * Logout teardown: drops the queue and the cached rules.
+ * Logout teardown: drops the cached rules and the capability probe, and
+ * **keeps every queued punch**.
  *
- * Both have to go. A queued punch belongs to the employee who made it and would
- * otherwise sync under whoever logs in next — attendance filed against the wrong
- * person, from a device that looks like it is working correctly. The cached
- * configuration is the previous employee's reporting locations and policy flags,
- * which would silently govern the next one's offline check-ins.
+ * This function used to clear the queue too, and that was the direct cause of
+ * lost attendance in production. The chain: an employee's automatic check-out is
+ * queued while they are offline; their token expires before it can drain; the
+ * 401 handler calls `expireSession()`, which runs this as its cleanup hook; the
+ * queue is deleted; the employee logs back in and the server never learns they
+ * left. Their local session then reads CHECKED_OUT for a punch the server has no
+ * record of, which is what produced a second automatic check-in on top of a
+ * still-open one.
+ *
+ * The invariant now is that **authentication state and attendance data are
+ * independent**. None of these may destroy a punch:
+ *
+ *   access-token expiry · refresh failure · forced logout · manual logout ·
+ *   app restart · network loss · returning to the login screen
+ *
+ * A queued punch is payroll data the employee has already earned. It leaves the
+ * queue in exactly two ways: the server accepts it, or someone explicitly asks
+ * for it to be discarded (`purgeAttendanceQueue`).
+ *
+ * The original concern behind the clear — a punch syncing under whoever logs in
+ * next — is real, and is now handled where it belongs: the drain is scoped to
+ * the authenticated employee (see `syncPendingAttendance`), so another
+ * employee's rows are skipped rather than deleted. Skipping is recoverable when
+ * the first employee logs back in; deleting never is.
+ *
+ * The cached configuration and the capability probe still go. Both are
+ * tenant/employee-scoped policy rather than employee data, both are rebuilt from
+ * the server on the next login, and a stale copy governing the next employee's
+ * offline check-ins is a live hazard with no upside.
  *
  * Never throws: a logout that fails because of local cleanup would strand the
  * user in a session they have asked to leave.
@@ -415,7 +486,6 @@ export const resolveWithCorrection = async ({ id, resolutionDocname }) => {
  */
 export const clearOfflineAttendance = async () => {
   const results = await Promise.allSettled([
-    clearAttendanceQueue(),
     clearAttendanceConfig(),
     // The capability is a fact about the server this account was on, and the
     // next login may be a different tenant entirely. Carrying "unsupported"
@@ -433,6 +503,22 @@ export const clearOfflineAttendance = async () => {
   notifyQueueChanged();
 };
 
+/**
+ * Discards every queued punch, synced or not.
+ *
+ * Deliberately separate from `clearOfflineAttendance` and deliberately not
+ * wired to any authentication path. This is the explicit, intentional purge —
+ * the only way unsynchronised attendance is allowed to leave the device without
+ * the server having accepted it. Nothing in the app calls it today; it exists so
+ * that a future "reset this device" affordance has one honest place to live
+ * rather than reaching for `clearAttendanceQueue` and quietly recreating the
+ * data loss this module was fixed to prevent.
+ */
+export const purgeAttendanceQueue = async () => {
+  await clearAttendanceQueue();
+  notifyQueueChanged();
+};
+
 export default {
   QUEUE_STATUS,
   addQueueChangeListener,
@@ -443,6 +529,7 @@ export default {
   getUnsyncedRows,
   isOnline,
   notifyQueueChanged,
+  purgeAttendanceQueue,
   resolveWithCorrection,
   shouldQueueFailure,
   submitAttendance,

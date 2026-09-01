@@ -238,21 +238,82 @@ export const pairWithOpenCheckin = async ({
  * Only `pending` rows are claimable. Blocked rows are woken back to pending by
  * `wakeBlocked` on their own schedule, which keeps "is it due" in one place and
  * stops a blocked row being picked up before its backoff has elapsed.
+ *
+ * `employeeId` scopes the claim to one employee's punches. A queued punch is
+ * uploaded with whatever token the device currently holds, so draining another
+ * employee's rows after a user switch would file their attendance against the
+ * person now logged in. Scoping *skips* those rows rather than deleting them —
+ * they are still that employee's data, and they drain normally the next time
+ * they log in on this device. Omitting it drains everything, which is only ever
+ * correct in tests.
+ *
+ * ## Strict per-employee ordering
+ *
+ * `ORDER BY timestamp ASC` alone does NOT give FIFO, because the ordering is
+ * applied only to rows that are claimable *right now*. An older punch that is
+ * `blocked`, or `pending` but still inside its retry backoff, is invisible to
+ * that ORDER BY — so a newer punch is claimed and uploaded ahead of it. For a
+ * check-out followed by a check-in that inverts the employee's day: the server
+ * receives the IN while it still believes the earlier session is open, which is
+ * precisely the duplicate-session failure this queue exists to prevent.
+ *
+ * So the NOT EXISTS below makes each employee's queue strictly head-of-line: a
+ * row is claimable only when nothing older for that employee is still capable of
+ * reaching the server. "Older" is `(timestamp, id)`, the same total order the
+ * ORDER BY uses, so the two cannot disagree.
+ *
+ * Which statuses count as a dependency is the same judgement
+ * `mayAffectServerCount` makes, and for the same reason:
+ *
+ *  - `pending` / `syncing` — will land, possibly in a moment. Must block.
+ *  - `blocked` — will land once auth or configuration is fixed. Must block.
+ *  - `blocked` + `endpoint-missing` — can never land without a deployment, and
+ *    is kept forever. Blocking on it would stall the employee's queue
+ *    permanently, so it is explicitly excluded.
+ *  - `rejected` / `resolved` / `synced` — the server is done with them.
+ *
+ * This is one statement, so the check and the claim cannot be separated by
+ * another drain: there is no window in which two contexts both decide a row is
+ * at the head.
  */
-export const claimNextPending = async (now = Date.now()) => {
+export const claimNextPending = async (now = Date.now(), { employeeId = null } = {}) => {
   const database = await getDatabase();
+
+  const scope = employeeId ? " AND candidate.employeeId = ?" : "";
+  const scopeParams = employeeId ? [employeeId] : [];
 
   const row = await database.getFirstAsync(
     `UPDATE ${QUEUE_TABLE}
         SET status = ?, updatedAt = ?
       WHERE id = (
-        SELECT id FROM ${QUEUE_TABLE}
-         WHERE status = ? AND nextAttemptAt <= ?
-         ORDER BY timestamp ASC, id ASC
+        SELECT candidate.id FROM ${QUEUE_TABLE} AS candidate
+         WHERE candidate.status = ? AND candidate.nextAttemptAt <= ?${scope}
+           AND NOT EXISTS (
+             SELECT 1 FROM ${QUEUE_TABLE} AS older
+              WHERE older.employeeId = candidate.employeeId
+                AND (older.timestamp < candidate.timestamp
+                     OR (older.timestamp = candidate.timestamp
+                         AND older.id < candidate.id))
+                AND (
+                  older.status IN (?, ?)
+                  OR (older.status = ? AND IFNULL(older.failureClass, '') <> ?)
+                )
+           )
+         ORDER BY candidate.timestamp ASC, candidate.id ASC
          LIMIT 1
       )
       RETURNING *;`,
-    [QUEUE_STATUS.SYNCING, now, QUEUE_STATUS.PENDING, now],
+    [
+      QUEUE_STATUS.SYNCING,
+      now,
+      QUEUE_STATUS.PENDING,
+      now,
+      ...scopeParams,
+      QUEUE_STATUS.PENDING,
+      QUEUE_STATUS.SYNCING,
+      QUEUE_STATUS.BLOCKED,
+      FAILURE_CLASS.ENDPOINT_MISSING,
+    ],
   );
 
   return hydrate(row);
@@ -717,6 +778,28 @@ export const listAll = async ({ limit = 500 } = {}) => {
  *    reconnect guard uses this: the server has already refused rejected rows, so
  *    its "no open session" is correct about them and must be allowed to close
  *    the session. Counting them would hold a session open forever.
+ *  - `mayAffectServerCount` — awaiting rows that could still change what the
+ *    server thinks, which is a stricter question than "is anything queued".
+ *
+ * ## Why `mayAffectServerCount` exists
+ *
+ * `awaitingServerCount` counts every blocked row, and blocked rows are kept
+ * forever by design. That is right for a row blocked on auth or on server
+ * configuration: someone refreshes a token or fixes a setting and the row lands,
+ * so until then the server's view of the session is genuinely unsettled.
+ *
+ * It is wrong for `endpoint-missing`. That row is blocked on a deployment, not
+ * on anything that will resolve on its own, and while it sits there
+ * `awaitingServerCount` never returns to zero. A caller that waits for zero
+ * before acting — `reconcilePresence` waits before it will open a session —
+ * would stop working permanently on any tenant without the offline endpoint
+ * deployed. One undeployable row would disable automatic check-in for good.
+ *
+ * So this count asks the narrower question the guards actually mean: *could any
+ * of these still create or close a session on the server?* Only
+ * `endpoint-missing` is excluded, and only while blocked — the row is still
+ * kept, still retried, and still counted everywhere else. If the endpoint is
+ * later deployed, one success flips it back and it is counted again.
  */
 export const countByStatus = async (employeeId = null) => {
   const database = await getDatabase();
@@ -762,6 +845,31 @@ export const countByStatus = async (employeeId = null) => {
 
   counts.awaitingServerCount =
     counts.pendingCount + counts.syncingCount + counts.blockedCount;
+
+  // Blocked rows split by *why*. Only the undeliverable class is separated out;
+  // auth, configuration and unknown all remain things that can still land.
+  const blockedRows = employeeId
+    ? await database.getAllAsync(
+        `SELECT failureClass, COUNT(*) AS total FROM ${QUEUE_TABLE}
+          WHERE status = ? AND employeeId = ? GROUP BY failureClass;`,
+        [QUEUE_STATUS.BLOCKED, employeeId],
+      )
+    : await database.getAllAsync(
+        `SELECT failureClass, COUNT(*) AS total FROM ${QUEUE_TABLE}
+          WHERE status = ? GROUP BY failureClass;`,
+        [QUEUE_STATUS.BLOCKED],
+      );
+
+  counts.blockedUndeliverableCount = (blockedRows ?? []).reduce(
+    (total, { failureClass, total: rowTotal }) =>
+      failureClass === FAILURE_CLASS.ENDPOINT_MISSING
+        ? total + (Number(rowTotal) || 0)
+        : total,
+    0,
+  );
+
+  counts.mayAffectServerCount =
+    counts.awaitingServerCount - counts.blockedUndeliverableCount;
 
   return counts;
 };

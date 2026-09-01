@@ -1,5 +1,6 @@
 import {
   describeLogSource,
+  describeLogTrigger,
   describeLogType,
   formatDayTitle,
   formatLogDate,
@@ -235,5 +236,42 @@ describe('groupRecordsByDay', () => {
     );
 
     expect(total).toBe(input.length);
+  });
+});
+
+describe('describeLogTrigger', () => {
+  // The chip is the whole point of the server's new `auto` field, so what it
+  // does and does not appear for is pinned in both directions.
+  it('describes an automatic punch', () => {
+    expect(describeLogTrigger(true)).toEqual({
+      label: 'Automatic',
+      tone: 'info',
+      icon: 'flash-outline',
+    });
+  });
+
+  it('says nothing for a manual punch', () => {
+    expect(describeLogTrigger(false)).toBeNull();
+  });
+
+  // An older tenant omits the field entirely. Its history must render exactly
+  // as it does today rather than growing a chip on every row.
+  it('says nothing when the server did not send the field', () => {
+    expect(describeLogTrigger(undefined)).toBeNull();
+    expect(describeLogTrigger(null)).toBeNull();
+  });
+
+  // Frappe Check fields reach some callers as 0/1 or as strings.
+  it.each([
+    [1, true],
+    [0, false],
+    ['1', true],
+    ['0', false],
+    ['true', true],
+    ['True', true],
+    ['false', false],
+    ['False', false],
+  ])('normalises %p to %p', (value, isAuto) => {
+    expect(describeLogTrigger(value) === null).toBe(!isAuto);
   });
 });

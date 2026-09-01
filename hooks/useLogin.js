@@ -9,6 +9,7 @@ import { setUnreadCount } from '../redux/Slices/notificationSlice';
 import { getNotifications } from '../services/api/notification.service';
 import { generateToken } from '../services/api';
 import { getLoginErrorMessage } from '../utils/loginError';
+import { readProvisioning } from '../utils/provisioning';
 
 /**
  * The login flow, lifted out of the classic screen so the modern UI is
@@ -66,11 +67,12 @@ export default function useLogin() {
   const handleLogin = async password => {
     setIsLoading(true);
     try {
-      const api_key = await AsyncStorage.getItem('api_key');
-      const app_key = await AsyncStorage.getItem('app_key');
-      const baseUrl = await AsyncStorage.getItem('baseUrl');
+      // Same three keys and the same guard as before, read through the shared
+      // helper so this and the auth navigator's "which screen do we open on"
+      // decision can never disagree about what "provisioned" means.
+      const { api_key, app_key, provisioned } = await readProvisioning();
 
-      if (!api_key || !app_key || !baseUrl) {
+      if (!provisioned) {
         Toast.show({
           type: 'error',
           text1: 'QR code not scanned',

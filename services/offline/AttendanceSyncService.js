@@ -284,6 +284,9 @@ const syncRow = async (row) => {
  * @param {string|null} [options.wakeFailureClass] wake only this class, so a
  *        token refresh retries auth-blocked rows without also re-attempting
  *        rows blocked on a missing endpoint
+ * @param {string|null} [options.employeeId] only upload this employee's rows.
+ *        Callers that know who is authenticated must pass it; leaving it null
+ *        drains every row regardless of owner, which is only safe in tests.
  * @returns {Promise<{ran: boolean, synced: number, duplicates: number,
  *                     blocked: number, rejected: number, woken: number,
  *                     remaining: number, reason?: string}>}
@@ -292,6 +295,7 @@ export const syncPendingAttendance = async ({
   trigger = "manual",
   wakeAllBlocked = false,
   wakeFailureClass = null,
+  employeeId = null,
 } = {}) => {
   if (activeRun) return activeRun;
 
@@ -344,7 +348,11 @@ export const syncPendingAttendance = async ({
       summary.ran = true;
 
       for (let processed = 0; processed < MAX_ROWS_PER_RUN; processed += 1) {
-        const row = await claimNextPending();
+        // Scoped to the authenticated employee. Rows belonging to anyone else
+        // are left untouched — see claimNextPending — because a queued punch is
+        // uploaded under the current token, and filing one employee's
+        // attendance against another is worse than it arriving late.
+        const row = await claimNextPending(Date.now(), { employeeId });
         if (!row) break;
 
         // Announced on the first claimed row, not at the top of the run: a drain

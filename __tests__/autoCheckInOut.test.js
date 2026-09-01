@@ -16,6 +16,7 @@ import apiClient from "../services/api/apiClient";
 import {
   autoCheckInOut,
   resolveServerTimestampAt,
+  userCheckIn,
 } from "../services/api/attendance.service";
 
 const ADD_LOG_ENDPOINT = "add_log_based_on_employee_field";
@@ -180,5 +181,54 @@ describe("autoCheckInOut (geofence-driven attendance)", () => {
       const [, payload] = apiClient.post.mock.calls[0];
       expect(payload.timestamp).toBe("not a datetime");
     });
+  });
+});
+
+
+describe("the `auto` flag on add_log_based_on_employee_field", () => {
+  // The server records whether a punch came from the office geofence or from a
+  // deliberate tap. Getting this backwards misattributes attendance, so both
+  // directions are pinned rather than only the interesting one.
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    await AsyncStorage.clear();
+    await AsyncStorage.setItem("baseUrl", "https://demo.erpgulf.com");
+    await AsyncStorage.setItem("access_token", "tok-123");
+    apiClient.get.mockResolvedValue({
+      data: { message: { server_time: "2026-07-23 10:00:00" } },
+    });
+    apiClient.post.mockResolvedValue({
+      data: { message: { name: "EMP-CHKIN-001" } },
+    });
+  });
+
+  it("sends auto: true for a geofence-driven punch", async () => {
+    await autoCheckInOut({ employeeCode: "HR-EMP-00011", type: "IN" });
+
+    const [, payload] = apiClient.post.mock.calls[0];
+    expect(payload.auto).toBe(true);
+  });
+
+  it("sends auto: false for a manual punch", async () => {
+    // restrict_location unset, so this takes the branch that touches no
+    // location APIs — expo-location is stubbed out at the top of this file.
+    const result = await userCheckIn({
+      employeeCode: "HR-EMP-00011",
+      type: "IN",
+    });
+
+    expect(result.allowed).toBe(true);
+    const [, payload] = apiClient.post.mock.calls[0];
+    expect(payload.auto).toBe(false);
+  });
+
+  // A real boolean, not the "True"/"False" strings a form-encoded request would
+  // produce: this client posts JSON, so Frappe receives a genuine bool and the
+  // server never has to guess whether the string "False" means false.
+  it("sends a boolean rather than a string", async () => {
+    await autoCheckInOut({ employeeCode: "HR-EMP-00011", type: "OUT" });
+
+    const [, payload] = apiClient.post.mock.calls[0];
+    expect(typeof payload.auto).toBe("boolean");
   });
 });

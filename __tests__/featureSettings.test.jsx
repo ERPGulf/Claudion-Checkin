@@ -85,6 +85,11 @@ import {
   filterOfferedShortcuts,
 } from '../utils/quickAccess';
 import withFeatureGate from '../navigation/withFeatureGate';
+// The two Home grids, imported so the "hidden everywhere" claim is checked
+// against the real menus rather than a copy of them. The quick-access lists are
+// already imported above.
+import { HR_FEATURES } from '../components/Home/YourLavas';
+import { LEGACY_HR_FEATURES } from '../components/HomeLegacy/YourLavas';
 /* eslint-enable import/first */
 
 /** The example payload from the API contract. */
@@ -510,5 +515,235 @@ describe('withFeatureGate', () => {
   it('renders the screen when settings are unknown', () => {
     const { getByText } = renderGated(null);
     expect(getByText('LOAN SCREEN')).toBeTruthy();
+  });
+});
+
+/**
+ * The payload the backend sends today.
+ *
+ * `geo_tagging` used to be the ERPNext select label and is now the 0/1/2 enum,
+ * and `auto_attendance` is new. Both forms of `geo_tagging` have to keep working
+ * — tenants upgrade at their own pace — and the enum has to be read as a value
+ * rather than as "no answer", or an administrator turning geotagging off would
+ * have no effect at all.
+ */
+describe('the current capability payload', () => {
+  const CURRENT = {
+    attendance_action: {
+      offline_attendance: false,
+      offline_attendance_version: '1',
+      photo_upload: true,
+      restrict_location: true,
+      unrestricted_checkout_location: true,
+      employee_shift: false,
+      geo_tagging: 2,
+      employee_checkin_break: false,
+      attendance_request: true,
+      attendance_history: true,
+      auto_attendance: true,
+    },
+    loan_application: true,
+    expense_claim: true,
+    leave_request: true,
+    employee_records: true,
+    complaints: true,
+  };
+
+  it('reads every boolean, including auto_attendance and expense_claim', () => {
+    const s = normalizeFeatureSettings(CURRENT);
+
+    expect(s.attendance_action.auto_attendance).toBe(true);
+    expect(s.attendance_action.offline_attendance).toBe(false);
+    expect(s.attendance_action.photo_upload).toBe(true);
+    expect(s.attendance_action.employee_shift).toBe(false);
+    expect(s.expense_claim).toBe(true);
+    expect(s.complaints).toBe(true);
+    expect(s.loan_application).toBe(true);
+  });
+
+  it('reads the geotagging enum', () => {
+    expect(normalizeFeatureSettings(CURRENT).attendance_action.geo_tagging_level)
+      .toBe(2);
+  });
+
+  // The regression this parsing was added for. `geo_tagging: 0` is "disabled",
+  // and it used to normalise to null — indistinguishable from a server that
+  // never sent the field, which is how an administrator turning it off had no
+  // effect at all.
+  it('reads geo_tagging: 0 as disabled, not as unknown', () => {
+    const s = normalizeFeatureSettings({
+      ...CURRENT,
+      attendance_action: { ...CURRENT.attendance_action, geo_tagging: 0 },
+    });
+
+    expect(s.attendance_action.geo_tagging_level).toBe(0);
+    expect(s.attendance_action.geo_tagging_level).not.toBeNull();
+  });
+
+  it('gates the Expense claim route on the new flag', () => {
+    expect(isRouteEnabled(normalizeFeatureSettings(CURRENT), 'Expense claim'))
+      .toBe(true);
+
+    const off = normalizeFeatureSettings({ expense_claim: false });
+    expect(isRouteEnabled(off, 'Expense claim')).toBe(false);
+  });
+
+  // Expense claim was an ungated route until this payload carried a flag for
+  // it, so a tenant that has not upgraded must keep it.
+  it('leaves Expense claim available when the server does not mention it', () => {
+    expect(isRouteEnabled(normalizeFeatureSettings({}), 'Expense claim')).toBe(
+      true,
+    );
+  });
+
+  it('keeps offline_attendance_version', () => {
+    expect(
+      normalizeFeatureSettings(CURRENT).attendance_action
+        .offline_attendance_version,
+    ).toBe('1');
+  });
+
+  it('gates the Auto attendance route on the new flag', () => {
+    const s = normalizeFeatureSettings(CURRENT);
+    expect(isRouteEnabled(s, 'Auto attendance')).toBe(true);
+
+    const off = normalizeFeatureSettings({
+      attendance_action: { auto_attendance: false },
+    });
+    expect(isRouteEnabled(off, 'Auto attendance')).toBe(false);
+  });
+
+  /**
+   * `auto_attendance: false` means "take it out of the menu".
+   *
+   * There are four places the option can appear, and they all filter through
+   * `isRouteEnabled`, so one ROUTE_FEATURES entry covers them — but "covers
+   * them" is the kind of claim that should be checked rather than reasoned
+   * about, because a surface that ever stopped filtering would leave a tile
+   * pointing at a screen that refuses to open.
+   */
+  describe('hides the option everywhere it is offered', () => {
+    const off = normalizeFeatureSettings({
+      attendance_action: { auto_attendance: false },
+    });
+
+    const autoTile = (item) => item.nav === 'Auto attendance';
+    const autoOption = (option) => option.url === 'Auto attendance';
+
+    const expenseOff = normalizeFeatureSettings({ expense_claim: false });
+    const expenseTile = (item) => item.nav === 'Expense claim';
+    const expenseOption = (option) => option.url === 'Expense claim';
+
+    it('drops the tile from the Home grid', () => {
+      expect(HR_FEATURES.some(autoTile)).toBe(true);
+      expect(
+        HR_FEATURES.filter((item) => isRouteEnabled(off, item.nav)).some(autoTile),
+      ).toBe(false);
+    });
+
+    it('drops the tile from the classic Home grid', () => {
+      expect(
+        LEGACY_HR_FEATURES.filter((item) => isRouteEnabled(off, item.nav)).some(
+          autoTile,
+        ),
+      ).toBe(false);
+    });
+
+    it('drops it from the quick-access picker', () => {
+      expect(QUICK_ACCESS_OPTIONS.some(autoOption)).toBe(true);
+      expect(availableQuickAccessOptions(off).some(autoOption)).toBe(false);
+    });
+
+    // A pin saved while the feature was on would otherwise sit on Home
+    // navigating to a screen the gate now refuses.
+    it('drops an already-pinned shortcut', () => {
+      const pinned = QUICK_ACCESS_OPTIONS.filter(autoOption);
+      expect(pinned).toHaveLength(1);
+      expect(filterOfferedShortcuts(pinned, off)).toEqual([]);
+    });
+
+    it('hides Expense claim from every surface too', () => {
+      const pinned = QUICK_ACCESS_OPTIONS.filter(expenseOption);
+      expect(pinned).toHaveLength(1);
+
+      expect(
+        HR_FEATURES.filter((i) => isRouteEnabled(expenseOff, i.nav)).some(
+          expenseTile,
+        ),
+      ).toBe(false);
+      expect(
+        LEGACY_HR_FEATURES.filter((i) => isRouteEnabled(expenseOff, i.nav)).some(
+          expenseTile,
+        ),
+      ).toBe(false);
+      expect(availableQuickAccessOptions(expenseOff).some(expenseOption)).toBe(
+        false,
+      );
+      expect(filterOfferedShortcuts(pinned, expenseOff)).toEqual([]);
+    });
+
+    // Turning one feature off must not take its neighbours with it.
+    it('leaves the other options alone', () => {
+      expect(
+        HR_FEATURES.filter((i) => isRouteEnabled(expenseOff, i.nav)).some(
+          autoTile,
+        ),
+      ).toBe(true);
+      expect(
+        HR_FEATURES.filter((i) => isRouteEnabled(off, i.nav)).some(expenseTile),
+      ).toBe(true);
+    });
+
+    it('keeps all four when the flag is on', () => {
+      const on = normalizeFeatureSettings(CURRENT);
+      const pinned = QUICK_ACCESS_OPTIONS.filter(autoOption);
+
+      expect(HR_FEATURES.filter((i) => isRouteEnabled(on, i.nav)).some(autoTile)).toBe(true);
+      expect(
+        LEGACY_HR_FEATURES.filter((i) => isRouteEnabled(on, i.nav)).some(autoTile),
+      ).toBe(true);
+      expect(availableQuickAccessOptions(on).some(autoOption)).toBe(true);
+      expect(filterOfferedShortcuts(pinned, on)).toHaveLength(1);
+    });
+  });
+
+  // A tenant that has not upgraded sends no such key, and must keep the screen.
+  it('leaves Auto attendance available when the server does not mention it', () => {
+    expect(isRouteEnabled(normalizeFeatureSettings({}), 'Auto attendance')).toBe(
+      true,
+    );
+  });
+});
+
+describe('geoTaggingLevel accepts the enum', () => {
+  it.each([
+    [0, 0],
+    [1, 1],
+    [2, 2],
+    ['0', 0],
+    ['1', 1],
+    ['2', 2],
+  ])('reads %p as level %p', (input, level) => {
+    expect(geoTaggingLevel(input)).toBe(level);
+  });
+
+  it('still reads the legacy labels', () => {
+    expect(geoTaggingLevel('Enable geotagging for all attendance actions')).toBe(2);
+    expect(geoTaggingLevel('Warnings only')).toBe(1);
+    expect(geoTaggingLevel('Disabled')).toBe(0);
+  });
+
+  // Level 0 is a real answer; everything below is genuinely "no answer", and
+  // must not collapse into 0.
+  it.each([3, -1, 1.5, NaN, '', '  ', 'something new', null, undefined, {}])(
+    'reports %p as unknown',
+    (input) => {
+      expect(geoTaggingLevel(input)).toBeNull();
+    },
+  );
+
+  // A sentence that merely starts with a digit is prose, not an enum.
+  it('does not read a number out of the middle of a label', () => {
+    expect(geoTaggingLevel('2 warnings issued')).toBe(1);
   });
 });

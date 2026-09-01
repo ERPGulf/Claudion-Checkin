@@ -441,3 +441,132 @@ describe("input validation", () => {
     ).rejects.toThrow(/invalid type/i);
   });
 });
+
+/**
+ * `forceQueue` — ordering, not connectivity.
+ *
+ * An automatic check-in must not overtake a punch the server has not received
+ * yet, or the server sees an IN while it still holds the earlier session open.
+ * This makes the punch take the queue even though the connection is fine, so it
+ * lands behind that punch in the employee's FIFO.
+ */
+describe("forceQueue", () => {
+  it("skips the online attempt and queues instead", async () => {
+    const online = jest.fn(() => Promise.resolve({ allowed: true, name: "X" }));
+
+    const result = await submitAttendance({
+      type: "IN",
+      employeeCode: "HR-EMP-00001",
+      attendanceType: "auto",
+      forceQueue: true,
+      online,
+    });
+
+    expect(online).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ allowed: true, queued: true });
+
+    const rows = await listAll();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].status).toBe(QUEUE_STATUS.PENDING);
+  });
+
+  it("is off by default, so ordinary punches still go online first", async () => {
+    const online = jest.fn(() => Promise.resolve({ allowed: true, name: "X" }));
+
+    await submitAttendance({
+      type: "IN",
+      employeeCode: "HR-EMP-00001",
+      attendanceType: "auto",
+      online,
+    });
+
+    expect(online).toHaveBeenCalledTimes(1);
+    expect(await listAll()).toHaveLength(0);
+  });
+
+  // Ordering is not worth losing a real crossing over. The OS will not deliver
+  // the ENTER again, so if the queue cannot take it, send it.
+  it("falls back to sending the punch when the queue refuses it", async () => {
+    markOfflineSyncUnsupported();
+    const online = jest.fn(() => Promise.resolve({ allowed: true, name: "X" }));
+
+    const result = await submitAttendance({
+      type: "IN",
+      employeeCode: "HR-EMP-00001",
+      attendanceType: "auto",
+      forceQueue: true,
+      online,
+    });
+
+    expect(online).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({ allowed: true, name: "X" });
+  });
+
+  it("falls back when the offline gate refuses it", async () => {
+    evaluateOfflineAttendance.mockResolvedValue({
+      allowed: false,
+      reason: "no-config",
+      message: NO_CONFIG_MESSAGE,
+    });
+    const online = jest.fn(() => Promise.resolve({ allowed: true, name: "X" }));
+
+    const result = await submitAttendance({
+      type: "IN",
+      employeeCode: "HR-EMP-00001",
+      attendanceType: "auto",
+      forceQueue: true,
+      online,
+    });
+
+    expect(online).toHaveBeenCalledTimes(1);
+    expect(result.allowed).toBe(true);
+  });
+
+  // Offline, there is nothing to fall back to — but the punch is queued anyway,
+  // which is the pre-existing behaviour and already correctly ordered.
+  it("queues normally when there is no connection either", async () => {
+    fetchIsOnline.mockResolvedValue(false);
+    const online = jest.fn();
+
+    const result = await submitAttendance({
+      type: "IN",
+      employeeCode: "HR-EMP-00001",
+      attendanceType: "auto",
+      forceQueue: true,
+      online,
+    });
+
+    expect(online).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ allowed: true, queued: true });
+  });
+
+  // The manual helper does not accept the flag at all, so no manual punch can
+  // be diverted into the queue by this mechanism.
+  it("cannot be triggered through the manual path", async () => {
+    const online = jest.fn(() => Promise.resolve({ allowed: true, name: "X" }));
+
+    await submitManualAttendance({
+      type: "IN",
+      employeeCode: "HR-EMP-00001",
+      forceQueue: true,
+      online,
+    });
+
+    expect(online).toHaveBeenCalledTimes(1);
+    expect(await listAll()).toHaveLength(0);
+  });
+
+  it("is forwarded by the geofence helper", async () => {
+    const online = jest.fn(() => Promise.resolve({ allowed: true, name: "X" }));
+
+    await submitAutoAttendance({
+      type: "IN",
+      employeeCode: "HR-EMP-00001",
+      forceQueue: true,
+      online,
+    });
+
+    expect(online).not.toHaveBeenCalled();
+    expect(await listAll()).toHaveLength(1);
+  });
+});

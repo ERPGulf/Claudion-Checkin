@@ -63,6 +63,10 @@ function AppNavigator() {
         "Attendance request",
         newHomeEnabled ? AttendanceRequest : AttendanceRequestLegacy,
       ),
+      autoAttendance: withFeatureGate(
+        "Auto attendance",
+        newHomeEnabled ? AutoAttendanceScreen : AutoAttendanceLegacy,
+      ),
       leaveRequest: withFeatureGate(
         "Leave request",
         newHomeEnabled ? LeaveRequest : LeaveRequestLegacy,
@@ -74,6 +78,10 @@ function AppNavigator() {
       loanApplication: withFeatureGate(
         "Loan application",
         newHomeEnabled ? LoanApplication : LoanApplicationLegacy,
+      ),
+      expenseClaim: withFeatureGate(
+        "Expense claim",
+        newHomeEnabled ? ExpenseClaim : ExpenseClaimLegacy,
       ),
       // The three "Your Records" document screens, all governed by
       // `employee_records`.
@@ -103,20 +111,14 @@ function AppNavigator() {
         name="Attendance request"
         component={gated.attendanceRequest}
       />
-      <Stack.Screen
-        name="Auto attendance"
-        component={newHomeEnabled ? AutoAttendanceScreen : AutoAttendanceLegacy}
-      />
+      <Stack.Screen name="Auto attendance" component={gated.autoAttendance} />
       <Stack.Screen
         name="Quick access"
         component={newHomeEnabled ? SelectQuickAccess : SelectQuickAccessLegacy}
       />
       <Stack.Screen name="Leave request" component={gated.leaveRequest} />
       <Stack.Screen name="Complaints" component={gated.complaints} />
-      <Stack.Screen
-        name="Expense claim"
-        component={newHomeEnabled ? ExpenseClaim : ExpenseClaimLegacy}
-      />
+      <Stack.Screen name="Expense claim" component={gated.expenseClaim} />
       <Stack.Screen name="Shortcut1" component={gated.shortcut1} />
       <Stack.Screen name="Shortcut2" component={gated.shortcut2} />
       <Stack.Screen name="Shortcut3" component={gated.shortcut3} />

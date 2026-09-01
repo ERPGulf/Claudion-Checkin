@@ -5,12 +5,14 @@ import {
   LAST_CHECKOUT_TIME_KEY,
 } from "../utils/attendanceSession";
 import {
+  applySessionOwner,
   canTransition,
   clearSessionState,
   performSessionTransition,
   readSession,
   reconcileSessionFromServer,
   SESSION_ORIGIN,
+  SESSION_OWNER_KEY,
   SESSION_STATE_KEY,
   SESSION_STATUS,
   TRANSITION_RESULT,
@@ -373,5 +375,89 @@ describe("attendance session state machine", () => {
     await clearSessionState();
 
     expect(await AsyncStorage.getItem(SESSION_STATE_KEY)).toBeNull();
+  });
+});
+
+/**
+ * Who the stored session belongs to.
+ *
+ * The record is a device-level key with no employee on it, and nothing cleared
+ * it — `clearSessionState` had no production caller at all, despite a comment
+ * claiming logout handled it. The fix is deliberately keyed on the employee
+ * changing rather than on logout: a session expiry is usually the same person
+ * authenticating again mid-shift, and clearing then would throw away the
+ * check-in their automatic check-out depends on.
+ */
+describe("applySessionOwner", () => {
+  it("adopts an existing session on first run rather than clearing it", async () => {
+    // An OTA update landing on a logged-in device mid-session: the session is
+    // almost certainly this employee's, and dropping it would break check-out.
+    await checkIn(SESSION_ORIGIN.AUTO);
+
+    const cleared = await applySessionOwner("HR-EMP-00011");
+
+    expect(cleared).toBe(false);
+    expect((await readSession()).status).toBe(SESSION_STATUS.CHECKED_IN);
+    expect(await AsyncStorage.getItem(SESSION_OWNER_KEY)).toBe("HR-EMP-00011");
+  });
+
+  it("keeps the session when the same employee authenticates again", async () => {
+    await applySessionOwner("HR-EMP-00011");
+    await checkIn(SESSION_ORIGIN.AUTO);
+
+    // Token expired, they logged straight back in.
+    const cleared = await applySessionOwner("HR-EMP-00011");
+
+    expect(cleared).toBe(false);
+    expect((await readSession()).status).toBe(SESSION_STATUS.CHECKED_IN);
+  });
+
+  it("clears the session when a different employee logs in", async () => {
+    await applySessionOwner("HR-EMP-00011");
+    await checkIn(SESSION_ORIGIN.AUTO);
+
+    const cleared = await applySessionOwner("HR-EMP-00099");
+
+    expect(cleared).toBe(true);
+    expect(await AsyncStorage.getItem(SESSION_STATE_KEY)).toBeNull();
+    expect(await AsyncStorage.getItem(CHECKIN_START_TIME_KEY)).toBeNull();
+    expect(await AsyncStorage.getItem(SESSION_OWNER_KEY)).toBe("HR-EMP-00099");
+  });
+
+  it("does nothing without an authenticated employee", async () => {
+    await applySessionOwner("HR-EMP-00011");
+    await checkIn(SESSION_ORIGIN.AUTO);
+
+    const cleared = await applySessionOwner(null);
+
+    expect(cleared).toBe(false);
+    expect((await readSession()).status).toBe(SESSION_STATUS.CHECKED_IN);
+  });
+});
+
+describe("a queued punch is accepted, not confirmed", () => {
+  it("reports `queued` so a caller cannot mistake it for a server record", async () => {
+    await checkIn(SESSION_ORIGIN.AUTO);
+
+    const outcome = await performSessionTransition({
+      type: "OUT",
+      origin: SESSION_ORIGIN.AUTO,
+      execute: async () => ({ allowed: true, queued: true }),
+    });
+
+    expect(outcome.status).toBe(TRANSITION_RESULT.COMPLETED);
+    expect(outcome.queued).toBe(true);
+    expect(outcome.serverConfirmed).toBe(false);
+  });
+
+  it("reports `serverConfirmed` for a punch the server accepted", async () => {
+    const outcome = await performSessionTransition({
+      type: "IN",
+      origin: SESSION_ORIGIN.AUTO,
+      execute: ok,
+    });
+
+    expect(outcome.queued).toBe(false);
+    expect(outcome.serverConfirmed).toBe(true);
   });
 });

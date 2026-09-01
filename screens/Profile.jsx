@@ -320,9 +320,14 @@ function Profile() {
       // 1. Remove FCM registration to avoid cross-user push delivery.
       await clearFcmRegistration();
 
-      // 1b. Drop queued punches and the cached attendance rules, for the same
-      // reason: they belong to this employee, and would otherwise sync — or
-      // govern offline check-ins — under whoever logs in next.
+      // 1b. Drop the cached attendance rules for the same reason: they are the
+      // previous employee's reporting locations and policy flags, and would
+      // otherwise govern the next one's offline check-ins.
+      //
+      // Queued punches are deliberately KEPT. They are payroll data the employee
+      // has already earned, and logging out is not a decision to discard it —
+      // the drain is scoped to the authenticated employee, so nobody else's
+      // token can upload them.
       await clearOfflineAttendance();
 
       // 2. Clear tokens from storage

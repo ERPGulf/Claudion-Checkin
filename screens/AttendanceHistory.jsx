@@ -164,6 +164,7 @@ function AttendanceHistory() {
                   logType={record.log_type}
                   time={record.time}
                   deviceId={record.device_id}
+                  auto={record.auto}
                   syncStatus={record.syncStatus}
                   showDate={false}
                   position={

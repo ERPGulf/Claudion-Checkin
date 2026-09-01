@@ -316,6 +316,10 @@ export const userCheckIn = async ({ employeeCode, type, locationData }) => {
       employee_field_value: employeeCode,
       log_type: type,
       timestamp,
+      // The employee tapped the button. `auto` is what lets the server tell a
+      // deliberate punch from a geofence crossing (see autoCheckInOut), so it is
+      // sent explicitly on both paths rather than left to a server-side default.
+      auto: false,
     };
 
     if (currentLocation) {
@@ -430,6 +434,9 @@ export const autoCheckInOut = async ({
       employee_field_value: employeeCode,
       log_type: type,
       timestamp,
+      // The office geofence made this call, not the employee — this is the
+      // whole distinction the flag exists to record.
+      auto: true,
     };
 
     // Informational only — position was already proven by the geofence

@@ -44,6 +44,28 @@ describe('AttendanceHistoryCard', () => {
     expect(queryByText(/CHECKED OUT AT/)).toBeNull();
   });
 
+  it('chips an automatic punch, and leaves a manual one bare', () => {
+    const auto = render(
+      <AttendanceHistoryCard logType="IN" time="2026-07-28 05:01:00" auto />,
+    );
+    expect(auto.getByText('Automatic')).toBeTruthy();
+
+    const manual = render(
+      <AttendanceHistoryCard logType="IN" time="2026-07-28 05:01:00" />,
+    );
+    expect(manual.queryByText('Automatic')).toBeNull();
+  });
+
+  it('announces an automatic punch to a screen reader', () => {
+    const { getByLabelText } = render(
+      <AttendanceHistoryCard logType="OUT" time="2026-07-28 17:39:45" auto />,
+    );
+
+    expect(
+      getByLabelText('Checked out, automatic, 05:39 PM, 28 Jul 2026'),
+    ).toBeTruthy();
+  });
+
   it('uses sentence case, not all caps', () => {
     const { getByText } = render(
       <AttendanceHistoryCard logType="IN" time="2026-07-28 05:01:00" />,

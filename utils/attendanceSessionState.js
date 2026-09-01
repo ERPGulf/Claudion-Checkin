@@ -238,9 +238,23 @@ const commitCheckOut = async ({ session, origin, at }) => {
  *        transition is legal. Rejections propagate to the caller, uncommitted.
  * @param {number} [options.at] commit timestamp, defaults to now
  * @returns {Promise<{status: string, session: object, previousSession: object,
+ *                    queued: boolean, serverConfirmed: boolean,
  *                    response?: object}>}
  *          `status` is one of TRANSITION_RESULT. On SKIPPED, `session` is the
  *          unchanged current state — callers can use it to re-sync their UI.
+ *
+ *          COMPLETED means the move was *accepted*, which is not the same as the
+ *          server having recorded it: an offline punch is accepted by the queue
+ *          and uploaded later. `queued` / `serverConfirmed` carry that
+ *          distinction so callers stop having to infer it from
+ *          `response.queued`. It matters — a caller that treats a queued punch
+ *          as server-confirmed tells the employee their attendance is filed when
+ *          it is still sitting in SQLite.
+ *
+ *          The transition still commits locally either way, and that is correct:
+ *          the punch happened, the session really did open or close on this
+ *          device, and the queue — not this record — is the authority on what
+ *          the server has yet to see (`getQueueCounts().awaitingServerCount`).
  */
 export const performSessionTransition = async ({
   type,
@@ -260,6 +274,8 @@ export const performSessionTransition = async ({
         status: TRANSITION_RESULT.SKIPPED,
         session: previousSession,
         previousSession,
+        queued: false,
+        serverConfirmed: false,
       };
     }
 
@@ -270,6 +286,8 @@ export const performSessionTransition = async ({
         status: TRANSITION_RESULT.FAILED,
         session: previousSession,
         previousSession,
+        queued: false,
+        serverConfirmed: false,
         response,
       };
     }
@@ -279,10 +297,14 @@ export const performSessionTransition = async ({
         ? await commitCheckIn({ origin, at })
         : await commitCheckOut({ session: previousSession, origin, at });
 
+    const queued = !!response?.queued;
+
     return {
       status: TRANSITION_RESULT.COMPLETED,
       session,
       previousSession,
+      queued,
+      serverConfirmed: !queued,
       response,
     };
   });
@@ -386,15 +408,67 @@ export const reconcileSessionFromServer = async ({
     });
   });
 
-/** Drops the record entirely (user switch / logout). */
+/** Drops the record entirely. See `applySessionOwner` for when that is right. */
 export const clearSessionState = async () => {
   await AsyncStorage.removeItem(SESSION_STATE_KEY);
+};
+
+/** Which employee the stored session record belongs to. */
+export const SESSION_OWNER_KEY = "attendanceSessionOwner";
+
+/**
+ * Keeps the session record tied to the employee who created it.
+ *
+ * The record is a device-level AsyncStorage key with no employee on it, and
+ * nothing used to clear it — `clearSessionState` had no production caller at all
+ * despite OfflineAttendanceBootstrap's comment claiming logout handled it. So a
+ * session opened by one employee survived into the next employee's login.
+ *
+ * Clearing it on logout would be the obvious fix and is the wrong one. A session
+ * expiry is not a user switch: the overwhelmingly common case is the same person
+ * authenticating again, mid-shift, and throwing away their open session loses
+ * the check-in the geofence needs in order to check them out later. So the
+ * trigger is the employee actually *changing*, which is the only event that
+ * makes the record meaningless.
+ *
+ * First run on a device that already has a session records the current employee
+ * as its owner rather than clearing — the session is almost certainly theirs
+ * (this ships as an update to a logged-in app), and adopting it keeps automatic
+ * check-out working across the upgrade.
+ *
+ * @param {string|null} employeeCode the authenticated employee
+ * @returns {Promise<boolean>} whether a foreign session was cleared
+ */
+export const applySessionOwner = async (employeeCode) => {
+  if (!employeeCode) return false;
+
+  let previousOwner = null;
+  try {
+    previousOwner = await AsyncStorage.getItem(SESSION_OWNER_KEY);
+  } catch {
+    // Unreadable owner is not evidence of a switch. Leave the session alone.
+    return false;
+  }
+
+  if (previousOwner === employeeCode) return false;
+
+  const isSwitch = !!previousOwner && previousOwner !== employeeCode;
+
+  if (isSwitch) {
+    await clearSessionState().catch(() => {});
+    await clearPersistedCheckinStartTime().catch(() => {});
+  }
+
+  await AsyncStorage.setItem(SESSION_OWNER_KEY, employeeCode).catch(() => {});
+
+  return isSwitch;
 };
 
 export default {
   SESSION_STATUS,
   SESSION_ORIGIN,
   TRANSITION_RESULT,
+  applySessionOwner,
   canTransition,
   clearSessionState,
   isSessionActive,

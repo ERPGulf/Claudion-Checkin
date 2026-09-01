@@ -15,11 +15,18 @@ import {
   isSessionActive,
   performSessionTransition,
   readSession,
+  reconcileSessionFromServer,
   SESSION_ORIGIN,
   TRANSITION_RESULT,
 } from "../utils/attendanceSessionState";
 import {
+  getPersistedSessionTimes,
+  normalizeCustomIn,
+  resolveActiveSessionStart,
+} from "../utils/attendanceSession";
+import {
   autoCheckInOut,
+  getAttendanceStatus,
   getOfficeLocation,
 } from "../services/api/attendance.service";
 import { fetchEmployeeData } from "../services/api/employee.service";
@@ -40,7 +47,11 @@ import {
   markEventProcessed,
   PENDING_EVENT,
 } from "../utils/geofenceEventLog";
-import { submitAutoAttendance } from "../services/offline/AttendanceQueueService";
+import {
+  getQueueCounts,
+  submitAutoAttendance,
+} from "../services/offline/AttendanceQueueService";
+import { syncNow } from "../services/offline/BackgroundSyncManager";
 
 const LOG_PREFIX = "[AutoAttendanceBootstrap]";
 
@@ -164,6 +175,33 @@ export default function AutoAttendanceBootstrap() {
     // presence reconciliation below, which is not a transition at all: moving
     // the mark from it would swallow a native event recorded moments earlier
     // that has not been replayed yet.
+    /**
+     * Counts this employee's punches that could still change the server's view
+     * of the session.
+     *
+     * `mayAffectServerCount`, and the exclusions are the whole point:
+     *
+     *  - REJECTED is out because the server has already refused those. Its "no
+     *    open session" is correct about them, and counting them would block
+     *    automatic check-in forever on a punch that is never coming. (This is
+     *    the same choice the manual screen's guard makes.)
+     *  - BLOCKED on `endpoint-missing` is out for the same reason in a different
+     *    disguise: that row is waiting on a deployment, is kept forever, and
+     *    would otherwise hold this guard shut permanently on any tenant without
+     *    the offline endpoint. Blocked on auth or configuration still counts —
+     *    those resolve by themselves and the row really can still land.
+     *
+     * Fails open at 0. A queue read that throws must not be able to disable
+     * automatic attendance.
+     */
+    const countAwaitingServer = async (code) =>
+      getQueueCounts(code)
+        .then((counts) => counts?.mayAffectServerCount ?? 0)
+        .catch((error) => {
+          console.log(`${LOG_PREFIX} Queue count failed:`, error?.message);
+          return 0;
+        });
+
     const performAttendanceAction = async (
       type,
       occurredAt,
@@ -198,11 +236,39 @@ export default function AutoAttendanceBootstrap() {
           type,
           origin: SESSION_ORIGIN.AUTO,
           at: occurredAt,
-          execute: () =>
-            submitAutoAttendance({
+          execute: async () => {
+            // A check-in must never overtake a punch the server has not seen.
+            // The OS can deliver an ENTER the instant the fence is registered at
+            // login — before the startup drain has uploaded the check-out that
+            // was queued while the employee was offline — and sending this IN
+            // directly would file it against a session the server still has
+            // open. Queueing puts it behind that check-out in the employee's
+            // FIFO, so the server receives OUT then IN.
+            //
+            // Only the IN direction. An OUT closes a session, and delaying one
+            // behind an earlier punch is what the queue's ordering already does
+            // for it anyway.
+            //
+            // Evaluated here rather than before `performSessionTransition`
+            // because `execute` runs while that function holds the session lock:
+            // no other transition for this employee can enqueue between this
+            // count and the submission below. The drain may still finish an
+            // upload in that window, which is harmless — it can only turn "queue
+            // it" into an unnecessary queue, never the reverse.
+            const forceQueue =
+              type === "IN" && (await countAwaitingServer(code)) > 0;
+
+            if (forceQueue) {
+              console.log(
+                `${LOG_PREFIX} Queueing auto IN behind an undelivered punch to preserve order`,
+              );
+            }
+
+            return submitAutoAttendance({
               type,
               employeeCode: code,
               occurredAt,
+              forceQueue,
               online: () =>
                 autoCheckInOut({
                   employeeCode: code,
@@ -210,7 +276,8 @@ export default function AutoAttendanceBootstrap() {
                   office: officeRef.current,
                   occurredAt,
                 }),
-            }),
+            });
+          },
         });
 
         // Handled either way: a skip means the session is already where this
@@ -252,12 +319,22 @@ export default function AutoAttendanceBootstrap() {
           const officeName = officeRef.current?.locationName;
           const startedManually =
             previousSession.origin === SESSION_ORIGIN.MANUAL;
+          const where = officeName ? `You left ${officeName}` : "You left the office";
+
+          // A queued punch is accepted locally, not recorded on the server. The
+          // old copy said "you've been checked out automatically" either way,
+          // which is how an employee came to believe a check-out had been filed
+          // when it was still in SQLite — and then could not explain the gap.
+          // Say which one it is.
           presentLocalNotification({
-            title: "Checked out",
-            body: officeName
-              ? `You left ${officeName}, so ${startedManually ? "your check-in was closed" : "you've been checked out"} automatically.`
-              : `You left the office, so ${startedManually ? "your check-in was closed" : "you've been checked out"} automatically.`,
-            data: { type: "auto-checkout" },
+            title: outcome.queued ? "Checked out offline" : "Checked out",
+            body: outcome.queued
+              ? `${where}, so you've been checked out on this device. It will sync when you're back online.`
+              : `${where}, so ${startedManually ? "your check-in was closed" : "you've been checked out"} automatically.`,
+            data: {
+              type: "auto-checkout",
+              pendingSync: outcome.queued,
+            },
           });
         }
         console.log(`${LOG_PREFIX} Auto ${type} succeeded`);
@@ -411,6 +488,30 @@ export default function AutoAttendanceBootstrap() {
      *
      * So decide from the fix `ensureMonitoring` already took. The state machine
      * is the arbiter, so a native ENTER arriving afterwards is a harmless no-op.
+     *
+     * ## Why a local CHECKED_OUT is not enough on its own
+     *
+     * This used to check in on exactly two facts: the device is inside the fence,
+     * and the local record says CHECKED_OUT. That is unsound right after an
+     * authentication recovery, because the local record can describe a check-out
+     * the server has never seen — a punch queued while offline, whose upload the
+     * token expiry interrupted. Acting on it filed a second check-in on top of a
+     * session the server still had open, and the employee's day showed IN, IN
+     * with no OUT between them.
+     *
+     * So the order below is evidence-first, and it is the same order (and the
+     * same helpers) the manual screen already uses in `syncCheckinFromStatus`:
+     *
+     *   1. anything queued  → drain it, and do not open a session this pass;
+     *   2. ask the server   → an open session there wins over the local record;
+     *   3. only then        → the local CHECKED_OUT is corroborated, check in.
+     *
+     * Step 2 is skipped when the server cannot be reached AND nothing is queued.
+     * "No answer" is not "no session", but with an empty outbox the local record
+     * is the best evidence available and refusing here would break automatic
+     * check-in for the offline case the queue exists to serve. The dangerous
+     * version of that case — a punch the server has not seen — is precisely what
+     * step 1 has already excluded.
      */
     const reconcilePresence = async (office) => {
       if (cancelled || !office?.withinRadius) return;
@@ -418,6 +519,84 @@ export default function AutoAttendanceBootstrap() {
       const session = await readSession();
       if (isSessionActive(session)) return;
 
+      const code = employeeCodeRef.current;
+
+      // 1. Unsynchronised punches. The local CHECKED_OUT may be one of them, in
+      //    which case the server's session is still open and a check-in now
+      //    would duplicate it. Drain first, then re-count: a successful sync
+      //    makes the server authoritative again and the pass can continue.
+      if (code && (await countAwaitingServer(code)) > 0) {
+        console.log(`${LOG_PREFIX} Queued punches outstanding; syncing before presence check-in`);
+        try {
+          // Scoped explicitly: this can run before the background sync manager
+          // has been told who is logged in, and an unscoped drain would refuse.
+          await syncNow({ trigger: "auto-attendance-presence", employeeId: code });
+        } catch (error) {
+          console.log(`${LOG_PREFIX} Presence sync failed:`, error?.message);
+        }
+
+        if (cancelled) return;
+
+        if ((await countAwaitingServer(code)) > 0) {
+          console.log(
+            `${LOG_PREFIX} Punches still awaiting the server; not opening a new session`,
+          );
+          return;
+        }
+      }
+
+      // 2. The server's own answer. `getAttendanceStatus` is the existing
+      //    authority — no new endpoint — and it distinguishes "no session" from
+      //    "no answer" via `unavailable`, which is the distinction this depends
+      //    on.
+      const fetchedAt = Date.now();
+      const status = await getAttendanceStatus().catch((error) => {
+        console.log(`${LOG_PREFIX} Status check failed:`, error?.message);
+        return { unavailable: true };
+      });
+
+      if (cancelled) return;
+
+      if (!status?.unavailable && normalizeCustomIn(status?.custom_in) === 1) {
+        console.log(
+          `${LOG_PREFIX} Server reports an open session; restoring it instead of checking in`,
+        );
+
+        // Best-effort restore of the local record. `resolveActiveSessionStart`
+        // can decline to name a start (it rejects one at or before the local
+        // check-out floor, which is exactly the stale floor this situation
+        // creates), and that is fine — not checking in is the load-bearing part.
+        const { checkinStartTime, lastCheckoutTime } =
+          await getPersistedSessionTimes();
+        const resolvedStart = resolveActiveSessionStart({
+          status,
+          storedCheckinStartTime: checkinStartTime,
+          reduxCheckinTime: null,
+          lastCheckoutTime,
+        });
+
+        if (resolvedStart) {
+          const restored = await reconcileSessionFromServer({
+            activeStartedAt: resolvedStart,
+            fetchedAt,
+          });
+          if (isSessionActive(restored)) {
+            dispatch(
+              setCheckin({
+                checkinTime: restored.startedAt,
+                location: null,
+                sessionOrigin: restored.origin,
+              }),
+            );
+          }
+        }
+
+        return;
+      }
+
+      // 3. Either the server says no session is open, or it could not be reached
+      //    with an empty outbox. Both leave the local CHECKED_OUT as the best
+      //    available account of the day, and the device is inside the fence.
       console.log(
         `${LOG_PREFIX} Already inside ${office.locationName || "the office"} at startup; checking in`,
       );
