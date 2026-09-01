@@ -62,6 +62,7 @@ function Profile() {
   );
   const [clientToken, setClientToken] = useState(null);
   const [isSharingClientToken, setIsSharingClientToken] = useState(false);
+  const [isSigningOut, setIsSigningOut] = useState(false);
   const [mockToastCount, setMockToastCount] = useState(0);
 
   useLayoutEffect(() => {
@@ -316,6 +317,12 @@ function Profile() {
   };
 
   const handleLogout = async () => {
+    // The confirmation dialog can be dismissed and reopened faster than the
+    // teardown runs, and two overlapping logouts race each other's storage
+    // writes for no benefit.
+    if (isSigningOut) return;
+    setIsSigningOut(true);
+
     try {
       hapticsMessage("success");
 
@@ -351,6 +358,10 @@ function Profile() {
         autoHide: true,
         visibilityTime: 3000,
       });
+      // Only on failure. On success `clearStore()` has already swapped the
+      // navigator, so this component is unmounted and setting state on it would
+      // be a no-op at best.
+      setIsSigningOut(false);
     }
   };
 
@@ -605,12 +616,17 @@ function Profile() {
           <RowDivider />
 
           <SettingsRow
-            icon="log-out-outline"
+            icon={isSigningOut ? "sync-outline" : "log-out-outline"}
             iconTint={colors.errorSurface}
             iconColor={colors.errorText}
-            title="Sign out"
+            title={isSigningOut ? "Signing out" : "Sign out"}
             titleColor={colors.errorText}
-            description="Clear local data and end this session"
+            description={
+              isSigningOut
+                ? "Clearing this session…"
+                : "Clear local data and end this session"
+            }
+            disabled={isSigningOut}
             onPress={() => {
               Alert.alert("Logout", "Are you sure you want to logout?", [
                 {

@@ -741,6 +741,11 @@ export const initializeFcm = async ({
   dispatch,
   onForegroundNotification,
 } = {}) => {
+  // Claims the session before anything else. A previous logout may still have
+  // Firebase deregistration in flight, and this is what tells it to leave this
+  // session's token and topics alone. See `revokeFcmRegistration`.
+  beginFcmSession();
+
   const messagingInstance = await getMessagingInstanceWithRetry();
 
   if (!messagingInstance) {
@@ -1086,34 +1091,94 @@ export const fetchTopicsFromServer = async () => {
   }
 };
 
-export const clearFcmRegistration = async () => {
-  const messagingInstance = getMessagingInstance();
+/**
+ * Which FCM session the app is on.
+ *
+ * Bumped by `initializeFcm`. A logout schedules its Firebase deregistration in
+ * the background (see below), and if the user signs straight back in, that
+ * queued work would otherwise delete the *new* session's token and unsubscribe
+ * its topics — silently killing push until the next launch. The epoch lets the
+ * stale teardown notice that the device has moved on and stop.
+ */
+let fcmSessionEpoch = 0;
+
+/** Called when a session starts, so any pending teardown becomes stale. */
+export const beginFcmSession = () => {
+  fcmSessionEpoch += 1;
+  return fcmSessionEpoch;
+};
+
+/**
+ * Tells Firebase to forget this device: delete the token, drop the topics.
+ *
+ * Both are network round-trips with no timeout of their own. Deliberately not
+ * awaited by `clearFcmRegistration` — see there.
+ *
+ * Aborts as soon as a newer session exists. Deleting a token that now belongs to
+ * whoever just logged in is worse than leaving a dead one registered, which the
+ * next `getToken` replaces anyway.
+ */
+export const revokeFcmRegistration = async (
+  messagingInstance,
+  topics,
+  epoch,
+) => {
+  const isStale = () => epoch !== fcmSessionEpoch;
+
+  if (!messagingInstance || isStale()) return;
 
   try {
-    if (messagingInstance) {
-      await deleteToken(messagingInstance);
-    }
+    await deleteToken(messagingInstance);
   } catch {
     // Token deletion can fail if Firebase is not fully initialized.
   }
 
-  if (messagingInstance) {
-    const storedTopics = await getStoredTopics();
+  if (isStale() || !topics.length) return;
 
-    await Promise.all(
-      storedTopics.map(async (topic) => {
-        try {
-          await unsubscribeFromTopic(messagingInstance, topic);
-        } catch {
-          // Ignore topic cleanup failures during logout/reset.
-        }
-      }),
-    );
-  }
+  await Promise.all(
+    topics.map(async (topic) => {
+      try {
+        await unsubscribeFromTopic(messagingInstance, topic);
+      } catch {
+        // Ignore topic cleanup failures during logout/reset.
+      }
+    }),
+  );
+};
+
+/**
+ * Ends this device's push registration.
+ *
+ * Split deliberately into what the caller must wait for and what it must not:
+ *
+ *  - **Local storage — awaited.** Instant, and everything downstream has to see
+ *    the token gone before the app calls itself logged out.
+ *  - **Firebase deregistration — backgrounded.** `deleteToken` and
+ *    `unsubscribeFromTopic` are unbounded network calls. This function is the
+ *    first `await` on both logout paths (`Profile.handleLogout` and
+ *    `expireSession`'s cleanup hook), and awaiting them held the whole logout —
+ *    and so the UI, since `clearStore()` runs last — for as long as Firebase
+ *    took. On a bad connection that is many seconds; offline it is longer still,
+ *    and it read as the app hanging on sign-out.
+ *
+ * Nothing depends on the deregistration having finished: the backend stops
+ * sending to this device because the *next* user's login re-registers, and an
+ * orphaned Firebase token is inert. So it is fire-and-forget, guarded by the
+ * session epoch above.
+ */
+export const clearFcmRegistration = async () => {
+  const messagingInstance = getMessagingInstance();
+  const epoch = fcmSessionEpoch;
+
+  // Read before the removal below wipes it.
+  const storedTopics = messagingInstance ? await getStoredTopics() : [];
 
   await AsyncStorage.multiRemove([
     FCM_TOKEN_KEY,
     FCM_LAST_MESSAGE_AT_KEY,
     FCM_TOPICS_KEY,
   ]);
+
+  // Not awaited, and never allowed to reject into the logout path.
+  revokeFcmRegistration(messagingInstance, storedTopics, epoch).catch(() => {});
 };
