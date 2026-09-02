@@ -84,6 +84,9 @@ export const buildCheckinRecord = (row) => {
     timestamp: row?.timestamp,
     device_id: row?.deviceId || DEVICE_ID,
     log_type: actionToLogType(row?.action),
+    // Always 0 — see queueAttendance, which is the only thing that writes this
+    // blob. The `?? 0` covers a row enqueued by an older build, so a queue that
+    // survived an update still sends the field the endpoint expects.
     over_time: payload.over_time ?? 0,
   };
 

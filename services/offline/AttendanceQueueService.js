@@ -149,6 +149,12 @@ const queueAttendance = async ({
       location: gate?.location?.locationName,
       distance: gate?.location?.distance,
       radius: gate?.location?.radius,
+      // Vestigial. The endpoint still accepts the field, but nothing on either
+      // side computes or consumes it and the app has no overtime concept, so it
+      // is always 0. Kept rather than dropped because removing a key the bulk
+      // insert expects could reject the whole call — and that rejection is
+      // indistinguishable from a real validation failure. Do not wire this up
+      // without a server-side change that says what is supposed to set it.
       over_time: 0,
       // Photo-mode tenants only. The upload needs a docname the server has not
       // issued yet, so the URI is carried here and the sync service attaches it
