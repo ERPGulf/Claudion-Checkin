@@ -1,5 +1,9 @@
 import apiClient from "./apiClient";
-import { getAuthContext, buildHeaders } from "./authHelper";
+import {
+  getAuthContext,
+  buildHeaders,
+  MISSING_EMPLOYEE_MESSAGE,
+} from "./authHelper";
 import { getServerTime } from "./attendance.service";
 
 /**
@@ -10,7 +14,7 @@ export const createComplaint = async ({ message }) => {
     const { baseUrl, token, employeeCode } = await getAuthContext();
 
     if (!employeeCode) {
-      return { error: "Session expired. Please login again." };
+      return { error: MISSING_EMPLOYEE_MESSAGE };
     }
 
     // 🔥 Get accurate server time

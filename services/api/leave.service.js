@@ -1,6 +1,10 @@
 // src/services/api/leave.service.js
 import apiClient from "./apiClient";
-import { getAuthContext, buildHeaders } from "./authHelper";
+import {
+  getAuthContext,
+  buildHeaders,
+  MISSING_EMPLOYEE_MESSAGE,
+} from "./authHelper";
 import { parseError } from "./errorHelper";
 
 export const createLeaveApplication = async (leaveData) => {
@@ -8,7 +12,7 @@ export const createLeaveApplication = async (leaveData) => {
     const { baseUrl, token, employeeCode } = await getAuthContext();
 
     if (!employeeCode) {
-      return { error: "Session expired. Please login again." };
+      return { error: MISSING_EMPLOYEE_MESSAGE };
     }
 
     const url = `${baseUrl}/api/method/employee_app.attendance_api.create_leave_application`;
@@ -147,7 +151,7 @@ export const getLeaveApplications = async () => {
     const { baseUrl, token, employeeCode } = await getAuthContext();
 
     if (!employeeCode) {
-      return { error: "Session expired. Please login again." };
+      return { error: MISSING_EMPLOYEE_MESSAGE };
     }
 
     const url = `${baseUrl}/api/method/employee_app.employee_list.list_leave_application`;

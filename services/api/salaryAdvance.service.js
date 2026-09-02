@@ -1,7 +1,11 @@
 // src/services/api/salaryAdvance.service.js
 
 import apiClient from "./apiClient";
-import { getAuthContext, buildHeaders } from "./authHelper";
+import {
+  getAuthContext,
+  buildHeaders,
+  MISSING_EMPLOYEE_MESSAGE,
+} from "./authHelper";
 import { parseError } from "./errorHelper";
 
 export const SalaryAdvanceRequest = async (advanceData) => {
@@ -9,7 +13,7 @@ export const SalaryAdvanceRequest = async (advanceData) => {
     const { baseUrl, token, employeeCode } = await getAuthContext();
 
     if (!employeeCode) {
-      return { error: "Session expired. Please login again." };
+      return { error: MISSING_EMPLOYEE_MESSAGE };
     }
 
     const url = `${baseUrl}/api/method/employee_app.gauth.salary_advance_request`;

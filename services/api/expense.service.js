@@ -1,7 +1,11 @@
 // src/services/api/expense.service.js
 
 import apiClient from "./apiClient";
-import { getAuthContext, buildHeaders } from "./authHelper";
+import {
+  getAuthContext,
+  buildHeaders,
+  MISSING_EMPLOYEE_MESSAGE,
+} from "./authHelper";
 import { parseError } from "./errorHelper";
 /**
  * Get Expense Claims
@@ -11,7 +15,7 @@ export const getExpenseClaims = async () => {
     const { baseUrl, token, employeeCode } = await getAuthContext();
 
     if (!employeeCode) {
-      return { error: "Session expired. Please login again." };
+      return { error: MISSING_EMPLOYEE_MESSAGE };
     }
 
     const url = `${baseUrl}/api/method/employee_app.attendance_api.get_expense_claims`;
@@ -64,7 +68,7 @@ export const createExpenseClaim = async (claimData) => {
     const { baseUrl, token, employeeCode } = await getAuthContext();
 
     if (!employeeCode) {
-      return { error: "Session expired. Please login again." };
+      return { error: MISSING_EMPLOYEE_MESSAGE };
     }
 
     const url = `${baseUrl}/api/method/employee_app.attendance_api.create_expense_claim`;

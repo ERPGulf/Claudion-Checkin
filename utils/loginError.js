@@ -11,6 +11,13 @@
 // Thrown by generateToken()/the screen pre-check when provisioning is missing.
 const SETUP_ERROR_PATTERN = /base url not found|scan qr|qr code/i;
 
+// Thrown by generateToken() when the server DID answer, and answered 200, but
+// the payload was missing a credential a session cannot work without. Matched
+// before the no-response branch below: these errors carry no `error.response`,
+// so without this they read as "can't reach the server" — the one diagnosis
+// that is certainly wrong, since the server just replied.
+const INCOMPLETE_CREDENTIALS_PATTERN = /refresh token|token not returned/i;
+
 // Axios error codes that mean the request never got a usable server response.
 const NO_RESPONSE_CODES = new Set([
   "ERR_NETWORK",
@@ -32,7 +39,19 @@ export const getLoginErrorMessage = (error) => {
     };
   }
 
-  // 2. No response from the server → no internet, server unreachable, SSL/TLS
+  // 2. The server replied, but without the credentials a session needs. Not the
+  //    employee's problem and not a network problem — an administrator has to
+  //    fix it server-side, so say so rather than sending them round the
+  //    check-your-connection loop.
+  if (INCOMPLETE_CREDENTIALS_PATTERN.test(message)) {
+    return {
+      text1: "Sign-in incomplete",
+      text2:
+        "The server didn't issue the credentials this app needs. Please contact your administrator.",
+    };
+  }
+
+  // 3. No response from the server → no internet, server unreachable, SSL/TLS
   //    handshake failure, request timeout, or the phone's date/time being wrong
   //    (all of which fail before the server ever replies).
   const hasResponse = Boolean(error?.response);
@@ -43,7 +62,7 @@ export const getLoginErrorMessage = (error) => {
     };
   }
 
-  // 3. Server rejected the credentials.
+  // 4. Server rejected the credentials.
   if (status === 401) {
     return {
       text1: "Incorrect password",
@@ -51,7 +70,7 @@ export const getLoginErrorMessage = (error) => {
     };
   }
 
-  // 4. Any other server-side error → surface the server's own message if any.
+  // 5. Any other server-side error → surface the server's own message if any.
   const serverMessage =
     error?.response?.data?.message || error?.response?.data?.exception || null;
 

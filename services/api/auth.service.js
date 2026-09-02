@@ -30,7 +30,22 @@ export const generateToken = async ({ api_key, app_key, api_secret }) => {
 
     if (!accessToken) throw new Error("Token not returned from server");
 
-    await saveTokens(accessToken, refreshToken || "");
+    // A session with no refresh token is a session that is guaranteed to fail:
+    // it works until the access token expires, then cannot renew itself, and
+    // the employee is signed out mid-shift with nothing in the app or the logs
+    // pointing at the real cause. This used to be accepted silently as
+    // `refreshToken || ""`. Refusing here costs one failed login and names the
+    // problem; accepting it costs a shift.
+    //
+    // Nothing is persisted on this path — `saveTokens` below is the only writer
+    // and it never runs — so a rejected login leaves no partial session behind.
+    if (!refreshToken) {
+      throw new Error(
+        "Sign-in incomplete: the server did not issue a refresh token. Please contact your administrator.",
+      );
+    }
+
+    await saveTokens(accessToken, refreshToken);
 
     return {
       access_token: accessToken,

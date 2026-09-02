@@ -4,7 +4,11 @@ import * as Location from "expo-location";
 import { format } from "date-fns";
 import apiClient from "./apiClient";
 import { cleanBaseUrl } from "./utils";
-import { getAuthContext, buildHeaders } from "./authHelper";
+import {
+  getAuthContext,
+  buildHeaders,
+  MISSING_EMPLOYEE_MESSAGE,
+} from "./authHelper";
 import { parseError } from "./errorHelper";
 import {
   normalizeCustomIn,
@@ -899,7 +903,7 @@ export const getAttendanceRequests = async () => {
     const { baseUrl, token, employeeCode } = await getAuthContext();
 
     if (!employeeCode) {
-      return { error: "Session expired. Please login again." };
+      return { error: MISSING_EMPLOYEE_MESSAGE };
     }
 
     const url = `${baseUrl}/api/method/employee_app.employee_list.list_attendance_request`;

@@ -153,14 +153,27 @@ export async function saveTokens(access, refresh) {
 
   const changed = nextAccess !== memoryAccessToken;
 
-  memoryAccessToken = nextAccess;
-  memoryRefreshToken = nextRefresh;
-  hasTerminalSessionFailure = false;
-
+  // Persist BEFORE updating memory, and never the other way round.
+  //
+  // The backend rotates refresh tokens: each refresh issues a new one and
+  // retires the one that was used. That makes the stored refresh token the
+  // session itself — lose it and there is no way back without the password.
+  //
+  // Writing memory first meant a failed `multiSet` left the two disagreeing:
+  // this process carried on happily with the new token in memory, while disk
+  // still held the retired one. The app worked until it was next launched, then
+  // presented a refresh token the server had already rotated away, was refused,
+  // and logged the employee out — hours later and with nothing connecting the
+  // two events. Awaiting the write first means memory is only ever advanced
+  // once the durable copy is safe.
   await AsyncStorage.multiSet([
     ["access_token", String(nextAccess)],
     ["refresh_token", String(nextRefresh)],
   ]);
+
+  memoryAccessToken = nextAccess;
+  memoryRefreshToken = nextRefresh;
+  hasTerminalSessionFailure = false;
 
   // Only on an actual change of credential — `saveTokens` is also called to
   // rewrite the same token, and that changes nothing for anyone waiting.
@@ -211,8 +224,17 @@ let refreshPromise = null;
 let failedQueue = [];
 let hasTerminalSessionFailure = false;
 
-let refreshFailCount = 0;
-const MAX_REFRESH_RETRIES = 3;
+/**
+ * Consecutive failed refreshes. Diagnostics only.
+ *
+ * It used to be a logout trigger: three cumulative failures — timeouts, dropped
+ * connections, 5xx, spread across a whole shift and never decaying — called
+ * `expireSession()` and destroyed a valid session. Being unable to reach the
+ * server is not the server rejecting the employee, and a phone in a lift, a
+ * basement or a site with one bar must not cost someone their session. Nothing
+ * reads this now except the log line that reports it.
+ */
+let consecutiveRefreshFailures = 0;
 const SESSION_EXPIRED_MESSAGE = "Session expired. Please login again.";
 
 const processQueue = (error, token = null) => {
@@ -232,21 +254,82 @@ const getRefreshErrorType = (err) => {
   return nestedData?.exc_type ?? parsedResponseData?.exc_type ?? null;
 };
 
+/**
+ * Exception types that name the credential itself as the problem.
+ *
+ * `PermissionError` is deliberately absent: Frappe raises it for "you may not
+ * read this doctype" on a perfectly valid session, and it carries no claim
+ * about the refresh token.
+ */
+const TERMINAL_EXC_TYPES = new Set([
+  "AuthenticationError",
+  "InvalidAuthorizationToken",
+  "InvalidAuthorizationHeader",
+  "TokenExpiredError",
+]);
+
+/** Server wording that names the refresh credential as invalid. */
+const INVALID_REFRESH_PATTERNS = [
+  /invalid[_\s-]?grant/i,
+  /invalid[^.]{0,30}token/i,
+  /token[^.]{0,30}(expired|revoked|invalid|not found)/i,
+  /refresh token[^.]{0,30}(missing|expired|revoked|invalid)/i,
+];
+
+const refreshErrorText = (err) => {
+  const parsed = parseJsonString(err?.response?.data);
+  const nested = parseJsonString(parsed?.data);
+
+  return [
+    typeof parsed === "string" ? parsed : null,
+    parsed?.message,
+    parsed?.error,
+    parsed?.error_description,
+    parsed?.exception,
+    nested?.message,
+    nested?.error,
+    nested?.exception,
+  ]
+    .filter((value) => typeof value === "string")
+    .join(" ");
+};
+
+/**
+ * Did the server explicitly reject the refresh credential?
+ *
+ * Only a yes here may end the session. The rule this encodes:
+ *
+ *   NETWORK FAILURE != AUTHENTICATION FAILURE
+ *
+ * `401` is the server saying the credential was refused, and is terminal.
+ * `403` is not: Frappe answers it for permission errors, and a reverse proxy,
+ * WAF or rate limiter answers it for reasons that have nothing to do with the
+ * employee at all. A 403 only ends the session when the body itself names the
+ * token as invalid, expired or revoked. Everything else — no response at all, a
+ * timeout, a 5xx, an unexplained 403 — is retryable and leaves the tokens
+ * exactly where they are.
+ */
 const isTerminalRefreshFailure = (err) => {
   const status = err?.response?.status;
-  const errorType = getRefreshErrorType(err);
 
-  return (
-    status === 401 ||
-    status === 403 ||
-    errorType === "PermissionError" ||
-    errorType === "AuthenticationError"
-  );
+  // No response means the request never reached a server that had an opinion.
+  if (!status) return false;
+
+  if (status === 401) return true;
+
+  if (TERMINAL_EXC_TYPES.has(getRefreshErrorType(err))) return true;
+
+  if (status === 403) {
+    const text = refreshErrorText(err);
+    return INVALID_REFRESH_PATTERNS.some((pattern) => pattern.test(text));
+  }
+
+  return false;
 };
 
 const expireSession = async () => {
   hasTerminalSessionFailure = true;
-  refreshFailCount = 0;
+  consecutiveRefreshFailures = 0;
   memoryAccessToken = null;
   memoryRefreshToken = null;
   delete apiClient.defaults.headers.common.Authorization;
@@ -312,7 +395,21 @@ export const refreshAccessToken = async () => {
     });
 
     const newAccess = getTokenFromResponse(data, "access_token");
-    const newRefresh = getTokenFromResponse(data, "refresh_token") ?? refresh;
+    const rotatedRefresh = getTokenFromResponse(data, "refresh_token");
+    const newRefresh = rotatedRefresh ?? refresh;
+
+    // The backend rotates refresh tokens, so a response without one means we
+    // are about to keep a credential the server has just retired — the next
+    // refresh will be refused and the employee signed out, with the real cause
+    // an hour in the past. Nothing can be done about it here (there is no other
+    // token to fall back to), but it must not pass silently: this log is what
+    // connects that logout to this moment.
+    if (!rotatedRefresh) {
+      console.log(
+        "[apiClient] WARNING: refresh response carried no refresh_token; keeping the previous one, which the server may have already rotated",
+        { responseKeys: Object.keys(data ?? {}) },
+      );
+    }
 
     if (!newAccess) throw new Error("Refresh returned empty token");
 
@@ -322,7 +419,7 @@ export const refreshAccessToken = async () => {
     // 🔥 FIX: update stale axios cache
     apiClient.defaults.headers.common["Authorization"] = `Bearer ${newAccess}`;
 
-    refreshFailCount = 0;
+    consecutiveRefreshFailures = 0;
 
     return newAccess;
   } catch (err) {
@@ -331,17 +428,23 @@ export const refreshAccessToken = async () => {
       ...getErrorDebugInfo(err),
     });
 
+    // The ONLY path that ends a session: the server answered, and what it said
+    // was that this refresh credential is no longer good.
     if (isTerminalRefreshFailure(err)) {
       await expireSession();
       throw createSessionExpiredError();
     }
 
-    refreshFailCount += 1;
-
-    if (refreshFailCount >= MAX_REFRESH_RETRIES) {
-      await expireSession();
-      throw createSessionExpiredError();
-    }
+    // Everything else is transient by definition — we could not reach the
+    // server, or it failed in a way that says nothing about the credential.
+    // The tokens stay exactly where they are, the session stays authenticated,
+    // and the next 401 tries again. There is deliberately no attempt ceiling:
+    // an attempt ceiling is how a bad afternoon of signal used to become a
+    // logout.
+    consecutiveRefreshFailures += 1;
+    console.log(
+      `[apiClient] Refresh unavailable (attempt ${consecutiveRefreshFailures} since last success); session kept`,
+    );
 
     throw err;
   }
@@ -389,7 +492,14 @@ apiClient.interceptors.response.use(
     }
 
     const status = error?.response?.status;
-    const isAuthError = status === 401 || status === 403;
+
+    // 401 only. A 403 is an *authorisation* answer — this employee may not do
+    // this — and refreshing the token cannot change it. Treating 403 as an
+    // expiry turned "you don't have permission to view this" into "your session
+    // has expired", and put the app on the refresh path for every WAF rule,
+    // proxy block and rate limit in front of the tenant. A 403 now falls
+    // through to the caller with the server's own message intact.
+    const isAuthError = status === 401;
     const isRefreshCall = original.url?.includes("create_refresh_token");
 
     if (isAuthError && hasTerminalSessionFailure) {
@@ -398,7 +508,7 @@ apiClient.interceptors.response.use(
         refreshState: {
           isRefreshing,
           queueLength: failedQueue.length,
-          refreshFailCount,
+          consecutiveRefreshFailures,
           hasTerminalSessionFailure,
         },
       });
@@ -422,7 +532,7 @@ apiClient.interceptors.response.use(
         refreshState: {
           isRefreshing,
           queueLength: failedQueue.length,
-          refreshFailCount,
+          consecutiveRefreshFailures,
           hasTerminalSessionFailure,
         },
       });
