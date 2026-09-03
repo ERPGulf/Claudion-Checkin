@@ -9,22 +9,32 @@ import NetInfo from "@react-native-community/netinfo";
  * "we're back online" to "drain the queue", which keeps this module free of the
  * import cycle that wiring it directly would create.
  *
- * Two questions, and they are NOT the same one:
+ * One question: **is there a transport?** `isInternetReachable` is deliberately
+ * NOT consulted, by anything.
  *
- *  - `isOnline()` — "is this connection usable?" Reachability wins when NetInfo
- *    has determined it, falling back to `isConnected` while it is still null. A
- *    phone on captive-portal hotel wifi reports `isConnected: true` and reaches
- *    nothing, and treating that as online makes every punch wait out a full
- *    request timeout before being queued — the employee waits, twice, at the
- *    door. This is the answer the UI shows and the door-side punch uses.
+ * It used to be, on the reasoning that a phone on captive-portal wifi reports
+ * `isConnected: true` and reaches nothing, so believing it makes a punch wait
+ * out a request timeout before being queued. That reasoning was wrong about
+ * which error is cheaper.
  *
- *  - `shouldAttemptRequest()` — "is it worth trying?" Transport only,
- *    reachability ignored. Every background path asks this one, because
- *    reachability is a probe that can be wrong for hours at a stretch and a
- *    background retry has no user waiting on it. See the note on that function.
+ * `isInternetReachable` is a probe result, not a fact. On Android it is
+ * `NET_CAPABILITY_VALIDATED` — the OS captive-portal check — and it stays
+ * `false` for as long as the device is on a network that blocks Android's check
+ * endpoint, which firewalled site wifi and some roaming data connections do
+ * while carrying the app's traffic perfectly. Believing it cost real payroll
+ * data twice over: the ordinary check-in API was skipped on working
+ * connections, and the drain then declined to deliver what had been queued, so
+ * rows sat in `pending` for days while the banner told the employee they were
+ * offline.
  *
- * Getting the second one to also mean the first is what let a wrong probe
- * strand a day of attendance in the queue, so keep them apart.
+ * A wrong "there is a transport" costs one failed request and one backoff step.
+ * A wrong "we are offline" costs a day's attendance and tells the employee a
+ * comforting lie about it. So the probe earns no vote, and there is one answer
+ * here rather than two that can disagree.
+ *
+ * `shouldAttemptRequest` is kept as a second name for it because that is what
+ * the service layer reads and it names the intent — but it is the same
+ * predicate, and there is no second behaviour to get out of step.
  */
 
 let currentState = {
@@ -37,48 +47,39 @@ let unsubscribe = null;
 const reconnectListeners = new Set();
 const changeListeners = new Set();
 
-/** Reachability if NetInfo has determined it, connectivity otherwise. */
+/**
+ * The one predicate: is there an interface that could carry a request?
+ *
+ * `isInternetReachable` is not read — see the note at the top of this file.
+ * Aeroplane mode and a genuinely down interface report `type: "none"`, which is
+ * the case this exists to catch: with no transport there is nothing to attempt,
+ * and skipping it is what keeps a punch at the door instant.
+ */
 export const isStateOnline = (state) => {
   if (!state) return false;
-  if (state.isInternetReachable === false) return false;
-  if (state.isInternetReachable === true) return true;
-  return !!state.isConnected;
+  if (state.type === "none") return false;
+  return state.isConnected !== false;
 };
+
+/**
+ * The same predicate under the name the service layer reads. Kept because
+ * "should I attempt this request?" is the question those call sites are asking,
+ * and reading `isOnline` there invites someone to reintroduce a probe check.
+ */
+export const shouldAttemptRequest = (state = currentState) =>
+  isStateOnline(state);
 
 /** Last known connectivity. Synchronous — safe inside a hot path. */
 export const isOnline = () => isStateOnline(currentState);
 
-/** The full last-known state, for logging and diagnostics. */
-export const getNetworkState = () => ({ ...currentState });
-
 /**
- * Whether it is worth *attempting* a request — a deliberately weaker question
- * than `isOnline()`, and the one every background path must ask.
+ * The full last-known state, for logging and diagnostics.
  *
- * `isInternetReachable` is a probe result, not a fact. On Android it is
- * `NET_CAPABILITY_VALIDATED`: the OS captive-portal check, which fails on any
- * network that blocks Android's connectivity-check endpoint — site wifi behind a
- * corporate firewall being the ordinary case — and then stays false for as long
- * as the device is on that network. On such a network every request the app
- * makes succeeds while NetInfo insists there is no internet.
- *
- * Letting that verdict decide whether to *try* is what turned a wrong probe into
- * lost payroll: punches were queued, the drain then declined to run because the
- * same probe said offline, and the rows sat in `pending` — "Pending sync" in
- * history, nothing in the backend — indefinitely. Nothing ever reached the
- * server, so nothing was ever classified, so nothing escalated.
- *
- * So this asks only: is there a transport at all? Being wrong here costs one
- * failed request and one backoff step. Being wrong the other way costs a day's
- * attendance.
+ * This is the only place `isInternetReachable` survives, and diagnostics is the
+ * only thing it is good for: it is worth having in a log when someone reports a
+ * punch behaving oddly, and worth nothing as an input to a decision.
  */
-export const shouldAttemptRequest = (state = currentState) => {
-  if (!state) return false;
-  // Aeroplane mode and a genuinely down interface. No transport means no
-  // request, and skipping it is what keeps a punch at the door instant.
-  if (state.type === "none") return false;
-  return state.isConnected !== false;
-};
+export const getNetworkState = () => ({ ...currentState });
 
 /** Refreshes the cached state from NetInfo, keeping the last one on failure. */
 const refreshState = async () => {
@@ -106,9 +107,8 @@ const refreshState = async () => {
  */
 export const fetchIsOnline = async () => isStateOnline(await refreshState());
 
-/** `shouldAttemptRequest` against a freshly fetched state. */
-export const fetchShouldAttemptRequest = async () =>
-  shouldAttemptRequest(await refreshState());
+/** `fetchIsOnline` under the name the service layer reads. Same predicate. */
+export const fetchShouldAttemptRequest = fetchIsOnline;
 
 /**
  * Registers a callback for offline → online transitions.

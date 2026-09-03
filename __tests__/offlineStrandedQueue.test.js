@@ -90,14 +90,14 @@ beforeEach(() => {
   });
 });
 
-describe("shouldAttemptRequest vs isOnline", () => {
-  it("keeps attempting when only the reachability probe says no", async () => {
+describe("the reachability probe gets no vote", () => {
+  it("reports online when only the probe says otherwise", async () => {
     NetInfo.fetch.mockResolvedValue(misvalidatedWifi);
 
-    // The two questions are allowed to disagree, and this is the case they
-    // disagree on. `isOnline` is for the UI and the door-side punch; the drain
-    // must not be held back by a probe result.
-    await expect(fetchIsOnline()).resolves.toBe(false);
+    // One predicate, so there is nothing for the UI and the services to
+    // disagree about. This is also what stops the banner telling an employee
+    // they are offline while their punches go through normally.
+    await expect(fetchIsOnline()).resolves.toBe(true);
     await expect(fetchShouldAttemptRequest()).resolves.toBe(true);
   });
 
