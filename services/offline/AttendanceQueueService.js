@@ -21,7 +21,7 @@ import {
   readAttendanceConfig,
 } from "./attendanceConfigCache";
 import { classifyAttendanceError, FAILURE_KIND } from "./attendanceErrors";
-import { fetchIsOnline, isOnline } from "./NetworkListener";
+import { fetchShouldAttemptRequest, isOnline } from "./NetworkListener";
 import { evaluateOfflineAttendance } from "./offlineAttendanceGate";
 import {
   clearOfflineCapability,
@@ -257,10 +257,27 @@ export const submitAttendance = async ({
     throw new Error(`submitAttendance: invalid type ${type}`);
   }
 
-  // Asked fresh rather than read from the cached state: a stale "offline" would
-  // queue a punch that could have gone straight through, and the round-trip is
-  // cheap next to the request it is deciding about.
-  const connected = await fetchIsOnline();
+  // "Is there a transport?", NOT "does NetInfo think the internet is reachable?".
+  //
+  // This decides whether the ordinary check-in API
+  // (`add_log_based_on_employee_field`, unchanged, the same call the app has
+  // always made) is even attempted. It used to ask reachability, which on
+  // Android is the OS captive-portal probe — and on a network that fails that
+  // probe while working perfectly, the real API was never called at all. The
+  // employee was told "checked in offline" on a working connection, and the
+  // client saw a pending record on a phone that was plainly online.
+  //
+  // So the queue is now reached only two ways: no transport at all (aeroplane
+  // mode, no signal), or the real call was attempted and failed transiently.
+  // Never on the strength of a probe alone.
+  //
+  // The cost is that a genuinely dead-but-connected network — real captive
+  // portal wifi — now waits out the request instead of queueing immediately.
+  // That is the right way round: a punch that reaches the server is worth a
+  // wait, and a punch queued on a good connection is exactly the failure being
+  // reported. Asked fresh rather than read from the cached state, since a stale
+  // answer would decide this on seconds-old information.
+  const connected = await fetchShouldAttemptRequest();
   const canGoOnline = connected && typeof online === "function";
 
   /**

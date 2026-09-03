@@ -37,7 +37,10 @@ import {
   submitAutoAttendance,
   submitManualAttendance,
 } from "../services/offline/AttendanceQueueService";
-import { fetchIsOnline } from "../services/offline/NetworkListener";
+import {
+  fetchIsOnline,
+  fetchShouldAttemptRequest,
+} from "../services/offline/NetworkListener";
 import { evaluateOfflineAttendance } from "../services/offline/offlineAttendanceGate";
 import { NO_CONFIG_MESSAGE } from "../services/offline/attendanceConfigCache";
 import {
@@ -76,6 +79,10 @@ beforeEach(() => {
   resetDatabaseHandle();
   jest.clearAllMocks();
   fetchIsOnline.mockResolvedValue(true);
+  // `jest.clearAllMocks()` wipes the factory's delegating implementation, so
+  // restore it: unless a test says otherwise, "can I attempt?" tracks "am I
+  // online?" and the two agree.
+  fetchShouldAttemptRequest.mockImplementation(() => fetchIsOnline());
   evaluateOfflineAttendance.mockResolvedValue(acceptedGate);
   resetOfflineCapability();
 });
@@ -170,6 +177,91 @@ describe("when the administrator has switched offline attendance off", () => {
 
     expect(result.queued).toBe(true);
     expect(await listAll()).toHaveLength(1);
+  });
+});
+
+/**
+ * The client's report, verbatim: employees were online, and the record went to
+ * the queue anyway. It did, because the door asked NetInfo whether the internet
+ * was *reachable* — the Android captive-portal probe — and skipped the ordinary
+ * check-in API entirely when that probe was wrong.
+ *
+ * The queue is now reachable only from a real failure or a real absence of
+ * transport.
+ */
+describe("when the reachability probe is wrong but the connection works", () => {
+  beforeEach(() => {
+    // What NetInfo says on firewalled site wifi: connected, probe says no.
+    fetchIsOnline.mockResolvedValue(false);
+    fetchShouldAttemptRequest.mockResolvedValue(true);
+  });
+
+  it("still calls the ordinary check-in API instead of queueing", async () => {
+    const online = jest
+      .fn()
+      .mockResolvedValue({ allowed: true, name: "EMP-CKIN-0001" });
+
+    const result = await submitAttendance({
+      type: "IN",
+      employeeCode: "TDI0167",
+      online,
+    });
+
+    expect(online).toHaveBeenCalledTimes(1);
+    expect(result.allowed).toBe(true);
+    expect(result.queued).toBeUndefined();
+    expect(await listAll()).toHaveLength(0);
+  });
+
+  it("queues only once that call has actually failed", async () => {
+    const online = jest.fn().mockResolvedValue(networkFailure());
+
+    const result = await submitAttendance({
+      type: "IN",
+      employeeCode: "TDI0167",
+      online,
+    });
+
+    expect(online).toHaveBeenCalledTimes(1);
+    expect(result.queued).toBe(true);
+    expect(await listAll()).toHaveLength(1);
+  });
+
+  it("surfaces a policy refusal rather than queueing behind it", async () => {
+    // Out of radius is the server having an opinion, and it stands whatever the
+    // probe thinks.
+    const online = jest.fn().mockResolvedValue({
+      allowed: false,
+      message: "You are 400m away from nearest location (Doha HQ).",
+    });
+
+    const result = await submitAttendance({
+      type: "IN",
+      employeeCode: "TDI0167",
+      online,
+    });
+
+    expect(result.allowed).toBe(false);
+    expect(result.message).toMatch(/400m away/);
+    expect(await listAll()).toHaveLength(0);
+  });
+});
+
+describe("when there is no transport at all", () => {
+  it("goes straight to the queue without waiting on a request", async () => {
+    // Aeroplane mode. Attempting here would make every punch wait out a
+    // timeout it cannot win, which is what the probe was protecting against.
+    fetchShouldAttemptRequest.mockResolvedValue(false);
+    const online = jest.fn();
+
+    const result = await submitAttendance({
+      type: "IN",
+      employeeCode: "TDI0167",
+      online,
+    });
+
+    expect(online).not.toHaveBeenCalled();
+    expect(result.queued).toBe(true);
   });
 });
 
