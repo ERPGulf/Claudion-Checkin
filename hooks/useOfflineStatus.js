@@ -21,6 +21,7 @@ import {
   describeOfflineStatus,
   OFFLINE_PHASE,
   resolveOfflinePhase,
+  STALE_PENDING_MS,
   SYNCED_VISIBLE_MS,
 } from "../utils/offlineStatus";
 import {
@@ -82,6 +83,7 @@ export default function useOfflineStatus() {
     rejectedCount: 0,
     unresolvedCount: 0,
     awaitingServerCount: 0,
+    oldestPendingAt: null,
   });
   const [justSyncedAt, setJustSyncedAt] = useState(null);
 
@@ -104,6 +106,7 @@ export default function useOfflineStatus() {
         rejectedCount: 0,
         unresolvedCount: 0,
         awaitingServerCount: 0,
+        oldestPendingAt: null,
       });
       return;
     }
@@ -117,6 +120,7 @@ export default function useOfflineStatus() {
         rejectedCount: next?.rejectedCount ?? 0,
         unresolvedCount: next?.unresolvedCount ?? 0,
         awaitingServerCount: next?.awaitingServerCount ?? 0,
+        oldestPendingAt: next?.oldestPendingAt ?? null,
       });
     } catch {
       // A queue read failing is not worth surfacing here — the banner's job is
@@ -203,11 +207,40 @@ export default function useOfflineStatus() {
    */
   const suppressAdminBanner = capability === false || !alertsEnabled;
 
+  /**
+   * The waiting phase turns on with the passage of time rather than an event, and
+   * every other input here is edge-triggered — so without this the banner would
+   * only notice an hour-old punch the next time something else happened to fire.
+   * One timer, set for the exact moment the oldest row crosses the threshold and
+   * for nothing else: not a poll, and it clears itself once the state is reached.
+   */
+  const [, setStaleTick] = useState(0);
+
+  useEffect(() => {
+    const { oldestPendingAt, pendingCount } = counts;
+    if (!pendingCount || !Number.isFinite(oldestPendingAt)) return undefined;
+
+    const remaining = oldestPendingAt + STALE_PENDING_MS - Date.now();
+    if (remaining <= 0) return undefined;
+
+    const timer = setTimeout(() => {
+      if (isMountedRef.current) setStaleTick((value) => value + 1);
+    }, remaining);
+
+    return () => clearTimeout(timer);
+  }, [counts]);
+
   const phase = resolveOfflinePhase({
     online,
     syncing,
     blocked: suppressAdminBanner ? 0 : counts.blockedCount,
     rejected: counts.rejectedCount,
+    pending: counts.pendingCount,
+    // Suppressed with the administrator banner, and for the same reason: on a
+    // tenant with no offline endpoint deployed, or for an employee who has
+    // turned sync alerts off, a permanent notice about records nobody can move
+    // is noise. A correction is never suppressed — that one is theirs to act on.
+    oldestPendingAt: suppressAdminBanner ? null : counts.oldestPendingAt,
     justSyncedAt,
   });
 

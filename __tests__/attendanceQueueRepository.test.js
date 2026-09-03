@@ -180,15 +180,23 @@ describe("claimNextPending", () => {
 });
 
 describe("retry scheduling", () => {
-  it("follows the specified 30s / 2m / 10m escalation", () => {
-    expect(retryDelayFor(0)).toBe(30 * 1000);
-    expect(retryDelayFor(1)).toBe(2 * 60 * 1000);
-    expect(retryDelayFor(2)).toBe(10 * 60 * 1000);
+  // Front-loaded: most transient failures are a lift or a few seconds of bad
+  // signal, and a punch that could land five seconds later should.
+  it("retries within seconds, then escalates", () => {
+    expect(retryDelayFor(0)).toBe(5 * 1000);
+    expect(retryDelayFor(1)).toBe(15 * 1000);
+    expect(retryDelayFor(2)).toBe(45 * 1000);
   });
 
   it("keeps escalating past the third attempt rather than repeating", () => {
     expect(retryDelayFor(3)).toBeGreaterThan(retryDelayFor(2));
     expect(retryDelayFor(99)).toBe(RETRY_DELAYS_MS[RETRY_DELAYS_MS.length - 1]);
+  });
+
+  // The ceiling is five minutes rather than an hour, so a longer-lived failure
+  // still gets a dozen attempts inside the window instead of two.
+  it("settles at five minutes", () => {
+    expect(RETRY_DELAYS_MS[RETRY_DELAYS_MS.length - 1]).toBe(5 * 60 * 1000);
   });
 
   it("returns the row to pending with the counter advanced", async () => {
@@ -200,15 +208,26 @@ describe("retry scheduling", () => {
     });
 
     expect(retryCount).toBe(1);
-    expect(nextAttemptAt).toBe(5000 + 30 * 1000);
+    expect(nextAttemptAt).toBe(5000 + 5 * 1000);
 
     const [stored] = await listForHistory({});
     expect(stored.status).toBe(QUEUE_STATUS.PENDING);
     expect(stored.error).toBe("Network Error");
   });
 
-  it("caps at five retries", () => {
-    expect(MAX_RETRIES).toBe(5);
+  // What matters is the wall-clock window before a row is parked as `blocked`
+  // (which shows the employee an administrator banner), not the attempt count.
+  // Fifteen attempts on this ladder spans a little under an hour — the same
+  // patience the old five-attempt slow ladder had, spent as quick tries.
+  it("keeps trying for about an hour before parking the row", () => {
+    expect(MAX_RETRIES).toBe(15);
+
+    const window = Array.from({ length: MAX_RETRIES }, (_, attempt) =>
+      retryDelayFor(attempt),
+    ).reduce((total, delay) => total + delay, 0);
+
+    expect(window).toBeGreaterThan(45 * 60 * 1000);
+    expect(window).toBeLessThan(75 * 60 * 1000);
   });
 });
 
@@ -286,9 +305,9 @@ describe("blocked rows", () => {
     expect(await claimNextPending()).toBeNull();
   });
 
-  it("decays to a six-hour floor and stays there", async () => {
-    expect(blockedDelayFor(0)).toBe(5 * 60 * 1000);
-    expect(blockedDelayFor(99)).toBe(6 * 60 * 60 * 1000);
+  it("decays to a one-hour floor and stays there", async () => {
+    expect(blockedDelayFor(0)).toBe(60 * 1000);
+    expect(blockedDelayFor(99)).toBe(60 * 60 * 1000);
   });
 
   // The ladder is positioned by elapsed blocked time, so waking a row early

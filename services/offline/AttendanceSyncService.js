@@ -5,13 +5,16 @@ import {
   MAX_RETRIES,
   claimNextPending,
   countByStatus,
+  hasWorkDue,
   markBlocked,
   markRejected,
   markRetry,
   markSynced,
+  peekNextRow,
   purgeSynced,
   releaseStuckSyncing,
   wakeBlocked,
+  wakePending,
 } from "./AttendanceQueueRepository";
 import { notifyQueueChanged } from "./AttendanceQueueService";
 import { classifyAttendanceError, FAILURE_KIND } from "./attendanceErrors";
@@ -269,6 +272,72 @@ const syncRow = async (row) => {
 };
 
 /**
+ * One line per run, unconditionally — including the runs that do nothing.
+ *
+ * This used to be reported only when something happened, which meant the single
+ * most important case logged nothing at all: a queue that is not moving. "Six
+ * punches read Pending sync and the phone is plainly online" was unanswerable
+ * from a device 4,000 miles away, because every candidate explanation — the
+ * drain never ran, it ran and declined to attempt, it ran and claimed nothing,
+ * it attempted and the row is mid-backoff — produced exactly the same silence.
+ *
+ * The head row is what separates them, so it is logged whatever its state. Raw
+ * `error` text belongs here and only here: it is Frappe exception text, useful
+ * to support and meaningless to the employee, so it stays out of the UI.
+ */
+const logRun = async (summary, employeeId) => {
+  let head = null;
+
+  try {
+    head = await peekNextRow({ employeeId });
+  } catch (error) {
+    // Diagnostics must never be able to fail a drain.
+    console.log(`${LOG_PREFIX} Head read failed:`, error?.message);
+  }
+
+  // An empty queue on a one-minute heartbeat has nothing to report and would
+  // bury the lines that matter. The condition is "no unresolved row and nothing
+  // happened" — NOT "nothing due", because a row waiting out its backoff is
+  // exactly the case this log exists for.
+  const changed =
+    summary.synced ||
+    summary.duplicates ||
+    summary.blocked ||
+    summary.rejected ||
+    summary.woken ||
+    summary.wokenPending;
+
+  if (!head && !changed) return;
+
+  console.log(`${LOG_PREFIX} Run (${summary.trigger})`, {
+    ran: summary.ran,
+    reason: summary.reason ?? null,
+    scope: employeeId ?? "all",
+    synced: summary.synced,
+    duplicates: summary.duplicates,
+    blocked: summary.blocked,
+    rejected: summary.rejected,
+    woken: summary.woken,
+    wokenPending: summary.wokenPending,
+    remaining: summary.remaining,
+    head: head
+      ? {
+          id: head.id,
+          action: head.action,
+          punchedAt: head.timestamp,
+          status: head.status,
+          attempts: head.retryCount,
+          failureClass: head.failureClass ?? null,
+          nextAttemptAt: head.nextAttemptAt
+            ? new Date(head.nextAttemptAt).toISOString()
+            : "due",
+          error: head.error ?? null,
+        }
+      : null,
+  });
+};
+
+/**
  * Drains the queue once.
  *
  * Never throws and never runs twice at once: a second caller while a run is in
@@ -281,6 +350,11 @@ const syncRow = async (row) => {
  * @param {string} [options.trigger] why the sync ran, for the log
  * @param {boolean} [options.wakeAllBlocked] ignore the blocked backoff and
  *        re-attempt every blocked row — for launch, reconnect and token refresh
+ * @param {boolean} [options.wakeAllPending] ignore the transient backoff too, so
+ *        every pending row is due. Only for an explicit pull-to-refresh — the
+ *        automatic triggers would reset the fast ladder on every app launch.
+ *        Stranded rows (a due time beyond any real backoff) are repaired on
+ *        every run regardless; see `wakePending`.
  * @param {string|null} [options.wakeFailureClass] wake only this class, so a
  *        token refresh retries auth-blocked rows without also re-attempting
  *        rows blocked on a missing endpoint
@@ -294,6 +368,7 @@ const syncRow = async (row) => {
 export const syncPendingAttendance = async ({
   trigger = "manual",
   wakeAllBlocked = false,
+  wakeAllPending = false,
   wakeFailureClass = null,
   employeeId = null,
 } = {}) => {
@@ -307,6 +382,7 @@ export const syncPendingAttendance = async ({
       blocked: 0,
       rejected: 0,
       woken: 0,
+      wokenPending: 0,
       remaining: 0,
       trigger,
     };
@@ -340,6 +416,18 @@ export const syncPendingAttendance = async ({
         );
       }
 
+      // Pending rows get the same treatment, for a reason the blocked ladder
+      // does not have: the drain claims strictly in order, so a single pending
+      // row that is not due holds back every later punch this employee has made.
+      // By default this only repairs rows scheduled beyond any real backoff — a
+      // clock that ran ahead — and an explicit pull makes every pending row due.
+      summary.wokenPending = await wakePending({ force: wakeAllPending });
+      if (summary.wokenPending) {
+        console.log(
+          `${LOG_PREFIX} Made ${summary.wokenPending} pending row(s) due for ${trigger}`,
+        );
+      }
+
       // `shouldAttemptRequest`, NOT `isOnline`. The drain has no user waiting
       // on it, so a wasted request costs nothing and a skipped one costs a
       // punch: on any network whose captive-portal probe fails, NetInfo reports
@@ -347,8 +435,19 @@ export const syncPendingAttendance = async ({
       // on that verdict left rows in `pending` — "Pending sync", never
       // attempted, never escalated — while every request the app made worked.
       // Only a total absence of transport (aeroplane mode) stops a run now.
+      // Nothing due: return before touching the radio. This is what makes a
+      // one-minute heartbeat affordable — an idle tick is one indexed query,
+      // no NetInfo call, no request, and (see logRun) no log line unless there
+      // is actually a row sitting there.
+      if (!(await hasWorkDue(Date.now(), { employeeId }))) {
+        summary.reason = "nothing-due";
+        await logRun(summary, employeeId);
+        return summary;
+      }
+
       if (!(await fetchShouldAttemptRequest())) {
         summary.reason = "offline";
+        await logRun(summary, employeeId);
         return summary;
       }
 
@@ -400,14 +499,16 @@ export const syncPendingAttendance = async ({
       const counts = await countByStatus();
       summary.remaining = counts.unresolvedCount;
 
+      await logRun(summary, employeeId);
+
       if (
         summary.synced ||
         summary.duplicates ||
         summary.blocked ||
         summary.rejected ||
-        summary.woken
+        summary.woken ||
+        summary.wokenPending
       ) {
-        console.log(`${LOG_PREFIX} Run complete (${trigger})`, summary);
         notifyQueueChanged();
       }
 

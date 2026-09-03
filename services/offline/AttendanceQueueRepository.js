@@ -20,21 +20,41 @@ import {
  * JSON-in-TEXT and which are SQLite's 0/1 integers.
  */
 
-/** Retry ceiling for ordinary transient failures. */
-export const MAX_RETRIES = 5;
+/**
+ * Retry ceiling for ordinary transient failures.
+ *
+ * High because the ladder below is fast: what matters is not the number of
+ * attempts but how long the row keeps getting them before it is parked as
+ * `blocked`, since parking it shows the employee an administrator banner. Fifteen
+ * attempts on the schedule below spans a little under an hour, which is about
+ * what five attempts on the old slow ladder spanned — the same patience, spent
+ * as many quick tries instead of a few widely-spaced ones.
+ */
+export const MAX_RETRIES = 15;
 
 /**
  * Backoff for transient failures, in ms, indexed by the attempt about to be
- * made. The first three are the specified 30s / 2m / 10m; the last two continue
- * the escalation rather than repeating, so a row failing for a reason time will
- * not fix stops costing requests quickly.
+ * made.
+ *
+ * Deliberately front-loaded: the first retry is five seconds after the failure,
+ * because the overwhelming majority of these are a lift, a stairwell, a car park or
+ * a few seconds of bad signal, and a punch that could have landed at 05:13:05
+ * has no business waiting until 05:13:35. It settles at five minutes rather than
+ * escalating to an hour, so a row that is failing for a longer-lived reason
+ * still gets a dozen attempts inside the window instead of two.
+ *
+ * The old schedule (30s / 2m / 10m / 30m / 1h) was sized to protect the server
+ * from a client that might be wrong about being online. It has cost real
+ * attendance latency, and the protection is better provided by the things that
+ * cannot be tuned away: one row per request, one drain at a time, and a halt on
+ * the first transient failure.
  */
 export const RETRY_DELAYS_MS = [
-  30 * 1000,
+  5 * 1000,
+  15 * 1000,
+  45 * 1000,
   2 * 60 * 1000,
-  10 * 60 * 1000,
-  30 * 60 * 1000,
-  60 * 60 * 1000,
+  5 * 60 * 1000,
 ];
 
 /**
@@ -47,13 +67,15 @@ export const RETRY_DELAYS_MS = [
  * client action and the alternative is losing payroll data.
  *
  * The floor is what stops "never stop retrying" from meaning "hammer the
- * server": at steady state one attempt per six hours, per device.
+ * server": at steady state one attempt per hour, per device. It was six hours,
+ * which meant a punch could sit for most of a working day after the fix that
+ * would have let it through had already been deployed.
  */
 export const BLOCKED_DELAYS_MS = [
-  5 * 60 * 1000, // 5m  — a deploy that is already in flight
-  30 * 60 * 1000, // 30m
-  2 * 60 * 60 * 1000, // 2h
-  6 * 60 * 60 * 1000, // 6h — the floor, repeated forever
+  60 * 1000, // 1m  — a deploy or a restart that is already in flight
+  5 * 60 * 1000, // 5m
+  20 * 60 * 1000, // 20m
+  60 * 60 * 1000, // 1h — the floor, repeated forever
 ];
 
 /** Delay before the attempt that follows `retryCount` transient failures. */
@@ -598,6 +620,55 @@ export const wakeBlocked = async ({
 };
 
 /**
+ * Un-strands `pending` rows whose next attempt sits further in the future than
+ * any legitimate backoff could put it.
+ *
+ * `wakeBlocked` covers `blocked` rows and `releaseStuckSyncing` covers `syncing`
+ * ones; until this existed, nothing ever touched a `pending` row's
+ * `nextAttemptAt`, and that was a hole with real consequences. The drain claims
+ * strictly in order (see `claimNextPending`), so one pending row that is not due
+ * holds back every later punch for that employee — and the retry ladder is
+ * scheduled from `Date.now()`. A device whose clock runs ahead when a retry is
+ * scheduled and is then corrected leaves that row due at a wall-clock time that
+ * may never arrive, and the whole employee's queue behind it reads "Pending
+ * sync" forever with nothing to explain it.
+ *
+ * Two modes, because two different claims are being made:
+ *
+ *  - default: only rows further out than the ladder's own maximum step. No
+ *    honest backoff can put a row there, so moving it is a repair, not a
+ *    shortcut past the schedule. Safe on every trigger.
+ *  - `force`: every pending row that is not yet due. This is a person pulling to
+ *    refresh — the same reasoning as `wakeBlocked({ force: true })`, and
+ *    deliberately not used by the automatic triggers, which would otherwise
+ *    reset the fast ladder on every app launch and walk rows into `blocked`
+ *    sooner than real time warrants.
+ *
+ * `status` is untouched — these rows are already pending. Only their due time
+ * moves.
+ *
+ * @returns {Promise<number>} how many rows were made due
+ */
+export const wakePending = async ({
+  force = false,
+  now = Date.now(),
+  maxDelayMs = RETRY_DELAYS_MS[RETRY_DELAYS_MS.length - 1],
+} = {}) => {
+  const database = await getDatabase();
+
+  const threshold = force ? now : now + maxDelayMs;
+
+  const result = await database.runAsync(
+    `UPDATE ${QUEUE_TABLE}
+        SET nextAttemptAt = 0, updatedAt = ?
+      WHERE status = ? AND nextAttemptAt > ?;`,
+    [now, QUEUE_STATUS.PENDING, threshold],
+  );
+
+  return result?.changes ?? 0;
+};
+
+/**
  * Releases rows stuck in `syncing`.
  *
  * A row is left in that state whenever the process dies mid-request — an OS
@@ -752,6 +823,37 @@ export const listForHistory = async ({
   return hydrateAll(rows);
 };
 
+/**
+ * The row the drain will take next, without claiming it.
+ *
+ * Ordered exactly as `claimNextPending` orders — oldest punch first — so this is
+ * the head of the queue whatever its state, including a row that is not due yet.
+ * Read only for the run log: when a queue is not moving, the head row is the
+ * whole answer, and until it was logged the only way to get at its `error`,
+ * `retryCount` and `nextAttemptAt` was a debugger attached to the employee's
+ * phone.
+ */
+export const peekNextRow = async ({ employeeId = null } = {}) => {
+  const database = await getDatabase();
+
+  const params = [...AWAITING_SERVER_STATUSES];
+  let where = `status IN (${placeholdersFor(AWAITING_SERVER_STATUSES)})`;
+  if (employeeId) {
+    where += " AND employeeId = ?";
+    params.push(employeeId);
+  }
+
+  const row = await database.getFirstAsync(
+    `SELECT * FROM ${QUEUE_TABLE}
+      WHERE ${where}
+      ORDER BY timestamp ASC, id ASC
+      LIMIT 1;`,
+    params,
+  );
+
+  return hydrate(row);
+};
+
 /** Every row, newest first. Diagnostics and tests. */
 export const listAll = async ({ limit = 500 } = {}) => {
   const database = await getDatabase();
@@ -871,16 +973,51 @@ export const countByStatus = async (employeeId = null) => {
   counts.mayAffectServerCount =
     counts.awaitingServerCount - counts.blockedUndeliverableCount;
 
+  // When the oldest punch still in motion was created, or null if there is
+  // none. `pendingCount` says how many are waiting; only this says for how
+  // long, which is the difference between ordinary queueing and a queue that
+  // has stopped moving. The banner needs exactly that distinction: a punch made
+  // thirty seconds ago is not news, and six of them from yesterday are.
+  //
+  // `createdAt`, not `timestamp` — how long the app has been holding the record,
+  // not when the employee punched. A backdated geofence replay is not stale.
+  const oldest = employeeId
+    ? await database.getFirstAsync(
+        `SELECT MIN(createdAt) AS oldest FROM ${QUEUE_TABLE}
+          WHERE status IN (?, ?) AND employeeId = ?;`,
+        [QUEUE_STATUS.PENDING, QUEUE_STATUS.SYNCING, employeeId],
+      )
+    : await database.getFirstAsync(
+        `SELECT MIN(createdAt) AS oldest FROM ${QUEUE_TABLE}
+          WHERE status IN (?, ?);`,
+        [QUEUE_STATUS.PENDING, QUEUE_STATUS.SYNCING],
+      );
+
+  counts.oldestPendingAt = Number(oldest?.oldest) || null;
+
   return counts;
 };
 
-/** Whether a drain has anything to do at `now`, including due blocked rows. */
-export const hasWorkDue = async (now = Date.now()) => {
+/**
+ * Whether a drain has anything to do at `now`, including due blocked rows.
+ *
+ * `employeeId` scopes it to match `claimNextPending`: a drain scoped to one
+ * employee would otherwise decide it had work to do on the strength of somebody
+ * else's row and then claim nothing.
+ */
+export const hasWorkDue = async (now = Date.now(), { employeeId = null } = {}) => {
   const database = await getDatabase();
+
+  const params = [QUEUE_STATUS.PENDING, QUEUE_STATUS.BLOCKED, now];
+  let where = "status IN (?, ?) AND nextAttemptAt <= ?";
+  if (employeeId) {
+    where += " AND employeeId = ?";
+    params.push(employeeId);
+  }
+
   const row = await database.getFirstAsync(
-    `SELECT 1 AS due FROM ${QUEUE_TABLE}
-      WHERE status IN (?, ?) AND nextAttemptAt <= ? LIMIT 1;`,
-    [QUEUE_STATUS.PENDING, QUEUE_STATUS.BLOCKED, now],
+    `SELECT 1 AS due FROM ${QUEUE_TABLE} WHERE ${where} LIMIT 1;`,
+    params,
   );
   return !!row;
 };
@@ -906,8 +1043,10 @@ export default {
   markRetry,
   markSynced,
   pairWithOpenCheckin,
+  peekNextRow,
   purgeSynced,
   releaseStuckSyncing,
   retryDelayFor,
   wakeBlocked,
+  wakePending,
 };

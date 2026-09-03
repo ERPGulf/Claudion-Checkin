@@ -13,7 +13,10 @@ import {
   formatLogTime,
   parseLogTime,
 } from "../../utils/attendanceHistory";
-import { describeQueueRow } from "../../utils/offlineStatus";
+import {
+  describeQueueDiagnostics,
+  describeQueueRow,
+} from "../../utils/offlineStatus";
 
 /**
  * What happened to an attendance record that hasn't reached the server, and
@@ -74,6 +77,7 @@ function QueueRowCard({ row, onCorrect }) {
   const { colors } = useAppTheme();
 
   const detail = describeQueueRow(row);
+  const diagnostics = describeQueueDiagnostics(row);
   const date = parseLogTime(row.timestamp);
   const { label: typeLabel } = describeLogType(
     row.action === "checkout" ? "OUT" : "IN",
@@ -162,6 +166,24 @@ function QueueRowCard({ row, onCorrect }) {
           onPress={() => onCorrect(row)}
           style={{ marginTop: SPACING.md }}
         />
+      )}
+
+      {/* The support line. Small, muted and last, because it is not for the
+          employee to act on — it is what makes a screenshot of this sheet
+          enough to diagnose a stuck queue without a debugger attached to the
+          phone. Tabular figures so the ids and times line up down the sheet. */}
+      {!!diagnostics && (
+        <Text
+          style={{
+            ...TYPO.caption,
+            color: colors.textMuted,
+            marginTop: SPACING.md,
+            fontVariant: ["tabular-nums"],
+          }}
+          accessibilityLabel={`Record details: ${diagnostics}`}
+        >
+          {diagnostics}
+        </Text>
       )}
     </View>
   );

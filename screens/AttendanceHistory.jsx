@@ -45,9 +45,10 @@ function AttendanceHistory() {
     sections,
     hasNextPage,
     isFetchingNextPage,
-    isRefetching,
+    isRefreshing,
     loadMore,
     refetch,
+    refreshAll,
   } = useAttendanceHistory();
 
   const page = {
@@ -197,8 +198,15 @@ function AttendanceHistory() {
           onEndReachedThreshold={0.2}
           refreshControl={
             <RefreshControl
-              refreshing={isRefetching}
-              onRefresh={refetch}
+              // `refreshAll`, not `refetch`. A pull here drains the queue first
+              // and then refetches, so a punch that has not reached the server
+              // gets one more attempt at the moment the employee is looking at
+              // it and asking why. With `refetch` alone this screen could only
+              // redraw the same "Pending sync" chip it was already showing —
+              // the one place the problem is visible was the one place nothing
+              // could be done about it.
+              refreshing={isRefreshing}
+              onRefresh={refreshAll}
               tintColor={colors.textMuted}
               colors={[colors.primary2]}
               progressBackgroundColor={colors.cardBackground}

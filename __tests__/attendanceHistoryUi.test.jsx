@@ -19,7 +19,47 @@ jest.mock('../hooks/useHomeExperience', () => ({
   default: () => ({ enabled: true, hydrated: true, setEnabled: jest.fn() }),
 }));
 
+jest.mock('../hooks/useModernScreenHeader', () => ({
+  __esModule: true,
+  default: () => {},
+}));
+
+/**
+ * The screen is presentation only, so the hook is stubbed and the assertion is
+ * about which of its two refresh functions the gesture reaches.
+ */
+const historyRecord = {
+  name: 'CI-1',
+  log_type: 'IN',
+  time: '2026-09-02 05:13:00',
+  device_id: 'MobileAPP',
+  syncStatus: 'pending',
+};
+
+const mockHistory = {
+  isLoading: false,
+  isError: false,
+  error: null,
+  // A pending punch, since that is the row the gesture exists for — and the
+  // screen shows an empty state rather than a list when there is nothing.
+  records: [historyRecord],
+  sections: [{ title: 'Yesterday', count: 1, data: [[historyRecord]] }],
+  hasNextPage: false,
+  isFetchingNextPage: false,
+  isRefreshing: false,
+  loadMore: jest.fn(),
+  refetch: jest.fn(),
+  refreshAll: jest.fn(),
+};
+
+jest.mock('../hooks/useAttendanceHistory', () => ({
+  __esModule: true,
+  default: () => mockHistory,
+}));
+
 /* eslint-disable import/first */
+import { SectionList } from 'react-native';
+import AttendanceHistory from '../screens/AttendanceHistory';
 import AttendanceHistoryCard from '../components/AttendanceHistory/AttendanceHistoryCard';
 import HistorySectionHeader from '../components/AttendanceHistory/HistorySectionHeader';
 import HistorySkeleton from '../components/AttendanceHistory/HistorySkeleton';
@@ -273,5 +313,43 @@ describe('HistorySkeleton', () => {
     expect(
       large.UNSAFE_queryAllByType(Animated.View).length,
     ).toBeGreaterThan(small.UNSAFE_queryAllByType(Animated.View).length);
+  });
+});
+
+/**
+ * The gesture, and what it reaches.
+ *
+ * `refreshAll` — drain the queue, then refetch — existed, was documented as the
+ * manual retry the design deliberately offers instead of a button, and was
+ * wired to nothing: the list passed `onRefresh={refetch}`. So on the one screen
+ * where a stuck punch is visible, pulling down refetched the server and redrew
+ * the same "Pending sync" chip it was already showing.
+ */
+describe('AttendanceHistory pull-to-refresh', () => {
+  beforeEach(() => {
+    mockScheme = 'light';
+    mockHistory.isRefreshing = false;
+    mockHistory.refetch.mockClear();
+    mockHistory.refreshAll.mockClear();
+  });
+
+  const refreshControlOf = (tree) =>
+    tree.UNSAFE_getByType(SectionList).props.refreshControl;
+
+  it('drains the queue rather than only refetching', () => {
+    const tree = render(<AttendanceHistory />);
+
+    // The gesture, as the list delivers it.
+    refreshControlOf(tree).props.onRefresh();
+
+    expect(mockHistory.refreshAll).toHaveBeenCalledTimes(1);
+    expect(mockHistory.refetch).not.toHaveBeenCalled();
+  });
+
+  it('spins for the whole gesture, drain included', () => {
+    mockHistory.isRefreshing = true;
+    const tree = render(<AttendanceHistory />);
+
+    expect(refreshControlOf(tree).props.refreshing).toBe(true);
   });
 });

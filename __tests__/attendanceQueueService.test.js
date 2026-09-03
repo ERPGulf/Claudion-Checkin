@@ -32,6 +32,7 @@ import {
 } from "../services/offline/AttendanceDatabase";
 import { listAll } from "../services/offline/AttendanceQueueRepository";
 import {
+  registerQueueDrainHandler,
   shouldQueueFailure,
   submitAttendance,
   submitAutoAttendance,
@@ -726,5 +727,124 @@ describe("forceQueue", () => {
 
     expect(online).not.toHaveBeenCalled();
     expect(await listAll()).toHaveLength(1);
+  });
+});
+
+/**
+ * Queueing a punch now asks for a drain.
+ *
+ * Nothing used to. A row waited for the next launch, foreground or five-minute
+ * heartbeat — and the reconnect trigger, which exists precisely for this, cannot
+ * fire when the punch was queued because the *server* was unreachable rather
+ * than the transport: there is no connectivity edge to notice. A punch made at
+ * 05:13 could therefore sit untouched until someone happened to reopen the app.
+ */
+describe("asking for a drain after queueing", () => {
+  let handler;
+  let unregister;
+
+  beforeEach(() => {
+    handler = jest.fn();
+    unregister = registerQueueDrainHandler(handler);
+  });
+
+  afterEach(() => unregister());
+
+  it("asks once a punch is safely in the queue", async () => {
+    fetchIsOnline.mockResolvedValue(false);
+
+    const result = await submitAttendance({
+      type: "IN",
+      employeeCode: "TDI0167",
+      online: jest.fn(),
+    });
+
+    expect(result.queued).toBe(true);
+    expect(handler).toHaveBeenCalledWith(
+      expect.objectContaining({ employeeId: "TDI0167", action: "checkin" }),
+    );
+  });
+
+  // A punch that just landed is the strongest evidence there is that the server
+  // is up and this token works, so anything already queued should go now rather
+  // than waiting out its own backoff.
+  it("asks when a punch lands online, since the server is proven up", async () => {
+    const online = jest.fn().mockResolvedValue({ allowed: true, name: "X" });
+
+    await submitAttendance({ type: "IN", employeeCode: "TDI0167", online });
+
+    expect(handler).toHaveBeenCalledWith(
+      expect.objectContaining({ employeeId: "TDI0167", reason: "online-punch" }),
+    );
+  });
+
+  // A refusal on its merits proves nothing about the queue's chances, and the
+  // punch itself never reached the queue.
+  it("does not ask when the server refused the punch on its merits", async () => {
+    const online = jest.fn().mockResolvedValue({
+      allowed: false,
+      message: "You are not within your office location.",
+    });
+
+    await submitAttendance({ type: "IN", employeeCode: "TDI0167", online });
+
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  // The same punch arriving twice — a geofence EXIT alongside a tapped
+  // check-out — inserts one row, so it is one drain.
+  it("does not ask again for a punch already queued", async () => {
+    fetchIsOnline.mockResolvedValue(false);
+
+    await submitAttendance({ type: "IN", employeeCode: "TDI0167", online: jest.fn() });
+    await submitAttendance({ type: "IN", employeeCode: "TDI0167", online: jest.fn() });
+
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not ask when the queue refused the punch", async () => {
+    fetchIsOnline.mockResolvedValue(false);
+    evaluateOfflineAttendance.mockResolvedValue({
+      allowed: false,
+      reason: "outside-radius",
+      message: "You are too far from your office location.",
+    });
+
+    await submitAttendance({ type: "IN", employeeCode: "TDI0167", online: jest.fn() });
+
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  // A punch is already in the queue by the time this runs. Nothing about asking
+  // for a drain may turn a saved punch into a failed one.
+  it("survives a handler that throws", async () => {
+    fetchIsOnline.mockResolvedValue(false);
+    handler.mockImplementation(() => {
+      throw new Error("manager exploded");
+    });
+
+    const result = await submitAttendance({
+      type: "IN",
+      employeeCode: "TDI0167",
+      online: jest.fn(),
+    });
+
+    expect(result.allowed).toBe(true);
+    expect(result.queued).toBe(true);
+    expect(await listAll()).toHaveLength(1);
+  });
+
+  it("is a no-op when no manager is listening", async () => {
+    unregister();
+    fetchIsOnline.mockResolvedValue(false);
+
+    const result = await submitAttendance({
+      type: "IN",
+      employeeCode: "TDI0167",
+      online: jest.fn(),
+    });
+
+    expect(result.queued).toBe(true);
+    expect(handler).not.toHaveBeenCalled();
   });
 });

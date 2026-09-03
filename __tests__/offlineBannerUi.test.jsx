@@ -42,6 +42,7 @@ jest.mock('../hooks/useOfflineStatus', () => ({
 }));
 
 /* eslint-disable import/first */
+import AttendanceSyncSheet from '../components/common/AttendanceSyncSheet';
 import OfflineBanner from '../components/common/OfflineBanner';
 import { COLORS, DARK_COLORS } from '../constants';
 import {
@@ -223,5 +224,96 @@ describe('exit animation', () => {
 
     // Still on screen — the words survive the transition rather than blanking.
     expect(queryByText("You're offline")).toBeTruthy();
+  });
+});
+
+/**
+ * The state that used to render nothing.
+ *
+ * A pending punch outlives the offline banner — the phone comes back onto wifi —
+ * and never reaches the administrator banner, because nothing is blocked. Six of
+ * them sat on a production device for a day with the app saying nothing at all.
+ */
+describe('the waiting pill', () => {
+  it('says the records are still waiting, and invites a tap', () => {
+    showPhase(OFFLINE_PHASE.WAITING, { pendingCount: 6, pending: 6 });
+    const { getByText } = render(<OfflineBanner />);
+
+    expect(getByText('Attendance still waiting to sync')).toBeTruthy();
+    expect(
+      getByText('6 attendance records saved on your device. Tap for details.'),
+    ).toBeTruthy();
+  });
+
+  // Amber. Nothing is lost and the employee has done nothing wrong.
+  it('is a warning, not an error', () => {
+    showPhase(OFFLINE_PHASE.WAITING, { pendingCount: 1, pending: 1 });
+    const { getByText } = render(<OfflineBanner />);
+
+    expect(getByText('icon:cloud-upload-outline')).toBeTruthy();
+  });
+});
+
+/**
+ * The support line on the sheet.
+ *
+ * Diagnosing a stuck queue used to need a debugger attached to the employee's
+ * phone: nothing they could see distinguished "retried forty times" from "never
+ * attempted once". This is the line they can screenshot.
+ */
+describe('the sync sheet support line', () => {
+  const pendingRow = {
+    id: 12,
+    action: 'checkin',
+    timestamp: '2026-09-02 05:13:00',
+    status: 'pending',
+    retryCount: 3,
+    nextAttemptAt: 0,
+    error: 'frappe.exceptions.ValidationError: something internal',
+  };
+
+  it('shows the row id, its state and its attempts', () => {
+    const { getByText } = render(
+      <AttendanceSyncSheet visible rows={[pendingRow]} onClose={() => {}} />,
+    );
+
+    expect(getByText('#12 · pending · 3 attempts · due now')).toBeTruthy();
+  });
+
+  it('keeps the employee-facing explanation free of it', () => {
+    const { getByText } = render(
+      <AttendanceSyncSheet visible rows={[pendingRow]} onClose={() => {}} />,
+    );
+
+    expect(getByText('Pending sync')).toBeTruthy();
+    expect(getByText('Saved on your device, waiting to be sent.')).toBeTruthy();
+  });
+
+  it('never shows the server exception text', () => {
+    const { queryByText } = render(
+      <AttendanceSyncSheet visible rows={[pendingRow]} onClose={() => {}} />,
+    );
+
+    expect(queryByText(/frappe|ValidationError/)).toBeNull();
+  });
+
+  it('says nothing about a next attempt for a row that will never be retried', () => {
+    const { getByText } = render(
+      <AttendanceSyncSheet
+        visible
+        onClose={() => {}}
+        rows={[
+          {
+            ...pendingRow,
+            id: 7,
+            status: 'rejected',
+            failureClass: 'validation',
+            retryCount: 2,
+          },
+        ]}
+      />,
+    );
+
+    expect(getByText('#7 · rejected/validation · 2 attempts')).toBeTruthy();
   });
 });

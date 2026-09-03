@@ -82,6 +82,47 @@ export const OFFLINE_UNSUPPORTED_MESSAGE =
 export const OFFLINE_DISABLED_MESSAGE =
   "Offline attendance is switched off for your organization. Please check in while you have a connection.";
 
+/**
+ * How the sync manager gets told "a punch just went into the queue".
+ *
+ * A callback rather than a direct call, because importing `BackgroundSyncManager`
+ * from here would close an import cycle (it imports `AttendanceSyncService`,
+ * which imports this module for `notifyQueueChanged`). Same shape as
+ * `addQueueChangeListener` above, and a no-op when nothing is registered — so a
+ * punch queued before the manager starts, or by a test, still behaves.
+ *
+ * `notifyQueueChanged` cannot serve this purpose: it fires for every queue
+ * mutation *including the drain's own*, so draining on it would re-enter the
+ * drain after every successful run.
+ *
+ * Why it is needed at all: until now nothing scheduled a drain when a punch was
+ * queued. The row waited for the next launch, foreground or five-minute tick —
+ * and the reconnect trigger, which exists precisely for this, cannot help when
+ * the punch was queued because the *server* was unreachable rather than the
+ * transport, since no connectivity edge ever occurs.
+ */
+let queueDrainHandler = null;
+
+export const registerQueueDrainHandler = (handler) => {
+  queueDrainHandler = typeof handler === "function" ? handler : null;
+
+  return () => {
+    if (queueDrainHandler === handler) queueDrainHandler = null;
+  };
+};
+
+const requestQueueDrain = (context) => {
+  if (!queueDrainHandler) return;
+
+  try {
+    queueDrainHandler(context);
+  } catch (error) {
+    // A punch is already safely in the queue by this point. Failing to ask for
+    // a drain must never turn that into a failed punch.
+    console.log(`${LOG_PREFIX} Drain request failed:`, error?.message);
+  }
+};
+
 /** Change notifications for the UI. */
 const changeListeners = new Set();
 
@@ -209,6 +250,13 @@ const queueAttendance = async ({
 
   notifyQueueChanged();
 
+  // Ask for a drain. The manager decides when — it holds a short delay so this
+  // does not immediately re-attempt a request that just failed and burn a step
+  // of the row's retry ladder.
+  if (inserted) {
+    requestQueueDrain({ employeeId: employeeCode, action: logTypeToAction(type) });
+  }
+
   return {
     allowed: true,
     queued: true,
@@ -291,7 +339,15 @@ export const submitAttendance = async ({
     try {
       const result = await online();
 
-      if (result?.allowed) return { done: true, result };
+      if (result?.allowed) {
+        // The strongest possible evidence that the server is up and this token
+        // works: a punch just landed on it. Anything already queued should go
+        // now rather than waiting for its own backoff to elapse — this is the
+        // moment the queue is most likely to succeed and least likely to be
+        // guessing about it.
+        requestQueueDrain({ employeeId: employeeCode, reason: "online-punch" });
+        return { done: true, result };
+      }
 
       if (!shouldQueueFailure(result)) {
         // A real refusal — out of radius, missing configuration, a rejected
@@ -579,6 +635,7 @@ export default {
   isOnline,
   notifyQueueChanged,
   purgeAttendanceQueue,
+  registerQueueDrainHandler,
   resolveWithCorrection,
   shouldQueueFailure,
   submitAttendance,

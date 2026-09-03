@@ -49,6 +49,7 @@ import {
   resetDatabaseHandle,
 } from "../services/offline/AttendanceDatabase";
 import {
+  MAX_RETRIES,
   countByStatus,
   enqueue,
   findById,
@@ -244,7 +245,7 @@ describe("retry rules", () => {
 
   // The cap still exists, but it moves the row to the slow schedule instead of
   // abandoning it. "Never lose attendance" outranks "stop trying".
-  it("moves a row to the slow schedule after five transient retries", async () => {
+  it("moves a row to the slow schedule once the retry window is spent", async () => {
     await enqueue(punch());
     pushCheckin.mockRejectedValue(networkError());
 
@@ -253,7 +254,7 @@ describe("retry rules", () => {
     Date.now = () => clock;
 
     try {
-      for (let attempt = 0; attempt < 6; attempt += 1) {
+      for (let attempt = 0; attempt < MAX_RETRIES + 1; attempt += 1) {
         resetSyncService();
         await syncPendingAttendance();
         clock += 2 * 60 * 60 * 1000; // past any scheduled delay
@@ -264,7 +265,9 @@ describe("retry rules", () => {
 
     const [row] = await listAll();
     expect(row.status).toBe(QUEUE_STATUS.BLOCKED);
-    expect(row.error).toMatch(/Still unreachable after 5 attempts/);
+    expect(row.error).toMatch(
+      new RegExp(`Still unreachable after ${MAX_RETRIES} attempts`),
+    );
   });
 
   // Nothing after the current row will fare better during the same outage.

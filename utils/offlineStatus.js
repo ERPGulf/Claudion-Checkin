@@ -1,3 +1,5 @@
+import { format } from "date-fns";
+
 /**
  * What the attendance status banner says, and whether it says anything at all.
  *
@@ -23,10 +25,33 @@ export const OFFLINE_PHASE = {
   NEEDS_ADMIN: "needs-admin",
   /** Rejected rows — only an attendance correction resolves these. */
   NEEDS_CORRECTION: "needs-correction",
+  /**
+   * Pending rows that have stopped looking like ordinary queueing.
+   *
+   * The state that had no banner at all. A punch queued a minute ago needs no
+   * announcement — it will be gone before anyone reads it — but the same punch
+   * still pending the next morning is the one thing the employee genuinely
+   * needs to know, and until now the app was silent about it: `pending` outlives
+   * the offline banner (the phone is back on wifi) and never reaches the
+   * administrator banner (nothing is blocked). Six records sat unmentioned on a
+   * production device while the only screen that showed them offered no way to
+   * ask why.
+   */
+  WAITING: "waiting",
 };
 
 /** How long the success state lingers before the banner retires itself. */
 export const SYNCED_VISIBLE_MS = 2000;
+
+/**
+ * How long a punch may sit pending before the banner mentions it.
+ *
+ * An hour, which is the transient retry ladder's own last step: past that point
+ * the queue has had every fast attempt it is going to get, so a row still
+ * waiting is no longer mid-schedule — it is a row nothing has been able to
+ * deliver. Shorter would announce every lift ride and every basement.
+ */
+export const STALE_PENDING_MS = 60 * 60 * 1000;
 
 /**
  * Precedence, most important first.
@@ -44,6 +69,11 @@ const PHASE_PRECEDENCE = [
   OFFLINE_PHASE.OFFLINE,
   OFFLINE_PHASE.SYNCING,
   OFFLINE_PHASE.SYNCED,
+  // Last. Every phase above it is a better explanation of the same records:
+  // offline says why they are waiting, syncing says they are moving right now,
+  // and the two persistent states name a specific cause. This one is what is
+  // left when a record is waiting and nothing else can account for it.
+  OFFLINE_PHASE.WAITING,
 ];
 
 const plural = (count, noun) => `${count} ${noun}${count === 1 ? "" : "s"}`;
@@ -58,6 +88,10 @@ const records = (count) => plural(count, "attendance record");
  * @param {boolean} [state.syncing] a drain is in flight
  * @param {number} [state.blocked] rows waiting on the server/administrator
  * @param {number} [state.rejected] rows needing a correction
+ * @param {number} [state.pending] rows still queued for an ordinary attempt
+ * @param {number|null} [state.oldestPendingAt] when the oldest of those was
+ *        queued, which is what separates ordinary queueing from a queue that
+ *        has stopped moving. Pass null to keep the waiting phase silent.
  * @param {number|null} [state.justSyncedAt] when a drain last landed something
  */
 export const resolveOfflinePhase = ({
@@ -65,6 +99,8 @@ export const resolveOfflinePhase = ({
   syncing = false,
   blocked = 0,
   rejected = 0,
+  pending = 0,
+  oldestPendingAt = null,
   justSyncedAt = null,
   now = Date.now(),
 }) => {
@@ -81,6 +117,14 @@ export const resolveOfflinePhase = ({
     now - justSyncedAt < SYNCED_VISIBLE_MS
   ) {
     active.add(OFFLINE_PHASE.SYNCED);
+  }
+  if (
+    online &&
+    pending > 0 &&
+    Number.isFinite(oldestPendingAt) &&
+    now - oldestPendingAt >= STALE_PENDING_MS
+  ) {
+    active.add(OFFLINE_PHASE.WAITING);
   }
 
   return (
@@ -139,6 +183,21 @@ export const describeOfflineStatus = (
         trailingIcon: null,
         motion: "none",
         actionable: false,
+      };
+
+    case OFFLINE_PHASE.WAITING:
+      return {
+        tone: "warning",
+        icon: "cloud-upload-outline",
+        // No blame and no alarm: the records are safe, and the employee has not
+        // done anything wrong. What this state adds over silence is simply that
+        // the app knows they are still here — and a way in to the detail, which
+        // is where the diagnostics that make a support report possible live.
+        title: "Attendance still waiting to sync",
+        subtitle: `${records(pending)} saved on your device. Tap for details.`,
+        trailingIcon: "chevron-forward",
+        motion: "none",
+        actionable: true,
       };
 
     case OFFLINE_PHASE.NEEDS_ADMIN:
@@ -273,15 +332,59 @@ export const describeQueueRow = (row) => {
   };
 };
 
+/**
+ * The support line: what state this row is in, how often it has been tried, and
+ * when it will be tried next.
+ *
+ * Deliberately terse and deliberately not prose. `describeQueueRow` above is
+ * the employee's explanation and stays free of jargon; this is the line someone
+ * screenshots and sends when the explanation is not enough — which is the
+ * situation this whole addition comes from. Six punches read "Pending sync" on a
+ * phone 4,000 miles away and there was no way to tell whether they had been
+ * attempted forty times or never once, because nothing the employee could see
+ * distinguished those two.
+ *
+ * Still no `row.error`. The state, the attempt count and the due time are facts
+ * about the queue; the error is Frappe exception text, and it stays in the log.
+ *
+ * @returns {string|null} null when there is nothing worth showing
+ */
+export const describeQueueDiagnostics = (row, { now = Date.now() } = {}) => {
+  if (!row?.id) return null;
+
+  const parts = [`#${row.id}`];
+
+  const state = [row.status, row.failureClass].filter(Boolean).join("/");
+  if (state) parts.push(state);
+
+  const attempts = Number(row.retryCount) || 0;
+  parts.push(attempts === 0 ? "no attempts yet" : plural(attempts, "attempt"));
+
+  // Only where a next attempt is a real thing. A rejected row is never retried
+  // and a resolved one is history, so a due time there would be a lie.
+  if (row.status === "pending" || row.status === "blocked") {
+    const nextAttemptAt = Number(row.nextAttemptAt) || 0;
+    parts.push(
+      nextAttemptAt > now
+        ? `next ${format(new Date(nextAttemptAt), "HH:mm")}`
+        : "due now",
+    );
+  }
+
+  return parts.join(" · ");
+};
+
 /** One string for screen readers, since the row is two visual lines. */
 export const describeOfflineStatusForA11y = (content) =>
   [content?.title, content?.subtitle].filter(Boolean).join(". ");
 
 export default {
   OFFLINE_PHASE,
+  STALE_PENDING_MS,
   SYNCED_VISIBLE_MS,
   describeOfflineStatus,
   describeOfflineStatusForA11y,
+  describeQueueDiagnostics,
   describeQueueRow,
   resolveOfflinePhase,
 };

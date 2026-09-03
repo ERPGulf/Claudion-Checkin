@@ -3,6 +3,7 @@ import { AppState } from "react-native";
 import { addTokenChangeListener } from "../api/apiClient";
 import { FAILURE_CLASS } from "./AttendanceDatabase";
 import { syncPendingAttendance } from "./AttendanceSyncService";
+import { registerQueueDrainHandler } from "./AttendanceQueueService";
 import {
   refreshAttendanceConfig,
   refreshAttendanceConfigIfStale,
@@ -17,7 +18,7 @@ import {
 /**
  * When the queue drains and when the cached configuration refreshes.
  *
- * Four triggers, all of them cheap because the work behind them is idempotent —
+ * Five triggers, all of them cheap because the work behind them is idempotent —
  * `syncPendingAttendance` collapses concurrent calls into one run and returns
  * immediately when nothing is due, and the config refresh is skipped while the
  * cache is fresh:
@@ -27,6 +28,7 @@ import {
  *  - **foreground** — returning from background, the moment a user is most
  *    likely to have walked back into signal
  *  - **reconnect** — NetInfo reports the connection restored
+ *  - **queued punch** — a punch just went into the queue, after a short delay
  *  - **interval** — a slow heartbeat while the app is open, which is the only
  *    thing that retires a row whose retry backoff expires while the user sits
  *    on one screen doing nothing
@@ -39,20 +41,43 @@ import {
 const LOG_PREFIX = "[BackgroundSyncManager]";
 
 /**
- * Slow on purpose. The retry schedule (30s → 2m → 10m …) is what decides when a
- * row is next attempted; this only needs to tick often enough to notice. A fast
- * interval would just wake the radio to find nothing due.
+ * The heartbeat while the app is open.
+ *
+ * A minute, because the retry ladder is now measured in seconds and a five-minute
+ * tick would be the thing deciding when a row is attempted rather than the
+ * ladder. A tick with nothing due is a single indexed query and no request —
+ * `syncPendingAttendance` returns before touching the network (see `hasWorkDue`)
+ * — so the cost of asking often is close to nothing, and the cost of asking
+ * rarely is a punch sitting on a working connection.
+ *
+ * Only while the app is in the foreground: this is a `setInterval`, and the OS
+ * stops it with the JS context.
  */
-export const SYNC_INTERVAL_MS = 5 * 60 * 1000;
+export const SYNC_INTERVAL_MS = 60 * 1000;
 
 /** Foregrounding twice in quick succession should not mean two runs. */
 const FOREGROUND_DEBOUNCE_MS = 3000;
+
+/**
+ * How long after a punch is queued before the queue is drained.
+ *
+ * Almost immediate. A punch reaches the queue either because there was no
+ * transport — in which case this drain finds none either and costs one query —
+ * or because the real request was just attempted and failed, and three seconds
+ * is long enough that an instant repeat of a failing request is not the first
+ * thing the queue does. It is deliberately shorter than the ladder's own first
+ * step: the point of this trigger is that a punch should not have to wait for a
+ * schedule to notice it exists.
+ */
+export const QUEUE_KICK_DELAY_MS = 3 * 1000;
 
 let started = false;
 let intervalId = null;
 let appStateSubscription = null;
 let removeReconnectListener = null;
 let removeTokenChangeListener = null;
+let removeQueueDrainHandler = null;
+let queueKickTimer = null;
 let lastForegroundRun = 0;
 let currentEmployeeId = null;
 let drainOnlyMode = false;
@@ -140,6 +165,23 @@ const handleReconnect = () => {
 };
 
 /**
+ * A punch was just queued.
+ *
+ * One timer for a burst: a geofence EXIT and a tapped check-out arriving
+ * together, or the several punches an employee makes while wondering why the
+ * screen says offline, all collapse into the single drain that would have
+ * handled them anyway.
+ */
+const handleQueuedPunch = () => {
+  if (queueKickTimer) return;
+
+  queueKickTimer = setTimeout(() => {
+    queueKickTimer = null;
+    runSync("queued-punch");
+  }, QUEUE_KICK_DELAY_MS);
+};
+
+/**
  * A new access token is the one event that makes an auth-blocked row plausible
  * again, so those are forced awake immediately. Scoped to `AUTH` — a fresh token
  * says nothing about an endpoint that is still not deployed, and re-attempting
@@ -180,6 +222,7 @@ export const startBackgroundSync = ({
   startNetworkListener();
   removeReconnectListener = addReconnectListener(handleReconnect);
   removeTokenChangeListener = addTokenChangeListener(handleTokenChange);
+  removeQueueDrainHandler = registerQueueDrainHandler(handleQueuedPunch);
 
   appStateSubscription = AppState.addEventListener(
     "change",
@@ -226,6 +269,14 @@ export const stopBackgroundSync = () => {
   removeTokenChangeListener?.();
   removeTokenChangeListener = null;
 
+  removeQueueDrainHandler?.();
+  removeQueueDrainHandler = null;
+
+  if (queueKickTimer) {
+    clearTimeout(queueKickTimer);
+    queueKickTimer = null;
+  }
+
   stopNetworkListener();
   currentEmployeeId = null;
   drainOnlyMode = false;
@@ -268,11 +319,17 @@ export const syncNow = async ({
   return syncPendingAttendance({
     trigger,
     wakeAllBlocked: true,
+    // Pending rows are made due as well, which the automatic triggers do not
+    // do. The drain claims in order, so a single row mid-backoff holds back
+    // every later punch — and a person pulling to refresh is asking about all
+    // of them, not just the ones whose ladder happens to have elapsed.
+    wakeAllPending: true,
     employeeId: scope,
   });
 };
 
 export default {
+  QUEUE_KICK_DELAY_MS,
   SYNC_INTERVAL_MS,
   isBackgroundSyncRunning,
   startBackgroundSync,

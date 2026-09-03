@@ -38,6 +38,10 @@ export default function useAttendanceHistory() {
   const employeeCode = useSelector(selectEmployeeCode);
   const [queueRows, setQueueRows] = useState([]);
   const [queueCounts, setQueueCounts] = useState(null);
+  // Separate from React Query's `isRefetching` so the spinner covers the drain
+  // as well as the refetch. The drain is the slower half and the half the user
+  // is actually waiting on.
+  const [isDraining, setIsDraining] = useState(false);
 
   const {
     isLoading,
@@ -113,14 +117,27 @@ export default function useAttendanceHistory() {
    * rather than two.
    */
   const refreshAll = useCallback(async () => {
+    setIsDraining(true);
+
     try {
-      await syncNow({ trigger: 'history-pull-to-refresh' });
+      // `employeeId` is passed explicitly rather than left to the sync manager's
+      // own idea of who is logged in. Without it a pull made while the manager
+      // is not running — offline attendance switched off for the tenant, or the
+      // employee code not through yet — finds no scope and refuses, so the one
+      // manual recovery the design offers would silently do nothing.
+      await syncNow({
+        trigger: 'history-pull-to-refresh',
+        employeeId: employeeCode,
+      });
     } catch (syncError) {
       console.log('[useAttendanceHistory] Sync failed:', syncError?.message);
+    } finally {
+      setIsDraining(false);
     }
+
     await reloadQueue();
     return refetch();
-  }, [refetch, reloadQueue]);
+  }, [employeeCode, refetch, reloadQueue]);
 
   return {
     employeeCode,
@@ -135,6 +152,8 @@ export default function useAttendanceHistory() {
     isRefetching,
     loadMore,
     refetch,
+    /** True while either half of a pull-to-refresh is in flight. */
+    isRefreshing: isDraining || isRefetching,
     // Offline additions. Existing callers ignore them, so both screens are
     // unchanged until they opt in.
     refreshAll,
