@@ -23,11 +23,19 @@ jest.mock("../services/offline/AttendanceApi", () => ({
   pushCheckin: jest.fn(),
 }));
 
-jest.mock("../services/offline/NetworkListener", () => ({
-  __esModule: true,
-  fetchIsOnline: jest.fn(() => Promise.resolve(true)),
-  isOnline: jest.fn(() => true),
-}));
+jest.mock("../services/offline/NetworkListener", () => {
+  // `fetchShouldAttemptRequest` tracks `fetchIsOnline` by default so the
+  // existing "go offline" setup in this suite still means offline. The suites
+  // that care about the two DISAGREEING — a network whose captive-portal probe
+  // fails, so reachability says no while requests work — override it.
+  const fetchIsOnline = jest.fn(() => Promise.resolve(true));
+  return {
+    __esModule: true,
+    fetchIsOnline,
+    fetchShouldAttemptRequest: jest.fn(() => fetchIsOnline()),
+    isOnline: jest.fn(() => true),
+  };
+});
 
 jest.mock("../services/offline/attendancePhotoUpload", () => ({
   __esModule: true,

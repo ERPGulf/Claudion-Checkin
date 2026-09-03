@@ -7,11 +7,19 @@
 jest.mock("expo-sqlite", () => require("../test-utils/expoSqliteMock"));
 jest.mock("expo-location", () => ({}));
 
-jest.mock("../services/offline/NetworkListener", () => ({
-  __esModule: true,
-  fetchIsOnline: jest.fn(() => Promise.resolve(true)),
-  isOnline: jest.fn(() => true),
-}));
+jest.mock("../services/offline/NetworkListener", () => {
+  // `fetchShouldAttemptRequest` tracks `fetchIsOnline` by default so the
+  // existing "go offline" setup in this suite still means offline. The suites
+  // that care about the two DISAGREEING — a network whose captive-portal probe
+  // fails, so reachability says no while requests work — override it.
+  const fetchIsOnline = jest.fn(() => Promise.resolve(true));
+  return {
+    __esModule: true,
+    fetchIsOnline,
+    fetchShouldAttemptRequest: jest.fn(() => fetchIsOnline()),
+    isOnline: jest.fn(() => true),
+  };
+});
 
 jest.mock("../services/offline/offlineAttendanceGate", () => ({
   __esModule: true,
@@ -32,10 +40,14 @@ import {
 import { fetchIsOnline } from "../services/offline/NetworkListener";
 import { evaluateOfflineAttendance } from "../services/offline/offlineAttendanceGate";
 import { NO_CONFIG_MESSAGE } from "../services/offline/attendanceConfigCache";
-import { OFFLINE_UNSUPPORTED_MESSAGE } from "../services/offline/AttendanceQueueService";
+import {
+  OFFLINE_DISABLED_MESSAGE,
+  OFFLINE_UNSUPPORTED_MESSAGE,
+} from "../services/offline/AttendanceQueueService";
 import {
   markOfflineSyncUnsupported,
   resetOfflineCapability,
+  setOfflineQueueingAllowed,
 } from "../services/offline/offlineCapability";
 
 const { __resetAll } = require("../test-utils/expoSqliteMock");
@@ -104,6 +116,60 @@ describe("when the server has no offline endpoint", () => {
       (await submitAttendance({ type: "IN", employeeCode: "TDI0167", online }))
         .allowed,
     ).toBe(true);
+  });
+});
+
+/**
+ * The administrator's switch used to stop the sync manager while leaving the
+ * punch path queueing, so a tenant with offline attendance switched off wrote
+ * rows into a queue that nothing drained: "Pending sync" forever, no attendance
+ * in the backend, and no error anywhere to explain it.
+ *
+ * The switch now governs one thing — whether a punch may be queued.
+ */
+describe("when the administrator has switched offline attendance off", () => {
+  beforeEach(() => {
+    fetchIsOnline.mockResolvedValue(false);
+    setOfflineQueueingAllowed(false);
+  });
+
+  it("refuses rather than queueing into a queue nothing drains", async () => {
+    const result = await submitAttendance({
+      type: "IN",
+      employeeCode: "TDI0167",
+      online: jest.fn(),
+    });
+
+    expect(result.allowed).toBe(false);
+    expect(result.reason).toBe("admin-disabled");
+    expect(result.message).toBe(OFFLINE_DISABLED_MESSAGE);
+    expect(await listAll()).toHaveLength(0);
+  });
+
+  it("leaves the online path alone", async () => {
+    fetchIsOnline.mockResolvedValue(true);
+    const online = jest.fn().mockResolvedValue({ allowed: true, name: "X" });
+
+    expect(
+      (await submitAttendance({ type: "IN", employeeCode: "TDI0167", online }))
+        .allowed,
+    ).toBe(true);
+  });
+
+  it("queues normally while the server has not said either way", async () => {
+    // `utils/featureSettings.js` defaults an unknown feature to available, so
+    // unknown here must permit queueing. Refusing would strand every punch on
+    // a first launch, or on a tenant whose backend predates the setting.
+    setOfflineQueueingAllowed(null);
+
+    const result = await submitAttendance({
+      type: "IN",
+      employeeCode: "TDI0167",
+      online: jest.fn(),
+    });
+
+    expect(result.queued).toBe(true);
+    expect(await listAll()).toHaveLength(1);
   });
 });
 

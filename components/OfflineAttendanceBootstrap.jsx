@@ -11,6 +11,7 @@ import {
   startBackgroundSync,
   stopBackgroundSync,
 } from "../services/offline/BackgroundSyncManager";
+import { setOfflineQueueingAllowed } from "../services/offline/offlineCapability";
 import { applySessionOwner } from "../utils/attendanceSessionState";
 
 /**
@@ -39,12 +40,19 @@ export default function OfflineAttendanceBootstrap() {
   const isLoggedIn = useSelector(selectIsLoggedIn);
   const employeeCode = useSelector(selectEmployeeCode);
 
-  // `attendance_action.offline_attendance` is the administrator's switch for the
-  // whole mechanism. Turning it off stops the NetInfo listener and the interval
-  // as well as the UI, so a tenant that does not want offline attendance is not
-  // paying for its background work either. Anything already queued is left
-  // alone — it is the employee's attendance, and it syncs if the feature comes
-  // back on. Clearing the queue happens on logout, not here.
+  // `attendance_action.offline_attendance` is the administrator's switch, and it
+  // governs exactly one thing: whether new punches may be *queued*. It used to
+  // stop the sync manager outright, which meant a tenant with the switch off got
+  // the worst of both — the punch path still queued (nothing told it not to) and
+  // nothing was left running to deliver what it queued. Those rows sat in
+  // `pending` forever, reading "Pending sync", with no attendance in the backend
+  // and no error anywhere to explain it.
+  //
+  // So now: the switch is mirrored into `offlineCapability` so `submitAttendance`
+  // refuses to queue, and the manager keeps running in drain-only mode so
+  // anything already in the queue still gets delivered. Nothing is ever queued
+  // that cannot be drained, and nothing queued is ever abandoned. Clearing the
+  // queue happens on logout, not here.
   const offlineEnabled = useSelector(state =>
     isFeatureEnabled(
       selectFeatureSettings(state),
@@ -79,13 +87,26 @@ export default function OfflineAttendanceBootstrap() {
       });
   }, [isLoggedIn, employeeCode]);
 
+  // Mirrored eagerly, and separately from the manager below, so the punch path
+  // has the answer before any effect ordering or connectivity comes into it.
   useEffect(() => {
-    if (!isLoggedIn || !offlineEnabled) {
+    setOfflineQueueingAllowed(isLoggedIn ? offlineEnabled : null);
+  }, [isLoggedIn, offlineEnabled]);
+
+  useEffect(() => {
+    if (!isLoggedIn) {
       stopBackgroundSync();
       return undefined;
     }
 
-    startBackgroundSync({ employeeId: employeeCode });
+    // `drainOnly` skips the configuration refresh — a tenant with the switch off
+    // has no offline rules worth keeping current — while leaving the drain, the
+    // NetInfo listener and the reconnect trigger in place for rows queued before
+    // the switch was flipped. On an empty queue that costs one no-op timer.
+    startBackgroundSync({
+      employeeId: employeeCode,
+      drainOnly: !offlineEnabled,
+    });
 
     return () => stopBackgroundSync();
   }, [isLoggedIn, employeeCode, offlineEnabled]);

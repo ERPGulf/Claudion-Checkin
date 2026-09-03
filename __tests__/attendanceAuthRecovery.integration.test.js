@@ -18,6 +18,7 @@ jest.mock("../services/api/apiClient", () => ({
 
 jest.mock("../services/offline/NetworkListener", () => ({
   fetchIsOnline: jest.fn(() => Promise.resolve(true)),
+  fetchShouldAttemptRequest: jest.fn(() => Promise.resolve(true)),
   isOnline: () => true,
   addReconnectListener: () => () => {},
   startNetworkListener: jest.fn(),

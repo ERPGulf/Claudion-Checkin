@@ -9,7 +9,7 @@ import {
 } from "./attendanceConfigCache";
 import {
   addReconnectListener,
-  fetchIsOnline,
+  fetchShouldAttemptRequest,
   startNetworkListener,
   stopNetworkListener,
 } from "./NetworkListener";
@@ -55,6 +55,7 @@ let removeReconnectListener = null;
 let removeTokenChangeListener = null;
 let lastForegroundRun = 0;
 let currentEmployeeId = null;
+let drainOnlyMode = false;
 
 /**
  * @param {string} trigger for the log
@@ -90,9 +91,16 @@ const runSync = (trigger, { wakeAllBlocked = false, wakeFailureClass = null } = 
  */
 const runConfigRefresh = async (trigger, { force = false } = {}) => {
   if (!currentEmployeeId) return;
+  // Drain-only: the tenant has offline attendance switched off, so there are no
+  // offline rules to keep current — but rows queued before it was switched off
+  // still have to be delivered. See startBackgroundSync.
+  if (drainOnlyMode) return;
 
   try {
-    if (!(await fetchIsOnline())) return;
+    // Attempt rather than trust: a network whose captive-portal probe fails
+    // reports no internet indefinitely, and a device that never refreshes its
+    // configuration cannot do offline attendance at all.
+    if (!(await fetchShouldAttemptRequest())) return;
 
     const result = force
       ? await refreshAttendanceConfig(currentEmployeeId)
@@ -146,14 +154,25 @@ const handleTokenChange = () => {
 
 /**
  * Starts every trigger. Idempotent — calling it again while running only
- * updates the employee the config refresh is for.
+ * updates the employee the config refresh is for, and whether it is drain-only.
  *
  * @param {object} options
  * @param {string} options.employeeId whose configuration to keep cached
+ * @param {boolean} [options.drainOnly] deliver what is already queued and
+ *        nothing more — no configuration refresh. This is what the
+ *        administrator's offline-attendance switch turns off, and the
+ *        distinction matters: that switch decides whether new punches may be
+ *        *queued*, and it was never a statement about whether punches already
+ *        queued should be *delivered*. Stopping the manager outright on a
+ *        disabled tenant left those rows in `pending` for good.
  * @returns {() => void} stop
  */
-export const startBackgroundSync = ({ employeeId = null } = {}) => {
+export const startBackgroundSync = ({
+  employeeId = null,
+  drainOnly = false,
+} = {}) => {
   currentEmployeeId = employeeId;
+  drainOnlyMode = drainOnly;
 
   if (started) return stopBackgroundSync;
   started = true;
@@ -184,7 +203,7 @@ export const startBackgroundSync = ({ employeeId = null } = {}) => {
   runConfigRefresh("launch", { force: true });
   runSync("launch", { wakeAllBlocked: true });
 
-  console.log(`${LOG_PREFIX} Started`, { employeeId });
+  console.log(`${LOG_PREFIX} Started`, { employeeId, drainOnly });
 
   return stopBackgroundSync;
 };
@@ -209,6 +228,7 @@ export const stopBackgroundSync = () => {
 
   stopNetworkListener();
   currentEmployeeId = null;
+  drainOnlyMode = false;
 
   console.log(`${LOG_PREFIX} Stopped`);
 };

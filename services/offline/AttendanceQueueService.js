@@ -25,6 +25,7 @@ import { fetchIsOnline, isOnline } from "./NetworkListener";
 import { evaluateOfflineAttendance } from "./offlineAttendanceGate";
 import {
   clearOfflineCapability,
+  isOfflineQueueingDisallowed,
   isOfflineSyncUnsupported,
 } from "./offlineCapability";
 
@@ -69,6 +70,17 @@ const LOG_PREFIX = "[AttendanceQueueService]";
  */
 export const OFFLINE_UNSUPPORTED_MESSAGE =
   "Offline attendance isn't enabled on your organization's server yet. Please check in while you have a connection.";
+
+/**
+ * Shown when the administrator has switched offline attendance off.
+ *
+ * Distinct from the two above again: the server can do it and the device has the
+ * rules, but the tenant has chosen not to. Refusing is the whole point of the
+ * switch — the alternative, which is what this used to do, was to accept the
+ * punch into a queue that the same switch had stopped anything from draining.
+ */
+export const OFFLINE_DISABLED_MESSAGE =
+  "Offline attendance is switched off for your organization. Please check in while you have a connection.";
 
 /** Change notifications for the UI. */
 const changeListeners = new Set();
@@ -322,6 +334,20 @@ export const submitAttendance = async ({
   //
   // Already-queued rows are untouched and still retried — the moment someone
   // deploys the endpoint, one success flips this back and everything drains.
+  // The administrator's switch. Same reasoning as the capability check below,
+  // for a different reason: nothing will drain what is queued here, because the
+  // switch puts the sync manager in drain-only mode for rows that already exist
+  // and stops new ones being justified at all.
+  if (isOfflineQueueingDisallowed()) {
+    console.log(`${LOG_PREFIX} Offline ${type} refused: switched off for this tenant`);
+    return refuseOrFallBack({
+      allowed: false,
+      reason: "admin-disabled",
+      message: OFFLINE_DISABLED_MESSAGE,
+      location: null,
+    });
+  }
+
   if (isOfflineSyncUnsupported()) {
     console.log(`${LOG_PREFIX} Offline ${type} refused: server has no offline endpoint`);
     return refuseOrFallBack({

@@ -9,13 +9,22 @@ import NetInfo from "@react-native-community/netinfo";
  * "we're back online" to "drain the queue", which keeps this module free of the
  * import cycle that wiring it directly would create.
  *
- * The distinction that matters is `isInternetReachable` vs `isConnected`.
- * A phone on captive-portal hotel wifi, or on a cell connection with no data
- * allowance, reports `isConnected: true` and reaches nothing. Treating that as
- * online means every punch takes a full request timeout before being queued —
- * the employee waits, twice, at the door. So reachability wins when it is known,
- * and only falls back to `isConnected` while it is still null (the state NetInfo
- * reports before its first probe completes).
+ * Two questions, and they are NOT the same one:
+ *
+ *  - `isOnline()` — "is this connection usable?" Reachability wins when NetInfo
+ *    has determined it, falling back to `isConnected` while it is still null. A
+ *    phone on captive-portal hotel wifi reports `isConnected: true` and reaches
+ *    nothing, and treating that as online makes every punch wait out a full
+ *    request timeout before being queued — the employee waits, twice, at the
+ *    door. This is the answer the UI shows and the door-side punch uses.
+ *
+ *  - `shouldAttemptRequest()` — "is it worth trying?" Transport only,
+ *    reachability ignored. Every background path asks this one, because
+ *    reachability is a probe that can be wrong for hours at a stretch and a
+ *    background retry has no user waiting on it. See the note on that function.
+ *
+ * Getting the second one to also mean the first is what let a wrong probe
+ * strand a day of attendance in the queue, so keep them apart.
  */
 
 let currentState = {
@@ -43,14 +52,36 @@ export const isOnline = () => isStateOnline(currentState);
 export const getNetworkState = () => ({ ...currentState });
 
 /**
- * Asks NetInfo directly rather than trusting the cached state.
+ * Whether it is worth *attempting* a request — a deliberately weaker question
+ * than `isOnline()`, and the one every background path must ask.
  *
- * Worth the round-trip immediately before deciding to queue a punch: the cached
- * value can be seconds stale, and a stale "offline" would queue something that
- * could have gone straight through. Falls back to the cached value if the fetch
- * itself fails.
+ * `isInternetReachable` is a probe result, not a fact. On Android it is
+ * `NET_CAPABILITY_VALIDATED`: the OS captive-portal check, which fails on any
+ * network that blocks Android's connectivity-check endpoint — site wifi behind a
+ * corporate firewall being the ordinary case — and then stays false for as long
+ * as the device is on that network. On such a network every request the app
+ * makes succeeds while NetInfo insists there is no internet.
+ *
+ * Letting that verdict decide whether to *try* is what turned a wrong probe into
+ * lost payroll: punches were queued, the drain then declined to run because the
+ * same probe said offline, and the rows sat in `pending` — "Pending sync" in
+ * history, nothing in the backend — indefinitely. Nothing ever reached the
+ * server, so nothing was ever classified, so nothing escalated.
+ *
+ * So this asks only: is there a transport at all? Being wrong here costs one
+ * failed request and one backoff step. Being wrong the other way costs a day's
+ * attendance.
  */
-export const fetchIsOnline = async () => {
+export const shouldAttemptRequest = (state = currentState) => {
+  if (!state) return false;
+  // Aeroplane mode and a genuinely down interface. No transport means no
+  // request, and skipping it is what keeps a punch at the door instant.
+  if (state.type === "none") return false;
+  return state.isConnected !== false;
+};
+
+/** Refreshes the cached state from NetInfo, keeping the last one on failure. */
+const refreshState = async () => {
   try {
     const state = await NetInfo.fetch();
     currentState = {
@@ -58,11 +89,26 @@ export const fetchIsOnline = async () => {
       isInternetReachable: state?.isInternetReachable ?? null,
       type: state?.type ?? "unknown",
     };
-    return isStateOnline(currentState);
   } catch {
-    return isOnline();
+    // The cached state stands — a failed fetch is not evidence of anything.
   }
+
+  return currentState;
 };
+
+/**
+ * Asks NetInfo directly rather than trusting the cached state.
+ *
+ * Worth the round-trip immediately before deciding to queue a punch: the cached
+ * value can be seconds stale, and a stale "offline" would queue something that
+ * could have gone straight through. Falls back to the cached value if the fetch
+ * itself fails.
+ */
+export const fetchIsOnline = async () => isStateOnline(await refreshState());
+
+/** `shouldAttemptRequest` against a freshly fetched state. */
+export const fetchShouldAttemptRequest = async () =>
+  shouldAttemptRequest(await refreshState());
 
 /**
  * Registers a callback for offline → online transitions.
@@ -179,10 +225,12 @@ export default {
   addNetworkChangeListener,
   addReconnectListener,
   fetchIsOnline,
+  fetchShouldAttemptRequest,
   getNetworkState,
   isOnline,
   isStateOnline,
   resetNetworkListener,
+  shouldAttemptRequest,
   startNetworkListener,
   stopNetworkListener,
 };

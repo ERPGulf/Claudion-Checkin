@@ -953,11 +953,15 @@ export default function useAttendanceAction() {
     ATTENDANCE_FEATURES.PHOTO_UPLOAD,
   );
 
+  // Exposed for the screens, NOT enforced here. It reads as a gate and is not
+  // one: a tenant with the switch off still queued punches, because the punch
+  // path never consulted this. Enforcement lives where the queueing happens
+  // (`submitAttendance`, via `offlineCapability.isOfflineQueueingDisallowed`),
+  // so there is one answer instead of a screen-level copy that can drift.
   const offlineAttendanceEnabled = isFeatureEnabled(
     featureSettings,
     ATTENDANCE_FEATURES.OFFLINE_ATTENDANCE,
   );
-
 
   /**
    * Check-in / check-out entry point. Photo mode ("photo" === "1") diverts to

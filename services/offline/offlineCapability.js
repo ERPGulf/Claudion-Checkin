@@ -29,6 +29,34 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export const CAPABILITY_KEY = "offlineSyncSupported";
 
+/**
+ * The administrator's switch (`attendance_action.offline_attendance`), mirrored
+ * where the services can read it.
+ *
+ * It lives in Redux, which is fine for the UI but not for `submitAttendance` —
+ * and the two answers have to agree, because they used to disagree in the worst
+ * possible direction: the switch stopped the background sync manager while the
+ * punch path went on queueing, so a disabled tenant's punches were written to a
+ * queue that nothing drained. They sat in `pending` forever, showed "Pending
+ * sync", and never reached the backend.
+ *
+ * The rule now, in both places: this switch decides whether a punch may be
+ * *queued*. It never decides whether a punch already queued is *delivered*.
+ *
+ * Tri-state for the same reason as the capability above — `null` is "the server
+ * has not said", and `utils/featureSettings.js` defaults an unknown feature to
+ * available, so unknown must permit queueing rather than refuse it.
+ */
+let adminEnabled = null;
+
+/** Mirrors the tenant's switch. `null`/`undefined` means "not yet known". */
+export const setOfflineQueueingAllowed = (value) => {
+  adminEnabled = value === null || value === undefined ? null : !!value;
+};
+
+/** True only when the administrator has positively switched offline off. */
+export const isOfflineQueueingDisallowed = () => adminEnabled === false;
+
 /** `true` supported · `false` endpoint missing · `null` not yet known. */
 let cached = null;
 let hydrated = false;
@@ -117,6 +145,8 @@ export const markOfflineSyncSupported = () => write(true);
 export const clearOfflineCapability = async () => {
   cached = null;
   hydrated = false;
+  // The next login may be a different tenant with the opposite setting.
+  adminEnabled = null;
 
   try {
     await AsyncStorage.removeItem(CAPABILITY_KEY);
@@ -131,6 +161,7 @@ export const clearOfflineCapability = async () => {
 export const resetOfflineCapability = () => {
   cached = null;
   hydrated = false;
+  adminEnabled = null;
   listeners.clear();
 };
 
@@ -140,8 +171,10 @@ export default {
   clearOfflineCapability,
   getOfflineCapability,
   hydrateOfflineCapability,
+  isOfflineQueueingDisallowed,
   isOfflineSyncUnsupported,
   markOfflineSyncSupported,
   markOfflineSyncUnsupported,
   resetOfflineCapability,
+  setOfflineQueueingAllowed,
 };

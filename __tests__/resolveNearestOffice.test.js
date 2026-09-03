@@ -3,10 +3,18 @@ jest.mock("../services/api/attendance.service", () => ({
   getOfficeLocation: jest.fn(),
 }));
 
-jest.mock("../services/offline/NetworkListener", () => ({
-  __esModule: true,
-  fetchIsOnline: jest.fn(() => Promise.resolve(true)),
-}));
+jest.mock("../services/offline/NetworkListener", () => {
+  // `fetchShouldAttemptRequest` tracks `fetchIsOnline` by default so the
+  // existing "go offline" setup in this suite still means offline. The suites
+  // that care about the two DISAGREEING — a network whose captive-portal probe
+  // fails, so reachability says no while requests work — override it.
+  const fetchIsOnline = jest.fn(() => Promise.resolve(true));
+  return {
+    __esModule: true,
+    fetchIsOnline,
+    fetchShouldAttemptRequest: jest.fn(() => fetchIsOnline()),
+  };
+});
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Location from "expo-location";

@@ -7,7 +7,7 @@ import {
   readAttendanceConfig,
 } from "./attendanceConfigCache";
 import { isOfflineFailure } from "./attendanceErrors";
-import { fetchIsOnline } from "./NetworkListener";
+import { fetchShouldAttemptRequest } from "./NetworkListener";
 
 /**
  * The offline half of the location gate.
@@ -120,7 +120,11 @@ export const getPositionForOfflineCheck = async ({
  *          shape, plus `fromCache`, or null when it cannot be determined
  */
 export const resolveNearestOffice = async (employeeCode) => {
-  if (await fetchIsOnline()) {
+  // Attempt whenever there is a transport, rather than trusting reachability:
+  // a network whose captive-portal probe fails reports no internet for as long
+  // as the device is on it, and answering from the cache there would hand the
+  // check-in screen a stale office list on a perfectly working connection.
+  if (await fetchShouldAttemptRequest()) {
     try {
       const nearest = await getOfficeLocation(employeeCode);
       return nearest ? { ...nearest, fromCache: false } : null;

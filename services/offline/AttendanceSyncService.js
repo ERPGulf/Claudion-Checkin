@@ -20,7 +20,7 @@ import {
   markOfflineSyncSupported,
   markOfflineSyncUnsupported,
 } from "./offlineCapability";
-import { fetchIsOnline } from "./NetworkListener";
+import { fetchShouldAttemptRequest } from "./NetworkListener";
 
 /**
  * Draining the queue.
@@ -340,7 +340,14 @@ export const syncPendingAttendance = async ({
         );
       }
 
-      if (!(await fetchIsOnline())) {
+      // `shouldAttemptRequest`, NOT `isOnline`. The drain has no user waiting
+      // on it, so a wasted request costs nothing and a skipped one costs a
+      // punch: on any network whose captive-portal probe fails, NetInfo reports
+      // no internet for as long as the device stays on it, and gating the drain
+      // on that verdict left rows in `pending` — "Pending sync", never
+      // attempted, never escalated — while every request the app made worked.
+      // Only a total absence of transport (aeroplane mode) stops a run now.
+      if (!(await fetchShouldAttemptRequest())) {
         summary.reason = "offline";
         return summary;
       }
