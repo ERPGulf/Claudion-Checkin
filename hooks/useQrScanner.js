@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import base64 from 'base-64';
+import { invalidateAuthSession } from '../utils/authSessionGuard';
 import utf8 from 'utf8';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useDispatch } from 'react-redux';
@@ -188,6 +189,7 @@ export default function useQrScanner() {
         cleanedData.employee_code &&
         cleanedData.baseUrl
       ) {
+        invalidateAuthSession();
         await AsyncStorage.multiSet([
           ['company', cleanedData.company],
           ['employee_code', cleanedData.employee_code],

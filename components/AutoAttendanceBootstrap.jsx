@@ -52,6 +52,7 @@ import {
   submitAutoAttendance,
 } from "../services/offline/AttendanceQueueService";
 import { syncNow } from "../services/offline/BackgroundSyncManager";
+import { captureAttendanceQueueScope } from "../services/offline/attendanceQueueProvenance";
 
 const LOG_PREFIX = "[AutoAttendanceBootstrap]";
 
@@ -156,6 +157,11 @@ export default function AutoAttendanceBootstrap() {
     if (!employeeCode) return undefined;
 
     let cancelled = false;
+    // Only events observed during this registration have evidence of ownership.
+    // Native replay from before it carries no backend identity; preserve it as
+    // unknown if it queues, rather than assigning today's company.
+    const scopeObservedAt = Date.now();
+    const queueScope = captureAttendanceQueueScope(employeeCode).catch(() => null);
 
     // A geofence transition is a request to move the attendance session state
     // machine, not an unconditional API call. The machine decides:
@@ -228,6 +234,8 @@ export default function AutoAttendanceBootstrap() {
       if (!code) return;
 
       try {
+        const sourceScope = occurredAt == null || occurredAt >= scopeObservedAt
+          ? await queueScope : null;
         // Same queue the manual screens use, differing only in `attendanceType`
         // and in which API call it wraps. A geofence crossing is precisely when
         // the network is least reliable — a car park, a basement, a site with no
@@ -269,6 +277,7 @@ export default function AutoAttendanceBootstrap() {
               employeeCode: code,
               occurredAt,
               forceQueue,
+              sourceScope,
               online: () =>
                 autoCheckInOut({
                   employeeCode: code,

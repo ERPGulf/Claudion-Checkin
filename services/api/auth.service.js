@@ -2,8 +2,11 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import apiClient, { saveTokens } from "./apiClient";
 import { cleanBaseUrl } from "./utils";
+import { getAuthSessionGeneration, invalidateAuthSession } from "../../utils/authSessionGuard";
+import { createAttendanceScopeChangedError } from "../offline/attendanceQueueProvenance";
 
 export const generateToken = async ({ api_key, app_key, api_secret }) => {
+  const generation = invalidateAuthSession();
   try {
     let baseUrl = await AsyncStorage.getItem("baseUrl");
     if (!baseUrl)
@@ -45,7 +48,8 @@ export const generateToken = async ({ api_key, app_key, api_secret }) => {
       );
     }
 
-    await saveTokens(accessToken, refreshToken);
+    if (generation !== getAuthSessionGeneration()) throw createAttendanceScopeChangedError();
+    await saveTokens(accessToken, refreshToken, generation);
 
     return {
       access_token: accessToken,

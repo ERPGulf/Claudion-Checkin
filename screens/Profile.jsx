@@ -24,6 +24,7 @@ import SettingsRow, { RowDivider } from "../components/common/SettingsRow";
 import ActionButton from "../components/common/ActionButton";
 import AppearanceSetting from "../components/settings/AppearanceSetting";
 import OfflineSyncSetting from "../components/settings/OfflineSyncSetting";
+import AttendanceRecoverySetting from "../components/settings/AttendanceRecoverySetting";
 import FeatureSettingsStatus from "../components/settings/FeatureSettingsStatus";
 // TEMPORARY: New Home Experience experiment — remove with the feature.
 import HomeExperienceSetting from "../components/experimental/HomeExperienceSetting";
@@ -33,6 +34,7 @@ import { clearTokens, clearStore } from "../services/api/apiClient";
 import { clearOfflineAttendance } from "../services/offline/AttendanceQueueService";
 import apiClient from "../services/api/apiClient";
 import { clearAuthCache } from "../services/api/authHelper";
+import { invalidateAuthSession } from "../utils/authSessionGuard";
 import {
   clearFcmRegistration,
   getClientFcmToken,
@@ -322,6 +324,7 @@ function Profile() {
     // writes for no benefit.
     if (isSigningOut) return;
     setIsSigningOut(true);
+    invalidateAuthSession();
 
     try {
       hapticsMessage("success");
@@ -558,6 +561,7 @@ function Profile() {
         <AppearanceSetting />
 
         <OfflineSyncSetting />
+        <AttendanceRecoverySetting />
 
         {/* Renders nothing unless the feature-settings fetch has failed. */}
         <FeatureSettingsStatus />

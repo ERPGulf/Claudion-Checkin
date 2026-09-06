@@ -28,7 +28,7 @@ import {
   isOfflineQueueingDisallowed,
   isOfflineSyncUnsupported,
 } from "./offlineCapability";
-import { readAttendanceQueueScope } from "./attendanceQueueProvenance";
+import { assertAttendanceQueueScope, captureAttendanceQueueScope } from "./attendanceQueueProvenance";
 
 /**
  * The write side of the offline queue, and the single seam every attendance
@@ -203,16 +203,24 @@ const queueAttendance = async ({
   occurredAt = null,
   photoUri = null,
   gate,
+  sourceScope,
 }) => {
   const config = gate?.config ?? (await readAttendanceConfig());
   const timestamp = await formatOfflineTimestamp(occurredAt ?? Date.now());
-  const currentScope = await readAttendanceQueueScope();
-  const tenantKey =
-    currentScope.employeeId === employeeCode ? currentScope.tenantKey : null;
+  let tenantKey = null;
+  try {
+    await assertAttendanceQueueScope(sourceScope);
+    if (sourceScope.employeeId === employeeCode) tenantKey = sourceScope.tenantKey;
+  } catch {
+    // Preserve the event, but do not stamp a new account's backend onto it.
+  }
 
   const { row, inserted } = await enqueue({
     employeeId: employeeCode,
-    employeeDocname: config?.employeeDocname ?? null,
+    // Old caches have no tenant provenance either. Their docname cannot be
+    // carried onto an attributable row for a different company's employee.
+    employeeDocname: !tenantKey || (config?.tenantKey === tenantKey && config?.employeeId === employeeCode)
+      ? config?.employeeDocname ?? null : null,
     tenantKey,
     attendanceType,
     action: logTypeToAction(type),
@@ -402,6 +410,7 @@ export const submitAttendance = async ({
   occurredAt = null,
   photoUri = null,
   forceQueue = false,
+  sourceScope = undefined,
 }) => {
   if (type !== "IN" && type !== "OUT") {
     throw new Error(`submitAttendance: invalid type ${type}`);
@@ -415,6 +424,14 @@ export const submitAttendance = async ({
   // docname the server issues, as it did before the queue existed.
   if (attendanceType === ATTENDANCE_TYPE.MANUAL) {
     return submitOnlineOnly({ type, employeeCode, online });
+  }
+
+  // Capture before network/gate awaits. Historical native replays must bring
+  // their originating scope; the current account cannot prove past ownership.
+  if (sourceScope === undefined) {
+    sourceScope = occurredAt == null
+      ? await captureAttendanceQueueScope(employeeCode).catch(() => null)
+      : null;
   }
 
   // "Is there a transport?", NOT "does NetInfo think the internet is reachable?".
@@ -574,6 +591,7 @@ export const submitAttendance = async ({
     occurredAt,
     photoUri,
     gate,
+    sourceScope,
   });
 };
 
@@ -600,6 +618,7 @@ export const submitAutoAttendance = ({
   online,
   occurredAt,
   forceQueue = false,
+  sourceScope,
 }) =>
   submitAttendance({
     type,
@@ -608,6 +627,7 @@ export const submitAutoAttendance = ({
     online,
     occurredAt,
     forceQueue,
+    sourceScope,
   });
 
 // ----------------------

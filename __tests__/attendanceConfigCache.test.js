@@ -4,6 +4,7 @@ jest.mock("../services/api/employee.service", () => ({
 }));
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { loginQueueEmployee } from "../test-utils/attendanceScope";
 import {
   CONFIG_KEY,
   NO_CONFIG_MESSAGE,
@@ -36,6 +37,7 @@ const employeeResponse = (overrides = {}) => ({
 
 beforeEach(async () => {
   await AsyncStorage.clear();
+  await loginQueueEmployee("TDI0167");
   jest.clearAllMocks();
 });
 

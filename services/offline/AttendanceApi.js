@@ -1,7 +1,5 @@
 // src/services/offline/AttendanceApi.js
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import apiClient from "../api/apiClient";
-import { cleanBaseUrl } from "../api/utils";
 import { FAILURE_CLASS, actionToLogType } from "./AttendanceDatabase";
 import {
   FAILURE_KIND,
@@ -11,6 +9,7 @@ import {
 } from "./attendanceErrors";
 import {
   assertAttendanceQueueScope,
+  captureAttendanceQueueScope,
   createAttendanceScopeChangedError,
 } from "./attendanceQueueProvenance";
 
@@ -177,24 +176,13 @@ export const interpretPushResponse = (body) => {
  *                    message: string, response: object}>}
  */
 export const pushCheckin = async (row, { syncScope = null } = {}) => {
-  let baseUrl;
-  let token;
-
-  if (syncScope) {
-    if (!row?.tenantKey || row.tenantKey !== syncScope.tenantKey) {
-      throw createAttendanceScopeChangedError();
-    }
-    const current = await assertAttendanceQueueScope(syncScope);
-    baseUrl = current.tenantKey;
-    token = current.accessToken;
-  } else {
-    const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
-    baseUrl = cleanBaseUrl(rawBaseUrl);
-    if (!baseUrl) throw new Error("Base URL missing");
-
-    token = await AsyncStorage.getItem("access_token");
-    if (!token) throw new Error("Token missing");
+  syncScope = syncScope ?? await captureAttendanceQueueScope(row?.employeeId);
+  if (!row?.tenantKey || row.tenantKey !== syncScope.tenantKey || row.employeeId !== syncScope.employeeId) {
+    throw createAttendanceScopeChangedError();
   }
+  const current = await assertAttendanceQueueScope(syncScope);
+  const baseUrl = current.tenantKey;
+  const token = current.accessToken;
 
   const record = buildCheckinRecord(row);
 

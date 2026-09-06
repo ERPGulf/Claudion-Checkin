@@ -329,14 +329,20 @@ export const claimNextPending = async (
            AND NOT EXISTS (
              SELECT 1 FROM ${QUEUE_TABLE} AS older
               WHERE older.employeeId = candidate.employeeId
-                AND older.tenantKey IS candidate.tenantKey
+                AND (older.tenantKey IS candidate.tenantKey OR older.tenantKey IS NULL)
                 AND (older.timestamp < candidate.timestamp
                      OR (older.timestamp = candidate.timestamp
                          AND older.id < candidate.id))
                 AND (
                   older.status IN (?, ?)
-                  OR (older.status = ? AND IFNULL(older.failureClass, '') <> ?)
+                 OR (older.status = ? AND IFNULL(older.failureClass, '') <> ?)
                 )
+           )
+           AND NOT EXISTS (
+             SELECT 1 FROM ${QUEUE_TABLE} AS paired
+              WHERE paired.id = candidate.pairedAttendanceId
+                AND (paired.tenantKey IS NOT candidate.tenantKey OR paired.employeeId <> candidate.employeeId)
+                AND paired.status IN ('pending', 'syncing', 'blocked')
            )
          ORDER BY candidate.timestamp ASC, candidate.id ASC
          LIMIT 1
@@ -535,7 +541,7 @@ export const markRejected = async ({
   );
 
   const row = await database.getFirstAsync(
-    `SELECT pairedAttendanceId FROM ${QUEUE_TABLE} WHERE id = ?;`,
+    `SELECT pairedAttendanceId, employeeId, tenantKey FROM ${QUEUE_TABLE} WHERE id = ?;`,
     [id],
   );
 
@@ -549,13 +555,16 @@ export const markRejected = async ({
     `UPDATE ${QUEUE_TABLE}
         SET status = ?, failureClass = ?, error = ?, nextAttemptAt = 0,
             updatedAt = ?
-      WHERE id = ? AND status IN (${placeholdersFor(AWAITING_SERVER_STATUSES)});`,
+      WHERE id = ? AND employeeId = ? AND tenantKey IS ?
+        AND status IN (${placeholdersFor(AWAITING_SERVER_STATUSES)});`,
     [
       QUEUE_STATUS.REJECTED,
       FAILURE_CLASS.DEPENDENT,
       "Dependent on rejected check-in.",
       now,
       pairedId,
+      row.employeeId,
+      row.tenantKey,
       ...AWAITING_SERVER_STATUSES,
     ],
   );
@@ -800,13 +809,13 @@ export const findById = async (id) => {
 };
 
 /** Whether this exact punch is already queued, in any state. */
-export const findDuplicate = async ({ employeeId, timestamp, action }) => {
+export const findDuplicate = async ({ employeeId, timestamp, action, tenantKey = null }) => {
   const database = await getDatabase();
   const row = await database.getFirstAsync(
     `SELECT * FROM ${QUEUE_TABLE}
-      WHERE employeeId = ? AND timestamp = ? AND action = ?
+      WHERE employeeId = ? AND timestamp = ? AND action = ? AND tenantKey IS ?
       LIMIT 1;`,
-    [employeeId, timestamp, action],
+    [employeeId, timestamp, action, tenantKey],
   );
   return hydrate(row);
 };
@@ -1122,6 +1131,21 @@ export const countRecoveryByScope = async ({ employeeId, tenantKey }) => {
   };
 };
 
+/** Unresolved records plus successes during the currently displayed attempt. */
+export const listRecoveryRows = async ({ employeeId, tenantKey, since = null }) => {
+  if (!employeeId || !tenantKey) throw new Error("Attendance recovery scope missing");
+  const database = await getDatabase();
+  const rows = await database.getAllAsync(
+    `SELECT * FROM ${QUEUE_TABLE}
+      WHERE employeeId = ? AND (tenantKey = ? OR tenantKey IS NULL)
+        AND (status IN (${placeholdersFor(UNRESOLVED_STATUSES)})
+          OR (tenantKey = ? AND status = ? AND ? IS NOT NULL AND updatedAt >= ?))
+      ORDER BY timestamp ASC, id ASC;`,
+    [employeeId, tenantKey, ...UNRESOLVED_STATUSES, tenantKey, QUEUE_STATUS.SYNCED, since, since],
+  );
+  return hydrateAll(rows);
+};
+
 /**
  * Whether a drain has anything to do at `now`, including due blocked rows.
  *
@@ -1161,6 +1185,7 @@ export default {
   claimNextPending,
   countByStatus,
   countRecoveryByScope,
+  listRecoveryRows,
   enqueue,
   findById,
   findDuplicate,

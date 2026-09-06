@@ -4,7 +4,8 @@ import { FAILURE_CLASS } from "./AttendanceDatabase";
 import {
   MAX_RETRIES,
   claimNextPending,
-  countByStatus,
+  countRecoveryByScope,
+  findById,
   hasWorkDue,
   markBlocked,
   markRejected,
@@ -13,6 +14,7 @@ import {
   peekNextRow,
   purgeSynced,
   releaseStuckSyncing,
+  releaseClaim,
   wakeBlocked,
   wakePending,
 } from "./AttendanceQueueRepository";
@@ -24,6 +26,7 @@ import {
   markOfflineSyncUnsupported,
 } from "./offlineCapability";
 import { fetchShouldAttemptRequest } from "./NetworkListener";
+import { ATTENDANCE_SCOPE_CHANGED, assertAttendanceQueueScope, captureAttendanceQueueScope } from "./attendanceQueueProvenance";
 
 /**
  * Draining the queue.
@@ -55,9 +58,12 @@ export const SYNCED_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
 /** The in-flight run, or null. Concurrency control — see (1) above. */
 let activeRun = null;
+let activeScope = null;
+let runGeneration = 0;
+export const cancelActiveSync = () => { runGeneration += 1; };
 
 /** Set once per app session, so stuck rows are released exactly once. */
-let hasReleasedStuckRows = false;
+const releasedScopes = new Set();
 
 /** Lifecycle phases a listener is told about. */
 export const SYNC_PHASE = {
@@ -101,10 +107,11 @@ const ROW_OUTCOME = {
   BLOCKED: "blocked",
   REJECTED: "rejected",
   OFFLINE: "offline",
+  SCOPE_CHANGED: "scope-changed",
 };
 
 /** Outcomes that mean the rest of this run is pointless. */
-const HALTS_RUN = new Set([ROW_OUTCOME.OFFLINE, ROW_OUTCOME.BLOCKED]);
+const HALTS_RUN = new Set([ROW_OUTCOME.OFFLINE, ROW_OUTCOME.BLOCKED, ROW_OUTCOME.SCOPE_CHANGED]);
 
 /**
  * Uploads a single claimed row and records the verdict.
@@ -114,9 +121,10 @@ const HALTS_RUN = new Set([ROW_OUTCOME.OFFLINE, ROW_OUTCOME.BLOCKED]);
  * the exact condition `releaseStuckSyncing` exists to clean up after a crash and
  * should never be reached by ordinary control flow.
  */
-const syncRow = async (row) => {
+const syncRow = async (row, syncScope, report) => {
   try {
-    const outcome = await pushCheckin(row);
+    await assertAttendanceQueueScope(syncScope);
+    const outcome = await pushCheckin(row, { syncScope });
 
     if (outcome.result === PUSH_RESULT.INSERTED) {
       await markSynced({
@@ -126,17 +134,19 @@ const syncRow = async (row) => {
       });
       // Proof the endpoint is there and answering, which is what turns offline
       // attendance back on after a deploy — nobody has to tell the app.
-      markOfflineSyncSupported();
+      if (await assertAttendanceQueueScope(syncScope).then(() => true, () => false)) markOfflineSyncSupported();
       console.log(`${LOG_PREFIX} Synced #${row.id}`, outcome.serverCheckinId);
 
       // The row is already committed as synced before this runs, and
       // `uploadQueuedPhoto` never throws — a missing attachment must not undo an
       // attendance record that the server has accepted.
       if (row.payload?.photoUri) {
-        await uploadQueuedPhoto({
+        const photo = await uploadQueuedPhoto({
           photoUri: row.payload.photoUri,
           docname: outcome.serverCheckinId,
+          syncScope,
         });
+        report.photoStatus = photo?.uploaded ? "uploaded" : "not-uploaded";
       }
 
       return ROW_OUTCOME.SYNCED;
@@ -151,7 +161,7 @@ const syncRow = async (row) => {
         duplicateMessage: outcome.message,
       });
       // A duplicate is still the endpoint answering.
-      markOfflineSyncSupported();
+      if (await assertAttendanceQueueScope(syncScope).then(() => true, () => false)) markOfflineSyncSupported();
       console.log(
         `${LOG_PREFIX} Duplicate detected for #${row.id}; treating as synced`,
       );
@@ -175,6 +185,7 @@ const syncRow = async (row) => {
 
     // Blocked: the server cannot take it *yet*. Kept, and retried on the slow
     // ladder until it can.
+    await assertAttendanceQueueScope(syncScope);
     if (outcome.failureClass === FAILURE_CLASS.ENDPOINT_MISSING) {
       markOfflineSyncUnsupported();
     }
@@ -191,6 +202,11 @@ const syncRow = async (row) => {
     );
     return ROW_OUTCOME.BLOCKED;
   } catch (error) {
+    const scopeValid = await assertAttendanceQueueScope(syncScope).then(() => true, () => false);
+    if (error?.code === ATTENDANCE_SCOPE_CHANGED || !scopeValid) {
+      await releaseClaim({ id: row.id });
+      return ROW_OUTCOME.SCOPE_CHANGED;
+    }
     const { kind, failureClass, message, status } =
       classifyAttendanceError(error);
 
@@ -371,8 +387,31 @@ export const syncPendingAttendance = async ({
   wakeAllPending = false,
   wakeFailureClass = null,
   employeeId = null,
+  syncScope = null,
 } = {}) => {
-  if (activeRun) return activeRun;
+  const requestedGeneration = runGeneration;
+  if (!employeeId) return { ran: false, reason: "no-employee", records: [] };
+  try {
+    syncScope = syncScope ?? await captureAttendanceQueueScope(employeeId);
+    await assertAttendanceQueueScope(syncScope);
+    if (requestedGeneration !== runGeneration) return { ran: false, reason: "scope-changed", records: [] };
+    if (syncScope.employeeId !== employeeId) return { ran: false, reason: "scope-changed", records: [] };
+  } catch {
+    return { ran: false, reason: "scope-changed", records: [] };
+  }
+  if (activeRun) {
+    const sameScope = activeScope?.employeeId === employeeId &&
+      activeScope?.tenantKey === syncScope.tenantKey &&
+      activeScope?.generation === syncScope.generation &&
+      activeScope?.accountId === syncScope.accountId && !activeScope?.isCancelled?.();
+    return sameScope ? activeRun : { ran: false, reason: "another-session-syncing", records: [] };
+  }
+  const generation = runGeneration;
+  const callerCancelled = syncScope.isCancelled;
+  syncScope = { ...syncScope, isCancelled: () => generation !== runGeneration || !!callerCancelled?.() };
+  activeScope = syncScope;
+  const scope = { employeeId, tenantKey: syncScope.tenantKey };
+  const scopeKey = JSON.stringify([scope.tenantKey, employeeId]);
 
   activeRun = (async () => {
     const summary = {
@@ -385,6 +424,7 @@ export const syncPendingAttendance = async ({
       wokenPending: 0,
       remaining: 0,
       trigger,
+      records: [],
     };
 
     let announcedStart = false;
@@ -393,9 +433,10 @@ export const syncPendingAttendance = async ({
       // Rows left `syncing` by a killed process would otherwise never be
       // claimed again. Once per session is enough — within a session the
       // single-flight lock means nothing else can have stranded one.
-      if (!hasReleasedStuckRows) {
-        const released = await releaseStuckSyncing();
-        hasReleasedStuckRows = true;
+      await assertAttendanceQueueScope(syncScope);
+      if (!releasedScopes.has(scopeKey)) {
+        const released = await releaseStuckSyncing(Date.now(), scope);
+        releasedScopes.add(scopeKey);
         if (released) {
           console.log(`${LOG_PREFIX} Released ${released} stuck row(s)`);
         }
@@ -406,7 +447,9 @@ export const syncPendingAttendance = async ({
       // have been upgraded since), a reconnect, a token refresh — while the
       // scheduled tick respects the ladder. This is what makes recovery
       // automatic: nobody has to remember that a record is waiting.
+      await assertAttendanceQueueScope(syncScope);
       summary.woken = await wakeBlocked({
+        ...scope,
         force: wakeAllBlocked,
         failureClass: wakeFailureClass,
       });
@@ -421,7 +464,8 @@ export const syncPendingAttendance = async ({
       // row that is not due holds back every later punch this employee has made.
       // By default this only repairs rows scheduled beyond any real backoff — a
       // clock that ran ahead — and an explicit pull makes every pending row due.
-      summary.wokenPending = await wakePending({ force: wakeAllPending });
+      await assertAttendanceQueueScope(syncScope);
+      summary.wokenPending = await wakePending({ ...scope, force: wakeAllPending });
       if (summary.wokenPending) {
         console.log(
           `${LOG_PREFIX} Made ${summary.wokenPending} pending row(s) due for ${trigger}`,
@@ -439,7 +483,7 @@ export const syncPendingAttendance = async ({
       // one-minute heartbeat affordable — an idle tick is one indexed query,
       // no NetInfo call, no request, and (see logRun) no log line unless there
       // is actually a row sitting there.
-      if (!(await hasWorkDue(Date.now(), { employeeId }))) {
+      if (!(await hasWorkDue(Date.now(), scope))) {
         summary.reason = "nothing-due";
         await logRun(summary, employeeId);
         return summary;
@@ -458,7 +502,8 @@ export const syncPendingAttendance = async ({
         // are left untouched — see claimNextPending — because a queued punch is
         // uploaded under the current token, and filing one employee's
         // attendance against another is worse than it arriving late.
-        const row = await claimNextPending(Date.now(), { employeeId });
+        await assertAttendanceQueueScope(syncScope);
+        const row = await claimNextPending(Date.now(), scope);
         if (!row) break;
 
         // Announced on the first claimed row, not at the top of the run: a drain
@@ -468,7 +513,16 @@ export const syncPendingAttendance = async ({
           notifySync({ phase: SYNC_PHASE.START });
         }
 
-        const outcome = await syncRow(row);
+        const report = { id: row.id, action: row.action, timestamp: row.timestamp };
+        const outcome = await syncRow(row, syncScope, report);
+        const saved = await findById(row.id);
+        summary.records.push({
+          ...report,
+          status: saved?.status,
+          duplicate: saved?.duplicate ?? false,
+          failureClass: saved?.failureClass,
+          outcome,
+        });
 
         if (outcome === ROW_OUTCOME.SYNCED) summary.synced += 1;
         if (outcome === ROW_OUTCOME.DUPLICATE) summary.duplicates += 1;
@@ -484,7 +538,8 @@ export const syncPendingAttendance = async ({
         // continuing would spend one pointless request per queued punch.
         if (HALTS_RUN.has(outcome)) {
           summary.reason =
-            outcome === ROW_OUTCOME.OFFLINE ? "connection-lost" : "blocked";
+            outcome === ROW_OUTCOME.SCOPE_CHANGED ? "scope-changed" :
+              outcome === ROW_OUTCOME.OFFLINE ? "connection-lost" : "blocked";
           break;
         }
       }
@@ -496,8 +551,8 @@ export const syncPendingAttendance = async ({
         console.log(`${LOG_PREFIX} Purge failed:`, error?.message);
       }
 
-      const counts = await countByStatus();
-      summary.remaining = counts.unresolvedCount;
+      const counts = await countRecoveryByScope(scope);
+      summary.remaining = counts.recoverableCount + counts.syncingCount + counts.rejectedCount;
 
       await logRun(summary, employeeId);
 
@@ -515,10 +570,12 @@ export const syncPendingAttendance = async ({
       return summary;
     } catch (error) {
       console.log(`${LOG_PREFIX} Run aborted:`, error?.message);
-      summary.reason = error?.message || "sync failed";
+      summary.reason = error?.code === ATTENDANCE_SCOPE_CHANGED ? "scope-changed" : "sync-error";
       return summary;
     } finally {
       activeRun = null;
+      activeScope = null;
+      notifyQueueChanged();
       // Paired with START, and only when START was sent — a listener must never
       // be left holding a "syncing" state it was never told to leave.
       if (announcedStart) notifySync({ phase: SYNC_PHASE.FINISH, summary });
@@ -534,7 +591,9 @@ export const isSyncing = () => activeRun !== null;
 /** Test seam. */
 export const resetSyncService = () => {
   activeRun = null;
-  hasReleasedStuckRows = false;
+  activeScope = null;
+  runGeneration += 1;
+  releasedScopes.clear();
   syncListeners.clear();
 };
 

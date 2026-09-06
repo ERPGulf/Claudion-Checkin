@@ -7,7 +7,10 @@ import { revertAll } from "../../redux/CommonActions";
 import { setSignOut } from "../../redux/Slices/AuthSlice";
 import {
   assertAttendanceQueueScope,
+  assertAttendanceSessionCurrent,
+  createAttendanceScopeChangedError,
 } from "../offline/attendanceQueueProvenance";
+import { activateAuthSession, getAuthSessionGeneration, invalidateAuthSession } from "../../utils/authSessionGuard";
 
 // ----------------------
 // MEMORY TOKEN CACHE
@@ -106,12 +109,12 @@ const getTokenFromResponse = (payload, key) => {
 };
 
 async function loadTokens() {
-  if (!memoryAccessToken) {
-    memoryAccessToken = await AsyncStorage.getItem("access_token");
-  }
-  if (!memoryRefreshToken) {
-    memoryRefreshToken = await AsyncStorage.getItem("refresh_token");
-  }
+  const generation = getAuthSessionGeneration();
+  const access = memoryAccessToken ?? await AsyncStorage.getItem("access_token");
+  const refresh = memoryRefreshToken ?? await AsyncStorage.getItem("refresh_token");
+  if (generation !== getAuthSessionGeneration()) throw createAttendanceScopeChangedError();
+  memoryAccessToken = access;
+  memoryRefreshToken = refresh;
   return { access: memoryAccessToken, refresh: memoryRefreshToken };
 }
 
@@ -141,7 +144,16 @@ const notifyTokenChanged = () => {
   });
 };
 
-export async function saveTokens(access, refresh) {
+// Teardown is serialized with token writes so a delayed refresh cannot restore
+// credentials after logout has removed them.
+let credentialWrite = Promise.resolve();
+const writeCredentials = (write) => {
+  const next = credentialWrite.then(write, write);
+  credentialWrite = next.catch(() => {});
+  return next;
+};
+
+export async function saveTokens(access, refresh, expectedGeneration = getAuthSessionGeneration()) {
   const nextAccess =
     access ?? memoryAccessToken ?? (await AsyncStorage.getItem("access_token"));
   const nextRefresh =
@@ -169,14 +181,20 @@ export async function saveTokens(access, refresh) {
   // and logged the employee out — hours later and with nothing connecting the
   // two events. Awaiting the write first means memory is only ever advanced
   // once the durable copy is safe.
-  await AsyncStorage.multiSet([
-    ["access_token", String(nextAccess)],
-    ["refresh_token", String(nextRefresh)],
-  ]);
+  await writeCredentials(async () => {
+    if (expectedGeneration !== getAuthSessionGeneration()) throw createAttendanceScopeChangedError();
+    await AsyncStorage.multiSet([
+      ["access_token", String(nextAccess)],
+      ["refresh_token", String(nextRefresh)],
+    ]);
+    if (expectedGeneration !== getAuthSessionGeneration()) throw createAttendanceScopeChangedError();
+  });
+  if (expectedGeneration !== getAuthSessionGeneration()) throw createAttendanceScopeChangedError();
 
   memoryAccessToken = nextAccess;
   memoryRefreshToken = nextRefresh;
   hasTerminalSessionFailure = false;
+  activateAuthSession(expectedGeneration);
 
   // Only on an actual change of credential — `saveTokens` is also called to
   // rewrite the same token, and that changes nothing for anyone waiting.
@@ -184,20 +202,22 @@ export async function saveTokens(access, refresh) {
   if (changed) notifyTokenChanged();
 }
 export function clearStore() {
+  invalidateAuthSession();
   store.dispatch(setSignOut());
   store.dispatch(revertAll());
 }
 export async function clearTokens() {
+  invalidateAuthSession();
   memoryAccessToken = null;
   memoryRefreshToken = null;
   hasTerminalSessionFailure = false;
   delete apiClient.defaults.headers.common.Authorization;
-  await AsyncStorage.multiRemove([
+  await writeCredentials(() => AsyncStorage.multiRemove([
     "access_token",
     "refresh_token",
     "fcm_token",
     "fcm_last_message_at",
-  ]);
+  ]));
 }
 
 // ----------------------
@@ -331,6 +351,7 @@ const isTerminalRefreshFailure = (err) => {
 };
 
 const expireSession = async () => {
+  const generation = invalidateAuthSession();
   hasTerminalSessionFailure = true;
   consecutiveRefreshFailures = 0;
   memoryAccessToken = null;
@@ -348,21 +369,24 @@ const expireSession = async () => {
     }
   }
 
-  await AsyncStorage.multiRemove([
+  if (generation !== getAuthSessionGeneration()) return;
+  await writeCredentials(() => generation === getAuthSessionGeneration() && AsyncStorage.multiRemove([
     "access_token",
     "refresh_token",
     "fcm_token",
     "fcm_last_message_at",
-  ]);
-  clearStore();
+  ]));
+  if (generation === getAuthSessionGeneration()) clearStore();
 };
 
 // ----------------------
 // REFRESH ACCESS TOKEN
 // ----------------------
 export const refreshAccessToken = async () => {
+  const generation = getAuthSessionGeneration();
   const { refresh } = await loadTokens();
   const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
+  if (generation !== getAuthSessionGeneration()) throw createAttendanceScopeChangedError();
 
   if (!refresh || !rawBaseUrl) {
     throw new Error("Missing refresh token or base URL");
@@ -416,7 +440,8 @@ export const refreshAccessToken = async () => {
 
     if (!newAccess) throw new Error("Refresh returned empty token");
 
-    await saveTokens(newAccess, newRefresh);
+    if (generation !== getAuthSessionGeneration()) throw createAttendanceScopeChangedError();
+    await saveTokens(newAccess, newRefresh, generation);
     hasTerminalSessionFailure = false;
 
     // 🔥 FIX: update stale axios cache
@@ -426,6 +451,7 @@ export const refreshAccessToken = async () => {
 
     return newAccess;
   } catch (err) {
+    if (generation !== getAuthSessionGeneration()) throw createAttendanceScopeChangedError();
     console.log("refreshAccessToken failed", {
       refreshToken: maskToken(refresh),
       ...getErrorDebugInfo(err),
@@ -459,8 +485,10 @@ export const refreshAccessToken = async () => {
 apiClient.interceptors.request.use(async (config) => {
   if (config.attendanceSyncScope) {
     const current = await assertAttendanceQueueScope(config.attendanceSyncScope);
+    assertAttendanceSessionCurrent(config.attendanceSyncScope);
     config.headers.Authorization = `Bearer ${current.accessToken}`;
-    delete config.attendanceSyncScope;
+    // Keep scope on the config for retries after token refresh.
+    if (!config.url?.startsWith(`${current.tenantKey}/api/`)) throw createAttendanceScopeChangedError();
     return config;
   }
 
@@ -491,6 +519,8 @@ apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
     const original = error.config;
+    if (!original) return Promise.reject(error);
+    if (original.attendanceSyncScope) await assertAttendanceQueueScope(original.attendanceSyncScope);
 
     // Skip refresh logic for generateToken()
     if (original.headers?.["x-skip-auth"] === "true") {
