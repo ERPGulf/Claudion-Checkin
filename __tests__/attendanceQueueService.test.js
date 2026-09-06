@@ -45,6 +45,7 @@ import {
 import { evaluateOfflineAttendance } from "../services/offline/offlineAttendanceGate";
 import { NO_CONFIG_MESSAGE } from "../services/offline/attendanceConfigCache";
 import {
+  MANUAL_OFFLINE_MESSAGE,
   OFFLINE_DISABLED_MESSAGE,
   OFFLINE_UNSUPPORTED_MESSAGE,
 } from "../services/offline/AttendanceQueueService";
@@ -75,6 +76,18 @@ const networkFailure = () => ({
   error: Object.assign(new Error("Network Error"), { code: "ERR_NETWORK" }),
 });
 
+/**
+ * The queueing decision belongs to the geofence path alone: a tapped punch is
+ * online-only and never reaches the queue. Everything below that is about
+ * queueing therefore runs as an automatic punch. The manual contract — that
+ * nothing is written, ever — has its own block at the bottom of this file.
+ *
+ * An explicit `attendanceType` still wins, so the cases that name one read the
+ * same as before.
+ */
+const submitQueueable = (options) =>
+  submitAttendance({ attendanceType: "auto", ...options });
+
 beforeEach(() => {
   __resetAll();
   resetDatabaseHandle();
@@ -99,7 +112,7 @@ describe("when the server has no offline endpoint", () => {
   });
 
   it("refuses honestly instead of queueing into a hole", async () => {
-    const result = await submitAttendance({
+    const result = await submitQueueable({
       type: "IN",
       employeeCode: "TDI0167",
       online: jest.fn(),
@@ -121,7 +134,7 @@ describe("when the server has no offline endpoint", () => {
     const online = jest.fn().mockResolvedValue({ allowed: true, name: "X" });
 
     expect(
-      (await submitAttendance({ type: "IN", employeeCode: "TDI0167", online }))
+      (await submitQueueable({ type: "IN", employeeCode: "TDI0167", online }))
         .allowed,
     ).toBe(true);
   });
@@ -142,7 +155,7 @@ describe("when the administrator has switched offline attendance off", () => {
   });
 
   it("refuses rather than queueing into a queue nothing drains", async () => {
-    const result = await submitAttendance({
+    const result = await submitQueueable({
       type: "IN",
       employeeCode: "TDI0167",
       online: jest.fn(),
@@ -159,7 +172,7 @@ describe("when the administrator has switched offline attendance off", () => {
     const online = jest.fn().mockResolvedValue({ allowed: true, name: "X" });
 
     expect(
-      (await submitAttendance({ type: "IN", employeeCode: "TDI0167", online }))
+      (await submitQueueable({ type: "IN", employeeCode: "TDI0167", online }))
         .allowed,
     ).toBe(true);
   });
@@ -170,7 +183,7 @@ describe("when the administrator has switched offline attendance off", () => {
     // a first launch, or on a tenant whose backend predates the setting.
     setOfflineQueueingAllowed(null);
 
-    const result = await submitAttendance({
+    const result = await submitQueueable({
       type: "IN",
       employeeCode: "TDI0167",
       online: jest.fn(),
@@ -202,7 +215,7 @@ describe("when the reachability probe is wrong but the connection works", () => 
       .fn()
       .mockResolvedValue({ allowed: true, name: "EMP-CKIN-0001" });
 
-    const result = await submitAttendance({
+    const result = await submitQueueable({
       type: "IN",
       employeeCode: "TDI0167",
       online,
@@ -217,7 +230,7 @@ describe("when the reachability probe is wrong but the connection works", () => 
   it("queues only once that call has actually failed", async () => {
     const online = jest.fn().mockResolvedValue(networkFailure());
 
-    const result = await submitAttendance({
+    const result = await submitQueueable({
       type: "IN",
       employeeCode: "TDI0167",
       online,
@@ -236,7 +249,7 @@ describe("when the reachability probe is wrong but the connection works", () => 
       message: "You are 400m away from nearest location (Doha HQ).",
     });
 
-    const result = await submitAttendance({
+    const result = await submitQueueable({
       type: "IN",
       employeeCode: "TDI0167",
       online,
@@ -255,7 +268,7 @@ describe("when there is no transport at all", () => {
     fetchShouldAttemptRequest.mockResolvedValue(false);
     const online = jest.fn();
 
-    const result = await submitAttendance({
+    const result = await submitQueueable({
       type: "IN",
       employeeCode: "TDI0167",
       online,
@@ -274,7 +287,7 @@ describe("when online", () => {
       message: "Successfully checked in",
     });
 
-    const result = await submitAttendance({
+    const result = await submitQueueable({
       type: "IN",
       employeeCode: "TDI0167",
       online,
@@ -294,7 +307,7 @@ describe("when online", () => {
       message: "You are 300m away from nearest location (Doha HQ).",
     });
 
-    const result = await submitAttendance({
+    const result = await submitQueueable({
       type: "IN",
       employeeCode: "TDI0167",
       online,
@@ -308,7 +321,7 @@ describe("when online", () => {
   it("queues when the real call fails on the network", async () => {
     const online = jest.fn().mockResolvedValue(networkFailure());
 
-    const result = await submitAttendance({
+    const result = await submitQueueable({
       type: "IN",
       employeeCode: "TDI0167",
       online,
@@ -330,7 +343,7 @@ describe("when online", () => {
         }),
       );
 
-    const result = await submitAttendance({
+    const result = await submitQueueable({
       type: "IN",
       employeeCode: "TDI0167",
       online,
@@ -348,7 +361,7 @@ describe("when online", () => {
       .fn()
       .mockRejectedValue({ response: { status: 403, data: { message: "No" } } });
 
-    const result = await submitAttendance({
+    const result = await submitQueueable({
       type: "IN",
       employeeCode: "TDI0167",
       online,
@@ -365,7 +378,7 @@ describe("when online", () => {
       .fn()
       .mockRejectedValue(new Error("Location permission denied"));
 
-    const result = await submitAttendance({
+    const result = await submitQueueable({
       type: "IN",
       employeeCode: "TDI0167",
       online,
@@ -383,7 +396,7 @@ describe("when offline", () => {
   it("queues without attempting the request at all", async () => {
     const online = jest.fn();
 
-    const result = await submitAttendance({
+    const result = await submitQueueable({
       type: "IN",
       employeeCode: "TDI0167",
       online,
@@ -394,7 +407,7 @@ describe("when offline", () => {
   });
 
   it("returns success, so the session state machine opens a real session", async () => {
-    const result = await submitAttendance({
+    const result = await submitQueueable({
       type: "IN",
       employeeCode: "TDI0167",
       online: jest.fn(),
@@ -407,7 +420,7 @@ describe("when offline", () => {
   });
 
   it("records the docname the config cache resolved, for the bulk endpoint", async () => {
-    await submitAttendance({
+    await submitQueueable({
       type: "IN",
       employeeCode: "TDI0167",
       online: jest.fn(),
@@ -419,7 +432,7 @@ describe("when offline", () => {
   });
 
   it("tags the row with the location the gate resolved", async () => {
-    await submitAttendance({
+    await submitQueueable({
       type: "IN",
       employeeCode: "TDI0167",
       online: jest.fn(),
@@ -440,7 +453,7 @@ describe("when offline", () => {
       message: "You are 812m away from nearest location (Doha HQ).",
     });
 
-    const result = await submitAttendance({
+    const result = await submitQueueable({
       type: "IN",
       employeeCode: "TDI0167",
       online: jest.fn(),
@@ -458,7 +471,7 @@ describe("when offline", () => {
       message: NO_CONFIG_MESSAGE,
     });
 
-    const result = await submitAttendance({
+    const result = await submitQueueable({
       type: "IN",
       employeeCode: "TDI0167",
       online: jest.fn(),
@@ -490,17 +503,17 @@ describe("the geofence path is not radius-gated", () => {
     });
   });
 
-  it("still enforces it for anything a person can tap", async () => {
+  // This used to assert that the exemption was narrow — that a tapped punch was
+  // still radius-gated. It is narrower still now: a manual punch never reaches
+  // the gate, because it never reaches the queue the gate guards.
+  it("never reaches the gate at all for anything a person can tap", async () => {
     await submitManualAttendance({
       type: "OUT",
       employeeCode: "TDI0167",
-      online: jest.fn(),
+      online: jest.fn(() => Promise.resolve({ allowed: false, message: "no" })),
     });
 
-    expect(evaluateOfflineAttendance).toHaveBeenCalledWith({
-      type: "OUT",
-      enforceRadius: true,
-    });
+    expect(evaluateOfflineAttendance).not.toHaveBeenCalled();
   });
 
   it("queues an automatic check-out taken outside the radius", async () => {
@@ -529,11 +542,11 @@ describe("the geofence path is not radius-gated", () => {
 describe("the shared queue", () => {
   beforeEach(() => fetchIsOnline.mockResolvedValue(false));
 
-  it("tags manual and automatic punches distinctly in one table", async () => {
+  it("holds automatic punches and nothing else", async () => {
     await submitManualAttendance({
       type: "IN",
       employeeCode: "TDI0167",
-      online: jest.fn(),
+      online: jest.fn(() => Promise.resolve({ allowed: false, message: "no" })),
     });
     await submitAutoAttendance({
       type: "OUT",
@@ -542,14 +555,13 @@ describe("the shared queue", () => {
     });
 
     const rows = await listAll();
-    const types = rows.map((row) => row.attendanceType).sort();
 
-    expect(types).toEqual(["auto", "manual"]);
+    expect(rows.map((row) => row.attendanceType)).toEqual(["auto"]);
   });
 
   it("does not queue the same punch twice", async () => {
     const submit = () =>
-      submitAttendance({
+      submitQueueable({
         type: "IN",
         employeeCode: "TDI0167",
         online: jest.fn(),
@@ -596,7 +608,7 @@ describe("shouldQueueFailure", () => {
 describe("input validation", () => {
   it("rejects a type that is neither IN nor OUT", async () => {
     await expect(
-      submitAttendance({ type: "SIDEWAYS", employeeCode: "TDI0167", online: jest.fn() }),
+      submitQueueable({ type: "SIDEWAYS", employeeCode: "TDI0167", online: jest.fn() }),
     ).rejects.toThrow(/invalid type/i);
   });
 });
@@ -613,7 +625,7 @@ describe("forceQueue", () => {
   it("skips the online attempt and queues instead", async () => {
     const online = jest.fn(() => Promise.resolve({ allowed: true, name: "X" }));
 
-    const result = await submitAttendance({
+    const result = await submitQueueable({
       type: "IN",
       employeeCode: "HR-EMP-00001",
       attendanceType: "auto",
@@ -632,7 +644,7 @@ describe("forceQueue", () => {
   it("is off by default, so ordinary punches still go online first", async () => {
     const online = jest.fn(() => Promise.resolve({ allowed: true, name: "X" }));
 
-    await submitAttendance({
+    await submitQueueable({
       type: "IN",
       employeeCode: "HR-EMP-00001",
       attendanceType: "auto",
@@ -649,7 +661,7 @@ describe("forceQueue", () => {
     markOfflineSyncUnsupported();
     const online = jest.fn(() => Promise.resolve({ allowed: true, name: "X" }));
 
-    const result = await submitAttendance({
+    const result = await submitQueueable({
       type: "IN",
       employeeCode: "HR-EMP-00001",
       attendanceType: "auto",
@@ -669,7 +681,7 @@ describe("forceQueue", () => {
     });
     const online = jest.fn(() => Promise.resolve({ allowed: true, name: "X" }));
 
-    const result = await submitAttendance({
+    const result = await submitQueueable({
       type: "IN",
       employeeCode: "HR-EMP-00001",
       attendanceType: "auto",
@@ -687,7 +699,7 @@ describe("forceQueue", () => {
     fetchIsOnline.mockResolvedValue(false);
     const online = jest.fn();
 
-    const result = await submitAttendance({
+    const result = await submitQueueable({
       type: "IN",
       employeeCode: "HR-EMP-00001",
       attendanceType: "auto",
@@ -753,7 +765,7 @@ describe("asking for a drain after queueing", () => {
   it("asks once a punch is safely in the queue", async () => {
     fetchIsOnline.mockResolvedValue(false);
 
-    const result = await submitAttendance({
+    const result = await submitQueueable({
       type: "IN",
       employeeCode: "TDI0167",
       online: jest.fn(),
@@ -771,7 +783,7 @@ describe("asking for a drain after queueing", () => {
   it("asks when a punch lands online, since the server is proven up", async () => {
     const online = jest.fn().mockResolvedValue({ allowed: true, name: "X" });
 
-    await submitAttendance({ type: "IN", employeeCode: "TDI0167", online });
+    await submitQueueable({ type: "IN", employeeCode: "TDI0167", online });
 
     expect(handler).toHaveBeenCalledWith(
       expect.objectContaining({ employeeId: "TDI0167", reason: "online-punch" }),
@@ -786,7 +798,7 @@ describe("asking for a drain after queueing", () => {
       message: "You are not within your office location.",
     });
 
-    await submitAttendance({ type: "IN", employeeCode: "TDI0167", online });
+    await submitQueueable({ type: "IN", employeeCode: "TDI0167", online });
 
     expect(handler).not.toHaveBeenCalled();
   });
@@ -796,8 +808,8 @@ describe("asking for a drain after queueing", () => {
   it("does not ask again for a punch already queued", async () => {
     fetchIsOnline.mockResolvedValue(false);
 
-    await submitAttendance({ type: "IN", employeeCode: "TDI0167", online: jest.fn() });
-    await submitAttendance({ type: "IN", employeeCode: "TDI0167", online: jest.fn() });
+    await submitQueueable({ type: "IN", employeeCode: "TDI0167", online: jest.fn() });
+    await submitQueueable({ type: "IN", employeeCode: "TDI0167", online: jest.fn() });
 
     expect(handler).toHaveBeenCalledTimes(1);
   });
@@ -810,7 +822,7 @@ describe("asking for a drain after queueing", () => {
       message: "You are too far from your office location.",
     });
 
-    await submitAttendance({ type: "IN", employeeCode: "TDI0167", online: jest.fn() });
+    await submitQueueable({ type: "IN", employeeCode: "TDI0167", online: jest.fn() });
 
     expect(handler).not.toHaveBeenCalled();
   });
@@ -823,7 +835,7 @@ describe("asking for a drain after queueing", () => {
       throw new Error("manager exploded");
     });
 
-    const result = await submitAttendance({
+    const result = await submitQueueable({
       type: "IN",
       employeeCode: "TDI0167",
       online: jest.fn(),
@@ -838,7 +850,7 @@ describe("asking for a drain after queueing", () => {
     unregister();
     fetchIsOnline.mockResolvedValue(false);
 
-    const result = await submitAttendance({
+    const result = await submitQueueable({
       type: "IN",
       employeeCode: "TDI0167",
       online: jest.fn(),
@@ -846,5 +858,156 @@ describe("asking for a drain after queueing", () => {
 
     expect(result.queued).toBe(true);
     expect(handler).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Manual attendance is online-only.
+ *
+ * The queue earns its keep on the geofence path, where the OS hands a crossing
+ * to an app that may not be running and will not deliver it again. A tapped
+ * punch has none of that: someone is watching the screen, and can be told it
+ * failed and tap again. What a queued row costs there is the part that is not
+ * obvious — it puts a punch on someone's payroll that only their handset can
+ * account for, shows "Pending sync" on a phone that is plainly online, and can
+ * be filed hours later against a session that has already closed.
+ *
+ * So the rule these tests hold is absolute: a manual punch either reaches the
+ * server or it did not happen, and the employee is told which.
+ */
+describe("manual attendance never touches the queue", () => {
+  const landed = { allowed: true, name: "EMP-CKIN-0001", location: null };
+
+  it("writes nothing when there is no transport at all", async () => {
+    fetchIsOnline.mockResolvedValue(false);
+    const online = jest.fn(() => Promise.reject(networkFailure().error));
+
+    const result = await submitManualAttendance({
+      type: "IN",
+      employeeCode: "TDI0167",
+      online,
+    });
+
+    expect(result.allowed).toBe(false);
+    expect(result.queued).toBeUndefined();
+    expect(await listAll()).toHaveLength(0);
+  });
+
+  // Never behind a connectivity check. There is nothing to fall back to, so a
+  // wrong "we are offline" would refuse a punch on a working connection and buy
+  // nothing — the trap that cost a release on the queueing path.
+  it("attempts the real call even with no transport", async () => {
+    fetchIsOnline.mockResolvedValue(false);
+    const online = jest.fn(() => Promise.resolve(landed));
+
+    await submitManualAttendance({ type: "IN", employeeCode: "TDI0167", online });
+
+    expect(online).toHaveBeenCalledTimes(1);
+  });
+
+  it("says the attendance was not marked rather than 'Network Error'", async () => {
+    const online = jest.fn(() => Promise.resolve(networkFailure()));
+
+    const result = await submitManualAttendance({
+      type: "IN",
+      employeeCode: "TDI0167",
+      online,
+    });
+
+    expect(result).toMatchObject({
+      allowed: false,
+      offline: true,
+      message: MANUAL_OFFLINE_MESSAGE,
+    });
+  });
+
+  // A refusal the app or the server made on purpose already explains itself.
+  it("leaves a deliberate refusal's own message alone", async () => {
+    const online = jest.fn(() =>
+      Promise.resolve({
+        allowed: false,
+        message: "You are 240m away. Allowed: 100m",
+      }),
+    );
+
+    const result = await submitManualAttendance({
+      type: "IN",
+      employeeCode: "TDI0167",
+      online,
+    });
+
+    expect(result.message).toBe("You are 240m away. Allowed: 100m");
+  });
+
+  // A 5xx is the clearest case: on the geofence path this queues. Here it does
+  // not, because there is nothing to retry it from.
+  it("does not queue a server error either", async () => {
+    const online = jest.fn(() =>
+      Promise.reject(
+        Object.assign(new Error("Request failed"), {
+          response: { status: 503, data: {} },
+        }),
+      ),
+    );
+
+    const result = await submitManualAttendance({
+      type: "IN",
+      employeeCode: "TDI0167",
+      online,
+    });
+
+    expect(result.allowed).toBe(false);
+    expect(await listAll()).toHaveLength(0);
+  });
+
+  it("passes a success through untouched", async () => {
+    const online = jest.fn(() => Promise.resolve(landed));
+
+    const result = await submitManualAttendance({
+      type: "IN",
+      employeeCode: "TDI0167",
+      online,
+    });
+
+    expect(result).toBe(landed);
+    expect(await listAll()).toHaveLength(0);
+  });
+
+  // A punch that just landed is the strongest evidence there is that the server
+  // is up and this token works, so anything the geofence queued should go now.
+  it("kicks the drain when a punch lands", async () => {
+    const handler = jest.fn();
+    const unregister = registerQueueDrainHandler(handler);
+
+    await submitManualAttendance({
+      type: "IN",
+      employeeCode: "TDI0167",
+      online: jest.fn(() => Promise.resolve(landed)),
+    });
+
+    expect(handler).toHaveBeenCalledWith({
+      employeeId: "TDI0167",
+      reason: "online-punch",
+    });
+
+    unregister();
+  });
+
+  it("is refused by the queue for no reason it can be talked into", async () => {
+    // Neither the tenant switch nor a missing endpoint changes anything here:
+    // there was never going to be a row.
+    await setOfflineQueueingAllowed(false);
+    fetchIsOnline.mockResolvedValue(false);
+    const online = jest.fn(() => Promise.reject(networkFailure().error));
+
+    const result = await submitManualAttendance({
+      type: "OUT",
+      employeeCode: "TDI0167",
+      online,
+    });
+
+    expect(result.message).toBe(MANUAL_OFFLINE_MESSAGE);
+    expect(result.message).not.toBe(OFFLINE_DISABLED_MESSAGE);
+    expect(await listAll()).toHaveLength(0);
   });
 });

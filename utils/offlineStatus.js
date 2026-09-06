@@ -155,9 +155,14 @@ export const describeOfflineStatus = (
         // Amber, not red: being offline is a condition to be aware of, not a
         // failure. Nothing has gone wrong and nothing is lost.
         title: "You're offline",
+        // With nothing queued this used to promise "attendance will sync
+        // automatically", which is now only true of the geofence. A tapped punch
+        // is online-only: it either reaches the server or it did not happen. An
+        // employee reading the old line could tap Check In, see it fail, and
+        // reasonably believe it had been saved anyway.
         subtitle: pending
           ? `${records(pending)} waiting to sync`
-          : "Attendance will sync automatically when you're back online.",
+          : "Check in or out needs a connection. Automatic punches sync later.",
         trailingIcon: "cloud-upload-outline",
         motion: "pulse",
         actionable: false,

@@ -6,8 +6,11 @@
 //
 // The entry point almost everything uses is `submitAttendance` (and its
 // `submitManualAttendance` / `submitAutoAttendance` bindings) — it wraps an
-// existing online call and falls back to the queue, returning the same contract
-// `performSessionTransition` already expects.
+// existing online call and returns the same contract `performSessionTransition`
+// already expects.
+//
+// Only the geofence path falls back to the queue. A manual punch gets one
+// attempt at the real API and its answer stands; see `submitOnlineOnly`.
 
 export * from "./AttendanceApi";
 export * from "./AttendanceDatabase";

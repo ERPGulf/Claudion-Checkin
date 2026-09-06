@@ -94,7 +94,7 @@ describe('visibility', () => {
 
     expect(getByText("You're offline")).toBeTruthy();
     expect(
-      getByText("Attendance will sync automatically when you're back online."),
+      getByText("Check in or out needs a connection. Automatic punches sync later."),
     ).toBeTruthy();
   });
 });

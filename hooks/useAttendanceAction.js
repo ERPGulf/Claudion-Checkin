@@ -525,11 +525,10 @@ export default function useAttendanceAction() {
       try {
         setActionLoading(true);
 
-        // `submitManualAttendance` runs `userCheckIn` unchanged when there is a
-        // connection, and queues the punch locally when there is not. Either way
-        // it returns the same `{ allowed }` contract, so the session state
-        // machine treats an offline check-in as an ordinary open session — which
-        // is what lets a geofence EXIT still close it hours later.
+        // `submitManualAttendance` runs `userCheckIn` unchanged and returns
+        // whatever it answers. A tapped punch is never queued, so this either
+        // opens a real session on the server — which a geofence EXIT can close
+        // hours later — or fails, and nothing is recorded anywhere.
         const outcome = await performSessionTransition({
           type,
           origin: SESSION_ORIGIN.MANUAL,
@@ -603,19 +602,6 @@ export default function useAttendanceAction() {
 
         const breakData = await refreshAttendanceData();
         syncBreakState(breakData);
-
-        // A queued punch is a success, not a warning — the employee's day is
-        // recorded and nothing more is required of them. It is labelled as
-        // offline only so the absence of it in the web desk for a while is not a
-        // surprise.
-        if (response?.queued) {
-          Toast.show({
-            type: "success",
-            text1: type === "IN" ? "Checked in offline" : "Checked out offline",
-            text2: "Saved on your device — it'll sync when you're back online.",
-          });
-          return;
-        }
 
         Toast.show({
           type: "success",

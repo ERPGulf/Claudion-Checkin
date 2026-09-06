@@ -147,11 +147,9 @@ function AttendanceCamera() {
       // Same session state machine the geofence drives, so a photo check-in is
       // an ordinary open session that an office EXIT can close automatically.
       //
-      // `photoUri` rides along on the queued row so an offline photo check-in
-      // does not silently drop the photo: the sync service uploads it once the
-      // server returns a docname. Best-effort — the camera writes to the cache
-      // directory, so a long outage under storage pressure can still lose the
-      // file. The punch itself is never lost, which is the part that matters.
+      // Online only — a manual punch is never queued, so either the server
+      // records it and names the document this photo attaches to, or nothing
+      // happened and the catch below says so.
       const outcome = await performSessionTransition({
         type,
         origin: SESSION_ORIGIN.MANUAL,
@@ -159,7 +157,6 @@ function AttendanceCamera() {
           submitManualAttendance({
             type,
             employeeCode,
-            photoUri: photo?.uri ?? null,
             online: () => userCheckIn(dataField),
           }),
       });
@@ -200,13 +197,11 @@ function AttendanceCamera() {
       }
 
       const { session } = outcome;
-      const queued = outcome.response?.queued === true;
       const docname = outcome.response?.name;
 
-      // A queued punch has no docname yet — there is no server record to name.
-      // That is expected, not the "Missing Checkin ID" failure below, which
-      // means the server accepted the request and answered without one.
-      if (!queued && !docname) {
+      // The server accepted the request but answered without naming the record,
+      // so there is nothing for the photo to attach to.
+      if (!docname) {
         throw new Error("Check-in failed: Missing Checkin ID");
       }
 
@@ -228,21 +223,6 @@ function AttendanceCamera() {
         );
       } else {
         dispatch(setCheckout({ checkoutTime: session.endedAt }));
-      }
-
-      // Offline: the status update and the photo upload both need the server,
-      // and the photo needs a docname that does not exist yet. Both are deferred
-      // to the sync service, which uploads the photo once the row lands and the
-      // server names it.
-      if (queued) {
-        hapticsMessage("success");
-        Toast.show({
-          type: "success",
-          text1: `CHECKED ${type} offline`,
-          text2: "Saved on your device — it'll sync when you're back online.",
-        });
-        navigation.navigate("Attendance action");
-        return;
       }
 
       try {

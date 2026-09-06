@@ -69,7 +69,7 @@ describe('describeOfflineStatus', () => {
 
       expect(content.title).toBe("You're offline");
       expect(content.subtitle).toBe(
-        "Attendance will sync automatically when you're back online.",
+        "Check in or out needs a connection. Automatic punches sync later.",
       );
     });
 

@@ -40,21 +40,29 @@ import {
  * serialisation lock and its duplicate-move rules are untouched — a queued
  * check-in opens a real session, and a geofence EXIT still closes it.
  *
- * That is also what satisfies "manual and auto share one queue with no
- * duplicated code": the two differ only in which function they hand to `online`
- * and which `attendanceType` they tag the row with. Everything after that point
- * is this module.
+ * **Only the geofence path queues.** The queue exists for a crossing the OS
+ * hands to a killed app: it cannot be retried and nobody is watching when it
+ * happens. A tapped punch is the opposite situation — a person is looking at the
+ * screen and can be told it failed. So a manual punch gets one attempt at the
+ * real API and whatever it says stands: nothing is written locally, nothing goes
+ * pending, and an employee is never told their day is recorded on the strength
+ * of a row only this device can see. That is what the app did before the queue
+ * existed, and it is what `submitOnlineOnly` restores.
  *
  * The decision it makes:
  *
- *   online?  ──yes──> run the real API ──ok──────────> done, nothing queued
- *      │                    │
- *      │                    └─ failed ─┬─ transport/5xx ──> queue it
- *      │                               └─ policy/validation > surface the error
+ *   manual? ──yes──> run the real API; its answer stands, ok or not
+ *      │
  *      no
  *      │
- *      └──> offline gate ─┬─ refused ──> surface the error
- *                         └─ accepted ─> queue it
+ *      └─> online? ──yes──> run the real API ──ok──────> done, nothing queued
+ *             │                    │
+ *             │                    └─ failed ─┬─ transport/5xx ──> queue it
+ *             │                               └─ policy/validation > surface it
+ *             no
+ *             │
+ *             └──> offline gate ─┬─ refused ──> surface the error
+ *                                └─ accepted ─> queue it
  */
 
 const LOG_PREFIX = "[AttendanceQueueService]";
@@ -81,6 +89,17 @@ export const OFFLINE_UNSUPPORTED_MESSAGE =
  */
 export const OFFLINE_DISABLED_MESSAGE =
   "Offline attendance is switched off for your organization. Please check in while you have a connection.";
+
+/**
+ * Shown when a manual punch could not reach the server.
+ *
+ * Manual attendance has no offline path, so there is nothing saved and nothing
+ * pending — and the message has to say exactly that. "Network Error" leaves the
+ * employee guessing whether it landed; the one thing they need to know is that
+ * it did not, and that trying again on a connection is the whole remedy.
+ */
+export const MANUAL_OFFLINE_MESSAGE =
+  "No connection — your attendance was not marked. Please try again once you're online.";
 
 /**
  * How the sync manager gets told "a punch just went into the queue".
@@ -272,17 +291,94 @@ const queueAttendance = async ({
 };
 
 /**
- * Runs one attendance action, online if possible and queued if not.
+ * Turns a manual failure's raw message into one that says what happened to the
+ * punch.
+ *
+ * Transport failures only. A refusal the app or the server made deliberately —
+ * out of radius, no cached rules, a rejected payload — already carries a message
+ * that explains itself, and overwriting it would hide the real reason the
+ * employee could not check in.
+ */
+const describeManualFailure = (failure) => {
+  const { kind } = classifyAttendanceError(failure?.error);
+  if (kind !== FAILURE_KIND.PENDING) return failure;
+
+  return { ...failure, offline: true, message: MANUAL_OFFLINE_MESSAGE };
+};
+
+/**
+ * A manual punch: one attempt at the real API, and its answer stands.
+ *
+ * Deliberately the behaviour the app had before the queue existed. Nothing is
+ * written locally, so there is no row to go `pending`, no "Pending sync" chip on
+ * a punch nobody can account for later, and no drain filing a tap against a
+ * session that closed hours ago. A manual punch either reaches the server or it
+ * did not happen, and the employee is told which.
+ *
+ * The call is made unconditionally rather than behind a connectivity check.
+ * There is nothing to fall back to here, so a wrong "we are offline" would
+ * refuse a punch on a working connection and buy nothing — the same trap
+ * `fetchShouldAttemptRequest` exists to keep the queueing path out of.
+ */
+const submitOnlineOnly = async ({ type, employeeCode, online }) => {
+  if (typeof online !== "function") {
+    throw new Error("submitAttendance: manual attendance requires `online`");
+  }
+
+  try {
+    const result = await online();
+
+    if (result?.allowed) {
+      // A punch just landed, so the server is up and this token works — the
+      // moment anything the geofence queued is most likely to succeed. Same
+      // reasoning as the queueing path's own `online-punch` kick.
+      requestQueueDrain({ employeeId: employeeCode, reason: "online-punch" });
+      return result;
+    }
+
+    console.log(`${LOG_PREFIX} Manual ${type} not marked:`, result?.message);
+
+    return describeManualFailure(
+      result ?? {
+        allowed: false,
+        message: "Attendance was not marked. Please try again.",
+        location: null,
+      },
+    );
+  } catch (error) {
+    const { message } = classifyAttendanceError(error);
+    console.log(`${LOG_PREFIX} Manual ${type} threw, not marked:`, message);
+
+    return describeManualFailure({
+      allowed: false,
+      message,
+      error,
+      location: null,
+    });
+  }
+};
+
+/**
+ * Runs one attendance action: online only when it is manual, online-or-queued
+ * when it comes from the geofence.
  *
  * @param {object} options
  * @param {"IN"|"OUT"} options.type
  * @param {string} options.employeeCode
- * @param {"manual"|"auto"} [options.attendanceType]
+ * @param {"manual"|"auto"} [options.attendanceType] `manual` skips the queue
+ *        entirely — see `submitOnlineOnly`. It is also the default, so a caller
+ *        that forgets to say gets the path that cannot write a row it did not
+ *        ask for; only the geofence opts in to queueing.
  * @param {() => Promise<object>} options.online the existing API call
  *        (`userCheckIn` / `autoCheckInOut`), used unchanged when there is a
  *        connection
  * @param {number|null} [options.occurredAt] device epoch ms the punch actually
- *        happened, for a replayed geofence crossing
+ *        happened, for a replayed geofence crossing. Automatic punches only
+ * @param {string|null} [options.photoUri] carried on a queued row so the sync
+ *        service can attach the picture once the server names the document.
+ *        Nothing sets this any more — the photo flow is a manual screen, and a
+ *        manual punch is never queued — but the sync side still honours it for
+ *        rows queued before that changed
  * @param {boolean} [options.forceQueue] skip the online attempt and queue the
  *        punch even though there is a connection. **Ordering, not connectivity.**
  *        Set when an older punch for this employee has not reached the server
@@ -303,6 +399,16 @@ export const submitAttendance = async ({
 }) => {
   if (type !== "IN" && type !== "OUT") {
     throw new Error(`submitAttendance: invalid type ${type}`);
+  }
+
+  // Manual attendance never reaches the queue, and this is the one place that
+  // guarantees it. Keyed on `attendanceType` rather than left to
+  // `submitManualAttendance`, so no caller can queue a tapped punch by reaching
+  // past the binding. `occurredAt`, `photoUri` and `forceQueue` are all queue
+  // concepts and are ignored here — the camera uploads its photo against the
+  // docname the server issues, as it did before the queue existed.
+  if (attendanceType === ATTENDANCE_TYPE.MANUAL) {
+    return submitOnlineOnly({ type, employeeCode, online });
   }
 
   // "Is there a transport?", NOT "does NetInfo think the internet is reachable?".
@@ -468,19 +574,17 @@ export const submitAttendance = async ({
 /**
  * `submitAttendance` pre-bound for the manual screens — check-in, check-out and
  * the photo flow.
+ *
+ * Online only; see `submitOnlineOnly`. There is no `photoUri` because there is
+ * no row to carry one: the camera screen uploads its picture itself, against the
+ * docname the server returns.
  */
-export const submitManualAttendance = ({
-  type,
-  employeeCode,
-  online,
-  photoUri = null,
-}) =>
+export const submitManualAttendance = ({ type, employeeCode, online }) =>
   submitAttendance({
     type,
     employeeCode,
     attendanceType: ATTENDANCE_TYPE.MANUAL,
     online,
-    photoUri,
   });
 
 /** `submitAttendance` pre-bound for the geofence path. */
