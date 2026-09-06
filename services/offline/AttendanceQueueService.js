@@ -28,6 +28,7 @@ import {
   isOfflineQueueingDisallowed,
   isOfflineSyncUnsupported,
 } from "./offlineCapability";
+import { readAttendanceQueueScope } from "./attendanceQueueProvenance";
 
 /**
  * The write side of the offline queue, and the single seam every attendance
@@ -205,10 +206,14 @@ const queueAttendance = async ({
 }) => {
   const config = gate?.config ?? (await readAttendanceConfig());
   const timestamp = await formatOfflineTimestamp(occurredAt ?? Date.now());
+  const currentScope = await readAttendanceQueueScope();
+  const tenantKey =
+    currentScope.employeeId === employeeCode ? currentScope.tenantKey : null;
 
   const { row, inserted } = await enqueue({
     employeeId: employeeCode,
     employeeDocname: config?.employeeDocname ?? null,
+    tenantKey,
     attendanceType,
     action: logTypeToAction(type),
     timestamp,
@@ -248,6 +253,7 @@ const queueAttendance = async ({
       const checkin = await pairWithOpenCheckin({
         checkoutId: row.id,
         employeeId: employeeCode,
+        tenantKey,
         timestamp,
       });
       if (checkin) {

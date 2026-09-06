@@ -1,5 +1,7 @@
 # Claudion-Checkin
 
+Contributor setup, architecture, validation commands, and compatibility constraints are in [AGENTS.md](AGENTS.md). [CLAUDE.md](CLAUDE.md) provides deeper domain rationale for both coding agents.
+
 ## Firebase Cloud Messaging (FCM)
 
 This app now includes production-ready FCM client wiring for Android and iOS:
@@ -35,13 +37,7 @@ You can also provide a full URL instead of a method path.
 
 ### iOS note
 
-If your local `ios/` native project is not fully generated, run:
-
-```bash
-npx expo prebuild --platform ios
-```
-
-Then open Xcode and ensure Push Notifications + Background Modes (Remote notifications) are enabled on the app target.
+The `ios/` project is committed and contains native configuration. Use `npm run ios` for local builds; inspect any intentional prebuild changes before keeping them. In Xcode, ensure Push Notifications and Background Modes (Remote notifications) are enabled on the app target.
 
 ## Testing EAS OTA updates on Android and iOS
 
@@ -49,10 +45,10 @@ This project is already configured for EAS Update:
 
 - `expo-updates` is installed.
 - `updates.url` points to the Expo project.
-- `runtimeVersion` is pinned manually to `1.1.7` for bare-workflow EAS builds.
+- `runtimeVersion` is an explicit string in `app.json`; iOS reads `EXUpdatesRuntimeVersion` from `ios/ClaudionCheckin/Supporting/Expo.plist`.
 - EAS build channels are defined in `eas.json`.
 
-When you bump the app version, update the pinned runtime version in `app.json` and the native Expo update config so OTA compatibility stays aligned.
+When you bump the app version, keep the runtime version in `app.json` and the native Expo update config aligned. Review the [versioning guide](CLAUDE.md#versioning-gotcha): the committed iOS project does not automatically receive `app.json` changes. Changes to native modules or native configuration require a new binary.
 
 Use a real EAS build to test OTA updates. Expo Go will not receive updates from your project channel.
 
@@ -110,14 +106,14 @@ npm run eas:update:production -- --message "Production OTA update"
 Open the Profile screen and check the OTA Updates card:
 
 - Channel should match the build channel.
-- Runtime should match the app version runtime.
+- Runtime should match the update's intended native runtime.
 - Update ID changes after a new OTA update is applied.
 
 Tap `Check for OTA update` to fetch and apply the latest update manually.
 
 ### Notes
 
-- Because `runtimeVersion.policy` uses `appVersion`, OTA updates only apply to builds with the same app version.
-- If you bump `expo.version`, older builds will not receive the new OTA update.
+- OTA compatibility uses the explicitly configured runtime version; this repository does not use `runtimeVersion.policy: appVersion`.
+- Changing `expo.version` alone does not change OTA targeting. Updates for a new runtime are not eligible for installed builds on the old runtime.
 - If an update does not appear, verify that the installed binary and published update use the same channel and runtime version.
 - The same JS update can be published to both platforms together, but only if both installed binaries are on a compatible runtime version.

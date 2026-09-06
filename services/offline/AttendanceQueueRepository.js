@@ -133,6 +133,7 @@ const placeholdersFor = (values) => values.map(() => "?").join(", ");
 export const enqueue = async ({
   employeeId,
   employeeDocname = null,
+  tenantKey = null,
   attendanceType,
   action,
   timestamp,
@@ -153,14 +154,15 @@ export const enqueue = async ({
 
   const result = await database.runAsync(
     `INSERT INTO ${QUEUE_TABLE}
-       (employeeId, employeeDocname, attendanceType, action, timestamp,
+       (employeeId, employeeDocname, tenantKey, attendanceType, action, timestamp,
         latitude, longitude, accuracy, address, deviceId, payload,
         status, retryCount, nextAttemptAt, sessionId, createdAt, updatedAt)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?)
-     ON CONFLICT (employeeId, timestamp, action) DO NOTHING;`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?)
+     ON CONFLICT DO NOTHING;`,
     [
       employeeId,
       employeeDocname,
+      tenantKey,
       attendanceType,
       action,
       timestamp,
@@ -181,9 +183,9 @@ export const enqueue = async ({
 
   const row = await database.getFirstAsync(
     `SELECT * FROM ${QUEUE_TABLE}
-      WHERE employeeId = ? AND timestamp = ? AND action = ?
+      WHERE tenantKey IS ? AND employeeId = ? AND timestamp = ? AND action = ?
       LIMIT 1;`,
-    [employeeId, timestamp, action],
+    [tenantKey, employeeId, timestamp, action],
   );
 
   return { row: hydrate(row), inserted };
@@ -208,6 +210,7 @@ export const enqueue = async ({
 export const pairWithOpenCheckin = async ({
   checkoutId,
   employeeId,
+  tenantKey = null,
   timestamp,
   now = Date.now(),
 }) => {
@@ -216,13 +219,14 @@ export const pairWithOpenCheckin = async ({
   const checkin = await database.getFirstAsync(
     `SELECT * FROM ${QUEUE_TABLE}
       WHERE employeeId = ?
+        AND tenantKey IS ?
         AND action = ?
         AND pairedAttendanceId IS NULL
         AND timestamp <= ?
         AND status IN (${placeholdersFor(UNRESOLVED_STATUSES)})
       ORDER BY timestamp DESC, id DESC
       LIMIT 1;`,
-    [employeeId, QUEUE_ACTION.CHECKIN, timestamp, ...UNRESOLVED_STATUSES],
+    [employeeId, tenantKey, QUEUE_ACTION.CHECKIN, timestamp, ...UNRESOLVED_STATUSES],
   );
 
   if (!checkin) return null;
@@ -298,21 +302,34 @@ export const pairWithOpenCheckin = async ({
  * another drain: there is no window in which two contexts both decide a row is
  * at the head.
  */
-export const claimNextPending = async (now = Date.now(), { employeeId = null } = {}) => {
+export const claimNextPending = async (
+  now = Date.now(),
+  { employeeId = null, tenantKey = null } = {},
+) => {
   const database = await getDatabase();
 
-  const scope = employeeId ? " AND candidate.employeeId = ?" : "";
-  const scopeParams = employeeId ? [employeeId] : [];
+  const scope = [];
+  const scopeParams = [];
+  if (employeeId) {
+    scope.push("candidate.employeeId = ?");
+    scopeParams.push(employeeId);
+  }
+  if (tenantKey) {
+    scope.push("candidate.tenantKey = ?");
+    scopeParams.push(tenantKey);
+  }
+  const scopeSql = scope.length ? ` AND ${scope.join(" AND ")}` : "";
 
   const row = await database.getFirstAsync(
     `UPDATE ${QUEUE_TABLE}
         SET status = ?, updatedAt = ?
       WHERE id = (
         SELECT candidate.id FROM ${QUEUE_TABLE} AS candidate
-         WHERE candidate.status = ? AND candidate.nextAttemptAt <= ?${scope}
+         WHERE candidate.status = ? AND candidate.nextAttemptAt <= ?${scopeSql}
            AND NOT EXISTS (
              SELECT 1 FROM ${QUEUE_TABLE} AS older
               WHERE older.employeeId = candidate.employeeId
+                AND older.tenantKey IS candidate.tenantKey
                 AND (older.timestamp < candidate.timestamp
                      OR (older.timestamp = candidate.timestamp
                          AND older.id < candidate.id))
@@ -414,6 +431,18 @@ export const markRetry = async ({
   );
 
   return { retryCount, nextAttemptAt };
+};
+
+/** Returns a claimed row to pending when identity changed before submission. */
+export const releaseClaim = async ({ id, now = Date.now() }) => {
+  const database = await getDatabase();
+  const result = await database.runAsync(
+    `UPDATE ${QUEUE_TABLE}
+        SET status = ?, nextAttemptAt = 0, updatedAt = ?
+      WHERE id = ? AND status = ?;`,
+    [QUEUE_STATUS.PENDING, now, id, QUEUE_STATUS.SYNCING],
+  );
+  return result?.changes ?? 0;
 };
 
 /**
@@ -592,6 +621,8 @@ export const markResolved = async ({
 export const wakeBlocked = async ({
   force = false,
   failureClass = null,
+  employeeId = null,
+  tenantKey = null,
   now = Date.now(),
 } = {}) => {
   const database = await getDatabase();
@@ -607,6 +638,16 @@ export const wakeBlocked = async ({
   if (failureClass) {
     conditions.push("failureClass = ?");
     params.push(failureClass);
+  }
+
+  if (employeeId) {
+    conditions.push("employeeId = ?");
+    params.push(employeeId);
+  }
+
+  if (tenantKey) {
+    conditions.push("tenantKey = ?");
+    params.push(tenantKey);
   }
 
   const result = await database.runAsync(
@@ -651,18 +692,30 @@ export const wakeBlocked = async ({
  */
 export const wakePending = async ({
   force = false,
+  employeeId = null,
+  tenantKey = null,
   now = Date.now(),
   maxDelayMs = RETRY_DELAYS_MS[RETRY_DELAYS_MS.length - 1],
 } = {}) => {
   const database = await getDatabase();
 
   const threshold = force ? now : now + maxDelayMs;
+  const conditions = ["status = ?", "nextAttemptAt > ?"];
+  const params = [QUEUE_STATUS.PENDING, threshold];
+  if (employeeId) {
+    conditions.push("employeeId = ?");
+    params.push(employeeId);
+  }
+  if (tenantKey) {
+    conditions.push("tenantKey = ?");
+    params.push(tenantKey);
+  }
 
   const result = await database.runAsync(
     `UPDATE ${QUEUE_TABLE}
         SET nextAttemptAt = 0, updatedAt = ?
-      WHERE status = ? AND nextAttemptAt > ?;`,
-    [now, QUEUE_STATUS.PENDING, threshold],
+      WHERE ${conditions.join(" AND ")};`,
+    [now, ...params],
   );
 
   return result?.changes ?? 0;
@@ -682,14 +735,27 @@ export const wakePending = async ({
  *
  * @returns {Promise<number>} how many rows were released
  */
-export const releaseStuckSyncing = async (now = Date.now()) => {
+export const releaseStuckSyncing = async (
+  now = Date.now(),
+  { employeeId = null, tenantKey = null } = {},
+) => {
   const database = await getDatabase();
+  const conditions = ["status = ?"];
+  const params = [QUEUE_STATUS.SYNCING];
+  if (employeeId) {
+    conditions.push("employeeId = ?");
+    params.push(employeeId);
+  }
+  if (tenantKey) {
+    conditions.push("tenantKey = ?");
+    params.push(tenantKey);
+  }
 
   const result = await database.runAsync(
     `UPDATE ${QUEUE_TABLE}
         SET status = ?, nextAttemptAt = 0, updatedAt = ?
-      WHERE status = ?;`,
-    [QUEUE_STATUS.PENDING, now, QUEUE_STATUS.SYNCING],
+      WHERE ${conditions.join(" AND ")};`,
+    [QUEUE_STATUS.PENDING, now, ...params],
   );
 
   return result?.changes ?? 0;
@@ -999,13 +1065,74 @@ export const countByStatus = async (employeeId = null) => {
 };
 
 /**
+ * Counts the records a user-initiated recovery may safely act on.
+ *
+ * NULL provenance is reported separately and never folded into the recoverable
+ * total. Those rows predate tenant ownership in the schema; an employee-code
+ * match cannot prove which Frappe site created them.
+ */
+export const countRecoveryByScope = async ({ employeeId, tenantKey }) => {
+  if (!employeeId || !tenantKey) {
+    throw new Error("Attendance recovery requires employee and tenant scope.");
+  }
+
+  const database = await getDatabase();
+  const rows = await database.getAllAsync(
+    `SELECT status, COUNT(*) AS total FROM ${QUEUE_TABLE}
+      WHERE employeeId = ? AND tenantKey = ?
+      GROUP BY status;`,
+    [employeeId, tenantKey],
+  );
+
+  const byStatus = {
+    [QUEUE_STATUS.PENDING]: 0,
+    [QUEUE_STATUS.SYNCING]: 0,
+    [QUEUE_STATUS.BLOCKED]: 0,
+    [QUEUE_STATUS.REJECTED]: 0,
+  };
+  (rows ?? []).forEach(({ status, total }) => {
+    if (status in byStatus) byStatus[status] = Number(total) || 0;
+  });
+
+  const unresolvedPlaceholders = placeholdersFor(UNRESOLVED_STATUSES);
+  const [unknown, otherTenant] = await Promise.all([
+    database.getFirstAsync(
+      `SELECT COUNT(*) AS total FROM ${QUEUE_TABLE}
+        WHERE employeeId = ? AND tenantKey IS NULL
+          AND status IN (${unresolvedPlaceholders});`,
+      [employeeId, ...UNRESOLVED_STATUSES],
+    ),
+    database.getFirstAsync(
+      `SELECT COUNT(*) AS total FROM ${QUEUE_TABLE}
+        WHERE employeeId = ? AND tenantKey IS NOT NULL AND tenantKey <> ?
+          AND status IN (${unresolvedPlaceholders});`,
+      [employeeId, tenantKey, ...UNRESOLVED_STATUSES],
+    ),
+  ]);
+
+  return {
+    pendingCount: byStatus[QUEUE_STATUS.PENDING],
+    syncingCount: byStatus[QUEUE_STATUS.SYNCING],
+    blockedCount: byStatus[QUEUE_STATUS.BLOCKED],
+    rejectedCount: byStatus[QUEUE_STATUS.REJECTED],
+    recoverableCount:
+      byStatus[QUEUE_STATUS.PENDING] + byStatus[QUEUE_STATUS.BLOCKED],
+    unknownTenantCount: Number(unknown?.total) || 0,
+    otherTenantCount: Number(otherTenant?.total) || 0,
+  };
+};
+
+/**
  * Whether a drain has anything to do at `now`, including due blocked rows.
  *
  * `employeeId` scopes it to match `claimNextPending`: a drain scoped to one
  * employee would otherwise decide it had work to do on the strength of somebody
  * else's row and then claim nothing.
  */
-export const hasWorkDue = async (now = Date.now(), { employeeId = null } = {}) => {
+export const hasWorkDue = async (
+  now = Date.now(),
+  { employeeId = null, tenantKey = null } = {},
+) => {
   const database = await getDatabase();
 
   const params = [QUEUE_STATUS.PENDING, QUEUE_STATUS.BLOCKED, now];
@@ -1013,6 +1140,10 @@ export const hasWorkDue = async (now = Date.now(), { employeeId = null } = {}) =
   if (employeeId) {
     where += " AND employeeId = ?";
     params.push(employeeId);
+  }
+  if (tenantKey) {
+    where += " AND tenantKey = ?";
+    params.push(tenantKey);
   }
 
   const row = await database.getFirstAsync(
@@ -1029,6 +1160,7 @@ export default {
   blockedDelayFor,
   claimNextPending,
   countByStatus,
+  countRecoveryByScope,
   enqueue,
   findById,
   findDuplicate,
@@ -1046,6 +1178,7 @@ export default {
   peekNextRow,
   purgeSynced,
   releaseStuckSyncing,
+  releaseClaim,
   retryDelayFor,
   wakeBlocked,
   wakePending,

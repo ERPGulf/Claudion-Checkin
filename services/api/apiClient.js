@@ -5,6 +5,9 @@ import { cleanBaseUrl, setCommonHeaders } from "./utils";
 import { store } from "../../redux/Store";
 import { revertAll } from "../../redux/CommonActions";
 import { setSignOut } from "../../redux/Slices/AuthSlice";
+import {
+  assertAttendanceQueueScope,
+} from "../offline/attendanceQueueProvenance";
 
 // ----------------------
 // MEMORY TOKEN CACHE
@@ -454,6 +457,13 @@ export const refreshAccessToken = async () => {
 // REQUEST INTERCEPTOR
 // ----------------------
 apiClient.interceptors.request.use(async (config) => {
+  if (config.attendanceSyncScope) {
+    const current = await assertAttendanceQueueScope(config.attendanceSyncScope);
+    config.headers.Authorization = `Bearer ${current.accessToken}`;
+    delete config.attendanceSyncScope;
+    return config;
+  }
+
   const baseUrl = await AsyncStorage.getItem("baseUrl");
 
   // skip auth header logic (generateToken)

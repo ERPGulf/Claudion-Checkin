@@ -9,6 +9,10 @@ import {
   cleanServerMessage,
   isDuplicateMessage,
 } from "./attendanceErrors";
+import {
+  assertAttendanceQueueScope,
+  createAttendanceScopeChangedError,
+} from "./attendanceQueueProvenance";
 
 /**
  * Uploading a queued punch.
@@ -172,13 +176,25 @@ export const interpretPushResponse = (body) => {
  * @returns {Promise<{result: string, serverCheckinId?: string|null,
  *                    message: string, response: object}>}
  */
-export const pushCheckin = async (row) => {
-  const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
-  const baseUrl = cleanBaseUrl(rawBaseUrl);
-  if (!baseUrl) throw new Error("Base URL missing");
+export const pushCheckin = async (row, { syncScope = null } = {}) => {
+  let baseUrl;
+  let token;
 
-  const token = await AsyncStorage.getItem("access_token");
-  if (!token) throw new Error("Token missing");
+  if (syncScope) {
+    if (!row?.tenantKey || row.tenantKey !== syncScope.tenantKey) {
+      throw createAttendanceScopeChangedError();
+    }
+    const current = await assertAttendanceQueueScope(syncScope);
+    baseUrl = current.tenantKey;
+    token = current.accessToken;
+  } else {
+    const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
+    baseUrl = cleanBaseUrl(rawBaseUrl);
+    if (!baseUrl) throw new Error("Base URL missing");
+
+    token = await AsyncStorage.getItem("access_token");
+    if (!token) throw new Error("Token missing");
+  }
 
   const record = buildCheckinRecord(row);
 
@@ -193,6 +209,7 @@ export const pushCheckin = async (row) => {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
+      attendanceSyncScope: syncScope,
       timeout: 20000,
     },
   );

@@ -115,13 +115,14 @@ export const AWAITING_SERVER_STATUSES = [
  * Schema version. Bump it and add a `case` in `migrate` — never edit an
  * existing statement, since installs in the field are already at that version.
  */
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 const CREATE_QUEUE_TABLE = `
   CREATE TABLE IF NOT EXISTS ${QUEUE_TABLE} (
     id                INTEGER PRIMARY KEY AUTOINCREMENT,
     employeeId        TEXT    NOT NULL,
     employeeDocname   TEXT,
+    tenantKey         TEXT,
     attendanceType    TEXT    NOT NULL,
     action            TEXT    NOT NULL,
     timestamp         TEXT    NOT NULL,
@@ -151,7 +152,7 @@ const CREATE_QUEUE_TABLE = `
  */
 const CREATE_DEDUPE_INDEX = `
   CREATE UNIQUE INDEX IF NOT EXISTS idx_${QUEUE_TABLE}_dedupe
-    ON ${QUEUE_TABLE} (employeeId, timestamp, action);
+    ON ${QUEUE_TABLE} (IFNULL(tenantKey, ''), employeeId, timestamp, action);
 `;
 
 /** Supports the drain's "oldest actionable row first" scan. */
@@ -170,6 +171,12 @@ const CREATE_HISTORY_INDEX = `
 const CREATE_SESSION_INDEX = `
   CREATE INDEX IF NOT EXISTS idx_${QUEUE_TABLE}_session
     ON ${QUEUE_TABLE} (employeeId, sessionId);
+`;
+
+/** Supports tenant-safe employee-scoped drains and recovery counts. */
+const CREATE_TENANT_DRAIN_INDEX = `
+  CREATE INDEX IF NOT EXISTS idx_${QUEUE_TABLE}_tenant_drain
+    ON ${QUEUE_TABLE} (tenantKey, employeeId, status, nextAttemptAt, timestamp, id);
 `;
 
 /**
@@ -210,6 +217,19 @@ const CREATE_V2_COLUMNS = `
   ALTER TABLE ${QUEUE_TABLE} ADD COLUMN pairedAttendanceId INTEGER;
 `;
 
+/**
+ * v2 → v3: provenance for queued records created from this version onward.
+ *
+ * Existing rows deliberately remain NULL. The database has never stored their
+ * original backend, and assigning the currently configured server would invent
+ * ownership after a tenant switch.
+ */
+const MIGRATE_V3 = `
+  ALTER TABLE ${QUEUE_TABLE} ADD COLUMN tenantKey TEXT;
+  DROP INDEX IF EXISTS idx_${QUEUE_TABLE}_dedupe;
+  ${CREATE_DEDUPE_INDEX}
+`;
+
 const migrate = async (database) => {
   const row = await database.getFirstAsync("PRAGMA user_version;");
   const current = Number(row?.user_version) || 0;
@@ -228,6 +248,7 @@ const migrate = async (database) => {
       ${CREATE_HISTORY_INDEX}
       ${CREATE_V2_COLUMNS}
       ${CREATE_SESSION_INDEX}
+      ${CREATE_TENANT_DRAIN_INDEX}
       PRAGMA user_version = ${SCHEMA_VERSION};
       COMMIT;
     `);
@@ -240,6 +261,16 @@ const migrate = async (database) => {
       ${MIGRATE_V2}
       ${CREATE_SESSION_INDEX}
       PRAGMA user_version = 2;
+      COMMIT;
+    `);
+  }
+
+  if (current < 3) {
+    await database.execAsync(`
+      BEGIN;
+      ${MIGRATE_V3}
+      ${CREATE_TENANT_DRAIN_INDEX}
+      PRAGMA user_version = 3;
       COMMIT;
     `);
   }
