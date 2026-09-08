@@ -11,6 +11,7 @@ import {
   markRejected,
   markRetry,
   markSynced,
+  markNeedsReview,
   peekNextRow,
   purgeSynced,
   releaseStuckSyncing,
@@ -27,6 +28,7 @@ import {
 } from "./offlineCapability";
 import { fetchShouldAttemptRequest } from "./NetworkListener";
 import { ATTENDANCE_SCOPE_CHANGED, assertAttendanceQueueScope, captureAttendanceQueueScope } from "./attendanceQueueProvenance";
+import { verifyQueuedAttendance } from "./AttendanceVerification";
 
 /**
  * Draining the queue.
@@ -53,7 +55,7 @@ const LOG_PREFIX = "[AttendanceSyncService]";
 /** Stops one bad row from spinning the drain forever within a single pass. */
 const MAX_ROWS_PER_RUN = 50;
 
-/** Synced rows are kept this long so history can show them, then dropped. */
+/** Legacy retention value; purgeSynced is suspended to preserve recovery evidence. */
 export const SYNCED_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
 /** The in-flight run, or null. Concurrency control — see (1) above. */
@@ -108,10 +110,33 @@ const ROW_OUTCOME = {
   REJECTED: "rejected",
   OFFLINE: "offline",
   SCOPE_CHANGED: "scope-changed",
+  NEEDS_REVIEW: "needs_review",
 };
 
 /** Outcomes that mean the rest of this run is pointless. */
-const HALTS_RUN = new Set([ROW_OUTCOME.OFFLINE, ROW_OUTCOME.BLOCKED, ROW_OUTCOME.SCOPE_CHANGED]);
+const HALTS_RUN = new Set([ROW_OUTCOME.OFFLINE, ROW_OUTCOME.BLOCKED, ROW_OUTCOME.SCOPE_CHANGED, ROW_OUTCOME.NEEDS_REVIEW]);
+
+const settleDuplicate = async (row, syncScope, message, response) => {
+  try {
+    const verification = await verifyQueuedAttendance(row, { syncScope });
+    await assertAttendanceQueueScope(syncScope);
+    if (verification.verified) {
+      await markSynced({ id: row.id, serverCheckinId: verification.evidence.name,
+        serverResponse: response, duplicate: true, duplicateMessage: message,
+        acceptanceConfirmed: true, verificationEvidence: verification.evidence });
+      return ROW_OUTCOME.DUPLICATE;
+    }
+    await markNeedsReview({ id: row.id, error: message, serverResponse: response, duplicate: true });
+    return ROW_OUTCOME.NEEDS_REVIEW;
+  } catch (error) {
+    if (error?.code === ATTENDANCE_SCOPE_CHANGED) {
+      await releaseClaim({ id: row.id });
+      return ROW_OUTCOME.SCOPE_CHANGED;
+    }
+    await markNeedsReview({ id: row.id, error: message, serverResponse: response, duplicate: true });
+    return ROW_OUTCOME.NEEDS_REVIEW;
+  }
+};
 
 /**
  * Uploads a single claimed row and records the verdict.
@@ -127,10 +152,15 @@ const syncRow = async (row, syncScope, report) => {
     const outcome = await pushCheckin(row, { syncScope });
 
     if (outcome.result === PUSH_RESULT.INSERTED) {
+      if (typeof outcome.serverCheckinId !== "string" || !outcome.serverCheckinId.trim()) {
+        await markNeedsReview({ id: row.id, error: "The server did not return an attendance reference.", serverResponse: outcome.response });
+        return ROW_OUTCOME.NEEDS_REVIEW;
+      }
       await markSynced({
         id: row.id,
         serverCheckinId: outcome.serverCheckinId,
         serverResponse: outcome.response,
+        acceptanceConfirmed: true,
       });
       // Proof the endpoint is there and answering, which is what turns offline
       // attendance back on after a deploy — nobody has to tell the app.
@@ -153,19 +183,12 @@ const syncRow = async (row, syncScope, report) => {
     }
 
     if (outcome.result === PUSH_RESULT.DUPLICATE) {
-      await markSynced({
-        id: row.id,
-        serverCheckinId: outcome.serverCheckinId,
-        serverResponse: outcome.response,
-        duplicate: true,
-        duplicateMessage: outcome.message,
-      });
-      // A duplicate is still the endpoint answering.
-      if (await assertAttendanceQueueScope(syncScope).then(() => true, () => false)) markOfflineSyncSupported();
-      console.log(
-        `${LOG_PREFIX} Duplicate detected for #${row.id}; treating as synced`,
-      );
-      return ROW_OUTCOME.DUPLICATE;
+      return settleDuplicate(row, syncScope, outcome.message, outcome.response);
+    }
+
+    if (outcome.result === "needs_review") {
+      await markNeedsReview({ id: row.id, error: outcome.message, serverResponse: outcome.response });
+      return ROW_OUTCOME.NEEDS_REVIEW;
     }
 
     if (outcome.result === PUSH_RESULT.REJECTED) {
@@ -213,14 +236,7 @@ const syncRow = async (row, syncScope, report) => {
     // A duplicate can also arrive as a thrown 417 rather than a structured
     // per-record failure, depending on how the backend surfaces it.
     if (kind === FAILURE_KIND.DUPLICATE) {
-      await markSynced({
-        id: row.id,
-        duplicate: true,
-        duplicateMessage: message,
-        serverResponse: error?.response?.data ?? null,
-      });
-      console.log(`${LOG_PREFIX} Duplicate (thrown) on #${row.id}`);
-      return ROW_OUTCOME.DUPLICATE;
+      return settleDuplicate(row, syncScope, message, error?.response?.data ?? null);
     }
 
     if (kind === FAILURE_KIND.REJECTED) {
@@ -320,6 +336,7 @@ const logRun = async (summary, employeeId) => {
     summary.duplicates ||
     summary.blocked ||
     summary.rejected ||
+    summary.needsReview ||
     summary.woken ||
     summary.wokenPending;
 
@@ -333,6 +350,7 @@ const logRun = async (summary, employeeId) => {
     duplicates: summary.duplicates,
     blocked: summary.blocked,
     rejected: summary.rejected,
+    needsReview: summary.needsReview,
     woken: summary.woken,
     wokenPending: summary.wokenPending,
     remaining: summary.remaining,
@@ -420,6 +438,7 @@ export const syncPendingAttendance = async ({
       duplicates: 0,
       blocked: 0,
       rejected: 0,
+      needsReview: 0,
       woken: 0,
       wokenPending: 0,
       remaining: 0,
@@ -528,6 +547,7 @@ export const syncPendingAttendance = async ({
         if (outcome === ROW_OUTCOME.DUPLICATE) summary.duplicates += 1;
         if (outcome === ROW_OUTCOME.BLOCKED) summary.blocked += 1;
         if (outcome === ROW_OUTCOME.REJECTED) summary.rejected += 1;
+        if (outcome === ROW_OUTCOME.NEEDS_REVIEW) summary.needsReview += 1;
 
         // Stop the run — and note that this also preserves FIFO. Everything
         // behind this row is older-first by construction, so halting leaves the
@@ -539,7 +559,8 @@ export const syncPendingAttendance = async ({
         if (HALTS_RUN.has(outcome)) {
           summary.reason =
             outcome === ROW_OUTCOME.SCOPE_CHANGED ? "scope-changed" :
-              outcome === ROW_OUTCOME.OFFLINE ? "connection-lost" : "blocked";
+              outcome === ROW_OUTCOME.OFFLINE ? "connection-lost" :
+                outcome === ROW_OUTCOME.NEEDS_REVIEW ? "needs-review" : "blocked";
           break;
         }
       }
@@ -552,7 +573,7 @@ export const syncPendingAttendance = async ({
       }
 
       const counts = await countRecoveryByScope(scope);
-      summary.remaining = counts.recoverableCount + counts.syncingCount + counts.rejectedCount;
+      summary.remaining = counts.recoverableCount + counts.syncingCount + counts.rejectedCount + counts.reviewCount;
 
       await logRun(summary, employeeId);
 

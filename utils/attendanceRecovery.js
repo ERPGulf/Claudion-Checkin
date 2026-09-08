@@ -2,7 +2,24 @@
 export const describeRecoveryRow = (row) => {
   if (!row.tenantKey) return {
     category: "attention", label: "Cannot verify company", tone: "warning",
-    explanation: "This attendance could not be safely matched to the current company. It was not uploaded. It remains on this device; contact your administrator.",
+    explanation: "The original company and server outcome could not be verified. This attendance remains on this device and will not be resent automatically. Contact your administrator.",
+  };
+  if (row.verificationIssue) return {
+    category: "attention", label: "Needs review", tone: "warning",
+    explanation: "The last server check could not verify an exact attendance log. This does not prove it is missing. Nothing was resent; ask your administrator to investigate.",
+  };
+  if (row.verifiedAt) return {
+    category: "success", label: "Verified on server", tone: "success",
+    explanation: "An attendance log with this worker, time and punch type was found on the server.",
+    photoNote: row.payload?.photoUri ? "Photo recovery has not been verified." : null,
+  };
+  if (row.status === "needs_review" ||
+    !["pending", "syncing", "blocked", "rejected", "resolved", "synced"].includes(row.status) ||
+    (row.status === "synced" && !row.acceptanceConfirmed)) return {
+    category: "attention", label: "Needs review", tone: "warning",
+    explanation: row.duplicate
+      ? "The server reported a duplicate, but the matching attendance has not been verified. Check the server record before recovery."
+      : "This saved record has no verified server outcome. Check the server record or ask your administrator to investigate. It will not be resent automatically.",
   };
   if (row.status === "synced") return {
     category: "success", label: row.duplicate ? "Already recorded" : "Synced", tone: "success",
@@ -14,9 +31,11 @@ export const describeRecoveryRow = (row) => {
       ? "Attendance is recorded. Photo recovery could not be confirmed." : null,
   };
   if (row.status === "rejected" || row.status === "resolved") return {
-    category: "attention", label: row.status === "resolved" ? "Correction recorded" : "Needs attention", tone: "warning",
-    explanation: row.status === "resolved" ? "An attendance correction has been recorded. This punch will not be retried."
-      : "The server rejected this attendance. It remains on this device and may require administrator attention.",
+    category: "attention", label: row.status === "resolved" ? "Correction submitted" : "Needs attention", tone: "warning",
+    explanation: row.status === "resolved" ? "A correction request was submitted. Its approval and the server attendance still need to be checked. This punch will not be retried."
+      : row.failureClass === "dependent"
+        ? "The paired attendance was rejected, so this record was held back. Both records remain saved for administrator review."
+        : "The server rejected this attendance. It remains on this device and may require administrator attention.",
   };
   if (row.status === "syncing") return {
     category: "syncing", label: "Syncing", tone: "info",
@@ -36,6 +55,9 @@ export const describeRecoveryRow = (row) => {
         : "This attendance is still saved on this device and is waiting to be sent."),
   };
 };
+
+export const canVerifyRecoveryRow = (row) => !!row.tenantKey &&
+  !["pending", "syncing", "blocked"].includes(row.status);
 
 export const summarizeRecoveryRows = (rows) => {
   const counts = { success: 0, waiting: 0, attention: 0, syncing: 0 };

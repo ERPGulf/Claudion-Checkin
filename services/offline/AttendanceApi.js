@@ -45,6 +45,7 @@ export const PUSH_RESULT = {
   BLOCKED: "blocked",
   /** The server never will — keep it, stop trying, offer a correction. */
   REJECTED: "rejected",
+  NEEDS_REVIEW: "needs_review",
 };
 
 /**
@@ -112,7 +113,22 @@ export const interpretPushResponse = (body) => {
   const inserted = Array.isArray(response?.inserted) ? response.inserted : [];
   const failed = Array.isArray(response?.failed) ? response.failed : [];
 
-  if (inserted.length) {
+  const invalidArray = (response.inserted != null && !Array.isArray(response.inserted)) ||
+    (response.failed != null && !Array.isArray(response.failed));
+  const invalidSuccess = inserted.length > 0 && (
+    inserted.length !== 1 || typeof inserted[0] !== "string" || !inserted[0].trim() ||
+    failed.length > 0 || response.status === "error" ||
+    (response.inserted_count != null && response.inserted_count !== 1) ||
+    (response.failed_count != null && response.failed_count !== 0)
+  );
+  const exception = body?.exc || body?.exception || body?.error || response.exc || response.exception || response.error;
+  if (invalidArray || invalidSuccess || (inserted.length > 0 && exception) || failed.length > 1 ||
+    (!inserted.length && (response.status === "success" || Number(response.inserted_count) > 0))) {
+    return { result: PUSH_RESULT.NEEDS_REVIEW, failureClass: "verification-required",
+      message: "The server response did not confirm which attendance was recorded.", response: body };
+  }
+
+  if (inserted.length === 1) {
     return {
       result: PUSH_RESULT.INSERTED,
       serverCheckinId: inserted[0] ?? null,

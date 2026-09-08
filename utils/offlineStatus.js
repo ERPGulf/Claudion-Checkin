@@ -251,6 +251,12 @@ export const describeOfflineStatus = (
 export const describeQueueRow = (row) => {
   const failureClass = row?.failureClass;
 
+  if (row?.status === "needs_review") return {
+    tone: "warning", label: "Needs review",
+    reason: "The server outcome could not be verified. Open Profile attendance recovery to check the saved record.",
+    willRetry: false, needsAdmin: false, needsEmployee: false, canCorrect: false,
+  };
+
   // A row that has been blocked before is still waiting on the same person,
   // even in the moment it sits back in `pending` between attempts. Reporting it
   // as an ordinary pending row for those windows would flicker the explanation

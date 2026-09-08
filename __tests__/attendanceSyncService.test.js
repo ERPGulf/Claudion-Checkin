@@ -23,6 +23,13 @@ jest.mock("../services/offline/AttendanceApi", () => ({
   pushCheckin: jest.fn(),
 }));
 
+jest.mock("../services/offline/AttendanceVerification", () => ({
+  verifyQueuedAttendance: jest.fn(async row => ({ verified: true, evidence: {
+    name: "VERIFIED-CHECKIN", employee: row.employeeId, time: row.timestamp,
+    log_type: row.action === "checkout" ? "OUT" : "IN", tenantKey: row.tenantKey,
+  } })),
+}));
+
 jest.mock("../services/offline/NetworkListener", () => {
   // `fetchShouldAttemptRequest` tracks `fetchIsOnline` by default so the
   // existing "go offline" setup in this suite still means offline. The suites

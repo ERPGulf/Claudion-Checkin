@@ -81,6 +81,7 @@ export default function useOfflineStatus() {
     pendingCount: 0,
     blockedCount: 0,
     rejectedCount: 0,
+    reviewCount: 0,
     unresolvedCount: 0,
     awaitingServerCount: 0,
     oldestPendingAt: null,
@@ -104,6 +105,7 @@ export default function useOfflineStatus() {
         pendingCount: 0,
         blockedCount: 0,
         rejectedCount: 0,
+        reviewCount: 0,
         unresolvedCount: 0,
         awaitingServerCount: 0,
         oldestPendingAt: null,
@@ -118,6 +120,7 @@ export default function useOfflineStatus() {
         pendingCount: next?.pendingCount ?? 0,
         blockedCount: next?.blockedCount ?? 0,
         rejectedCount: next?.rejectedCount ?? 0,
+        reviewCount: next?.reviewCount ?? 0,
         unresolvedCount: next?.unresolvedCount ?? 0,
         awaitingServerCount: next?.awaitingServerCount ?? 0,
         oldestPendingAt: next?.oldestPendingAt ?? null,
@@ -233,7 +236,7 @@ export default function useOfflineStatus() {
   const phase = resolveOfflinePhase({
     online,
     syncing,
-    blocked: suppressAdminBanner ? 0 : counts.blockedCount,
+    blocked: (suppressAdminBanner ? 0 : counts.blockedCount) + (counts.reviewCount ?? 0),
     rejected: counts.rejectedCount,
     pending: counts.pendingCount,
     // Suppressed with the administrator banner, and for the same reason: on a

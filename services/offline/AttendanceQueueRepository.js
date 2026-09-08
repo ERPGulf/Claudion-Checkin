@@ -106,12 +106,31 @@ const hydrate = (row) => {
     duplicate: row.duplicate === 1,
     payload: parseJson(row.payload, {}),
     serverResponse: parseJson(row.serverResponse, null),
+    verificationEvidence: parseJson(row.verificationEvidence, null),
   };
 };
 
 const hydrateAll = (rows) => (Array.isArray(rows) ? rows.map(hydrate) : []);
 
 const placeholdersFor = (values) => values.map(() => "?").join(", ");
+
+// Shared by the atomic claim and read-only support diagnostics. Do not infer
+// claimability just from status/due time: an older row or pair can prevent it.
+const CLAIM_DEPENDENCIES_SQL = `
+  NOT EXISTS (
+    SELECT 1 FROM ${QUEUE_TABLE} AS older
+     WHERE older.employeeId = candidate.employeeId
+       AND (older.tenantKey IS candidate.tenantKey OR older.tenantKey IS NULL)
+       AND (older.timestamp < candidate.timestamp
+         OR (older.timestamp = candidate.timestamp AND older.id < candidate.id))
+       AND (older.status IN ('pending', 'syncing', 'needs_review')
+         OR (older.status = 'blocked' AND IFNULL(older.failureClass, '') <> 'endpoint-missing'))
+  ) AND NOT EXISTS (
+    SELECT 1 FROM ${QUEUE_TABLE} AS paired
+     WHERE paired.id = candidate.pairedAttendanceId
+       AND (paired.tenantKey IS NOT candidate.tenantKey OR paired.employeeId <> candidate.employeeId)
+       AND paired.status IN ('pending', 'syncing', 'blocked', 'needs_review')
+  )`;
 
 // ----------------------
 // WRITES
@@ -322,28 +341,11 @@ export const claimNextPending = async (
 
   const row = await database.getFirstAsync(
     `UPDATE ${QUEUE_TABLE}
-        SET status = ?, updatedAt = ?
+        SET status = ?, updatedAt = ?, lastAttemptAt = ?, attemptCount = attemptCount + 1
       WHERE id = (
         SELECT candidate.id FROM ${QUEUE_TABLE} AS candidate
          WHERE candidate.status = ? AND candidate.nextAttemptAt <= ?${scopeSql}
-           AND NOT EXISTS (
-             SELECT 1 FROM ${QUEUE_TABLE} AS older
-              WHERE older.employeeId = candidate.employeeId
-                AND (older.tenantKey IS candidate.tenantKey OR older.tenantKey IS NULL)
-                AND (older.timestamp < candidate.timestamp
-                     OR (older.timestamp = candidate.timestamp
-                         AND older.id < candidate.id))
-                AND (
-                  older.status IN (?, ?)
-                 OR (older.status = ? AND IFNULL(older.failureClass, '') <> ?)
-                )
-           )
-           AND NOT EXISTS (
-             SELECT 1 FROM ${QUEUE_TABLE} AS paired
-              WHERE paired.id = candidate.pairedAttendanceId
-                AND (paired.tenantKey IS NOT candidate.tenantKey OR paired.employeeId <> candidate.employeeId)
-                AND paired.status IN ('pending', 'syncing', 'blocked')
-           )
+           AND ${CLAIM_DEPENDENCIES_SQL}
          ORDER BY candidate.timestamp ASC, candidate.id ASC
          LIMIT 1
       )
@@ -351,13 +353,10 @@ export const claimNextPending = async (
     [
       QUEUE_STATUS.SYNCING,
       now,
+      now,
       QUEUE_STATUS.PENDING,
       now,
       ...scopeParams,
-      QUEUE_STATUS.PENDING,
-      QUEUE_STATUS.SYNCING,
-      QUEUE_STATUS.BLOCKED,
-      FAILURE_CLASS.ENDPOINT_MISSING,
     ],
   );
 
@@ -377,6 +376,8 @@ export const markSynced = async ({
   serverResponse = null,
   duplicate = false,
   duplicateMessage = null,
+  acceptanceConfirmed = false,
+  verificationEvidence = null,
   now = Date.now(),
 }) => {
   const database = await getDatabase();
@@ -385,7 +386,8 @@ export const markSynced = async ({
     `UPDATE ${QUEUE_TABLE}
         SET status = ?, serverCheckinId = ?, serverResponse = ?,
             duplicate = ?, duplicateMessage = ?, error = NULL,
-            failureClass = NULL, blockedSince = NULL, updatedAt = ?
+            failureClass = NULL, blockedSince = NULL, updatedAt = ?,
+            acceptanceConfirmed = ?, verifiedAt = ?, verificationEvidence = ?
       WHERE id = ?;`,
     [
       QUEUE_STATUS.SYNCED,
@@ -394,9 +396,50 @@ export const markSynced = async ({
       duplicate ? 1 : 0,
       duplicateMessage,
       now,
+      acceptanceConfirmed ? 1 : 0,
+      verificationEvidence ? now : null,
+      verificationEvidence ? JSON.stringify(verificationEvidence) : null,
       id,
     ],
   );
+};
+
+/** A server answer that cannot prove acceptance must not silently complete. */
+export const markNeedsReview = async ({ id, error, serverResponse = null, duplicate = false, now = Date.now() }) => {
+  const database = await getDatabase();
+  await database.runAsync(
+    `UPDATE ${QUEUE_TABLE} SET status = ?, failureClass = 'verification-required',
+       error = ?, serverResponse = ?, duplicate = ?, duplicateMessage = ?,
+       nextAttemptAt = 0, updatedAt = ? WHERE id = ? AND status = ?;`,
+    [QUEUE_STATUS.NEEDS_REVIEW, error, serverResponse ? JSON.stringify(serverResponse) : null,
+      duplicate ? 1 : 0, duplicate ? error : null, now, id, QUEUE_STATUS.SYNCING],
+  );
+};
+
+/** Positive server evidence only; preserve the original outcome in the evidence. */
+export const recordServerVerification = async ({ row, evidence, now = Date.now() }) => {
+  const database = await getDatabase();
+  const result = await database.runAsync(
+    `UPDATE ${QUEUE_TABLE} SET verifiedAt = ?, verificationEvidence = ?, status = ?,
+       verificationCheckedAt = ?, verificationIssue = NULL
+     WHERE id = ? AND tenantKey = ? AND employeeId = ? AND timestamp = ?
+       AND action = ? AND status = ? AND updatedAt = ? AND verificationCheckedAt IS ?;`,
+    [now, JSON.stringify({ ...evidence, originalStatus: row.verificationEvidence?.originalStatus ?? row.status }), QUEUE_STATUS.SYNCED, now,
+      row.id, row.tenantKey, row.employeeId, row.timestamp, row.action, row.status, row.updatedAt, row.verificationCheckedAt],
+  );
+  return result?.changes ?? 0;
+};
+
+/** An inconclusive read is durable review information, never proof of absence. */
+export const recordVerificationIssue = async ({ row, reason, now = Date.now() }) => {
+  const database = await getDatabase();
+  const result = await database.runAsync(
+    `UPDATE ${QUEUE_TABLE} SET verificationCheckedAt = ?, verificationIssue = ?
+      WHERE id = ? AND tenantKey = ? AND employeeId = ? AND timestamp = ?
+        AND action = ? AND status = ? AND updatedAt = ? AND verificationCheckedAt IS ?;`,
+    [now, reason, row.id, row.tenantKey, row.employeeId, row.timestamp, row.action, row.status, row.updatedAt, row.verificationCheckedAt],
+  );
+  return result?.changes ?? 0;
 };
 
 /**
@@ -771,28 +814,11 @@ export const releaseStuckSyncing = async (
 };
 
 /**
- * Drops synced rows older than the retention window.
- *
- * Only `synced`. Blocked, rejected and resolved rows are never aged out:
- * the first two are unresolved business however old, and the third is the audit
- * trail behind a correction request.
- *
- * @returns {Promise<number>} how many rows were removed
+ * Retention is suspended. Historical success flags are not verified receipts,
+ * and deleting them destroys the only recoverable original punch. Keep this
+ * compatibility seam until a separately reviewed archive policy exists.
  */
-export const purgeSynced = async ({
-  olderThanMs = 7 * 24 * 60 * 60 * 1000,
-  now = Date.now(),
-} = {}) => {
-  const database = await getDatabase();
-
-  const result = await database.runAsync(
-    `DELETE FROM ${QUEUE_TABLE}
-      WHERE status = ? AND updatedAt < ?;`,
-    [QUEUE_STATUS.SYNCED, now - olderThanMs],
-  );
-
-  return result?.changes ?? 0;
-};
+export const purgeSynced = async () => 0;
 
 // ----------------------
 // READS
@@ -874,6 +900,7 @@ export const listForHistory = async ({
     QUEUE_STATUS.REJECTED,
     QUEUE_STATUS.RESOLVED,
     QUEUE_STATUS.SYNCED,
+    QUEUE_STATUS.NEEDS_REVIEW,
   ],
   limit = 200,
 } = {}) => {
@@ -911,8 +938,9 @@ export const listForHistory = async ({
 export const peekNextRow = async ({ employeeId = null } = {}) => {
   const database = await getDatabase();
 
-  const params = [...AWAITING_SERVER_STATUSES];
-  let where = `status IN (${placeholdersFor(AWAITING_SERVER_STATUSES)})`;
+  const statuses = [...AWAITING_SERVER_STATUSES, QUEUE_STATUS.NEEDS_REVIEW];
+  const params = [...statuses];
+  let where = `status IN (${placeholdersFor(statuses)})`;
   if (employeeId) {
     where += " AND employeeId = ?";
     params.push(employeeId);
@@ -937,6 +965,30 @@ export const listAll = async ({ limit = 500 } = {}) => {
     [limit],
   );
   return hydrateAll(rows);
+};
+
+/** Support-only read across all statuses/tenants; no arbitrary row limit. */
+export const listDiagnosticRows = async ({ employeeIds, date }) => {
+  const database = await getDatabase();
+  if (!employeeIds.length) return [];
+  const rows = await database.getAllAsync(
+    `SELECT * FROM ${QUEUE_TABLE} WHERE employeeId IN (${placeholdersFor(employeeIds)})
+      AND substr(timestamp, 1, 10) = ? ORDER BY timestamp, id;`,
+    [...employeeIds, date],
+  );
+  return rows.map(row => ({ ...hydrate(row), rawPayload: row.payload, rawServerResponse: row.serverResponse }));
+};
+
+export const listClaimableIds = async ({ employeeId, tenantKey, now = Date.now() }) => {
+  if (!employeeId || !tenantKey) throw new Error("Diagnostic scope missing");
+  const database = await getDatabase();
+  return (await database.getAllAsync(
+    `SELECT candidate.id FROM ${QUEUE_TABLE} AS candidate
+      WHERE candidate.employeeId = ? AND candidate.tenantKey = ?
+        AND candidate.status = 'pending' AND candidate.nextAttemptAt <= ?
+        AND ${CLAIM_DEPENDENCIES_SQL} ORDER BY candidate.timestamp, candidate.id;`,
+    [employeeId, tenantKey, now],
+  )).map(row => row.id);
 };
 
 /**
@@ -998,6 +1050,7 @@ export const countByStatus = async (employeeId = null) => {
     [QUEUE_STATUS.BLOCKED]: 0,
     [QUEUE_STATUS.REJECTED]: 0,
     [QUEUE_STATUS.RESOLVED]: 0,
+    [QUEUE_STATUS.NEEDS_REVIEW]: 0,
     total: 0,
   };
 
@@ -1013,15 +1066,16 @@ export const countByStatus = async (employeeId = null) => {
   counts.blockedCount = counts[QUEUE_STATUS.BLOCKED];
   counts.rejectedCount = counts[QUEUE_STATUS.REJECTED];
   counts.resolvedCount = counts[QUEUE_STATUS.RESOLVED];
+  counts.reviewCount = counts[QUEUE_STATUS.NEEDS_REVIEW];
 
   counts.unresolvedCount =
     counts.pendingCount +
     counts.syncingCount +
     counts.blockedCount +
-    counts.rejectedCount;
+    counts.rejectedCount + counts.reviewCount;
 
   counts.awaitingServerCount =
-    counts.pendingCount + counts.syncingCount + counts.blockedCount;
+    counts.pendingCount + counts.syncingCount + counts.blockedCount + counts.reviewCount;
 
   // Blocked rows split by *why*. Only the undeliverable class is separated out;
   // auth, configuration and unknown all remain things that can still land.
@@ -1098,24 +1152,30 @@ export const countRecoveryByScope = async ({ employeeId, tenantKey }) => {
     [QUEUE_STATUS.SYNCING]: 0,
     [QUEUE_STATUS.BLOCKED]: 0,
     [QUEUE_STATUS.REJECTED]: 0,
+    [QUEUE_STATUS.NEEDS_REVIEW]: 0,
   };
   (rows ?? []).forEach(({ status, total }) => {
     if (status in byStatus) byStatus[status] = Number(total) || 0;
   });
 
-  const unresolvedPlaceholders = placeholdersFor(UNRESOLVED_STATUSES);
-  const [unknown, otherTenant] = await Promise.all([
+  const [unknown, otherTenant, review] = await Promise.all([
     database.getFirstAsync(
       `SELECT COUNT(*) AS total FROM ${QUEUE_TABLE}
-        WHERE employeeId = ? AND tenantKey IS NULL
-          AND status IN (${unresolvedPlaceholders});`,
-      [employeeId, ...UNRESOLVED_STATUSES],
+        WHERE employeeId = ? AND tenantKey IS NULL;`,
+      [employeeId],
     ),
     database.getFirstAsync(
       `SELECT COUNT(*) AS total FROM ${QUEUE_TABLE}
-        WHERE employeeId = ? AND tenantKey IS NOT NULL AND tenantKey <> ?
-          AND status IN (${unresolvedPlaceholders});`,
-      [employeeId, tenantKey, ...UNRESOLVED_STATUSES],
+        WHERE employeeId = ? AND tenantKey IS NOT NULL AND tenantKey <> ?;`,
+      [employeeId, tenantKey],
+    ),
+    database.getFirstAsync(
+      `SELECT COUNT(*) AS total FROM ${QUEUE_TABLE}
+        WHERE employeeId = ? AND tenantKey = ?
+          AND status NOT IN ('pending', 'syncing', 'blocked', 'rejected')
+          AND (verificationIssue IS NOT NULL OR (verifiedAt IS NULL
+            AND (status <> 'synced' OR acceptanceConfirmed = 0)));`,
+      [employeeId, tenantKey],
     ),
   ]);
 
@@ -1128,20 +1188,19 @@ export const countRecoveryByScope = async ({ employeeId, tenantKey }) => {
       byStatus[QUEUE_STATUS.PENDING] + byStatus[QUEUE_STATUS.BLOCKED],
     unknownTenantCount: Number(unknown?.total) || 0,
     otherTenantCount: Number(otherTenant?.total) || 0,
+    reviewCount: Number(review?.total) || 0,
   };
 };
 
-/** Unresolved records plus successes during the currently displayed attempt. */
-export const listRecoveryRows = async ({ employeeId, tenantKey, since = null }) => {
+/** Every retained status. A zero pending count must not hide historical evidence. */
+export const listRecoveryRows = async ({ employeeId, tenantKey }) => {
   if (!employeeId || !tenantKey) throw new Error("Attendance recovery scope missing");
   const database = await getDatabase();
   const rows = await database.getAllAsync(
     `SELECT * FROM ${QUEUE_TABLE}
       WHERE employeeId = ? AND (tenantKey = ? OR tenantKey IS NULL)
-        AND (status IN (${placeholdersFor(UNRESOLVED_STATUSES)})
-          OR (tenantKey = ? AND status = ? AND ? IS NOT NULL AND updatedAt >= ?))
       ORDER BY timestamp ASC, id ASC;`,
-    [employeeId, tenantKey, ...UNRESOLVED_STATUSES, tenantKey, QUEUE_STATUS.SYNCED, since, since],
+    [employeeId, tenantKey],
   );
   return hydrateAll(rows);
 };
@@ -1199,6 +1258,8 @@ export default {
   markResolved,
   markRetry,
   markSynced,
+  markNeedsReview,
+  recordServerVerification,
   pairWithOpenCheckin,
   peekNextRow,
   purgeSynced,

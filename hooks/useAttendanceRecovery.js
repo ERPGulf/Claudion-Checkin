@@ -8,6 +8,7 @@ import { addQueueChangeListener } from "../services/offline/AttendanceQueueServi
 import { addSyncListener, isSyncing } from "../services/offline/AttendanceSyncService";
 import { syncNow } from "../services/offline/BackgroundSyncManager";
 import { assertAttendanceQueueScope, captureAttendanceQueueScope, normalizeAttendanceTenantKey } from "../services/offline/attendanceQueueProvenance";
+import { reconcileAttendanceRow } from "../services/offline/AttendanceVerification";
 
 const READ_ERROR = "Could not read saved attendance. Please try again.";
 
@@ -28,6 +29,7 @@ export default function useAttendanceRecovery() {
   const [backgroundBusy, setBackgroundBusy] = useState(isSyncing);
   const [visible, setVisible] = useState(false);
   const [notice, setNotice] = useState(null);
+  const [checkingId, setCheckingId] = useState(null);
   const current = () => mounted.current && identityRef.current === identity;
 
   const read = useCallback(async () => {
@@ -66,6 +68,7 @@ export default function useAttendanceRecovery() {
     setVisible(false);
     setNotice(null);
     setBusy(false);
+    setCheckingId(null);
     setBackgroundBusy(isSyncing());
     setState({ identity, loading: true, counts: null, rows: [], error: null });
     refresh();
@@ -110,7 +113,25 @@ export default function useAttendanceRecovery() {
     }
   }, [identity, isLoggedIn, employeeId, read, refresh]);
 
+  const verify = useCallback(async (id) => {
+    if (pressed.current || !isLoggedIn) return;
+    pressed.current = true;
+    setCheckingId(id);
+    setNotice(null);
+    try {
+      const result = await reconcileAttendanceRow({ id, employeeId });
+      if (current()) setNotice(result.verified
+        ? "The matching attendance log was verified on the server."
+        : "Could not verify an exact server record. Nothing was resent. This record remains saved; ask your administrator to check the original attendance and company.");
+    } catch {
+      if (current()) setNotice("Could not check this record. Your session or connection may have changed. Nothing was resent.");
+    } finally {
+      if (current()) { await refresh(); setCheckingId(null); }
+      pressed.current = false;
+    }
+  }, [identity, isLoggedIn, employeeId, refresh]);
+
   const safeState = state.identity === identity ? state : { loading: true, counts: null, rows: [], error: null };
   return { ...safeState, isLoggedIn, busy: busy || backgroundBusy, visible: visible && state.identity === identity && isLoggedIn,
-    notice, sync, refresh, open: () => { setVisible(true); refresh(); }, close: () => setVisible(false) };
+    notice, checkingId, verify, sync, refresh, open: () => { setVisible(true); refresh(); }, close: () => setVisible(false) };
 }

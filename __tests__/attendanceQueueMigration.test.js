@@ -100,7 +100,7 @@ describe("v1 → v2", () => {
     const db = await getDatabase();
     const row = await db.getFirstAsync("PRAGMA user_version;");
 
-    expect(Number(row.user_version)).toBe(3);
+    expect(Number(row.user_version)).toBe(4);
   });
 
   it("adds the v2 columns", async () => {
@@ -198,11 +198,11 @@ describe("v1 → v2", () => {
 });
 
 describe("a fresh install", () => {
-  it("goes straight to v3 with every column present", async () => {
+  it("goes straight to v4 with every column present", async () => {
     const db = await getDatabase();
 
     const version = await db.getFirstAsync("PRAGMA user_version;");
-    expect(Number(version.user_version)).toBe(3);
+    expect(Number(version.user_version)).toBe(4);
 
     const columns = await db.getAllAsync(`PRAGMA table_info(${QUEUE_TABLE});`);
     expect(columns.map((c) => c.name)).toEqual(
@@ -217,6 +217,27 @@ describe("a fresh install", () => {
 });
 
 describe("tenant provenance migration", () => {
+  it("rolls back a failed additive upgrade and retries without losing original rows", async () => {
+    await seedV1();
+    const db = await SQLite.openDatabaseAsync(DATABASE_NAME);
+    const exec = db.execAsync;
+    let failed = false;
+    db.execAsync = async sql => {
+      if (!failed && sql.includes("ADD COLUMN acceptanceConfirmed")) {
+        failed = true;
+        return exec(sql.replace("PRAGMA user_version = 4;", "SELECT missing_column FROM attendance_queue;"));
+      }
+      return exec(sql);
+    };
+    await expect(getDatabase()).rejects.toThrow();
+    expect((await db.getFirstAsync("PRAGMA user_version")).user_version).toBe(3);
+    expect((await db.getAllAsync(`SELECT * FROM ${QUEUE_TABLE}`))).toHaveLength(4);
+    expect((await db.getAllAsync(`PRAGMA table_info(${QUEUE_TABLE})`)).map(column => column.name)).not.toContain("acceptanceConfirmed");
+    await getDatabase();
+    expect((await db.getFirstAsync("PRAGMA user_version")).user_version).toBe(4);
+    expect(await listAll()).toHaveLength(4);
+    db.execAsync = exec;
+  });
   it("preserves v1 manual/photo and automatic data, retry state and original timestamps without inventing ownership", async () => {
     await seedV1();
     const db = await SQLite.openDatabaseAsync(DATABASE_NAME);
@@ -253,7 +274,11 @@ describe("tenant provenance migration", () => {
     const before = await db.getAllAsync(`SELECT * FROM ${QUEUE_TABLE} ORDER BY id`);
     await getDatabase();
     const after = await db.getAllAsync(`SELECT * FROM ${QUEUE_TABLE} ORDER BY id`);
-    expect(after).toEqual(before.map(row => ({ ...row, tenantKey: null })));
+    expect(after).toEqual(before.map(row => ({ ...row, tenantKey: null,
+      acceptanceConfirmed: 0, verifiedAt: null, verificationEvidence: null,
+      verificationCheckedAt: null, verificationIssue: null,
+      lastAttemptAt: null, attemptCount: 0,
+    })));
     resetDatabaseHandle();
     await getDatabase();
     expect(await db.getAllAsync(`SELECT * FROM ${QUEUE_TABLE} ORDER BY id`)).toEqual(after);
