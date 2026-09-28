@@ -23,6 +23,13 @@ jest.mock("../services/offline/AttendanceApi", () => ({
   pushCheckin: jest.fn(),
 }));
 
+jest.mock("../services/offline/AttendanceVerification", () => ({
+  verifyQueuedAttendance: jest.fn(async row => ({ verified: true, evidence: {
+    name: "VERIFIED-CHECKIN", employee: row.employeeId, time: row.timestamp,
+    log_type: row.action === "checkout" ? "OUT" : "IN", tenantKey: row.tenantKey,
+  } })),
+}));
+
 jest.mock("../services/offline/NetworkListener", () => {
   // `fetchShouldAttemptRequest` tracks `fetchIsOnline` by default so the
   // existing "go offline" setup in this suite still means offline. The suites
@@ -42,6 +49,8 @@ jest.mock("../services/offline/attendancePhotoUpload", () => ({
   uploadQueuedPhoto: jest.fn(() => Promise.resolve({ uploaded: true })),
 }));
 
+import { loginQueueEmployee, TEST_TENANT } from "../test-utils/attendanceScope";
+
 import {
   FAILURE_CLASS,
   QUEUE_ACTION,
@@ -58,7 +67,7 @@ import {
 } from "../services/offline/AttendanceQueueRepository";
 import {
   resetSyncService,
-  syncPendingAttendance,
+  syncPendingAttendance as drainAttendance,
 } from "../services/offline/AttendanceSyncService";
 import { PUSH_RESULT, pushCheckin } from "../services/offline/AttendanceApi";
 import { fetchIsOnline } from "../services/offline/NetworkListener";
@@ -66,7 +75,10 @@ import { uploadQueuedPhoto } from "../services/offline/attendancePhotoUpload";
 
 const { __resetAll } = require("../test-utils/expoSqliteMock");
 
+const syncPendingAttendance = (options = {}) => drainAttendance({ employeeId: "TDI0167", ...options });
+
 const punch = (overrides = {}) => ({
+  tenantKey: TEST_TENANT,
   employeeId: "TDI0167",
   attendanceType: "manual",
   action: QUEUE_ACTION.CHECKIN,
@@ -84,7 +96,8 @@ const inserted = (name = "EMP-CKIN-07-2026-000078") => ({
 const networkError = () =>
   Object.assign(new Error("Network Error"), { code: "ERR_NETWORK" });
 
-beforeEach(() => {
+beforeEach(async () => {
+  await loginQueueEmployee("TDI0167");
   __resetAll();
   resetDatabaseHandle();
   resetSyncService();
@@ -386,6 +399,7 @@ describe("the session cascade, end to end", () => {
     );
     await pairWithOpenCheckin({
       checkoutId: checkout.id,
+      tenantKey: TEST_TENANT,
       employeeId: "TDI0167",
       timestamp: "2026-07-28 17:00:00",
     });
@@ -456,10 +470,10 @@ describe("photo attachments", () => {
 
     await syncPendingAttendance();
 
-    expect(uploadQueuedPhoto).toHaveBeenCalledWith({
+    expect(uploadQueuedPhoto).toHaveBeenCalledWith(expect.objectContaining({
       photoUri: "file:///cache/shot.jpg",
       docname: "EMP-CKIN-1",
-    });
+    }));
   });
 
   it("keeps the row synced even when the photo cannot be attached", async () => {

@@ -2,12 +2,13 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import apiClient from "./apiClient";
 import { cleanBaseUrl } from "./utils";
+import { assertAttendanceQueueScope } from "../offline/attendanceQueueProvenance";
 
 /**
  * userFileUpload(file, docname)
  * keeps same name and signature
  */
-export const userFileUpload = async (file, docname) => {
+export const userFileUpload = async (file, docname, { syncScope = null } = {}) => {
   try {
     if (!file || !file.uri) throw new Error("Invalid file data");
     if (!docname) throw new Error("Missing docname (check-in ID)");
@@ -18,6 +19,7 @@ export const userFileUpload = async (file, docname) => {
 
     const token = await AsyncStorage.getItem("access_token");
     if (!token) throw new Error("Missing access token");
+    if (syncScope) await assertAttendanceQueueScope(syncScope);
 
     const formData = new FormData();
     formData.append("file", {
@@ -33,6 +35,7 @@ export const userFileUpload = async (file, docname) => {
       `${baseUrl}/api/method/employee_app.attendance_api.upload_file`,
       formData,
       {
+        ...(syncScope ? { attendanceSyncScope: syncScope } : {}),
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "multipart/form-data",
@@ -49,12 +52,13 @@ export const userFileUpload = async (file, docname) => {
 /**
  * putUserFile(employeeCode)
  */
-export const putUserFile = async (employeeCode) => {
+export const putUserFile = async (employeeCode, _docname, { syncScope = null } = {}) => {
   try {
     const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
     const baseUrl = cleanBaseUrl(rawBaseUrl);
     const token = await AsyncStorage.getItem("access_token");
     if (!token) throw new Error("Missing access token");
+    if (syncScope) await assertAttendanceQueueScope(syncScope);
 
     const url = `${baseUrl}/api/method/employee_app.attendance_api.employee`;
 
@@ -62,6 +66,7 @@ export const putUserFile = async (employeeCode) => {
     formData.append("employee_code", employeeCode);
 
     const { data } = await apiClient.put(url, formData, {
+      ...(syncScope ? { attendanceSyncScope: syncScope } : {}),
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
         Authorization: `Bearer ${token}`,

@@ -1,5 +1,6 @@
 // src/services/offline/attendancePhotoUpload.js
 import { putUserFile, userFileUpload } from "../api";
+import { assertAttendanceQueueScope } from "./attendanceQueueProvenance";
 
 /**
  * Attaching the photo a check-in was queued with.
@@ -28,18 +29,19 @@ const LOG_PREFIX = "[attendancePhotoUpload]";
  * @returns {Promise<{uploaded: boolean, reason?: string}>} never throws — a
  *          failed attachment must not undo a synced attendance record
  */
-export const uploadQueuedPhoto = async ({ photoUri, docname }) => {
+export const uploadQueuedPhoto = async ({ photoUri, docname, syncScope = null }) => {
   if (!photoUri) return { uploaded: false, reason: "no-photo" };
   if (!docname) return { uploaded: false, reason: "no-docname" };
 
   try {
+    if (syncScope) await assertAttendanceQueueScope(syncScope);
     const file = {
       uri: photoUri,
       name: `${docname}_${Date.now()}.jpg`,
       type: "image/jpeg",
     };
 
-    const uploadResponse = await userFileUpload(file, docname);
+    const uploadResponse = await userFileUpload(file, docname, { syncScope });
     const uploadedFileUrl = uploadResponse?.message?.[0];
 
     if (!uploadedFileUrl) {
@@ -48,7 +50,8 @@ export const uploadQueuedPhoto = async ({ photoUri, docname }) => {
 
     const updateFormData = new FormData();
     updateFormData.append("custom_image", uploadedFileUrl);
-    await putUserFile(updateFormData, docname);
+    if (syncScope) await assertAttendanceQueueScope(syncScope);
+    await putUserFile(updateFormData, docname, { syncScope });
 
     console.log(`${LOG_PREFIX} Attached photo to ${docname}`);
     return { uploaded: true };

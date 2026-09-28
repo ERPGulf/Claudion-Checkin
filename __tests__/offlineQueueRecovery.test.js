@@ -68,11 +68,14 @@ import { PUSH_RESULT, pushCheckin } from "../services/offline/AttendanceApi";
 
 const { __resetAll } = require("../test-utils/expoSqliteMock");
 
+import { loginQueueEmployee, TEST_TENANT } from "../test-utils/attendanceScope";
+
 const EMPLOYEE = "0202";
 const MAX_LADDER_MS = RETRY_DELAYS_MS[RETRY_DELAYS_MS.length - 1];
 
 /** The 2 Sep queue, as the employee's history screen showed it. */
 const punch = (overrides = {}) => ({
+  tenantKey: TEST_TENANT,
   employeeId: EMPLOYEE,
   attendanceType: "manual",
   action: QUEUE_ACTION.CHECKIN,
@@ -87,7 +90,8 @@ const accepted = (docname) => ({
   response: { inserted: [docname] },
 });
 
-beforeEach(() => {
+beforeEach(async () => {
+  await loginQueueEmployee(EMPLOYEE);
   __resetAll();
   resetDatabaseHandle();
   resetSyncService();

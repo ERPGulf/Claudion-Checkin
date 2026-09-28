@@ -48,7 +48,7 @@ import {
 import { enqueue, findById } from "../services/offline/AttendanceQueueRepository";
 import {
   resetSyncService,
-  syncPendingAttendance,
+  syncPendingAttendance as drainAttendance,
 } from "../services/offline/AttendanceSyncService";
 import { PUSH_RESULT, pushCheckin } from "../services/offline/AttendanceApi";
 import {
@@ -60,6 +60,7 @@ import {
 
 const { __resetAll } = require("../test-utils/expoSqliteMock");
 
+import { loginQueueEmployee, TEST_TENANT } from "../test-utils/attendanceScope";
 const EMPLOYEE = "0202";
 
 /** Connected, and the OS captive-portal probe says otherwise. */
@@ -69,7 +70,9 @@ const misvalidatedWifi = {
   type: "wifi",
 };
 
+const syncPendingAttendance = (options = {}) => drainAttendance({ employeeId: EMPLOYEE, ...options });
 const punch = (overrides = {}) => ({
+  tenantKey: TEST_TENANT,
   employeeId: EMPLOYEE,
   attendanceType: "manual",
   action: QUEUE_ACTION.CHECKIN,
@@ -77,7 +80,8 @@ const punch = (overrides = {}) => ({
   ...overrides,
 });
 
-beforeEach(() => {
+beforeEach(async () => {
+  await loginQueueEmployee(EMPLOYEE);
   __resetAll();
   resetDatabaseHandle();
   resetSyncService();

@@ -1,7 +1,5 @@
 // src/services/offline/AttendanceApi.js
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import apiClient from "../api/apiClient";
-import { cleanBaseUrl } from "../api/utils";
 import { FAILURE_CLASS, actionToLogType } from "./AttendanceDatabase";
 import {
   FAILURE_KIND,
@@ -9,6 +7,11 @@ import {
   cleanServerMessage,
   isDuplicateMessage,
 } from "./attendanceErrors";
+import {
+  assertAttendanceQueueScope,
+  captureAttendanceQueueScope,
+  createAttendanceScopeChangedError,
+} from "./attendanceQueueProvenance";
 
 /**
  * Uploading a queued punch.
@@ -42,6 +45,7 @@ export const PUSH_RESULT = {
   BLOCKED: "blocked",
   /** The server never will — keep it, stop trying, offer a correction. */
   REJECTED: "rejected",
+  NEEDS_REVIEW: "needs_review",
 };
 
 /**
@@ -109,7 +113,22 @@ export const interpretPushResponse = (body) => {
   const inserted = Array.isArray(response?.inserted) ? response.inserted : [];
   const failed = Array.isArray(response?.failed) ? response.failed : [];
 
-  if (inserted.length) {
+  const invalidArray = (response.inserted != null && !Array.isArray(response.inserted)) ||
+    (response.failed != null && !Array.isArray(response.failed));
+  const invalidSuccess = inserted.length > 0 && (
+    inserted.length !== 1 || typeof inserted[0] !== "string" || !inserted[0].trim() ||
+    failed.length > 0 || response.status === "error" ||
+    (response.inserted_count != null && response.inserted_count !== 1) ||
+    (response.failed_count != null && response.failed_count !== 0)
+  );
+  const exception = body?.exc || body?.exception || body?.error || response.exc || response.exception || response.error;
+  if (invalidArray || invalidSuccess || (inserted.length > 0 && exception) || failed.length > 1 ||
+    (!inserted.length && (response.status === "success" || Number(response.inserted_count) > 0))) {
+    return { result: PUSH_RESULT.NEEDS_REVIEW, failureClass: "verification-required",
+      message: "The server response did not confirm which attendance was recorded.", response: body };
+  }
+
+  if (inserted.length === 1) {
     return {
       result: PUSH_RESULT.INSERTED,
       serverCheckinId: inserted[0] ?? null,
@@ -172,13 +191,14 @@ export const interpretPushResponse = (body) => {
  * @returns {Promise<{result: string, serverCheckinId?: string|null,
  *                    message: string, response: object}>}
  */
-export const pushCheckin = async (row) => {
-  const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
-  const baseUrl = cleanBaseUrl(rawBaseUrl);
-  if (!baseUrl) throw new Error("Base URL missing");
-
-  const token = await AsyncStorage.getItem("access_token");
-  if (!token) throw new Error("Token missing");
+export const pushCheckin = async (row, { syncScope = null } = {}) => {
+  syncScope = syncScope ?? await captureAttendanceQueueScope(row?.employeeId);
+  if (!row?.tenantKey || row.tenantKey !== syncScope.tenantKey || row.employeeId !== syncScope.employeeId) {
+    throw createAttendanceScopeChangedError();
+  }
+  const current = await assertAttendanceQueueScope(syncScope);
+  const baseUrl = current.tenantKey;
+  const token = current.accessToken;
 
   const record = buildCheckinRecord(row);
 
@@ -193,6 +213,7 @@ export const pushCheckin = async (row) => {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
+      attendanceSyncScope: syncScope,
       timeout: 20000,
     },
   );

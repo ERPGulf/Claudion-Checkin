@@ -15,7 +15,7 @@ import {
   getDatabase,
   resetDatabaseHandle,
 } from "../services/offline/AttendanceDatabase";
-import { countByStatus, listAll } from "../services/offline/AttendanceQueueRepository";
+import { countByStatus, enqueue, listAll } from "../services/offline/AttendanceQueueRepository";
 
 const { __resetAll } = require("../test-utils/expoSqliteMock");
 
@@ -100,7 +100,7 @@ describe("v1 → v2", () => {
     const db = await getDatabase();
     const row = await db.getFirstAsync("PRAGMA user_version;");
 
-    expect(Number(row.user_version)).toBe(2);
+    expect(Number(row.user_version)).toBe(4);
   });
 
   it("adds the v2 columns", async () => {
@@ -198,11 +198,11 @@ describe("v1 → v2", () => {
 });
 
 describe("a fresh install", () => {
-  it("goes straight to v2 with every column present", async () => {
+  it("goes straight to v4 with every column present", async () => {
     const db = await getDatabase();
 
     const version = await db.getFirstAsync("PRAGMA user_version;");
-    expect(Number(version.user_version)).toBe(2);
+    expect(Number(version.user_version)).toBe(4);
 
     const columns = await db.getAllAsync(`PRAGMA table_info(${QUEUE_TABLE});`);
     expect(columns.map((c) => c.name)).toEqual(
@@ -213,5 +213,86 @@ describe("a fresh install", () => {
   it("starts empty", async () => {
     await getDatabase();
     expect((await countByStatus()).total).toBe(0);
+  });
+});
+
+describe("tenant provenance migration", () => {
+  it("rolls back a failed additive upgrade and retries without losing original rows", async () => {
+    await seedV1();
+    const db = await SQLite.openDatabaseAsync(DATABASE_NAME);
+    const exec = db.execAsync;
+    let failed = false;
+    db.execAsync = async sql => {
+      if (!failed && sql.includes("ADD COLUMN acceptanceConfirmed")) {
+        failed = true;
+        return exec(sql.replace("PRAGMA user_version = 4;", "SELECT missing_column FROM attendance_queue;"));
+      }
+      return exec(sql);
+    };
+    await expect(getDatabase()).rejects.toThrow();
+    expect((await db.getFirstAsync("PRAGMA user_version")).user_version).toBe(3);
+    expect((await db.getAllAsync(`SELECT * FROM ${QUEUE_TABLE}`))).toHaveLength(4);
+    expect((await db.getAllAsync(`PRAGMA table_info(${QUEUE_TABLE})`)).map(column => column.name)).not.toContain("acceptanceConfirmed");
+    await getDatabase();
+    expect((await db.getFirstAsync("PRAGMA user_version")).user_version).toBe(4);
+    expect(await listAll()).toHaveLength(4);
+    db.execAsync = exec;
+  });
+  it("preserves v1 manual/photo and automatic data, retry state and original timestamps without inventing ownership", async () => {
+    await seedV1();
+    const db = await SQLite.openDatabaseAsync(DATABASE_NAME);
+    await db.runAsync(`UPDATE ${QUEUE_TABLE} SET payload = ?, retryCount = 7, nextAttemptAt = 999999 WHERE id = 1`,
+      [JSON.stringify({ photoUri: "file:///original.jpg", location: "Original office", over_time: 0 })]);
+    await db.runAsync(`UPDATE ${QUEUE_TABLE} SET attendanceType = 'auto', action = 'checkout' WHERE id = 2`);
+    await db.runAsync(`UPDATE ${QUEUE_TABLE} SET action = 'checkout' WHERE id = 4`);
+    const before = await db.getAllAsync(`SELECT * FROM ${QUEUE_TABLE} ORDER BY id`);
+    await getDatabase();
+    const after = await db.getAllAsync(`SELECT * FROM ${QUEUE_TABLE} ORDER BY id`);
+    expect(after).toHaveLength(before.length);
+    after.forEach((row, index) => {
+      expect(row).toMatchObject({ ...before[index], status: before[index].status === 'failed' ? 'blocked' : before[index].status });
+      expect(row.tenantKey).toBeNull();
+      expect(row.pairedAttendanceId).toBeNull();
+    });
+  });
+
+  it("preserves every v2 pairing/resolution field and only adds NULL tenant ownership", async () => {
+    const db = await SQLite.openDatabaseAsync(DATABASE_NAME);
+    await db.execAsync(`${V1_SCHEMA}
+      ALTER TABLE ${QUEUE_TABLE} ADD COLUMN failureClass TEXT;
+      ALTER TABLE ${QUEUE_TABLE} ADD COLUMN blockedSince INTEGER;
+      ALTER TABLE ${QUEUE_TABLE} ADD COLUMN resolutionDocname TEXT;
+      ALTER TABLE ${QUEUE_TABLE} ADD COLUMN resolvedAt INTEGER;
+      ALTER TABLE ${QUEUE_TABLE} ADD COLUMN sessionId TEXT;
+      ALTER TABLE ${QUEUE_TABLE} ADD COLUMN pairedAttendanceId INTEGER;
+      PRAGMA user_version = 2;`);
+    await db.execAsync(`INSERT INTO ${QUEUE_TABLE}
+      (employeeId, attendanceType, action, timestamp, payload, status, retryCount, nextAttemptAt,
+       failureClass, blockedSince, sessionId, pairedAttendanceId, createdAt, updatedAt)
+      VALUES ('EMP-1', 'manual', 'checkin', '2026-07-01 09:00:00', '{"photoUri":"file:///old.jpg"}', 'blocked', 3, 1234, 'auth', 12, 'pair-1', 2, 1, 2),
+             ('EMP-1', 'auto', 'checkout', '2026-07-01 18:00:00', '{}', 'pending', 4, 5678, null, null, 'pair-1', 1, 1, 2);`);
+    const before = await db.getAllAsync(`SELECT * FROM ${QUEUE_TABLE} ORDER BY id`);
+    await getDatabase();
+    const after = await db.getAllAsync(`SELECT * FROM ${QUEUE_TABLE} ORDER BY id`);
+    expect(after).toEqual(before.map(row => ({ ...row, tenantKey: null,
+      acceptanceConfirmed: 0, verifiedAt: null, verificationEvidence: null,
+      verificationCheckedAt: null, verificationIssue: null,
+      lastAttemptAt: null, attemptCount: 0,
+    })));
+    resetDatabaseHandle();
+    await getDatabase();
+    expect(await db.getAllAsync(`SELECT * FROM ${QUEUE_TABLE} ORDER BY id`)).toEqual(after);
+  });
+
+  it("keeps legacy deduplication and separates identical punches from distinct known tenants", async () => {
+    await seedV1();
+    await getDatabase();
+    const punch = { employeeId: 'TDI0167', attendanceType: 'manual', action: 'checkin', timestamp: '2026-07-28 09:00:00' };
+    expect((await enqueue(punch)).inserted).toBe(false);
+    const known = { ...punch, tenantKey: 'https://a.example.com' };
+    expect((await enqueue(known)).inserted).toBe(true);
+    expect((await enqueue(known)).inserted).toBe(false);
+    expect((await enqueue({ ...known, tenantKey: 'https://b.example.com' })).inserted).toBe(true);
+    expect((await listAll()).filter(row => row.tenantKey == null)).toHaveLength(4);
   });
 });

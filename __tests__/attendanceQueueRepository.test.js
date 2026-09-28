@@ -515,7 +515,7 @@ describe("releaseStuckSyncing", () => {
 });
 
 describe("purgeSynced", () => {
-  it("drops synced rows past the retention window", async () => {
+  it("retains synced evidence past the former retention window", async () => {
     const { row } = await enqueue(punch());
     await markSynced({ id: row.id, now: 1000 });
 
@@ -524,8 +524,8 @@ describe("purgeSynced", () => {
       now: 1000 + 500,
     });
 
-    expect(removed).toBe(1);
-    expect((await countByStatus()).total).toBe(0);
+    expect(removed).toBe(0);
+    expect((await countByStatus()).total).toBe(1);
   });
 
   it.each([

@@ -2,7 +2,8 @@
 import { AppState } from "react-native";
 import { addTokenChangeListener } from "../api/apiClient";
 import { FAILURE_CLASS } from "./AttendanceDatabase";
-import { syncPendingAttendance } from "./AttendanceSyncService";
+import { cancelActiveSync, syncPendingAttendance } from "./AttendanceSyncService";
+import { assertAttendanceQueueScope, captureAttendanceQueueScope } from "./attendanceQueueProvenance";
 import { registerQueueDrainHandler } from "./AttendanceQueueService";
 import {
   refreshAttendanceConfig,
@@ -252,6 +253,7 @@ export const startBackgroundSync = ({
 };
 
 export const stopBackgroundSync = () => {
+  cancelActiveSync();
   if (!started) return;
   started = false;
 
@@ -301,8 +303,6 @@ export const syncNow = async ({
   // code not yet through — would find no scope and refuse forever, which for
   // `reconcilePresence` would mean automatic check-in never resuming.
   const scope = employeeId || currentEmployeeId;
-
-  await runConfigRefresh(trigger, { force: true });
   // An explicit pull is a person asking "is it done yet?", so every blocked row
   // is re-attempted regardless of its backoff. This is the closest thing to a
   // manual retry the design offers, and it is deliberately not a button.
@@ -316,7 +316,19 @@ export const syncNow = async ({
     return { ran: false, reason: "no-employee", trigger };
   }
 
+  let syncScope;
+  try {
+    syncScope = await captureAttendanceQueueScope(scope);
+    // Recovery needs only the stored payload. Other existing callers still
+    // refresh configuration, guarded across that await.
+    if (trigger !== "user-sync-pending-attendance") await runConfigRefresh(trigger, { force: true });
+    await assertAttendanceQueueScope(syncScope);
+  } catch {
+    return { ran: false, reason: "scope-changed", records: [] };
+  }
+
   return syncPendingAttendance({
+    syncScope,
     trigger,
     wakeAllBlocked: true,
     // Pending rows are made due as well, which the automatic triggers do not

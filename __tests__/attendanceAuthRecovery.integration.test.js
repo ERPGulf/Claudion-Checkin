@@ -75,6 +75,9 @@ const { __resetAll } = require("../test-utils/expoSqliteMock");
  * the seam between authentication and the queue.
  */
 
+import { loginQueueEmployee } from "../test-utils/attendanceScope";
+import { captureAttendanceQueueScope } from "../services/offline/attendanceQueueProvenance";
+const TENANT = "https://aysha.erpgulf.com";
 const EMPLOYEE = "HR-EMP-00011";
 const OTHER_EMPLOYEE = "HR-EMP-00099";
 
@@ -87,6 +90,7 @@ const accepted = (name = "EMP-CKIN-09-2026-000006") => ({
 });
 
 const login = async (token) => {
+  await loginQueueEmployee(EMPLOYEE, TENANT, token);
   await AsyncStorage.setItem("baseUrl", "https://aysha.erpgulf.com");
   await AsyncStorage.setItem("access_token", token);
 };
@@ -101,6 +105,7 @@ const queueCheckout = (employeeId = EMPLOYEE) =>
   enqueue({
     employeeId,
     employeeDocname: employeeId,
+    tenantKey: TENANT,
     attendanceType: "auto",
     action: QUEUE_ACTION.CHECKOUT,
     timestamp: "2026-09-01 12:29:00",
@@ -129,6 +134,7 @@ const cacheConfig = () =>
     JSON.stringify({
       employeeId: EMPLOYEE,
       employeeDocname: EMPLOYEE,
+      tenantKey: TENANT,
       locations: [],
       rules: { restrictLocation: 0, unrestrictedCheckoutLocation: 0 },
     }),
@@ -327,6 +333,7 @@ describe("an automatic IN cannot overtake an undelivered punch", () => {
       employeeCode: EMPLOYEE,
       occurredAt: localAt(12, 40),
       forceQueue,
+      sourceScope: await captureAttendanceQueueScope(EMPLOYEE),
       online,
     });
 
@@ -367,6 +374,7 @@ describe("an automatic IN cannot overtake an undelivered punch", () => {
     await enqueue({
       employeeId: EMPLOYEE,
       employeeDocname: EMPLOYEE,
+      tenantKey: TENANT,
       attendanceType: "auto",
       action: QUEUE_ACTION.CHECKOUT,
       timestamp: "2026-09-01 12:29:00",
@@ -376,6 +384,7 @@ describe("an automatic IN cannot overtake an undelivered punch", () => {
     await enqueue({
       employeeId: EMPLOYEE,
       employeeDocname: EMPLOYEE,
+      tenantKey: TENANT,
       attendanceType: "auto",
       action: QUEUE_ACTION.CHECKIN,
       timestamp: "2026-09-01 07:54:00",
@@ -402,6 +411,7 @@ describe("an automatic IN cannot overtake an undelivered punch", () => {
     await enqueue({
       employeeId: EMPLOYEE,
       employeeDocname: EMPLOYEE,
+      tenantKey: TENANT,
       attendanceType: "auto",
       action: QUEUE_ACTION.CHECKIN,
       timestamp: "2026-09-01 12:40:00",
@@ -424,6 +434,7 @@ describe("an automatic IN cannot overtake an undelivered punch", () => {
     await enqueue({
       employeeId: EMPLOYEE,
       employeeDocname: EMPLOYEE,
+      tenantKey: TENANT,
       attendanceType: "auto",
       action: QUEUE_ACTION.CHECKIN,
       timestamp: "2026-09-01 12:40:00",
@@ -441,6 +452,7 @@ describe("an automatic IN cannot overtake an undelivered punch", () => {
     await enqueue({
       employeeId: EMPLOYEE,
       employeeDocname: EMPLOYEE,
+      tenantKey: TENANT,
       attendanceType: "auto",
       action: QUEUE_ACTION.CHECKIN,
       timestamp: "2026-09-01 12:40:00",

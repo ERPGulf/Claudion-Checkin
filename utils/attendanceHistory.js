@@ -163,9 +163,13 @@ export const SYNC_STATUS = {
   /** Superseded by a correction request. Kept for audit. */
   RESOLVED: 'resolved',
   DUPLICATE: 'duplicate',
+  NEEDS_REVIEW: 'needs-review',
 };
 
 const SYNC_STATUS_DESCRIPTIONS = {
+  [SYNC_STATUS.NEEDS_REVIEW]: {
+    label: 'Needs review', tone: 'warning', icon: 'help-circle-outline',
+  },
   [SYNC_STATUS.PENDING]: {
     label: 'Pending sync',
     tone: 'warning',
@@ -221,6 +225,7 @@ export function describeSyncStatus(syncStatus) {
  * checking why a punch they made twice only appears once.
  */
 export function resolveQueueSyncStatus(row) {
+  if (row?.status === 'needs_review') return SYNC_STATUS.NEEDS_REVIEW;
   if (row?.status === 'synced') {
     return row.duplicate ? SYNC_STATUS.DUPLICATE : SYNC_STATUS.SYNCED;
   }

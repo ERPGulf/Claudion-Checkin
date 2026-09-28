@@ -38,6 +38,8 @@ export const QUEUE_TABLE = "attendance_queue";
  *              resolvable only by an attendance correction.
  *   RESOLVED → a rejected record that a correction request has superseded.
  *              Preserved for audit, excluded from every unresolved count.
+ *   NEEDS_REVIEW → acceptance is uncertain; retained, never automatically
+ *              retried. Exact positive server verification can reconcile it.
  */
 export const QUEUE_STATUS = {
   PENDING: "pending",
@@ -46,6 +48,7 @@ export const QUEUE_STATUS = {
   BLOCKED: "blocked",
   REJECTED: "rejected",
   RESOLVED: "resolved",
+  NEEDS_REVIEW: "needs_review",
 };
 
 /**
@@ -94,6 +97,7 @@ export const UNRESOLVED_STATUSES = [
   QUEUE_STATUS.SYNCING,
   QUEUE_STATUS.BLOCKED,
   QUEUE_STATUS.REJECTED,
+  QUEUE_STATUS.NEEDS_REVIEW,
 ];
 
 /**
@@ -115,13 +119,14 @@ export const AWAITING_SERVER_STATUSES = [
  * Schema version. Bump it and add a `case` in `migrate` — never edit an
  * existing statement, since installs in the field are already at that version.
  */
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 4;
 
 const CREATE_QUEUE_TABLE = `
   CREATE TABLE IF NOT EXISTS ${QUEUE_TABLE} (
     id                INTEGER PRIMARY KEY AUTOINCREMENT,
     employeeId        TEXT    NOT NULL,
     employeeDocname   TEXT,
+    tenantKey         TEXT,
     attendanceType    TEXT    NOT NULL,
     action            TEXT    NOT NULL,
     timestamp         TEXT    NOT NULL,
@@ -151,7 +156,7 @@ const CREATE_QUEUE_TABLE = `
  */
 const CREATE_DEDUPE_INDEX = `
   CREATE UNIQUE INDEX IF NOT EXISTS idx_${QUEUE_TABLE}_dedupe
-    ON ${QUEUE_TABLE} (employeeId, timestamp, action);
+    ON ${QUEUE_TABLE} (IFNULL(tenantKey, ''), employeeId, timestamp, action);
 `;
 
 /** Supports the drain's "oldest actionable row first" scan. */
@@ -170,6 +175,12 @@ const CREATE_HISTORY_INDEX = `
 const CREATE_SESSION_INDEX = `
   CREATE INDEX IF NOT EXISTS idx_${QUEUE_TABLE}_session
     ON ${QUEUE_TABLE} (employeeId, sessionId);
+`;
+
+/** Supports tenant-safe employee-scoped drains and recovery counts. */
+const CREATE_TENANT_DRAIN_INDEX = `
+  CREATE INDEX IF NOT EXISTS idx_${QUEUE_TABLE}_tenant_drain
+    ON ${QUEUE_TABLE} (tenantKey, employeeId, status, nextAttemptAt, timestamp, id);
 `;
 
 /**
@@ -210,6 +221,30 @@ const CREATE_V2_COLUMNS = `
   ALTER TABLE ${QUEUE_TABLE} ADD COLUMN pairedAttendanceId INTEGER;
 `;
 
+/**
+ * v2 → v3: provenance for queued records created from this version onward.
+ *
+ * Existing rows deliberately remain NULL. The database has never stored their
+ * original backend, and assigning the currently configured server would invent
+ * ownership after a tenant switch.
+ */
+const MIGRATE_V3 = `
+  ALTER TABLE ${QUEUE_TABLE} ADD COLUMN tenantKey TEXT;
+  DROP INDEX IF EXISTS idx_${QUEUE_TABLE}_dedupe;
+  ${CREATE_DEDUPE_INDEX}
+`;
+
+// Add evidence without reclassifying, requeueing or attributing historical rows.
+const MIGRATE_V4 = `
+  ALTER TABLE ${QUEUE_TABLE} ADD COLUMN acceptanceConfirmed INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE ${QUEUE_TABLE} ADD COLUMN verifiedAt INTEGER;
+  ALTER TABLE ${QUEUE_TABLE} ADD COLUMN verificationEvidence TEXT;
+  ALTER TABLE ${QUEUE_TABLE} ADD COLUMN verificationCheckedAt INTEGER;
+  ALTER TABLE ${QUEUE_TABLE} ADD COLUMN verificationIssue TEXT;
+  ALTER TABLE ${QUEUE_TABLE} ADD COLUMN lastAttemptAt INTEGER;
+  ALTER TABLE ${QUEUE_TABLE} ADD COLUMN attemptCount INTEGER NOT NULL DEFAULT 0;
+`;
+
 const migrate = async (database) => {
   const row = await database.getFirstAsync("PRAGMA user_version;");
   const current = Number(row?.user_version) || 0;
@@ -228,6 +263,8 @@ const migrate = async (database) => {
       ${CREATE_HISTORY_INDEX}
       ${CREATE_V2_COLUMNS}
       ${CREATE_SESSION_INDEX}
+      ${CREATE_TENANT_DRAIN_INDEX}
+      ${MIGRATE_V4}
       PRAGMA user_version = ${SCHEMA_VERSION};
       COMMIT;
     `);
@@ -240,6 +277,25 @@ const migrate = async (database) => {
       ${MIGRATE_V2}
       ${CREATE_SESSION_INDEX}
       PRAGMA user_version = 2;
+      COMMIT;
+    `);
+  }
+
+  if (current < 3) {
+    await database.execAsync(`
+      BEGIN;
+      ${MIGRATE_V3}
+      ${CREATE_TENANT_DRAIN_INDEX}
+      PRAGMA user_version = 3;
+      COMMIT;
+    `);
+  }
+
+  if (current < 4) {
+    await database.execAsync(`
+      BEGIN;
+      ${MIGRATE_V4}
+      PRAGMA user_version = 4;
       COMMIT;
     `);
   }
@@ -264,7 +320,14 @@ export const getDatabase = () => {
       await database.execAsync(
         "PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;",
       );
-      await migrate(database);
+      try {
+        await migrate(database);
+      } catch (error) {
+        // An SQL error can leave BEGIN open on the cached native connection.
+        // Roll back the incomplete step so the next open can retry that version.
+        await database.execAsync("ROLLBACK;").catch(() => {});
+        throw error;
+      }
       return database;
     })().catch((error) => {
       databasePromise = null;
@@ -281,9 +344,8 @@ export const resetDatabaseHandle = () => {
 };
 
 /**
- * Empties the queue. Called on logout alongside the config cache — a queued
- * punch belongs to the employee who made it, and must never sync under the next
- * user's token.
+ * Explicit destructive reset. No production caller uses it; logout retains
+ * attendance. Never use this function to recover a synchronization problem.
  */
 export const clearAttendanceQueue = async () => {
   const database = await getDatabase();

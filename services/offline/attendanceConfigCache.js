@@ -1,6 +1,7 @@
 // src/services/offline/attendanceConfigCache.js
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { fetchEmployeeData } from "../api/employee.service";
+import { assertAttendanceQueueScope, captureAttendanceQueueScope } from "./attendanceQueueProvenance";
 
 /**
  * The attendance rules, kept on the device so a check-in can be validated with
@@ -173,8 +174,11 @@ export const refreshAttendanceConfig = async (employeeId) => {
   }
 
   try {
+    const scope = await captureAttendanceQueueScope(employeeId);
     const employee = await fetchEmployeeData(employeeId);
     const config = buildConfig(employee, { employeeId });
+    await assertAttendanceQueueScope(scope);
+    config.tenantKey = scope.tenantKey;
 
     // An empty location list from a *successful* request is ambiguous: it can
     // mean "this employee has no reporting locations" or it can mean the server
@@ -182,7 +186,7 @@ export const refreshAttendanceConfig = async (employeeId) => {
     // would silently disable offline attendance, so the previous cache wins.
     if (!config.locations.length) {
       const existing = await readAttendanceConfig();
-      if (existing?.locations?.length) {
+      if (existing?.locations?.length && existing.employeeId === employeeId && existing.tenantKey === scope.tenantKey) {
         console.log(`${logPrefix} Empty location list; keeping cached config`);
         return {
           refreshed: false,
@@ -192,7 +196,9 @@ export const refreshAttendanceConfig = async (employeeId) => {
       }
     }
 
+    await assertAttendanceQueueScope(scope);
     await AsyncStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+    await assertAttendanceQueueScope(scope);
     await mirrorLegacyKeys(config);
 
     console.log(`${logPrefix} Cached`, {

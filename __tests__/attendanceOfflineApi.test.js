@@ -1,3 +1,5 @@
+jest.mock("../redux/Store", () => ({ store: { dispatch: jest.fn() } }));
+
 import {
   DEVICE_ID,
   PUSH_RESULT,
@@ -82,6 +84,23 @@ describe("buildCheckinRecord", () => {
 });
 
 describe("interpretPushResponse", () => {
+  it("keeps the entire ambiguous envelope so support can inspect the original exception", () => {
+    const body = { message: { inserted: ["ONE"] }, exception: "Request rolled back" };
+    const outcome = interpretPushResponse(body);
+    expect(outcome.result).toBe(PUSH_RESULT.NEEDS_REVIEW);
+    expect(outcome.response).toEqual(body);
+  });
+  it.each([
+    { inserted: [null] }, { inserted: [""] }, { inserted: [{}] },
+    { inserted: ["ONE", "TWO"] }, { inserted: ["ONE"], failed: [{ error: "rejected" }] },
+    { inserted: ["ONE"], status: "error" }, { inserted: ["ONE"], failed_count: 1 },
+    { inserted: ["ONE"], inserted_count: 2 }, { inserted: "ONE" },
+    { message: { inserted: ["ONE"] }, exception: "Request rolled back" },
+    { status: "success", inserted: [] }, { inserted_count: 1, inserted: [] },
+    { failed: [{ error: "duplicate entry" }, { error: "invalid employee" }] },
+  ])("retains ambiguous acceptance for review: %j", body => {
+    expect(interpretPushResponse(body).result).toBe(PUSH_RESULT.NEEDS_REVIEW);
+  });
   const successBody = {
     status: "success",
     message: "All records inserted successfully.",

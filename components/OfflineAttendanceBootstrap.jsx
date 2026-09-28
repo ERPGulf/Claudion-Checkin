@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useSelector } from "react-redux";
 import { selectIsLoggedIn } from "../redux/Slices/AuthSlice";
-import { selectEmployeeCode } from "../redux/Slices/UserSlice";
+import { selectBaseUrl, selectEmployeeCode } from "../redux/Slices/UserSlice";
 import { selectFeatureSettings } from "../redux/Slices/FeatureSettingsSlice";
 import {
   ATTENDANCE_FEATURES,
@@ -39,6 +39,7 @@ import { applySessionOwner } from "../utils/attendanceSessionState";
 export default function OfflineAttendanceBootstrap() {
   const isLoggedIn = useSelector(selectIsLoggedIn);
   const employeeCode = useSelector(selectEmployeeCode);
+  const baseUrl = useSelector(selectBaseUrl);
 
   // `attendance_action.offline_attendance` is the administrator's switch, and it
   // governs exactly one thing: whether new punches may be *queued*. It used to
@@ -109,7 +110,7 @@ export default function OfflineAttendanceBootstrap() {
     });
 
     return () => stopBackgroundSync();
-  }, [isLoggedIn, employeeCode, offlineEnabled]);
+  }, [isLoggedIn, employeeCode, baseUrl, offlineEnabled]);
 
   return null;
 }
