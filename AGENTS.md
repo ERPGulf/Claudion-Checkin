@@ -53,4 +53,4 @@ Add behavioral regression tests for changed contracts, authentication, attendanc
 
 ## Deeper References
 
-Read the relevant [CLAUDE.md architecture sections](CLAUDE.md#architecture) for domain rationale and its [versioning guide](CLAUDE.md#versioning-gotcha) for release fields. [README.md](README.md) covers FCM and OTA procedures. Consult `sessionResilience`, `attendanceAuthRecovery.integration`, `attendanceQueueMigration`, and `attendanceOfflineApi` suites for executable contracts. Verify prose against current code when they disagree.
+Before building or restyling any screen, read [DESIGN.md](DESIGN.md) for tokens, shared components, screen templates, and known platform UI pitfalls. Read the relevant [CLAUDE.md architecture sections](CLAUDE.md#architecture) for domain rationale and its [versioning guide](CLAUDE.md#versioning-gotcha) for release fields. [README.md](README.md) covers FCM and OTA procedures. Consult `sessionResilience`, `attendanceAuthRecovery.integration`, `attendanceQueueMigration`, and `attendanceOfflineApi` suites for executable contracts. Verify prose against current code when they disagree.
