@@ -85,6 +85,10 @@ function AppNavigator() {
         "Expense claim",
         newHomeEnabled ? ExpenseClaim : ExpenseClaimLegacy,
       ),
+      resignation: withFeatureGate(
+        "Resignation",
+        newHomeEnabled ? Resignation : ResignationLegacy,
+      ),
       // The three "Your Records" document screens, all governed by
       // `employee_records`.
       shortcut1: withFeatureGate("Shortcut1", Shortcut1),
@@ -135,10 +139,7 @@ function AppNavigator() {
       <Stack.Screen name="comingsoon" component={ComingSoon} />
 
       <Stack.Screen name="Loan application" component={gated.loanApplication} />
-      <Stack.Screen
-        name="Resignation"
-        component={newHomeEnabled ? Resignation : ResignationLegacy}
-      />
+      <Stack.Screen name="Resignation" component={gated.resignation} />
     </Stack.Navigator>
   );
 }
