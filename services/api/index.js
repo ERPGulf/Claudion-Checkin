@@ -12,6 +12,7 @@ export * from "./records.service";
 export * from "./notification.service";
 export * from "./salaryAdvance.service";
 export * from "./loanApplication.service";
+export * from "./resignation.service";
 
 
 
@@ -27,6 +28,7 @@ import records from "./records.service";
 import salaryAdvance from "./salaryAdvance.service";
 import loanApplication from "./loanApplication.service";
 import notification from "./notification.service";
+import resignation from "./resignation.service";
 
 export default {
   auth,
@@ -40,4 +42,5 @@ export default {
   notification,
   salaryAdvance,
   loanApplication,
+  resignation,
 };

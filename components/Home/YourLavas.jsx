@@ -102,6 +102,11 @@ export const HR_FEATURES = [
     icon: "chatbox-ellipses-outline",
     nav: "Complaints",
   },
+  {
+    label: "Resignation",
+    icon: "exit-outline",
+    nav: "Resignation",
+  },
 ];
 
 /* ---------------------------------------------------

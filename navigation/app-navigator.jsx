@@ -27,6 +27,8 @@ import {
   LoanApplicationLegacy,
   AutoAttendanceScreen,
   AutoAttendanceLegacy,
+  Resignation,
+  ResignationLegacy,
 } from "../screens";
 import HomeTabGroup from "./home.tabbar";
 // TEMPORARY: New Home Experience experiment — remove with the feature.
@@ -133,6 +135,10 @@ function AppNavigator() {
       <Stack.Screen name="comingsoon" component={ComingSoon} />
 
       <Stack.Screen name="Loan application" component={gated.loanApplication} />
+      <Stack.Screen
+        name="Resignation"
+        component={newHomeEnabled ? Resignation : ResignationLegacy}
+      />
     </Stack.Navigator>
   );
 }
