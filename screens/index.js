@@ -41,6 +41,9 @@ import LoanApplication from './LoanApplication';
 // TEMPORARY: New Home Experience experiment — remove with the feature.
 import LoanApplicationLegacy from './LoanApplicationLegacy';
 import AutoAttendanceScreen from './AutoAttendance';
+import Resignation from './Resignation';
+// TEMPORARY: New Home Experience experiment — remove with the feature.
+import ResignationLegacy from './ResignationLegacy';
 // TEMPORARY: New Home Experience experiment — remove with the feature.
 import AutoAttendanceLegacy from './AutoAttendanceLegacy';
 export {
@@ -77,6 +80,8 @@ export {
   MyQrCode,
   MyQrCodeLegacy,
   AutoAttendanceScreen,
-  AutoAttendanceLegacy
+  AutoAttendanceLegacy,
+  Resignation,
+  ResignationLegacy,
 
 };

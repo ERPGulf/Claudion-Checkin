@@ -110,6 +110,7 @@ const FULL_RESPONSE = {
   leave_request: true,
   employee_records: true,
   complaints: true,
+  employee_resignation: true,
 };
 
 /** Settings with everything explicitly on, then selectively switched off. */
@@ -146,6 +147,7 @@ describe('normalizeFeatureSettings', () => {
     expect(s.leave_request).toBe(true);
     expect(s.employee_records).toBe(true);
     expect(s.complaints).toBe(true);
+    expect(s.employee_resignation).toBe(true);
 
     expect(s.attendance_action.employee_shift).toBe(false);
     expect(s.attendance_action.employee_checkin_break).toBe(false);
@@ -295,8 +297,11 @@ describe('isRouteEnabled', () => {
       leave_request: false,
       complaints: false,
       employee_records: false,
+      employee_resignation: false,
       attendance_action: { attendance_history: false, attendance_request: false },
     });
+
+    expect(isRouteEnabled(off, 'Resignation')).toBe(false);
 
     expect(isRouteEnabled(off, 'Loan application')).toBe(false);
     expect(isRouteEnabled(off, 'Leave request')).toBe(false);

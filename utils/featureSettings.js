@@ -14,7 +14,8 @@
  *             unrestricted_checkout_location, employee_shift,
  *             employee_checkin_break, attendance_request, attendance_history,
  *             auto_attendance, loan_application, leave_request,
- *             employee_records, complaints, expense_claim
+ *             employee_records, complaints, expense_claim,
+ *             employee_resignation
  *
  *   strings   offline_attendance_version ("1")
  *
@@ -67,6 +68,7 @@ export const FEATURES = {
   EMPLOYEE_RECORDS: 'employee_records',
   COMPLAINTS: 'complaints',
   EXPENSE_CLAIM: 'expense_claim',
+  EMPLOYEE_RESIGNATION: 'employee_resignation',
 };
 
 /** Nested under `attendance_action`. Addressed as `attendance_action.<key>`. */
@@ -186,6 +188,7 @@ export function emptyFeatureSettings() {
     employee_records: null,
     complaints: null,
     expense_claim: null,
+    employee_resignation: null,
     attendance_action: {
       offline_attendance: null,
       offline_attendance_version: null,
@@ -325,6 +328,7 @@ export const ROUTE_FEATURES = {
   'Leave request': FEATURES.LEAVE_REQUEST,
   Complaints: FEATURES.COMPLAINTS,
   'Expense claim': FEATURES.EXPENSE_CLAIM,
+  Resignation: FEATURES.EMPLOYEE_RESIGNATION,
   'Attendance request': ATTENDANCE_FEATURES.ATTENDANCE_REQUEST,
   'Attendance history': ATTENDANCE_FEATURES.ATTENDANCE_HISTORY,
   'Auto attendance': ATTENDANCE_FEATURES.AUTO_ATTENDANCE,

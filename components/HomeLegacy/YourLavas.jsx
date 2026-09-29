@@ -155,6 +155,11 @@ export const LEGACY_HR_FEATURES = [
                 nav: "Complaints",
               },
               {
+                label: ["Resignation"],
+                icon: "exit-outline",
+                nav: "Resignation",
+              },
+              {
                 label: ["Vacation", "list"],
                 icon: "list-outline",
                 nav: "comingsoon", // or your actual screen name
