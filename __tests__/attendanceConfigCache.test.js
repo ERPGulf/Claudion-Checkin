@@ -16,6 +16,7 @@ import {
   refreshAttendanceConfigIfStale,
 } from "../services/offline/attendanceConfigCache";
 import { fetchEmployeeData } from "../services/api/employee.service";
+import { getAuthSessionGeneration, invalidateAuthSession } from "../utils/authSessionGuard";
 
 /**
  * The cache is what makes offline validation possible at all, so its two rules
@@ -158,6 +159,151 @@ describe("refreshAttendanceConfig", () => {
   it("does not spend a request with no employee code", async () => {
     await refreshAttendanceConfig(null);
     expect(fetchEmployeeData).not.toHaveBeenCalled();
+  });
+});
+
+describe("mobile attendance policy hand-off", () => {
+  it("caches a complete prevalidated employee response without another request", async () => {
+    const result = await refreshAttendanceConfig("TDI0167", {
+      requireCompletePolicy: true,
+      employeeData: employeeResponse(),
+    });
+
+    expect(result.refreshed).toBe(true);
+    expect(fetchEmployeeData).not.toHaveBeenCalled();
+    expect(await AsyncStorage.getItem("restrict_location")).toBe("1");
+    expect(await AsyncStorage.getItem("unrestricted_checkout_location")).toBe("0");
+    expect(await AsyncStorage.getItem("photo")).toBe("0");
+  });
+
+  it("cannot publish a prevalidated response from an earlier login generation", async () => {
+    const expectedGeneration = getAuthSessionGeneration();
+    invalidateAuthSession();
+    await loginQueueEmployee("TDI0167");
+
+    const result = await refreshAttendanceConfig("TDI0167", {
+      requireCompletePolicy: true,
+      employeeData: employeeResponse(),
+      expectedGeneration,
+    });
+
+    expect(result.refreshed).toBe(false);
+    expect(fetchEmployeeData).not.toHaveBeenCalled();
+    expect(await readAttendanceConfig()).toBeNull();
+    expect(await AsyncStorage.getItem("restrict_location")).toBeNull();
+  });
+
+  it.each([0, 1, "0", "1", false, true])(
+    "accepts the explicit policy flag %p",
+    async (flag) => {
+      fetchEmployeeData.mockResolvedValue(employeeResponse({
+        restrict_location: flag,
+        unrestricted_checkout_location: flag,
+        photo: flag,
+      }));
+
+      const result = await refreshAttendanceConfig("TDI0167", {
+        requireCompletePolicy: true,
+      });
+
+      expect(result.refreshed).toBe(true);
+      expect(await AsyncStorage.getItem("restrict_location")).toBe(String(Number(flag)));
+    },
+  );
+
+  it.each(["restrict_location", "unrestricted_checkout_location", "photo"])(
+    "retains the previous cache and mirrors when %s is missing",
+    async (field) => {
+      fetchEmployeeData.mockResolvedValue(employeeResponse());
+      await refreshAttendanceConfig("TDI0167");
+      const before = await AsyncStorage.multiGet([
+        CONFIG_KEY, "restrict_location", "unrestricted_checkout_location", "photo",
+        "geotagging", "employee_locations",
+      ]);
+      await AsyncStorage.setItem("auth_method", "mobile");
+      const partial = employeeResponse({ restrict_location: 0, photo: 1 });
+      delete partial[field];
+      fetchEmployeeData.mockResolvedValue(partial);
+
+      const result = await refreshAttendanceConfig("TDI0167");
+
+      expect(result.refreshed).toBe(false);
+      expect(result.error).toMatch(/configuration is incomplete/);
+      expect(await AsyncStorage.multiGet(before.map(([key]) => key))).toEqual(before);
+    },
+  );
+
+  it.each([undefined, null, "", " ", "false", 2, -1])(
+    "refuses incomplete restriction %p without relaxing seeded policy",
+    async (restrictLocation) => {
+      await AsyncStorage.multiSet([
+        ["restrict_location", "1"],
+        ["unrestricted_checkout_location", "0"],
+        ["photo", "1"],
+      ]);
+      fetchEmployeeData.mockResolvedValue(employeeResponse({
+        restrict_location: restrictLocation,
+      }));
+
+      const result = await refreshAttendanceConfig("TDI0167", {
+        requireCompletePolicy: true,
+      });
+
+      expect(result.refreshed).toBe(false);
+      expect(await readAttendanceConfig()).toBeNull();
+      expect(await AsyncStorage.getItem("restrict_location")).toBe("1");
+      expect(await AsyncStorage.getItem("photo")).toBe("1");
+    },
+  );
+
+  it("automatically rejects partial policy on later mobile refreshes", async () => {
+    await AsyncStorage.setItem("auth_method", "mobile");
+    fetchEmployeeData.mockResolvedValue({});
+
+    const result = await refreshAttendanceConfig("TDI0167");
+
+    expect(result.refreshed).toBe(false);
+    expect(await readAttendanceConfig()).toBeNull();
+  });
+
+  it.each([
+    { locations: [] },
+    { locations: [{ location: "Synthetic office", reporting_radius: 100 }] },
+    { locations: [{ latitude: 25.28, longitude: 51.52, reporting_radius: 0 }] },
+  ])("refuses restricted policy without a usable reporting location: %p", async ({ locations }) => {
+    fetchEmployeeData.mockResolvedValue(employeeResponse({ employee_locations: locations }));
+
+    const result = await refreshAttendanceConfig("TDI0167", {
+      requireCompletePolicy: true,
+    });
+
+    expect(result.refreshed).toBe(false);
+    expect(result.error).toMatch(/Reporting locations are not configured/);
+    expect(await readAttendanceConfig()).toBeNull();
+  });
+
+  it("accepts an explicitly unrestricted employee with no reporting locations", async () => {
+    fetchEmployeeData.mockResolvedValue(employeeResponse({
+      restrict_location: 0,
+      employee_locations: [],
+    }));
+
+    const result = await refreshAttendanceConfig("TDI0167", {
+      requireCompletePolicy: true,
+    });
+
+    expect(result.refreshed).toBe(true);
+    expect(result.config.locations).toEqual([]);
+  });
+
+  it("preserves the QR path's existing missing-policy defaults", async () => {
+    await AsyncStorage.setItem("auth_method", "qr");
+    fetchEmployeeData.mockResolvedValue({});
+
+    const result = await refreshAttendanceConfig("TDI0167");
+
+    expect(result.refreshed).toBe(true);
+    expect(result.config.rules.restrictLocation).toBe(0);
   });
 });
 

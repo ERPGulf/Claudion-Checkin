@@ -28,6 +28,11 @@ jest.mock('../hooks/useHomeExperience', () => ({
   }),
 }));
 
+let mockMobileAvailable = true;
+jest.mock('../utils/mobileAuthCrypto', () => ({
+  isMobileAuthAvailable: () => mockMobileAvailable,
+}));
+
 let mockReduceMotion = false;
 jest.mock('../hooks/useReducedMotion', () => ({
   __esModule: true,
@@ -154,6 +159,7 @@ beforeEach(async () => {
   mockScheme = 'light';
   mockNewHomeEnabled = true;
   mockReduceMotion = false;
+  mockMobileAvailable = true;
   jest.clearAllMocks();
   mockGetNotifications.mockResolvedValue([]);
   mockGenerateToken.mockResolvedValue({ access_token: 'tok_123' });
@@ -344,6 +350,23 @@ describe('useLogin', () => {
  * ================================================================== */
 
 describe('Login container', () => {
+  it.each([true, false])('offers mobile sign-in when modern UI is %s', enabled => {
+    mockNewHomeEnabled = enabled;
+    const { getByLabelText } = renderScreen();
+
+    fireEvent.press(getByLabelText('Sign in with mobile number'));
+
+    expect(mockNavigate).toHaveBeenCalledWith('mobile login');
+  });
+
+  it.each([true, false])('hides unsupported mobile sign-in when modern UI is %s', enabled => {
+    mockNewHomeEnabled = enabled;
+    mockMobileAvailable = false;
+    const { queryByText } = renderScreen();
+
+    expect(queryByText('Sign in with mobile number')).toBeNull();
+  });
+
   it('renders the modern login when the modern UI is on', () => {
     const { getByText, queryByText } = renderScreen();
 

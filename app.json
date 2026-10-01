@@ -3,7 +3,7 @@
     "name": "Claudion Checkin",
     "slug": "claudion-checkin",
     "scheme": "claudioncheckin",
-    "version": "1.2.0",
+    "version": "1.2.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -55,7 +55,7 @@
         "ITSAppUsesNonExemptEncryption": false,
         "UIBackgroundModes": ["remote-notification"]
       },
-      "buildNumber": "12",
+      "buildNumber": "13",
       "appleTeamId": "VWL956UDWG"
     },
     "android": {
@@ -65,7 +65,7 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.bazim.claudioncheckin",
-      "versionCode": 21,
+      "versionCode": 22,
       "googleServicesFile": "./google-services.json",
       "permissions": [
         "android.permission.CAMERA",
@@ -89,7 +89,7 @@
       }
     },
     "owner": "erpgulf",
-    "runtimeVersion": "1.2.0",
+    "runtimeVersion": "1.2.1",
     "updates": {
       "url": "https://u.expo.dev/ee37c3a6-1da3-43ae-ad14-6b34a26c92ac",
       "enabled": true,

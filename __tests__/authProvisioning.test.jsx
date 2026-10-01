@@ -19,7 +19,17 @@ const screens = {
   login: "LOGIN SCREEN",
   Qrscan: "QR SCAN SCREEN",
   welcome: "WELCOME SCREEN",
+  mobile: "MOBILE LOGIN SCREEN",
 };
+
+let mockMobileAvailable = true;
+jest.mock("../utils/mobileAuthCrypto", () => ({
+  isMobileAuthAvailable: () => mockMobileAvailable,
+}));
+jest.mock("../screens/MobileLogin", () => {
+  const { Text } = require("react-native");
+  return { __esModule: true, default: () => <Text>MOBILE LOGIN SCREEN</Text> };
+});
 
 // The real screens drag in the whole app (redux, camera, theming). This suite is
 // about the routing decision, so each one is reduced to its name.
@@ -61,6 +71,7 @@ const renderAuthNavigator = () =>
   );
 
 beforeEach(async () => {
+  mockMobileAvailable = true;
   await AsyncStorage.clear();
 });
 
@@ -98,6 +109,59 @@ describe("readProvisioning", () => {
 });
 
 describe("AuthNavigator's first screen", () => {
+  it("reopens mobile sign-in after a mobile session", async () => {
+    await AsyncStorage.multiSet([
+      ["auth_method", "mobile"],
+      ["baseUrl", "https://mobile.example.test"],
+      ["backendUrl", "https://mobile.example.test"],
+    ]);
+
+    const { findByText, queryByText } = renderAuthNavigator();
+
+    expect(await findByText(screens.mobile)).toBeTruthy();
+    expect(queryByText(screens.login)).toBeNull();
+    expect(queryByText(screens.welcome)).toBeNull();
+  });
+
+  it("keeps complete QR provisioning ahead of the last mobile choice", async () => {
+    await provision();
+    await AsyncStorage.setItem("auth_method", "mobile");
+
+    const { findByText } = renderAuthNavigator();
+
+    expect(await findByText(screens.login)).toBeTruthy();
+  });
+
+  it("requires a stored tenant before reopening mobile sign-in", async () => {
+    await AsyncStorage.setItem("auth_method", "mobile");
+
+    const { findByText } = renderAuthNavigator();
+
+    expect(await findByText(screens.welcome)).toBeTruthy();
+  });
+
+  it("uses Welcome when an older binary cannot support mobile sign-in", async () => {
+    mockMobileAvailable = false;
+    await AsyncStorage.multiSet([
+      ["auth_method", "mobile"],
+      ["baseUrl", "https://mobile.example.test"],
+    ]);
+
+    const { findByText, queryByText } = renderAuthNavigator();
+
+    expect(await findByText(screens.welcome)).toBeTruthy();
+    expect(queryByText(screens.mobile)).toBeNull();
+  });
+
+  it("still opens QR Login without mobile capability", async () => {
+    mockMobileAvailable = false;
+    await provision();
+
+    const { findByText } = renderAuthNavigator();
+
+    expect(await findByText(screens.login)).toBeTruthy();
+  });
+
   it("goes straight to Login when the device is already provisioned", async () => {
     // The state a session expiry leaves behind: tenant keys intact, no token.
     await provision();

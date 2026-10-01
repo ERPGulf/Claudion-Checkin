@@ -1,0 +1,126 @@
+# Mobile sign-in
+
+Employees can choose the existing QR/password method or mobile sign-in. Both
+Welcome variants and both password Login variants offer the mobile method.
+The new screen uses the SDK's resolved credential requirements for password,
+OTP, optional password creation, and password reset. It never starts cold-boot
+reauthentication during app launch or background geofence relaunch.
+
+Dependencies are `@erpgulf/auth-sdk@0.1.1`, `@erpgulf/server-lookup@1.0.0`, and
+Expo SDK 54's `expo-crypto@~15.0.9`. Both ERPGulf packages ship ESM; Jest maps
+their published entry points and transforms them. Expo's own UTF-8 TextDecoder
+is exercised by the sealed-token regression test.
+
+## Company lookup configuration
+
+Set these build/development environment variables through local `.env.local`
+or the selected EAS environment:
+
+- `EXPO_PUBLIC_SERVER_LOOKUP_URL`
+- `EXPO_PUBLIC_SERVER_LOOKUP_SECRET`
+- `EXPO_PUBLIC_SERVER_LOOKUP_ALPHABET`
+
+Keep deployment values out of source control and diagnostic output. The hook
+passes literal `process.env.EXPO_PUBLIC_*` property accesses to `lookupServer`
+only when lookup is actually needed. Established company selections work
+without lookup configuration or an available lookup service.
+
+In `.env` files, escape a literal dollar sign as `\$`; quoted values still go
+through Expo's dotenv expansion. EAS environment variables use the plain `$`.
+After changing these variables, restart with `npx expo start -c`.
+
+Company codes are normalized and validated with the package's helpers, kept
+only in screen memory, and sent in one lookup attempt with the package's
+15-second timeout. There is no retry, cache, or manual server-address fallback.
+SDK client creation enforces HTTPS origins. Invalid lookup responses, including
+an HTTP URL or a URL the SDK rejects, use the app's support message.
+
+`backendUrl` is the mobile company preference. It is saved only after a successful
+SDK `begin()`, and skips future lookup. “Change company” clears this preference
+and the active form. Existing QR provisioning and canonical `baseUrl` remain
+intact until mobile session hand-off succeeds.
+
+## Identity and attendance hand-off
+
+`completeMobileSignIn` invalidates the previous auth generation before calling
+SDK completion, rejects missing refresh tokens and stale responses before
+writes, and uses `saveTokens` as the sole token writer. All identity actions
+precede `setSignIn`; the existing unread-count fetch and success toast follow.
+The QR `useLogin` implementation is unchanged.
+
+The authenticated employee-policy response must explicitly supply a Frappe
+docname (`name` or `employee`) matching an SDK employee field, a display name
+(`employee_name`), and the QR attendance identifier (`employee_code` or
+`employee_field_value`). Conflicting or absent identifiers are rejected. SDK
+`id` is used only as the initial profile lookup candidate, never assumed to be
+the QR employee code. This conservative contract needs validation against the
+actual tenant; it is not evidence that the published SDK's backend contract
+works on a live server.
+
+Before any provisioning changes, the app downloads and validates explicit
+`restrict_location`, `unrestricted_checkout_location`, and `photo` flags.
+Restricted employees also need a usable reporting location and positive radius.
+It then writes `baseUrl`, `employee_code`, `employee_id`, and `full_name`, saves
+tokens, and awaits the scoped attendance cache and legacy mirrors before
+publishing the authenticated UI. Later mobile policy refreshes also reject
+partial data; missing restriction mirrors refuse manual attendance.
+
+Successful mobile hand-off removes QR `api_key`/`app_key`, stale `company`, and
+the previous username. Employees rescan to use QR again. Same-tenant attendance
+sessions and queued records are preserved; a tenant change clears the previous
+tenant's session record without deleting queued punches. A persistence failure
+clears the failed credentials and restores the previous provisioning when its
+generation is still current. Cleanup never rolls back over a newer session.
+
+`auth_method` stores `qr` or `mobile`. Full QR provisioning takes priority when
+choosing the unauthenticated route; otherwise the last mobile method and a
+remembered URL open mobile sign-in. Older binaries without secure random values
+continue to offer the QR method.
+
+## Native release and required live checks
+
+Release fields are version/runtime `1.2.1`, iOS build `13`, and Android
+versionCode `22`, including the committed iOS plists. `ExpoCrypto` requires a
+new native build; an OTA update alone does not install it. Its guarded startup
+load prevents older binaries from crashing and hides their mobile option.
+
+Local tests use synthetic credentials, keys, alphabets, employee data, and SDK
+transport responses. The project scan did not locate a confirmed staging tenant
+with disposable employees. Before rollout, supply that setup and verify:
+
+- QR and mobile/password sign-in, plus an OTP-only tenant on both platforms.
+- The SDK employee fields, canonical Frappe docname, and the exact identifier
+  already stored as QR `employee_code`, including an existing queued employee.
+- The employee profile response contract and fail-closed attendance flags.
+- SDK refresh tokens with the existing
+  `employee_app.gauth.create_refresh_token` endpoint. An incompatibility blocks
+  rollout; no alternate refresh path is implemented.
+- Password create/reset, manual resend cooldown, logout/expiry route selection,
+  and location checks before the first attendance submission.
+
+Native/Metro builds and mock-based tests do not substitute for these live checks.
+
+## Local verification
+
+The pre-change baseline passed 73 Jest suites and 1,675 tests. This checkout
+already excludes `.git-rewrite` from Jest's test paths; the snapshot still
+produces a package-name collision warning. Lint remains unavailable because
+the repository has no ESLint configuration. Jest was run with `--watchman=false`
+and `--forceExit` to accommodate the existing Watchman/open-handle limitations.
+The final full suite passed 78 suites and 1,782 tests, including real SDK
+transport fixtures for password and OTP-only hand-off, rollback and stale-session
+checks, and sealed lookup tokens decoded with Expo's TextDecoder. Recovery also
+requires manual Resend after an unconfirmed OTP attempt.
+
+Production Metro exports passed for iOS and Android. CocoaPods includes
+`ExpoCrypto` 15.0.9, and both native debug builds passed with the bumped version
+fields. The iOS build used the command-line override
+`IPHONEOS_DEPLOYMENT_TARGET=15.1` to accommodate the current Xcode toolchain's
+rejection of older resource-pod targets; no pod deployment settings were changed
+in the repository.
+
+Fresh iOS and Android simulators showed both sign-in choices and the company-code
+form in light and dark themes. iOS also exercised native secure random values
+and Expo's UTF-8 decoder in Hermes. An existing development notification warning
+was dismissed for the iOS screen captures; Android's captured error log was
+empty. These smoke checks did not submit lookup requests or credentials.

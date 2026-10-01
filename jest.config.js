@@ -20,6 +20,8 @@ module.exports = {
       "|@react-native" +
       "|@react-native-firebase" +
       "|@react-navigation" +
+      "|@erpgulf/auth-sdk" +
+      "|@erpgulf/server-lookup" +
       "|expo" +
       "|expo-asset" +
       "|expo-constants" +
@@ -36,6 +38,8 @@ module.exports = {
   ],
 
   moduleNameMapper: {
+    "^@erpgulf/auth-sdk$": "<rootDir>/node_modules/@erpgulf/auth-sdk/dist/index.js",
+    "^@erpgulf/server-lookup$": "<rootDir>/node_modules/@erpgulf/server-lookup/dist/index.js",
     "^expo-modules-core$": "<rootDir>/node_modules/expo-modules-core",
   },
 };

@@ -1,6 +1,6 @@
 {
   "name": "claudion-checkin",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "main": "node_modules/expo/AppEntry.js",
   "scripts": {
     "start": "expo start",
@@ -24,6 +24,8 @@
     "eas:submit:android": "eas submit --profile production --platform android --latest"
   },
   "dependencies": {
+    "@erpgulf/auth-sdk": "0.1.1",
+    "@erpgulf/server-lookup": "1.0.0",
     "@expo/vector-icons": "^15.0.3",
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@react-native-community/datetimepicker": "8.4.4",
@@ -47,6 +49,7 @@
     "expo-camera": "~17.0.10",
     "expo-checkbox": "~5.0.8",
     "expo-constants": "~18.0.14",
+    "expo-crypto": "~15.0.9",
     "expo-device": "~8.0.10",
     "expo-document-picker": "~14.0.8",
     "expo-font": "~14.0.12",

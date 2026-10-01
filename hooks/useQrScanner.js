@@ -204,6 +204,7 @@ export default function useQrScanner() {
             String(cleanedData.unrestricted_checkout_location),
           ],
         ]);
+        await AsyncStorage.setItem('auth_method', 'qr');
         // Redux dispatch (NO restrict_location)
         dispatch(setUsername(cleanedData.api_key));
         dispatch(setFullname(cleanedData.full_name));

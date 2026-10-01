@@ -2,6 +2,8 @@
 
 Contributor setup, architecture, validation commands, and compatibility constraints are in [AGENTS.md](AGENTS.md). [CLAUDE.md](CLAUDE.md) provides deeper domain rationale for both coding agents.
 
+The QR/password and company-code/mobile sign-in methods are described in [Mobile sign-in](docs/mobile-sign-in.md), including lookup configuration and the staging checks required before rollout.
+
 ## Firebase Cloud Messaging (FCM)
 
 This app now includes production-ready FCM client wiring for Android and iOS:

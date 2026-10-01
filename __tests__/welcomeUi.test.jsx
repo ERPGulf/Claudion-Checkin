@@ -19,6 +19,11 @@ jest.mock('../hooks/useHomeExperience', () => ({
   }),
 }));
 
+let mockMobileAvailable = true;
+jest.mock('../utils/mobileAuthCrypto', () => ({
+  isMobileAuthAvailable: () => mockMobileAvailable,
+}));
+
 let mockReduceMotion = false;
 jest.mock('../hooks/useReducedMotion', () => ({
   __esModule: true,
@@ -92,6 +97,7 @@ beforeEach(() => {
   mockScheme = 'light';
   mockNewHomeEnabled = true;
   mockReduceMotion = false;
+  mockMobileAvailable = true;
   jest.clearAllMocks();
 });
 
@@ -100,20 +106,39 @@ beforeEach(() => {
  * ================================================================== */
 
 describe('Welcome screen container', () => {
+  it.each([true, false])('offers mobile sign-in when modern UI is %s', enabled => {
+    mockNewHomeEnabled = enabled;
+    const { getByLabelText } = render(<WelcomeScreen />);
+
+    fireEvent.press(getByLabelText('Sign in with mobile number'));
+
+    expect(mockNavigate).toHaveBeenCalledWith('mobile login');
+  });
+
+  it.each([true, false])('hides unsupported mobile sign-in when modern UI is %s', enabled => {
+    mockNewHomeEnabled = enabled;
+    mockMobileAvailable = false;
+    const { getByLabelText, queryByText } = render(<WelcomeScreen />);
+
+    expect(queryByText('Sign in with mobile number')).toBeNull();
+    fireEvent.press(getByLabelText('Scan QR code'));
+    expect(mockNavigate).toHaveBeenCalledWith('Qrscan');
+  });
+
   it('renders the modern welcome when the modern UI is on', () => {
     const { getByText, queryByText } = render(<WelcomeScreen />);
 
     expect(getByText('Welcome')).toBeTruthy();
-    expect(getByText('Get Started')).toBeTruthy();
-    expect(queryByText('GET STARTED')).toBeNull();
+    expect(getByText('Scan QR code')).toBeTruthy();
+    expect(getByText('Sign in with mobile number')).toBeTruthy();
   });
 
-  it('renders the untouched classic welcome when the modern UI is off', () => {
+  it('renders the classic welcome when the modern UI is off', () => {
     mockNewHomeEnabled = false;
 
     const { getByText, queryByText } = render(<WelcomeScreen />);
 
-    expect(getByText('GET STARTED')).toBeTruthy();
+    expect(getByText('Scan QR code')).toBeTruthy();
     expect(queryByText('Welcome')).toBeNull();
   });
 });
@@ -154,7 +179,7 @@ describe('modern Welcome screen', () => {
   it('routes the primary action to the QR scanner, as before', () => {
     const { getByText } = render(<WelcomeScreen />);
 
-    fireEvent.press(getByText('Get Started'));
+    fireEvent.press(getByText('Scan QR code'));
 
     expect(mockNavigate).toHaveBeenCalledTimes(1);
     expect(mockNavigate).toHaveBeenCalledWith('Qrscan');
@@ -250,7 +275,7 @@ describe('modern Welcome CTA', () => {
   it('takes the standard filled control, not the brand accent', () => {
     const light = render(<WelcomeScreen />);
     expect(
-      flatten(light.getByLabelText('Get Started').props.style).backgroundColor,
+      flatten(light.getByLabelText('Scan QR code').props.style).backgroundColor,
     ).toBe(COLORS.buttonFill);
     // No orange on this screen at all any more — the atmosphere carries the
     // brand, and the button is the same control every other screen uses.
@@ -264,20 +289,20 @@ describe('modern Welcome CTA', () => {
     const dark = render(<WelcomeScreen />);
 
     expect(
-      flatten(dark.getByLabelText('Get Started').props.style).backgroundColor,
+      flatten(dark.getByLabelText('Scan QR code').props.style).backgroundColor,
     ).toBe(DARK_COLORS.buttonFill);
     expect(DARK_COLORS.buttonFill).not.toBe(COLORS.buttonFill);
   });
 
   it('labels the fill with its paired foreground in both palettes', () => {
     const light = render(<WelcomeScreen />);
-    expect(flatten(light.getByText('Get Started').props.style).color).toBe(
+    expect(flatten(light.getByText('Scan QR code').props.style).color).toBe(
       COLORS.buttonFillText,
     );
 
     mockScheme = 'dark';
     const dark = render(<WelcomeScreen />);
-    expect(flatten(dark.getByText('Get Started').props.style).color).toBe(
+    expect(flatten(dark.getByText('Scan QR code').props.style).color).toBe(
       DARK_COLORS.buttonFillText,
     );
   });
@@ -285,7 +310,7 @@ describe('modern Welcome CTA', () => {
   it('is the tallest control on the page', () => {
     const { getByLabelText } = render(<WelcomeScreen />);
 
-    expect(flatten(getByLabelText('Get Started').props.style).minHeight).toBe(54);
+    expect(flatten(getByLabelText('Scan QR code').props.style).minHeight).toBe(54);
   });
 
   it('points the arrow along the reading direction', () => {
@@ -546,7 +571,7 @@ describe('modern Welcome entrance', () => {
     });
 
     // Still on screen and interactive once the animation has run.
-    fireEvent.press(getByText('Get Started'));
+    fireEvent.press(getByText('Scan QR code'));
     expect(mockNavigate).toHaveBeenCalledWith('Qrscan');
 
     jest.useRealTimers();
@@ -559,7 +584,7 @@ describe('modern Welcome entrance', () => {
 
     // No waiting: everything is present and pressable immediately.
     expect(getByLabelText('Claudion')).toBeTruthy();
-    fireEvent.press(getByText('Get Started'));
+    fireEvent.press(getByText('Scan QR code'));
     expect(mockNavigate).toHaveBeenCalledWith('Qrscan');
   });
 });

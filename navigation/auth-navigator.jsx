@@ -2,14 +2,16 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
 import React, { useEffect, useState } from "react";
 import { Login, QrScan, WelcomeScreen } from "../screens";
-import { readProvisioning } from "../utils/provisioning";
+import MobileLogin from "../screens/MobileLogin";
+import { readInitialAuthRoute } from "../utils/provisioning";
+import { isMobileAuthAvailable } from "../utils/mobileAuthCrypto";
 
 const Stack = createNativeStackNavigator();
 
 /**
  * Where an unauthenticated app opens.
  *
- * Two different situations arrive here and they need different first screens:
+ * QR provisioning keeps priority over the last mobile sign-in choice:
  *
  *  - **Never provisioned.** No `baseUrl` / `api_key` / `app_key`, so there is no
  *    tenant to log in to yet. Welcome → QR scan, exactly as before.
@@ -19,6 +21,8 @@ const Stack = createNativeStackNavigator();
  *    password — and sending this user to the QR scanner asks them to re-provision
  *    a device that never stopped being provisioned. This was a real support
  *    complaint, not a hypothetical.
+ *  - **Mobile used last.** Without QR credentials, a remembered mobile tenant
+ *    opens mobile sign-in when the binary provides the required crypto module.
  *
  * `initialRouteName` is only read when the navigator first mounts, so the
  * decision has to be made before rendering it — hence the null render below
@@ -31,6 +35,7 @@ const Stack = createNativeStackNavigator();
  * onto a different tenant.
  */
 function AuthNavigator() {
+  const mobileAvailable = isMobileAuthAvailable();
   // null = undecided. Rendering the navigator before this resolves would bake in
   // whichever route happened to be the default.
   const [initialRoute, setInitialRoute] = useState(null);
@@ -39,14 +44,14 @@ function AuthNavigator() {
     let cancelled = false;
 
     (async () => {
-      const { provisioned } = await readProvisioning();
-      if (!cancelled) setInitialRoute(provisioned ? "login" : "welcome");
+      const route = await readInitialAuthRoute({ mobileAvailable });
+      if (!cancelled) setInitialRoute(route);
     })();
 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [mobileAvailable]);
 
   if (!initialRoute) return null;
 
@@ -58,6 +63,7 @@ function AuthNavigator() {
       <Stack.Screen name="login" component={Login} />
       <Stack.Screen name="Qrscan" component={QrScan} />
       <Stack.Screen name="welcome" component={WelcomeScreen} />
+      {mobileAvailable && <Stack.Screen name="mobile login" component={MobileLogin} />}
     </Stack.Navigator>
   );
 }

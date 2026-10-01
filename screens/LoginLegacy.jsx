@@ -20,7 +20,10 @@ import { Formik } from "formik";
 import * as Yup from "yup";
 import { useNavigation } from "@react-navigation/native";
 import { setSignIn } from "../redux/Slices/AuthSlice";
-import { COLORS, SIZES, BUILD_TAG } from "../constants";
+import { COLORS, SIZES, BUILD_TAG, SPACING, TYPO } from "../constants";
+import PressableScale from "../components/common/PressableScale";
+import useAppTheme from "../hooks/useAppTheme";
+import { isMobileAuthAvailable } from "../utils/mobileAuthCrypto";
 import { WelcomeCard } from "../components/Login";
 import { selectEmployeeCode } from "../redux/Slices/UserSlice";
 import { generateToken } from "../services/api";
@@ -28,6 +31,7 @@ import { getLoginErrorMessage } from "../utils/loginError";
 
 function LoginLegacy() {
   const navigation = useNavigation();
+  const { colors } = useAppTheme();
   const dispatch = useDispatch();
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -259,6 +263,20 @@ function LoginLegacy() {
                   Rescan QR Code
                 </Text>
               </TouchableOpacity>
+
+              {isMobileAuthAvailable() && (
+                <PressableScale
+                  disabled={isLoading}
+                  accessibilityLabel="Sign in with mobile number"
+                  accessibilityState={{ disabled: isLoading }}
+                  onPress={() => navigation.navigate("mobile login")}
+                  style={{ alignItems: "center", padding: SPACING.md }}
+                >
+                  <Text style={{ ...TYPO.subhead, color: colors.textSecondary }}>
+                    Sign in with mobile number
+                  </Text>
+                </PressableScale>
+              )}
 
               <Text
                 style={{

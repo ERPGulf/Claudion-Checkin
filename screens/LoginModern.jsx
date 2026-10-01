@@ -18,6 +18,8 @@ import useLogin from "../hooks/useLogin";
 import useReducedMotion from "../hooks/useReducedMotion";
 import ActionButton from "../components/common/ActionButton";
 import FormField from "../components/common/FormField";
+import PressableScale from "../components/common/PressableScale";
+import { isMobileAuthAvailable } from "../utils/mobileAuthCrypto";
 import { BrandMark } from "../components/Welcome";
 import { GreetingCard } from "../components/Login";
 
@@ -276,6 +278,19 @@ function LoginModern() {
                       disabled={isLoading}
                       onPress={() => navigation.navigate("Qrscan")}
                     />
+                    {isMobileAuthAvailable() && (
+                      <PressableScale
+                        disabled={isLoading}
+                        accessibilityLabel="Sign in with mobile number"
+                        accessibilityState={{ disabled: isLoading }}
+                        onPress={() => navigation.navigate("mobile login")}
+                        style={{ alignItems: "center", padding: SPACING.md }}
+                      >
+                        <Text style={{ ...TYPO.subhead, color: colors.textSecondary }}>
+                          Sign in with mobile number
+                        </Text>
+                      </PressableScale>
+                    )}
                   </Animated.View>
 
                   {/* The larger share of the slack, so the block lands above the

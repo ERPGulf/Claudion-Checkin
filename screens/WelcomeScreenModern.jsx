@@ -16,6 +16,7 @@ import { BUILD_TAG, SPACING, TYPO } from "../constants";
 import useAppTheme from "../hooks/useAppTheme";
 import useReducedMotion from "../hooks/useReducedMotion";
 import ActionButton from "../components/common/ActionButton";
+import { isMobileAuthAvailable } from "../utils/mobileAuthCrypto";
 import {
   BrandMark,
   BRAND_MARK_MAX_WIDTH,
@@ -257,12 +258,22 @@ function WelcomeScreenModern() {
                     itself. The arrow follows the reading direction, so it points
                     forward rather than backwards in an RTL layout. */}
                 <ActionButton
-                  label="Get Started"
+                  label="Scan QR code"
                   icon={I18nManager.isRTL ? "arrow-back" : "arrow-forward"}
                   size="lg"
                   elevated
                   onPress={() => navigation.navigate("Qrscan")}
                 />
+                {isMobileAuthAvailable() && (
+                  <ActionButton
+                    label="Sign in with mobile number"
+                    icon="phone-portrait-outline"
+                    variant="outline"
+                    size="lg"
+                    style={{ marginTop: SPACING.md }}
+                    onPress={() => navigation.navigate("mobile login")}
+                  />
+                )}
               </View>
             </View>
 
