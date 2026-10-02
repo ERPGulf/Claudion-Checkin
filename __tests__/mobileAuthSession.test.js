@@ -43,8 +43,9 @@ const sdkSuccess = (token = {}) => ({
   },
 });
 
+let transport;
 const createSdkFlow = async ({ success = sdkSuccess(), finish, passwordPolicy = "Mandatory", otpPolicy = "No" } = {}) => {
-  const transport = { request: jest.fn(async ({ url }) => {
+  transport = { request: jest.fn(async ({ url }) => {
     if (url.endsWith("master_token")) {
       return { status: 200, body: { data: { access_token: "fake-master-token", refresh_token: "fake-master-refresh", expires_in: 3600, token_type: "Bearer", scope: "all openid" } } };
     }
@@ -137,6 +138,10 @@ it("completes the real SDK's OTP-only flow using secure random values and no app
     success, passwordPolicy: "No", otpPolicy: "Mandatory", credentials: { otp: "111111" },
   })).resolves.toEqual({ status: "authenticated" });
   expect(saveSpy).toHaveBeenCalledWith(ACCESS, REFRESH, getAuthSessionGeneration());
+  const signIn = transport.request.mock.calls.find(([request]) => request.url.endsWith("sign_in_api"))[0];
+  const form = new URLSearchParams(signIn.body);
+  expect(form.get("otp")).toBe("111111");
+  expect(form.get("password")).toMatch(/^egf_[A-Za-z0-9]+$/);
 });
 
 it.each(["", undefined])("does not write anything without a refresh token (%s)", async (refresh_token) => {

@@ -24,7 +24,7 @@
     "eas:submit:android": "eas submit --profile production --platform android --latest"
   },
   "dependencies": {
-    "@erpgulf/auth-sdk": "0.1.1",
+    "@erpgulf/auth-sdk": "0.1.2",
     "@erpgulf/server-lookup": "1.0.0",
     "@expo/vector-icons": "^15.0.3",
     "@react-native-async-storage/async-storage": "^2.2.0",

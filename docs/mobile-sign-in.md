@@ -8,7 +8,7 @@ The new screen uses the SDK's resolved credential requirements for password,
 OTP, optional password creation, and password reset. It never starts cold-boot
 reauthentication during app launch or background geofence relaunch.
 
-Dependencies are `@erpgulf/auth-sdk@0.1.1`, `@erpgulf/server-lookup@1.0.0`, and
+Dependencies are `@erpgulf/auth-sdk@0.1.2`, `@erpgulf/server-lookup@1.0.0`, and
 Expo SDK 54's `expo-crypto@~15.0.9`. Both ERPGulf packages ship ESM; Jest maps
 their published entry points and transforms them. Expo's own UTF-8 TextDecoder
 is exercised by the sealed-token regression test.
@@ -100,6 +100,10 @@ transport responses. The project scan did not locate a confirmed staging tenant
 with disposable employees. Before rollout, supply that setup and verify:
 
 - QR and mobile/password sign-in, plus an OTP-only tenant on both platforms.
+- SDK-generated passwords, sent with the OTP when the policy has no password
+  or an Optional employee has none: the backend accepts them, and
+  `employee_has_existing_password` stays `false`, or the next sign-in asks for
+  a password the employee never saw.
 - The SDK employee fields, canonical Frappe docname, and the exact identifier
   already stored as QR `employee_code`, including an existing queued employee.
 - The employee profile response contract and fail-closed attendance flags.
