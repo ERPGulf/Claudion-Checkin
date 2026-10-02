@@ -1,7 +1,9 @@
 # Mobile sign-in
 
-Employees can choose the existing QR/password method or mobile sign-in. Both
-Welcome variants and both password Login variants offer the mobile method.
+Employees can choose the existing QR/password method or mobile sign-in, and
+the app presents them at equal weight: both Welcome variants show the two as
+matching option cards, and both password Login variants offer QR rescan and
+mobile as matching alternatives below Login.
 The new screen uses the SDK's resolved credential requirements for password,
 OTP, optional password creation, and password reset. It never starts cold-boot
 reauthentication during app launch or background geofence relaunch.
@@ -31,9 +33,18 @@ After changing these variables, restart with `npx expo start -c`.
 
 Company codes are normalized and validated with the package's helpers, kept
 only in screen memory, and sent in one lookup attempt with the package's
-15-second timeout. There is no retry, cache, or manual server-address fallback.
-SDK client creation enforces HTTPS origins. Invalid lookup responses, including
-an HTTP URL or a URL the SDK rejects, use the app's support message.
+15-second timeout. There is no retry or cache. SDK client creation enforces
+HTTPS origins. Invalid lookup responses, including an HTTP URL or a URL the SDK
+rejects, use the app's support message.
+
+Instead of a company code, the employee can switch the form to **Server
+address** and type it. The address is normalized and validated with the
+package's `normalizeBackendUrl`/`validateBackendUrl`, refused at the field
+unless it is HTTPS, and reduced to its origin, so a pasted desk link such as
+`/app/home` still works. It skips the lookup and its configuration entirely and
+is persisted exactly like a looked-up URL. Connection and backend-shape
+failures on this path say the server could not be reached at that address,
+rather than blaming the setup service.
 
 `backendUrl` is the mobile company preference. It is saved only after a successful
 SDK `begin()`, and skips future lookup. “Change company” clears this preference

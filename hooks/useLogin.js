@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useDispatch, useSelector } from 'react-redux';
 import { Toast } from 'react-native-toast-message/lib/src/Toast';
 import * as Yup from 'yup';
 import { setSignIn } from '../redux/Slices/AuthSlice';
-import { selectEmployeeCode } from '../redux/Slices/UserSlice';
+import { selectEmployeeCode, setFullname } from '../redux/Slices/UserSlice';
 import { setUnreadCount } from '../redux/Slices/notificationSlice';
 import { getNotifications } from '../services/api/notification.service';
 import { generateToken } from '../services/api';
@@ -54,6 +54,15 @@ export default function useLogin() {
   const [isLoading, setIsLoading] = useState(false);
   const employeeCode = useSelector(selectEmployeeCode);
   const fullname = useSelector(state => state.user.fullname);
+
+  // Logout resets Redux but keeps the QR scan's `full_name`, so restore it
+  // rather than greet a provisioned employee anonymously.
+  useEffect(() => {
+    if (fullname) return;
+    AsyncStorage.getItem('full_name')
+      .then(stored => { if (stored) dispatch(setFullname(stored)); })
+      .catch(() => {});
+  }, [fullname, dispatch]);
 
   // Form validation schema
   const loginSchema = Yup.object().shape({

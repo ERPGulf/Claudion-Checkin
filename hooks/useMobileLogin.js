@@ -5,7 +5,9 @@ import { useDispatch } from 'react-redux';
 import { isAuthError } from '@erpgulf/auth-sdk';
 import {
   lookupServer,
+  normalizeBackendUrl,
   normalizeCompanyCode,
+  validateBackendUrl,
   validateCompanyCode,
   ServerLookupError,
   ServerLookupConfigurationError,
@@ -31,6 +33,21 @@ function lookupErrorCopy(error) {
       return copy("We couldn't connect to the setup service. Check your internet connection and try again.", 'تعذّر الاتصال بخدمة الإعداد. تحقّق من اتصالك بالإنترنت وحاول مرة أخرى.');
     default:
       return copy('The setup service returned an invalid response. Please try again or contact support.', 'أعادت خدمة الإعداد استجابة غير صالحة. حاول مرة أخرى أو تواصل مع الدعم.');
+  }
+}
+
+// A typed address fails in ways a looked-up one does not: a typo'd host is a
+// network error, and a reachable non-Frappe host answers 404.
+const MANUAL_SERVER_FAILURES = new Set(['NETWORK_ERROR', 'TIMEOUT', 'SERVER_ERROR', 'INVALID_RESPONSE', 'INVALID_BASE_URL', 'MASTER_TOKEN_FAILED', 'MASTER_TOKEN_REJECTED']);
+
+function serverAddressIssueCopy(issue) {
+  switch (issue) {
+    case 'required':
+      return copy('Enter the server address.', 'أدخل عنوان الخادم.');
+    case 'insecure':
+      return copy('The server address must use https.', 'يجب أن يستخدم عنوان الخادم بروتوكول https.');
+    default:
+      return copy("That address doesn't look right. Check it and try again.", 'لا يبدو هذا العنوان صحيحًا. تحقّق منه وحاول مرة أخرى.');
   }
 }
 
@@ -64,6 +81,8 @@ export default function useMobileLogin() {
   const dispatch = useDispatch();
   const [backendUrl, setBackendUrl] = useState('');
   const [companyCode, setCompanyCodeState] = useState('');
+  const [discovery, setDiscoveryState] = useState('company');
+  const [serverAddress, setServerAddressState] = useState('');
   const [mobileNumber, setMobileNumberState] = useState('');
   const [password, setPassword] = useState('');
   const [otp, setOtp] = useState('');
@@ -74,6 +93,7 @@ export default function useMobileLogin() {
   const [isHydrating, setIsHydrating] = useState(true);
   const [error, setError] = useState('');
   const [companyCodeError, setCompanyCodeError] = useState('');
+  const [serverAddressError, setServerAddressError] = useState('');
   const [mobileNumberError, setMobileNumberError] = useState('');
   const [otpSent, setOtpSent] = useState(false);
   const [resendDeadline, setResendDeadline] = useState(0);
@@ -156,7 +176,9 @@ export default function useMobileLogin() {
           httpStatus: caught.httpStatus,
           retryable: caught.retryable,
         });
-        setError(authErrorCopy(caught));
+        setError(pending.phase === 'manual' && MANUAL_SERVER_FAILURES.has(caught.code)
+          ? copy("We couldn't connect to that server. Check the address and try again.", 'تعذّر الاتصال بهذا الخادم. تحقّق من العنوان وحاول مرة أخرى.')
+          : authErrorCopy(caught));
       } else {
         setError(copy('The request could not be completed. Please try again or contact support.', 'تعذّر إكمال الطلب. يُرجى المحاولة مرة أخرى أو التواصل مع الدعم.'));
       }
@@ -195,6 +217,7 @@ export default function useMobileLogin() {
 
   const begin = async () => {
     setCompanyCodeError('');
+    setServerAddressError('');
     setMobileNumberError('');
     const mobile = mobileNumber.trim();
     if (!mobile) {
@@ -202,7 +225,19 @@ export default function useMobileLogin() {
       return;
     }
     const code = normalizeCompanyCode(companyCode);
-    if (!backendUrl) {
+    const manual = !backendUrl && discovery === 'server';
+    let manualUrl = '';
+    if (manual) {
+      const address = normalizeBackendUrl(serverAddress);
+      // The SDK only accepts HTTPS origins; say so at the field instead of failing later.
+      const issue = validateBackendUrl(address) || (/^http:/i.test(address) ? 'insecure' : null);
+      if (issue) {
+        setServerAddressError(serverAddressIssueCopy(issue));
+        return;
+      }
+      // A pasted desk link (/app/...) still names the site; Frappe serves from the origin.
+      manualUrl = new URL(address).origin;
+    } else if (!backendUrl) {
       const issue = validateCompanyCode(code);
       if (issue) {
         setCompanyCodeError(issue === 'required'
@@ -212,7 +247,7 @@ export default function useMobileLogin() {
       }
     }
     return run('begin', async pending => {
-      let resolvedUrl = backendUrl;
+      let resolvedUrl = backendUrl || manualUrl;
       if (!resolvedUrl) {
         pending.phase = 'lookup';
         const resolved = await lookupServer(code, {
@@ -228,16 +263,18 @@ export default function useMobileLogin() {
         if (!isCurrent(pending)) return;
         resolvedUrl = resolved.backendUrl;
       }
-      pending.phase = 'begin';
+      pending.phase = manual ? 'manual' : 'begin';
       const auth = getMobileAuthClient(resolvedUrl);
       const activeFlow = await auth.begin({ mobileNumber: mobile });
       if (!isCurrent(pending)) return;
+      pending.phase = 'begin';
       await writePreference(() => isCurrent(pending)
         ? AsyncStorage.setItem('backendUrl', resolvedUrl)
         : undefined);
       if (!isCurrent(pending)) return;
       setBackendUrl(resolvedUrl);
       setCompanyCodeState('');
+      setServerAddressState('');
       setMobileNumberState(activeFlow.mobileNumber);
       await applyFlow(auth, activeFlow, pending);
     });
@@ -307,8 +344,10 @@ export default function useMobileLogin() {
     clearFlow();
     setBackendUrl('');
     setCompanyCodeState('');
+    setServerAddressState('');
     setError('');
     setCompanyCodeError('');
+    setServerAddressError('');
     setMobileNumberError('');
     return run('changeCompany', async pending => {
       await writePreference(() => AsyncStorage.removeItem('backendUrl'));
@@ -333,6 +372,22 @@ export default function useMobileLogin() {
       setError('');
       setCompanyCodeState(value);
     },
+    discovery,
+    setDiscovery: mode => {
+      cancelCurrent();
+      setError('');
+      setCompanyCodeError('');
+      setServerAddressError('');
+      setDiscoveryState(mode);
+    },
+    serverAddress,
+    setServerAddress: value => {
+      cancelCurrent();
+      setServerAddressError('');
+      setError('');
+      setServerAddressState(value);
+    },
+    serverAddressError,
     mobileNumber,
     setMobileNumber,
     password,

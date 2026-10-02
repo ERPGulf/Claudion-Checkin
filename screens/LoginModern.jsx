@@ -18,7 +18,7 @@ import useLogin from "../hooks/useLogin";
 import useReducedMotion from "../hooks/useReducedMotion";
 import ActionButton from "../components/common/ActionButton";
 import FormField from "../components/common/FormField";
-import PressableScale from "../components/common/PressableScale";
+import OrDivider from "../components/common/OrDivider";
 import { isMobileAuthAvailable } from "../utils/mobileAuthCrypto";
 import { BrandMark } from "../components/Welcome";
 import { GreetingCard } from "../components/Login";
@@ -66,8 +66,8 @@ const LIFT_DELAY_MS = 110;
  * were the same size and weight as each other. The order is unchanged; the
  * distances are what carry meaning now:
  *
- *   wordmark → 24 → greeting → 24 → password → 20 → Login → 12 → Scan QR
- *   → flexible → build stamp
+ *   wordmark → 24 → greeting → 24 → password → 20 → Login → or → Scan QR
+ *   → 12 → mobile → flexible → build stamp
  *
  * The 20 under the field and the 12 between the buttons are the whole fix: the
  * primary action sits with the field it submits, the secondary sits with the
@@ -264,12 +264,12 @@ function LoginModern() {
                       onPress={handleSubmit}
                     />
 
-                    <View style={{ height: GAP_BETWEEN_BUTTONS }} />
-
-                    {/* The classic "Rescan QR Code", same destination. `outline`
-                        so it reads as the alternative route rather than a second
-                        primary, and disabled mid-submit so a tap cannot navigate
-                        out from under an in-flight login. */}
+                    {/* The other two ways in, as equals: the classic "Rescan QR
+                        Code" and mobile sign-in share one variant and size, so
+                        neither is demoted beneath the other. `outline` keeps both
+                        below Login, and both are disabled mid-submit so a tap
+                        cannot navigate out from under an in-flight login. */}
+                    <OrDivider style={{ marginVertical: SPACING.lg }} />
                     <ActionButton
                       label="Scan QR Code"
                       icon="qr-code-outline"
@@ -279,17 +279,15 @@ function LoginModern() {
                       onPress={() => navigation.navigate("Qrscan")}
                     />
                     {isMobileAuthAvailable() && (
-                      <PressableScale
+                      <ActionButton
+                        label="Sign in with mobile number"
+                        icon="phone-portrait-outline"
+                        variant="outline"
+                        size="lg"
                         disabled={isLoading}
-                        accessibilityLabel="Sign in with mobile number"
-                        accessibilityState={{ disabled: isLoading }}
+                        style={{ marginTop: GAP_BETWEEN_BUTTONS }}
                         onPress={() => navigation.navigate("mobile login")}
-                        style={{ alignItems: "center", padding: SPACING.md }}
-                      >
-                        <Text style={{ ...TYPO.subhead, color: colors.textSecondary }}>
-                          Sign in with mobile number
-                        </Text>
-                      </PressableScale>
+                      />
                     )}
                   </Animated.View>
 

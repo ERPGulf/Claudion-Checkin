@@ -111,6 +111,59 @@ it('skips lookup and its configuration entirely when backendUrl is already store
   view.unmount();
 });
 
+it('uses a typed server address instead of lookup and persists its origin only after begin', async () => {
+  const view = await mount();
+  act(() => {
+    view.result.current.setDiscovery('server');
+    view.result.current.setServerAddress('  erp.example.test/app/home  ');
+    view.result.current.setMobileNumber('+5550001');
+  });
+  const pending = deferred();
+  client.begin.mockReturnValue(pending.promise);
+  let begin;
+  act(() => { begin = view.result.current.begin(); });
+  await waitFor(() => expect(client.begin).toHaveBeenCalledWith({ mobileNumber: '+5550001' }));
+  expect(lookupServer).not.toHaveBeenCalled();
+  expect(getMobileAuthClient).toHaveBeenCalledWith('https://erp.example.test');
+  expect(await AsyncStorage.getItem('backendUrl')).toBeNull();
+  await act(async () => { pending.resolve(makeFlow()); await begin; });
+  expect(await AsyncStorage.getItem('backendUrl')).toBe('https://erp.example.test');
+  expect(view.result.current.serverAddress).toBe('');
+  view.unmount();
+});
+
+it.each([
+  ['', 'Enter the server address.'],
+  ['not a server', "That address doesn't look right."],
+  ['http://erp.example.test', 'must use https'],
+])('rejects the server address %j at the field without any request', async (address, expected) => {
+  const view = await mount();
+  act(() => {
+    view.result.current.setDiscovery('server');
+    view.result.current.setServerAddress(address);
+    view.result.current.setMobileNumber('+5550001');
+  });
+  await act(async () => { await view.result.current.begin(); });
+  expect(view.result.current.serverAddressError).toContain(expected);
+  expect(lookupServer).not.toHaveBeenCalled();
+  expect(getMobileAuthClient).not.toHaveBeenCalled();
+  view.unmount();
+});
+
+it('blames the typed address, not the setup service, when that server cannot be reached', async () => {
+  client.begin.mockRejectedValue(new AuthError('NETWORK_ERROR', 'not-for-consumers', { retryable: true }));
+  const view = await mount();
+  act(() => {
+    view.result.current.setDiscovery('server');
+    view.result.current.setServerAddress('erp.example.test');
+    view.result.current.setMobileNumber('+5550001');
+  });
+  await act(async () => { await view.result.current.begin(); });
+  expect(view.result.current.error).toContain("couldn't connect to that server");
+  expect(await AsyncStorage.getItem('backendUrl')).toBeNull();
+  view.unmount();
+});
+
 it('does not look up blank/oversize codes or call begin for an empty mobile number', async () => {
   const view = await mount();
   await act(async () => { await view.result.current.begin(); });

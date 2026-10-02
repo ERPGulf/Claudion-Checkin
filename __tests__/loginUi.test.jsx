@@ -232,6 +232,17 @@ describe('useLogin', () => {
     expect(await AsyncStorage.getItem('employee_id')).toBe('HR-EMP-00011');
   });
 
+  it('restores the stored QR name after logout reset Redux', async () => {
+    await AsyncStorage.setItem('full_name', FULL_NAME);
+    const store = makeStore();
+
+    renderHook(() => useLogin(), {
+      wrapper: ({ children }) => <Provider store={store}>{children}</Provider>,
+    });
+
+    await waitFor(() => expect(store.getState().user.fullname).toBe(FULL_NAME));
+  });
+
   it('syncs the unread count, counting only unread notifications', async () => {
     await provision();
     await AsyncStorage.setItem('employee_id', 'HR-EMP-00011');
@@ -505,6 +516,17 @@ describe('modern Login', () => {
     expect(qr.backgroundColor).toBe(COLORS.cardBackground);
     expect(qr.borderWidth).toBe(1);
     expect(login.minHeight).toBe(qr.minHeight);
+  });
+
+  it('gives the QR rescan and mobile sign-in the same weight', () => {
+    const { getByLabelText } = renderScreen();
+
+    const qr = flatten(getByLabelText('Scan QR Code').props.style);
+    const mobile = flatten(getByLabelText('Sign in with mobile number').props.style);
+
+    expect(mobile.backgroundColor).toBe(qr.backgroundColor);
+    expect(mobile.borderWidth).toBe(qr.borderWidth);
+    expect(mobile.minHeight).toBe(qr.minHeight);
   });
 
   it('keeps the build stamp', () => {

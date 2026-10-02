@@ -25,6 +25,10 @@ const mockNavigate = jest.fn();
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: mockNavigate }),
 }));
+jest.mock('expo-image', () => {
+  const { View } = require('react-native');
+  return { Image: props => <View {...props} /> };
+});
 jest.mock('@expo/vector-icons', () => {
   const { Text } = require('react-native');
   const icon = ({ name }) => <Text>{`icon:${name}`}</Text>;
@@ -66,7 +70,7 @@ beforeEach(() => {
     otpSent: false,
   };
   [
-    'setCompanyCode', 'setMobileNumber', 'setPassword', 'setOtp', 'setNewPassword',
+    'setCompanyCode', 'setDiscovery', 'setServerAddress', 'setMobileNumber', 'setPassword', 'setOtp', 'setNewPassword',
     'begin', 'complete', 'resendOtp', 'changeCompany', 'startCreatePassword',
     'startResetPassword', 'cancelPasswordMode', 'savePassword',
   ].forEach(action => { mockLogin[action] = jest.fn(); });
@@ -84,11 +88,27 @@ it('collects the company code and mobile number before beginning', () => {
   expect(mockLogin.begin).toHaveBeenCalledTimes(1);
 });
 
+it('switches between a company code and a typed server address', () => {
+  const screen = render(<MobileLogin />);
+
+  expect(screen.getByLabelText('Use company code').props.accessibilityState.selected).toBe(true);
+  fireEvent.press(screen.getByLabelText('Use server address'));
+  expect(mockLogin.setDiscovery).toHaveBeenCalledWith('server');
+
+  mockLogin.discovery = 'server';
+  screen.rerender(<MobileLogin />);
+  expect(screen.queryByLabelText('Company code')).toBeNull();
+  expect(screen.getByLabelText('Use server address').props.accessibilityState.selected).toBe(true);
+  fireEvent.changeText(screen.getByLabelText('Server address'), 'erp.example.test');
+  expect(mockLogin.setServerAddress).toHaveBeenCalledWith('erp.example.test');
+});
+
 it('uses the selected company and offers Change company', () => {
   mockLogin.backendUrl = 'https://company.example.test';
   const { getByLabelText, getByText, queryByLabelText } = render(<MobileLogin />);
 
   expect(queryByLabelText('Company code')).toBeNull();
+  expect(queryByLabelText('Use server address')).toBeNull();
   expect(getByText('Company selected')).toBeTruthy();
   fireEvent.press(getByLabelText('Change company'));
   expect(mockLogin.changeCompany).toHaveBeenCalledTimes(1);

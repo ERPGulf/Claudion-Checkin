@@ -5,6 +5,7 @@ import BrandMark, {
 } from './BrandMark';
 import AccentHalo from './AccentHalo';
 import ShimmerField from './ShimmerField';
+import SignInOptions from './SignInOptions';
 
 export {
   BrandMark,
@@ -13,4 +14,5 @@ export {
   WORDMARK_ASPECT,
   AccentHalo,
   ShimmerField,
+  SignInOptions,
 };

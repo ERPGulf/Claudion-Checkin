@@ -2,10 +2,8 @@ import { View, Text, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Image } from "expo-image";
 import React from "react";
-import { useNavigation } from "@react-navigation/native";
 import { COLORS, BUILD_TAG, SPACING } from "../constants";
-import ActionButton from "../components/common/ActionButton";
-import { isMobileAuthAvailable } from "../utils/mobileAuthCrypto";
+import { SignInOptions } from "../components/Welcome";
 import icon from "../assets/icon.png";
 
 /**
@@ -18,8 +16,6 @@ import icon from "../assets/icon.png";
  * Delete this file with the rest of the experiment.
  */
 function WelcomeScreenLegacy() {
-  const navigation = useNavigation();
-
   return (
     <SafeAreaView
       style={{
@@ -52,22 +48,7 @@ function WelcomeScreenLegacy() {
             paddingHorizontal: SPACING.lg,
           }}
         >
-          <ActionButton
-            label="Scan QR code"
-            icon="qr-code-outline"
-            size="lg"
-            onPress={() => navigation.navigate("Qrscan")}
-          />
-          {isMobileAuthAvailable() && (
-            <ActionButton
-              label="Sign in with mobile number"
-              icon="phone-portrait-outline"
-              variant="outline"
-              size="lg"
-              style={{ marginTop: SPACING.md }}
-              onPress={() => navigation.navigate("mobile login")}
-            />
-          )}
+          <SignInOptions />
         </View>
       </ScrollView>
     </SafeAreaView>

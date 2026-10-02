@@ -20,18 +20,27 @@ import { Formik } from "formik";
 import * as Yup from "yup";
 import { useNavigation } from "@react-navigation/native";
 import { setSignIn } from "../redux/Slices/AuthSlice";
-import { COLORS, SIZES, BUILD_TAG, SPACING, TYPO } from "../constants";
-import PressableScale from "../components/common/PressableScale";
-import useAppTheme from "../hooks/useAppTheme";
+import { COLORS, SIZES, BUILD_TAG } from "../constants";
 import { isMobileAuthAvailable } from "../utils/mobileAuthCrypto";
 import { WelcomeCard } from "../components/Login";
 import { selectEmployeeCode } from "../redux/Slices/UserSlice";
 import { generateToken } from "../services/api";
 import { getLoginErrorMessage } from "../utils/loginError";
 
+// Rescan and mobile sign-in are equal alternatives to Login, so they share one look.
+const ALTERNATIVE_BUTTON = {
+  borderColor: COLORS.primary,
+  borderWidth: 1,
+  backgroundColor: COLORS.white,
+  height: 56,
+  borderRadius: 12,
+  justifyContent: "center",
+  alignItems: "center",
+};
+const ALTERNATIVE_LABEL = { color: COLORS.primary, fontSize: 18, fontWeight: "600" };
+
 function LoginLegacy() {
   const navigation = useNavigation();
-  const { colors } = useAppTheme();
   const dispatch = useDispatch();
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -243,39 +252,22 @@ function LoginLegacy() {
 
               <TouchableOpacity
                 onPress={() => navigation.navigate("Qrscan")}
-                style={{
-                  borderColor: COLORS.primary,
-                  borderWidth: 1,
-                  backgroundColor: COLORS.white,
-                  height: 56,
-                  borderRadius: 12,
-                  justifyContent: "center",
-                  alignItems: "center",
-                }}
+                style={ALTERNATIVE_BUTTON}
               >
-                <Text
-                  style={{
-                    color: COLORS.primary,
-                    fontSize: 18,
-                    fontWeight: "600",
-                  }}
-                >
-                  Rescan QR Code
-                </Text>
+                <Text style={ALTERNATIVE_LABEL}>Rescan QR Code</Text>
               </TouchableOpacity>
 
               {isMobileAuthAvailable() && (
-                <PressableScale
+                <TouchableOpacity
                   disabled={isLoading}
+                  accessibilityRole="button"
                   accessibilityLabel="Sign in with mobile number"
                   accessibilityState={{ disabled: isLoading }}
                   onPress={() => navigation.navigate("mobile login")}
-                  style={{ alignItems: "center", padding: SPACING.md }}
+                  style={[ALTERNATIVE_BUTTON, { marginTop: 12 }]}
                 >
-                  <Text style={{ ...TYPO.subhead, color: colors.textSecondary }}>
-                    Sign in with mobile number
-                  </Text>
-                </PressableScale>
+                  <Text style={ALTERNATIVE_LABEL}>Sign in with mobile number</Text>
+                </TouchableOpacity>
               )}
 
               <Text

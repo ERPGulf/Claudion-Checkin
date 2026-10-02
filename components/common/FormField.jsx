@@ -79,6 +79,7 @@ function FormField({
   textContentType,
   autoComplete,
   autoCapitalize,
+  autoCorrect,
   accessibilityLabel,
   accessibilityHint,
   style,
@@ -114,26 +115,30 @@ function FormField({
 
   return (
     <View style={[{ minWidth: 0 }, style]}>
-      <View
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          marginBottom: compact ? 2 : SPACING.xs,
-        }}
-      >
-        <Text
-          style={{ ...TYPO.caption, color: colors.textSecondary, flex: 1 }}
-          numberOfLines={1}
+      {/* No label row when a control above already names the field; the
+          input still announces `accessibilityLabel`. */}
+      {(!!label || optional) && (
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            marginBottom: compact ? 2 : SPACING.xs,
+          }}
         >
-          {label}
-        </Text>
-
-        {optional && (
-          <Text style={{ ...TYPO.caption2, color: colors.textMuted }}>
-            Optional
+          <Text
+            style={{ ...TYPO.caption, color: colors.textSecondary, flex: 1 }}
+            numberOfLines={1}
+          >
+            {label}
           </Text>
-        )}
-      </View>
+
+          {optional && (
+            <Text style={{ ...TYPO.caption2, color: colors.textMuted }}>
+              Optional
+            </Text>
+          )}
+        </View>
+      )}
 
       <View
         style={{
@@ -204,6 +209,7 @@ function FormField({
           textContentType={textContentType}
           autoComplete={autoComplete}
           autoCapitalize={autoCapitalize}
+          autoCorrect={autoCorrect}
           onFocus={() => setFocused(true)}
           // The caller's handler still runs — Formik marks the field touched on
           // blur, and swallowing it here would silence every validation message.
