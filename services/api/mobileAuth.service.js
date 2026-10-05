@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
-import { createAuthClient } from "@erpgulf/auth-sdk";
+import { AuthError, createAuthClient } from "@erpgulf/auth-sdk";
 import { Toast } from "react-native-toast-message/lib/src/Toast";
 import { saveTokens, clearTokens, plainAxios } from "./apiClient";
 import { getNotifications } from "./notification.service";
@@ -41,12 +41,56 @@ const HANDOFF_KEYS = [
   CONFIG_KEY, CAPABILITY_KEY, SESSION_STATE_KEY, CHECKIN_START_TIME_KEY,
 ];
 
+const parseBody = (text) => {
+  if (!text) return undefined;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+};
+
+/**
+ * React Native's global fetch (XHR) ignores the SDK's `redirect: "error"`, so a
+ * redirect could replay the form body and master bearer. expo/fetch enforces it.
+ * Every HTTP status is a response; failures are fresh errors with no cause,
+ * because a native error can carry request credentials. No logs, no retries.
+ */
+const authTransport = {
+  async request({ method, url, headers, body, timeoutMs = 15000 }) {
+    const controller = new AbortController();
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, timeoutMs);
+    try {
+      // Required lazily: QR users load this module at startup too.
+      const { fetch } = require("expo/fetch");
+      const response = await fetch(url, {
+        method,
+        body,
+        headers: { "Cache-Control": "no-store", ...headers },
+        redirect: "error",
+        credentials: "omit",
+        signal: controller.signal,
+      });
+      return { status: response.status, body: parseBody(await response.text()) };
+    } catch {
+      throw new AuthError(timedOut ? "TIMEOUT" : "NETWORK_ERROR", "Authentication request failed.");
+    } finally {
+      clearTimeout(timer);
+    }
+  },
+};
+
 /** A client retains only its own tenant's in-memory master token. */
 export const getMobileAuthClient = (baseUrl) => {
   if (!clients.has(baseUrl)) {
     clients.set(baseUrl, createAuthClient({
       baseUrl,
       timeoutMs: 15000,
+      transport: authTransport,
       metadata: {
         appId: "com.bazim.claudioncheckin",
         appVersion: Constants.nativeAppVersion ?? Constants.expoConfig?.version,

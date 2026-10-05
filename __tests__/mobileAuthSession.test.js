@@ -1,7 +1,9 @@
 jest.mock("../services/api/notification.service", () => ({ getNotifications: jest.fn() }));
 jest.mock("react-native-toast-message/lib/src/Toast", () => ({ Toast: { show: jest.fn() } }));
+jest.mock("expo/fetch", () => ({ fetch: jest.fn() }));
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { fetch as expoFetch } from "expo/fetch";
 import MockAdapter from "axios-mock-adapter";
 import { createAuthClient } from "@erpgulf/auth-sdk";
 import * as apiClient from "../services/api/apiClient";
@@ -43,20 +45,23 @@ const sdkSuccess = (token = {}) => ({
   },
 });
 
+const masterBody = { data: { access_token: "fake-master-token", refresh_token: "fake-master-refresh", expires_in: 3600, token_type: "Bearer", scope: "all openid" } };
+const policyBody = (passwordPolicy = "Mandatory", otpPolicy = "No") => ({
+  status: "success", employee_id: DOCNAME,
+  employee_has_existing_password: true, employee_has_signed_up: true,
+  sign_up_policy: { password_policy: passwordPolicy, otp_policy: "Mandatory" },
+  sign_in_policy: { password_policy: passwordPolicy, otp_policy: otpPolicy },
+  cold_boot_policy: { password_policy: passwordPolicy, otp_policy: otpPolicy },
+});
+
 let transport;
 const createSdkFlow = async ({ success = sdkSuccess(), finish, passwordPolicy = "Mandatory", otpPolicy = "No" } = {}) => {
   transport = { request: jest.fn(async ({ url }) => {
     if (url.endsWith("master_token")) {
-      return { status: 200, body: { data: { access_token: "fake-master-token", refresh_token: "fake-master-refresh", expires_in: 3600, token_type: "Bearer", scope: "all openid" } } };
+      return { status: 200, body: masterBody };
     }
     if (url.endsWith("get_employee_login_policy")) {
-      return { status: 200, body: {
-        status: "success", employee_id: DOCNAME,
-        employee_has_existing_password: true, employee_has_signed_up: true,
-        sign_up_policy: { password_policy: passwordPolicy, otp_policy: "Mandatory" },
-        sign_in_policy: { password_policy: passwordPolicy, otp_policy: otpPolicy },
-        cold_boot_policy: { password_policy: passwordPolicy, otp_policy: otpPolicy },
-      } };
+      return { status: 200, body: policyBody(passwordPolicy, otpPolicy) };
     }
     if (url.endsWith("sign_in_api")) {
       if (finish) await finish();
@@ -252,6 +257,60 @@ it("does not let an unread-count failure undo successful authentication", async 
 it("reuses a client per HTTPS tenant and rejects insecure lookup results", () => {
   expect(getMobileAuthClient(BASE_URL)).toBe(getMobileAuthClient(BASE_URL));
   expect(() => getMobileAuthClient("http://insecure.example.test")).toThrow(expect.objectContaining({ code: "INVALID_BASE_URL" }));
+});
+
+describe("SDK transport", () => {
+  // Each test uses its own origin: clients, and their master tokens, are cached per origin.
+  const replies = (handler) => expoFetch.mockImplementation(async (url) => {
+    const [status, body] = handler(url);
+    return { status, text: async () => (typeof body === "string" ? body : JSON.stringify(body)) };
+  });
+
+  it("sends SDK requests through expo/fetch with redirects refused, cookies omitted and no-store", async () => {
+    replies((url) => [200, url.endsWith("master_token") ? masterBody : policyBody()]);
+    const flow = await getMobileAuthClient("https://transport-1.example.test").begin({ mobileNumber: " 5550001 " });
+    expect(flow).toMatchObject({ action: "SIGN_IN", nextStep: "ENTER_PASSWORD", mobileNumber: "5550001" });
+    const [url, init] = expoFetch.mock.calls[1];
+    expect(url).toBe("https://transport-1.example.test/api/method/employee_app.authentication.get_employee_login_policy");
+    expect(init).toMatchObject({ method: "POST", body: "mobile=5550001", redirect: "error", credentials: "omit" });
+    expect(init.headers).toMatchObject({
+      "Cache-Control": "no-store",
+      "Content-Type": "application/x-www-form-urlencoded",
+      Authorization: "Bearer fake-master-token",
+    });
+    expect(init.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it("returns HTTP failures as responses so the SDK classifies them", async () => {
+    replies((url) => (url.endsWith("master_token") ? [200, masterBody] : [503, "<html>gateway</html>"]));
+    await expect(getMobileAuthClient("https://transport-2.example.test").begin({ mobileNumber: "5550001" }))
+      .rejects.toMatchObject({ code: "SERVER_ERROR", httpStatus: 503, retryable: true });
+  });
+
+  it("turns a refused redirect or dead socket into a cause-free NETWORK_ERROR", async () => {
+    expoFetch.mockRejectedValue(new Error("Redirect is not allowed; Authorization: Bearer fake-master-token"));
+    const error = await getMobileAuthClient("https://transport-3.example.test")
+      .begin({ mobileNumber: "5550001" })
+      .catch((caught) => caught);
+    expect(error).toMatchObject({ code: "NETWORK_ERROR" });
+    expect(error.cause).toBeUndefined();
+    expect(error.message).not.toContain("fake-master-token");
+  });
+
+  it("aborts at the client timeout and reports TIMEOUT", async () => {
+    jest.useFakeTimers();
+    try {
+      expoFetch.mockImplementation((url, { signal }) => new Promise((resolve, reject) => {
+        signal.addEventListener("abort", () => reject(new Error("aborted")));
+      }));
+      const pending = getMobileAuthClient("https://transport-4.example.test").begin({ mobileNumber: "5550001" });
+      const assertion = expect(pending).rejects.toMatchObject({ code: "TIMEOUT" });
+      await jest.advanceTimersByTimeAsync(15000);
+      await assertion;
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 });
 
 it("refuses mobile manual attendance when the restriction mirror is missing", async () => {

@@ -21,6 +21,23 @@ import { isMobileAuthAvailable } from '../utils/mobileAuthCrypto';
 
 const copy = (english, arabic) => I18nManager.isRTL ? arabic : english;
 
+// Client-side resend cooldown, independent of the code's own lifetime (often
+// minutes); a code that expires sooner may be resent as soon as it does.
+const RESEND_SECONDS = 45;
+const MIN_PASSWORD_LENGTH = 8;
+// A dispatched mutation the SDK marks non-retryable may already have applied.
+const UNCONFIRMED_CODES = new Set(['TIMEOUT', 'NETWORK_ERROR', 'SERVER_ERROR', 'INVALID_RESPONSE']);
+const passwordChangeUnconfirmed = error =>
+  !isAuthError(error) || (!error.retryable && UNCONFIRMED_CODES.has(error.code));
+
+/** Rules for a password the employee is choosing, never for one they already have. */
+function newPasswordError(value, confirmation) {
+  if (!value.trim()) return copy("Password can't be only spaces.", 'لا يمكن أن تتكوّن كلمة المرور من مسافات فقط.');
+  if (value.length < MIN_PASSWORD_LENGTH) return copy('Password must be at least 8 characters.', 'يجب أن تتكوّن كلمة المرور من 8 أحرف على الأقل.');
+  if (value !== confirmation) return copy('Passwords do not match.', 'كلمتا المرور غير متطابقتين.');
+  return '';
+}
+
 function lookupErrorCopy(error) {
   if (error instanceof ServerLookupConfigurationError) {
     return copy('Setup is not configured correctly in this app. Please contact support.', 'خدمة الإعداد غير مهيّأة بشكل صحيح في هذا التطبيق. يُرجى التواصل مع الدعم.');
@@ -51,7 +68,13 @@ function serverAddressIssueCopy(issue) {
   }
 }
 
-function authErrorCopy(error) {
+function authErrorCopy(error, phase) {
+  if (phase === 'password' && error.code === 'INVALID_PASSWORD') {
+    return copy("That password can't be used. Try a different one.", 'لا يمكن استخدام كلمة المرور هذه. جرّب كلمة مرور أخرى.');
+  }
+  if (phase === 'password' && error.code === 'AUTHENTICATION_FAILED') {
+    return copy("We couldn't change your password. Check the code and try again.", 'تعذّر تغيير كلمة المرور. تحقّق من الرمز وحاول مرة أخرى.');
+  }
   switch (error.code) {
     case 'INVALID_BASE_URL':
       return copy('The setup service returned an invalid response. Please try again or contact support.', 'أعادت خدمة الإعداد استجابة غير صالحة. حاول مرة أخرى أو تواصل مع الدعم.');
@@ -71,6 +94,10 @@ function authErrorCopy(error) {
       return error.retryable
         ? copy('The server could not be reached. Check your connection and try again.', 'تعذّر الوصول إلى الخادم. تحقّق من اتصالك وحاول مرة أخرى.')
         : copy('The request could not be confirmed. Check before submitting again; an OTP may already have been used.', 'تعذّر تأكيد الطلب. تحقّق قبل الإرسال مجددًا؛ ربما تم استخدام رمز التحقق.');
+    // The SDK's own service credential failed; nothing the employee entered.
+    case 'MASTER_TOKEN_FAILED':
+    case 'MASTER_TOKEN_REJECTED':
+      return copy('The sign-in service is unavailable right now. Please try again shortly.', 'خدمة تسجيل الدخول غير متاحة حاليًا. يُرجى المحاولة مرة أخرى بعد قليل.');
     default:
       return copy('Sign-in was not successful. Check your details or contact support.', 'لم ينجح تسجيل الدخول. تحقّق من بياناتك أو تواصل مع الدعم.');
   }
@@ -87,6 +114,7 @@ export default function useMobileLogin() {
   const [password, setPassword] = useState('');
   const [otp, setOtp] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [flow, setFlow] = useState(null);
   const [passwordMode, setPasswordMode] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -109,7 +137,13 @@ export default function useMobileLogin() {
     setPassword('');
     setOtp('');
     setNewPassword('');
+    setConfirmPassword('');
   };
+  // Password help belongs to sign-in only, and reset never to a password + OTP
+  // step: a code-only reset would bypass the password that step demands.
+  const signingIn = flow?.action === 'SIGN_IN';
+  const canCreatePassword = signingIn && flow.capabilities.canCreatePassword;
+  const canResetPassword = signingIn && flow.capabilities.canResetPassword && flow.nextStep !== 'ENTER_PASSWORD_AND_OTP';
   const clearFlow = () => {
     otpAttempted.current = false;
     setFlow(null);
@@ -176,9 +210,16 @@ export default function useMobileLogin() {
           httpStatus: caught.httpStatus,
           retryable: caught.retryable,
         });
+        // The rejected credential is cleared so the next attempt starts clean.
+        if (caught.code === 'INVALID_OR_EXPIRED_OTP') setOtp('');
+        if (caught.code === 'INVALID_PASSWORD') {
+          setPassword('');
+          setNewPassword('');
+          setConfirmPassword('');
+        }
         setError(pending.phase === 'manual' && MANUAL_SERVER_FAILURES.has(caught.code)
           ? copy("We couldn't connect to that server. Check the address and try again.", 'تعذّر الاتصال بهذا الخادم. تحقّق من العنوان وحاول مرة أخرى.')
-          : authErrorCopy(caught));
+          : authErrorCopy(caught, pending.phase));
       } else {
         setError(copy('The request could not be completed. Please try again or contact support.', 'تعذّر إكمال الطلب. يُرجى المحاولة مرة أخرى أو التواصل مع الدعم.'));
       }
@@ -196,9 +237,10 @@ export default function useMobileLogin() {
     otpAttempted.current = true;
     const sent = await auth.sendOtp({ mobileNumber: activeFlow.mobileNumber });
     if (!isCurrent(pending)) return;
+    const cooldown = Math.min(RESEND_SECONDS, sent.expiresIn);
     setOtpSent(true);
-    setResendDeadline(Date.now() + sent.expiresIn * 1000);
-    setResendSeconds(sent.expiresIn);
+    setResendDeadline(Date.now() + cooldown * 1000);
+    setResendSeconds(cooldown);
   };
 
   const applyFlow = async (auth, activeFlow, pending) => {
@@ -293,6 +335,14 @@ export default function useMobileLogin() {
       }
       if (requirement !== 'disabled' && value.trim()) credentials[name] = value;
     }
+    // An untouched optional password stays omitted so the SDK can manage one.
+    if (flow.credentials.password.purpose === 'create' && password) {
+      const issue = newPasswordError(password, confirmPassword);
+      if (issue) {
+        setError(issue);
+        return;
+      }
+    }
     return run('complete', async pending => {
       const auth = getMobileAuthClient(backendUrl);
       const result = await completeMobileSignIn({
@@ -314,7 +364,7 @@ export default function useMobileLogin() {
   };
 
   const startPasswordMode = mode => {
-    if (!flow || operation.current || !(mode === 'create' ? flow.capabilities.canCreatePassword : flow.capabilities.canResetPassword)) return;
+    if (!flow || operation.current || !(mode === 'create' ? canCreatePassword : canResetPassword)) return;
     clearSecrets();
     setError('');
     setPasswordMode(mode);
@@ -329,13 +379,29 @@ export default function useMobileLogin() {
       setError(copy('Enter the OTP and your new password.', 'أدخل رمز التحقق وكلمة المرور الجديدة.'));
       return;
     }
+    const issue = newPasswordError(newPassword, confirmPassword);
+    if (issue) {
+      setError(issue);
+      return;
+    }
     return run('password', async pending => {
       const auth = getMobileAuthClient(backendUrl);
-      await auth.setPasswordWithOtp({ mobileNumber: flow.mobileNumber, otp, newPassword });
+      let unconfirmed = false;
+      try {
+        await auth.setPasswordWithOtp({ mobileNumber: flow.mobileNumber, otp, newPassword });
+      } catch (caught) {
+        // The flow is a policy snapshot: if the change may have landed, it is stale.
+        if (!passwordChangeUnconfirmed(caught)) throw caught;
+        unconfirmed = true;
+      }
       if (!isCurrent(pending)) return;
+      pending.phase = 'begin';
       clearFlow();
       const activeFlow = await auth.begin({ mobileNumber: flow.mobileNumber });
       await applyFlow(auth, activeFlow, pending);
+      if (unconfirmed && isCurrent(pending)) {
+        setError(copy("We couldn't confirm whether your password changed. Continue with the sign-in below.", 'تعذّر التأكد من تغيير كلمة المرور. تابع تسجيل الدخول أدناه.'));
+      }
     });
   };
 
@@ -393,11 +459,16 @@ export default function useMobileLogin() {
     password,
     setPassword,
     otp,
-    setOtp,
+    // Codes are digits; drop whitespace a paste can bring (passwords stay untouched).
+    setOtp: value => setOtp(value.replace(/\s/g, '')),
     newPassword,
     setNewPassword,
+    confirmPassword,
+    setConfirmPassword,
     flow,
     passwordMode,
+    canCreatePassword,
+    canResetPassword,
     isLoading,
     isHydrating,
     isAvailable: isMobileAuthAvailable(),

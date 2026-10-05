@@ -59,5 +59,16 @@ target 'ClaudionCheckin' do
       :mac_catalyst_enabled => false,
       :ccache_enabled => ccache_enabled?(podfile_properties),
     )
+
+    # Xcode 27 refuses deployment targets below 15.0; some pods (and their resource bundles) still declare 9.0–13.4.
+    min_target = podfile_properties['ios.deploymentTarget'] || '15.1'
+    installer.pods_project.targets.each do |target|
+      target.build_configurations.each do |build_config|
+        target_version = build_config.build_settings['IPHONEOS_DEPLOYMENT_TARGET']
+        if target_version && Gem::Version.new(target_version) < Gem::Version.new(min_target)
+          build_config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = min_target
+        end
+      end
+    end
   end
 end

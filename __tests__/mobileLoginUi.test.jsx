@@ -59,8 +59,11 @@ beforeEach(() => {
     password: '',
     otp: '',
     newPassword: '',
+    confirmPassword: '',
     flow: null,
     passwordMode: null,
+    canCreatePassword: false,
+    canResetPassword: false,
     isLoading: false,
     isHydrating: false,
     error: null,
@@ -70,7 +73,7 @@ beforeEach(() => {
     otpSent: false,
   };
   [
-    'setCompanyCode', 'setDiscovery', 'setServerAddress', 'setMobileNumber', 'setPassword', 'setOtp', 'setNewPassword',
+    'setCompanyCode', 'setDiscovery', 'setServerAddress', 'setMobileNumber', 'setPassword', 'setOtp', 'setNewPassword', 'setConfirmPassword',
     'begin', 'complete', 'resendOtp', 'changeCompany', 'startCreatePassword',
     'startResetPassword', 'cancelPasswordMode', 'savePassword',
   ].forEach(action => { mockLogin[action] = jest.fn(); });
@@ -128,6 +131,7 @@ it.each([
   expect(!!queryByLabelText('Password')).toBe(passwordLabel === 'Password');
   expect(!!queryByLabelText('New password')).toBe(passwordLabel === 'New password');
   expect(!!queryByLabelText('Verification code')).toBe(hasOtp);
+  expect(!!queryByLabelText('Confirm password')).toBe(purpose === 'create');
   expect(!!queryByText('Optional')).toBe(password === 'optional');
 });
 
@@ -144,7 +148,21 @@ it('submits credentials through complete and preserves the QR destination', () =
   expect(mockNavigate).toHaveBeenCalledWith('Qrscan');
 });
 
-it('keeps resend disabled for the server-provided cooldown', () => {
+it('says a code was sent only when the current step asks for one', () => {
+  mockLogin.mobileNumber = '+15550000000';
+  // Sent for the password panel, then "Back to sign-in" on a password-only step.
+  mockLogin.otpSent = true;
+  mockLogin.flow = flow('ENTER_PASSWORD', 'required', 'disabled');
+  const screen = render(<MobileLogin />);
+  expect(screen.queryByText(/We sent a verification code/)).toBeNull();
+  expect(screen.getByText('Enter your details to finish signing in.')).toBeTruthy();
+
+  mockLogin.flow = flow('ENTER_OTP', 'disabled', 'required');
+  screen.rerender(<MobileLogin />);
+  expect(screen.getByText('We sent a verification code to +15550000000.')).toBeTruthy();
+});
+
+it('keeps resend disabled during the cooldown', () => {
   mockLogin.flow = flow('ENTER_OTP', 'disabled', 'required');
   mockLogin.resendSeconds = 42;
   const screen = render(<MobileLogin />);
@@ -159,13 +177,15 @@ it('keeps resend disabled for the server-provided cooldown', () => {
   expect(mockLogin.resendOtp).toHaveBeenCalledTimes(1);
 });
 
-it('shows password actions only when the flow allows them', () => {
-  mockLogin.flow = flow('ENTER_OTP', 'disabled', 'required');
+it('shows password actions only when the hook allows them, not from raw capabilities', () => {
+  mockLogin.flow = flow('ENTER_PASSWORD_AND_OTP', 'required', 'required');
+  mockLogin.flow.capabilities = { canCreatePassword: true, canResetPassword: true };
   const screen = render(<MobileLogin />);
   expect(screen.queryByLabelText('Create a password')).toBeNull();
   expect(screen.queryByLabelText('Forgot password?')).toBeNull();
 
-  mockLogin.flow.capabilities = { canCreatePassword: true, canResetPassword: true };
+  mockLogin.canCreatePassword = true;
+  mockLogin.canResetPassword = true;
   screen.rerender(<MobileLogin />);
   fireEvent.press(screen.getByLabelText('Create a password'));
   fireEvent.press(screen.getByLabelText('Forgot password?'));
@@ -176,11 +196,14 @@ it('shows password actions only when the flow allows them', () => {
 it.each(['create', 'reset'])('renders the %s password step in the same screen', mode => {
   mockLogin.flow = flow('ENTER_PASSWORD', 'required', 'disabled');
   mockLogin.passwordMode = mode;
-  const { getByLabelText, queryByLabelText } = render(<MobileLogin />);
+  const { getByLabelText, getByPlaceholderText, queryByLabelText } = render(<MobileLogin />);
 
   expect(queryByLabelText('Password')).toBeNull();
   expect(getByLabelText('Verification code')).toBeTruthy();
+  expect(getByPlaceholderText('At least 8 characters')).toBeTruthy();
   fireEvent.changeText(getByLabelText('New password'), 'synthetic-new-password');
+  fireEvent.changeText(getByLabelText('Confirm password'), 'synthetic-new-password');
+  expect(mockLogin.setConfirmPassword).toHaveBeenCalledWith('synthetic-new-password');
   fireEvent.press(getByLabelText('Save password'));
   fireEvent.press(getByLabelText('Back to sign-in'));
 

@@ -23,8 +23,7 @@ import StatusBanner from '../components/common/StatusBanner';
 import { BrandMark } from '../components/Welcome';
 import { isMobileAuthAvailable } from '../utils/mobileAuthCrypto';
 
-const isOptional = credential =>
-  String(credential?.requirement).toUpperCase() === 'OPTIONAL';
+const isOptional = credential => credential?.requirement === 'optional';
 const isEnabled = credential =>
   !!credential && credential.requirement !== 'disabled';
 const DISCOVERY_OPTIONS = [
@@ -50,7 +49,8 @@ function MobileLoginForm() {
   const subtitle = changingPassword
     ? 'Enter the code we sent and choose a new password.'
     : login.flow
-      ? login.otpSent
+      // A code sent for the password panel must not caption a password-only step.
+      ? login.otpSent && showOtp
         ? `We sent a verification code to ${login.mobileNumber}.`
         : 'Enter your details to finish signing in.'
       : login.backendUrl
@@ -64,6 +64,21 @@ function MobileLoginForm() {
   const buttonLabel = changingPassword
     ? 'Save password'
     : login.flow ? 'Sign in' : 'Continue';
+  // Not marked optional: it only counts once a password has been typed.
+  const confirmField = (
+    <FormField
+      label="Confirm password"
+      icon="lock-closed-outline"
+      placeholder="Re-enter the password"
+      value={login.confirmPassword}
+      onChangeText={login.setConfirmPassword}
+      secureTextEntry
+      autoCapitalize="none"
+      autoComplete="new-password"
+      textContentType="newPassword"
+      disabled={loading}
+    />
+  );
   const link = (label, onPress) => (
     <PressableScale
       accessibilityLabel={label}
@@ -246,7 +261,7 @@ function MobileLoginForm() {
                   <FormField
                     label={creatingFlowPassword ? 'New password' : 'Password'}
                     icon="lock-closed-outline"
-                    placeholder={creatingFlowPassword ? 'Choose a password' : 'Enter password'}
+                    placeholder={creatingFlowPassword ? 'At least 8 characters' : 'Enter password'}
                     value={login.password}
                     onChangeText={login.setPassword}
                     optional={isOptional(passwordCredential)}
@@ -257,6 +272,7 @@ function MobileLoginForm() {
                     disabled={loading}
                   />
                 )}
+                {!changingPassword && creatingFlowPassword && confirmField}
                 {showOtp && (
                   <View>
                     <FormField
@@ -265,7 +281,6 @@ function MobileLoginForm() {
                       placeholder="Enter code"
                       value={login.otp}
                       onChangeText={login.setOtp}
-                      optional={!changingPassword && isOptional(otpCredential)}
                       keyboardType="number-pad"
                       textContentType="oneTimeCode"
                       autoComplete="sms-otp"
@@ -286,18 +301,21 @@ function MobileLoginForm() {
                   </View>
                 )}
                 {changingPassword && (
-                  <FormField
-                    label="New password"
-                    icon="lock-closed-outline"
-                    placeholder="Choose a new password"
-                    value={login.newPassword}
-                    onChangeText={login.setNewPassword}
-                    secureTextEntry
-                    autoCapitalize="none"
-                    autoComplete="new-password"
-                    textContentType="newPassword"
-                    disabled={loading}
-                  />
+                  <>
+                    <FormField
+                      label="New password"
+                      icon="lock-closed-outline"
+                      placeholder="At least 8 characters"
+                      value={login.newPassword}
+                      onChangeText={login.setNewPassword}
+                      secureTextEntry
+                      autoCapitalize="none"
+                      autoComplete="new-password"
+                      textContentType="newPassword"
+                      disabled={loading}
+                    />
+                    {confirmField}
+                  </>
                 )}
               </Card>
 
@@ -327,8 +345,8 @@ function MobileLoginForm() {
                   ? link('Back to sign-in', login.cancelPasswordMode)
                   : (
                     <>
-                      {login.flow?.capabilities?.canCreatePassword && link('Create a password', login.startCreatePassword)}
-                      {login.flow?.capabilities?.canResetPassword && link('Forgot password?', login.startResetPassword)}
+                      {login.canCreatePassword && link('Create a password', login.startCreatePassword)}
+                      {login.canResetPassword && link('Forgot password?', login.startResetPassword)}
                     </>
                   )}
               </View>

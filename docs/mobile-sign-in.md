@@ -51,6 +51,28 @@ SDK `begin()`, and skips future lookup. “Change company” clears this prefere
 and the active form. Existing QR provisioning and canonical `baseUrl` remain
 intact until mobile session hand-off succeeds.
 
+## SDK transport and credentials
+
+SDK requests use an `expo/fetch` transport in `mobileAuth.service.js`. React
+Native's global fetch silently follows redirects despite the SDK's
+`redirect: "error"`, which could replay the form body and master bearer token.
+The transport also omits cookies, sends `Cache-Control: no-store`, returns every
+HTTP status to the SDK, and reports failures as cause-free `TIMEOUT` or
+`NETWORK_ERROR`. It is required lazily, so loading the module at startup (which
+QR users also do) cannot fail on the native fetch module.
+
+Resend is manual, with a 45-second cooldown, or the code's `expiresIn` when
+that is shorter. A password the employee chooses (sign-up, create, reset) needs
+a matching confirmation, at least 8 characters, and not only spaces. An
+untouched optional sign-up password is omitted, so the SDK sends a managed one.
+Create/reset is offered only on `SIGN_IN`, and reset never on
+`ENTER_PASSWORD_AND_OTP`, where a code-only reset would bypass the password.
+After `setPasswordWithOtp`, including an outcome the SDK cannot confirm, the
+old flow is discarded and `begin()` runs again. A rejected OTP or password is
+cleared from its field. `AUTH_CAFM_GAP_ANALYSIS.md` lists the remaining
+deliberate differences from the CAFM reference, including the absence of
+cold-boot re-authentication.
+
 ## Identity and attendance hand-off
 
 `completeMobileSignIn` invalidates the previous auth generation before calling
