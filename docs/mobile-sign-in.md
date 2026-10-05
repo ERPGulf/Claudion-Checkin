@@ -61,6 +61,13 @@ HTTP status to the SDK, and reports failures as cause-free `TIMEOUT` or
 `NETWORK_ERROR`. It is required lazily, so loading the module at startup (which
 QR users also do) cannot fail on the native fetch module.
 
+Development builds log every SDK exchange as `[auth-sdk] METHOD URL → status`
+with its request and response, plus the flow `begin()` resolved
+(`[auth-sdk] flow`). `access_token`, `refresh_token`, `password`,
+`new_password` and `otp` are masked as `***`; a failed request logs only
+`TIMEOUT` or `NETWORK_ERROR`, never the native error. Release builds log none
+of it. Read them in the Metro terminal or with `adb logcat -s ReactNativeJS`.
+
 Resend is manual, with a 45-second cooldown, or the code's `expiresIn` when
 that is shorter. A password the employee chooses (sign-up, create, reset) needs
 a matching confirmation, at least 8 characters, and not only spaces. An
@@ -72,6 +79,26 @@ old flow is discarded and `begin()` runs again. A rejected OTP or password is
 cleared from its field. `AUTH_CAFM_GAP_ANALYSIS.md` lists the remaining
 deliberate differences from the CAFM reference, including the absence of
 cold-boot re-authentication.
+
+## Authentication modes
+
+The backend sends one policy triple per tenant mode. The SDK resolves it
+against the employee's state, and the screen renders only the resolved
+credentials; it never reads the raw policy. `authFlowMatrix.test.js` pins this
+end to end.
+
+| Mode | Backend policy: sign-up password · sign-in · cold boot (password / OTP) | Sign-up | Sign-in | Cold boot |
+| --- | --- | --- | --- | --- |
+| Password | Mandatory · Mandatory / No · Mandatory / No | new password + code | password | password |
+| OTP | No · No / Mandatory · No / Mandatory | code | code | code |
+| Optional | Optional · Optional / Optional · Optional / Optional | code + optional new password | password if the employee has one, otherwise code | as sign-in |
+| Both | Mandatory · Mandatory / Mandatory · Mandatory / No | new password + code | password + code | password |
+
+Sign-up OTP is always Mandatory. There is no Skip button: an optional new
+password is labelled Optional and may be left empty, and the code is still
+required. A required password, including an Optional-mode employee's existing
+one, cannot be skipped, and a code cannot replace it. Cold boot is listed for
+completeness; the app does not run it.
 
 ## Identity and attendance hand-off
 

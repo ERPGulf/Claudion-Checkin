@@ -245,6 +245,8 @@ export default function useMobileLogin() {
 
   const applyFlow = async (auth, activeFlow, pending) => {
     if (!isCurrent(pending)) return;
+    // The SDK's resolved flow (step, fields, policy snapshot); it holds no credentials.
+    if (__DEV__) console.log('[auth-sdk] flow', JSON.stringify(activeFlow));
     clearSecrets();
     setPasswordMode(null);
     setFlow(activeFlow);

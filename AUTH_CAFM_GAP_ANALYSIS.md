@@ -204,7 +204,7 @@ Touch: `SDK` = `AUTH_SDK_ONLY`. No proposed change touches a `SHARED` or `QR_ONL
 | Identity mapping | Profile download, explicit attendance code | `employee.id` | INTENTIONAL DIFFERENCE (app-specific attendance identifier) | — | — |
 | Navigation | No imperative navigation; navigator swap; mobile route gated by crypto | Same principle | KEEP | — | — |
 | Logout | Shared logout; SDK client cache retained | `resetAuthClients()` | INTENTIONAL DIFFERENCE (master token is an unauthenticated, tenant-scoped service credential; nothing user-bound cached; avoids editing shared logout) | — | — |
-| Error handling | Code-only copy; diagnostics `{ code, httpStatus, retryable }` | Same (dev-only logs) | KEEP | — | — |
+| Error handling | Code-only copy; release diagnostics `{ code, httpStatus, retryable }`; development builds also log each SDK exchange and the resolved flow with credentials masked | Code-only copy; dev-only `{ code, httpStatus, retryable }`; transport logs nothing | INTENTIONAL DIFFERENCE (dev-only diagnostics, requested for debugging) | — | SDK |
 | Race conditions | Synchronous operation ref, operation identity for late results, generation guard, cancel on edit/company change | State-based disabling, flow identity | KEEP (stronger) | — | — |
 | Dead code | OTP `optional` prop (resolved OTP is never optional); upper-cased requirement compare | — | REMOVE | Simplify | SDK |
 | Discovery | `@erpgulf/server-lookup` / typed HTTPS origin; `begin()` validates the server | Directory + ping | INTENTIONAL DIFFERENCE (outside the SDK) | — | — |
@@ -281,7 +281,7 @@ holding nothing user-specific. Shared logout stays unchanged.
 
 | # | Change | File (classification) | QR regression risk |
 |---|---|---|---|
-| 1 | `expo/fetch` transport (`redirect:'error'`, `credentials:'omit'`, `Cache-Control: no-store`, own timer → `TIMEOUT`, cause-less `NETWORK_ERROR`, every status returned, no logs/retries); lazy `require` so a missing native module surfaces as `NETWORK_ERROR`, never a startup crash | `services/api/mobileAuth.service.js` (AUTH_SDK_ONLY) | None: only SDK clients use it; module import has no new side effect |
+| 1 | `expo/fetch` transport (`redirect:'error'`, `credentials:'omit'`, `Cache-Control: no-store`, own timer → `TIMEOUT`, cause-less `NETWORK_ERROR`, every status returned, no retries, masked logs in development builds only); lazy `require` so a missing native module surfaces as `NETWORK_ERROR`, never a startup crash | `services/api/mobileAuth.service.js` (AUTH_SDK_ONLY) | None: only SDK clients use it; module import has no new side effect |
 | 2 | Resend cooldown `min(45 s, expiresIn)` | `hooks/useMobileLogin.js` (AUTH_SDK_ONLY) | None |
 | 3 | Create/reset only on `SIGN_IN`; no reset on `ENTER_PASSWORD_AND_OTP`; hook exposes `canCreatePassword`/`canResetPassword` | `hooks/useMobileLogin.js`, `screens/MobileLogin.jsx` (AUTH_SDK_ONLY) | None |
 | 4 | Unknown `setPasswordWithOtp` outcome → discard flow, `begin()` again, explain | `hooks/useMobileLogin.js` | None |

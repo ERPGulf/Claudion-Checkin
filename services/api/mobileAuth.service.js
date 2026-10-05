@@ -50,11 +50,16 @@ const parseBody = (text) => {
   }
 };
 
+// Development builds log every SDK exchange; these values never reach a log.
+const SECRET_KEYS = new Set(["access_token", "refresh_token", "password", "new_password", "otp"]);
+const masked = (value) => JSON.stringify(value, (key, field) => (SECRET_KEYS.has(key) ? "***" : field));
+
 /**
  * React Native's global fetch (XHR) ignores the SDK's `redirect: "error"`, so a
  * redirect could replay the form body and master bearer. expo/fetch enforces it.
  * Every HTTP status is a response; failures are fresh errors with no cause,
- * because a native error can carry request credentials. No logs, no retries.
+ * because a native error can carry request credentials. No retries; logs only
+ * in development builds, with credentials masked.
  */
 const authTransport = {
   async request({ method, url, headers, body, timeoutMs = 15000 }) {
@@ -75,8 +80,18 @@ const authTransport = {
         credentials: "omit",
         signal: controller.signal,
       });
-      return { status: response.status, body: parseBody(await response.text()) };
+      const parsed = parseBody(await response.text());
+      if (__DEV__) {
+        console.log(
+          `[auth-sdk] ${method} ${url} → ${response.status}`,
+          body ? `request=${masked(Object.fromEntries(new URLSearchParams(body)))}` : "",
+          `response=${masked(parsed)}`,
+        );
+      }
+      return { status: response.status, body: parsed };
     } catch {
+      // The native error itself can carry credentials; log only its class.
+      if (__DEV__) console.log(`[auth-sdk] ${method} ${url} failed: ${timedOut ? "TIMEOUT" : "NETWORK_ERROR"}`);
       throw new AuthError(timedOut ? "TIMEOUT" : "NETWORK_ERROR", "Authentication request failed.");
     } finally {
       clearTimeout(timer);

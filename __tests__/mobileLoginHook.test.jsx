@@ -250,6 +250,28 @@ it('omits an untouched optional password and validates required OTP before compl
   view.unmount();
 });
 
+it('requires a resolved existing password even when the raw policy is Optional / Optional', async () => {
+  client.begin.mockResolvedValue(makeFlow('ENTER_PASSWORD', {
+    action: 'SIGN_IN',
+    capabilities: { canCreatePassword: false, canResetPassword: true },
+    policy: {
+      passwordPolicy: 'optional', otpPolicy: 'optional', employeeHasExistingPassword: true, employeeHasSignedUp: true,
+      signInPolicy: { passwordPolicy: 'optional', otpPolicy: 'optional' },
+    },
+  }));
+  const view = await mount(backend);
+  await start(view);
+  expect(client.sendOtp).not.toHaveBeenCalled();
+  act(() => view.result.current.setOtp('123456')); // a code cannot stand in for the password
+  await act(async () => { await view.result.current.complete(); });
+  expect(view.result.current.error).toBe('Enter your password.');
+  expect(completeMobileSignIn).not.toHaveBeenCalled();
+  act(() => view.result.current.setPassword('known password'));
+  await act(async () => { await view.result.current.complete(); });
+  expect(completeMobileSignIn.mock.calls[0][0].credentials).toEqual({ password: 'known password' });
+  view.unmount();
+});
+
 it('strips whitespace a paste brings into the code, never from a password', async () => {
   client.begin.mockResolvedValue(makeFlow('ENTER_PASSWORD_AND_OTP', {
     action: 'SIGN_IN', credentials: { password: { requirement: 'required', purpose: 'existing' }, otp: { requirement: 'required' } },

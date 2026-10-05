@@ -135,6 +135,33 @@ it.each([
   expect(!!queryByText('Optional')).toBe(password === 'optional');
 });
 
+// The raw backend policy rides along in flow.policy; only the resolved credentials may drive the form.
+const rawPolicy = (password, otp) => ({
+  passwordPolicy: password, otpPolicy: otp, employeeHasExistingPassword: true,
+  signInPolicy: { passwordPolicy: password, otpPolicy: otp },
+  coldBootPolicy: { passwordPolicy: password, otpPolicy: otp },
+});
+
+it('never offers to skip a password the flow resolved as required, even when the raw policy is Optional', () => {
+  mockLogin.flow = { ...flow('ENTER_PASSWORD', 'required', 'disabled', 'existing'), action: 'SIGN_IN', policy: rawPolicy('optional', 'optional') };
+  const screen = render(<MobileLogin />);
+
+  expect(screen.getByLabelText('Password')).toBeTruthy();
+  expect(screen.queryByText('Optional')).toBeNull();
+  expect(screen.queryByLabelText('Verification code')).toBeNull();
+  expect(screen.queryByText(/skip|without a password/i)).toBeNull();
+});
+
+it('marks a password skippable only when the resolved flow makes it optional, whatever the raw policy says', () => {
+  mockLogin.flow = { ...flow('ENTER_OTP_OPTIONAL_PASSWORD', 'optional', 'required', 'create'), action: 'SIGN_UP', policy: rawPolicy('required', 'required') };
+  const screen = render(<MobileLogin />);
+
+  // Leaving this field empty is the skip; the code stays required.
+  expect(screen.getByLabelText('New password')).toBeTruthy();
+  expect(screen.getByText('Optional')).toBeTruthy();
+  expect(screen.getByLabelText('Verification code')).toBeTruthy();
+});
+
 it('submits credentials through complete and preserves the QR destination', () => {
   mockLogin.flow = flow('ENTER_OTP', 'disabled', 'required');
   const { getByLabelText } = render(<MobileLogin />);

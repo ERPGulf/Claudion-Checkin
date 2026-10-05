@@ -297,6 +297,21 @@ describe("SDK transport", () => {
     expect(error.message).not.toContain("fake-master-token");
   });
 
+  it("logs every exchange in development with credentials masked", async () => {
+    replies((url) => [200, url.endsWith("master_token") ? masterBody
+      : url.endsWith("get_employee_login_policy") ? policyBody() : sdkSuccess()]);
+    const auth = getMobileAuthClient("https://transport-5.example.test");
+    const flow = await auth.begin({ mobileNumber: "5550001" });
+    await auth.complete(flow, { password: "fake-password" });
+    const logged = JSON.stringify(console.log.mock.calls);
+    expect(logged).toContain("get_employee_login_policy");
+    expect(logged).toContain("sign_in_policy");
+    expect(logged).toContain("sign_in_api");
+    for (const secret of ["fake-master-token", "fake-master-refresh", "fake-password", ACCESS, REFRESH]) {
+      expect(logged).not.toContain(secret);
+    }
+  });
+
   it("aborts at the client timeout and reports TIMEOUT", async () => {
     jest.useFakeTimers();
     try {
