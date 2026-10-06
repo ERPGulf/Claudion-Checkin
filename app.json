@@ -7,11 +7,6 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
-    "splash": {
-      "image": "./assets/splash.png",
-      "resizeMode": "cover",
-      "backgroundColor": "#ffffff"
-    },
     "plugins": [
       "@react-native-firebase/app",
       "@react-native-firebase/messaging",
@@ -28,22 +23,48 @@
           "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera to enable essential functionality, such as scanning QR codes and capturing photos for employee activity tracking and verification."
         }
       ],
+      "./plugins/withAttendanceBackgroundRuntime",
       [
         "expo-build-properties",
         {
           "ios": {
             "useFrameworks": "static",
-            "forceStaticLinking": ["RNFBApp", "RNFBMessaging"]
+            "enableSceneSupport": true,
+            "forceStaticLinking": [
+              "RNFBApp",
+              "RNFBMessaging"
+            ]
           }
+        }
+      ],
+      [
+        "./plugins/withAttendanceBackgroundRuntime",
+        {
+          "normalizeManifestOnly": true
         }
       ],
       "expo-font",
       "expo-asset",
-      "expo-notifications"
+      "expo-notifications",
+      "@react-native-community/datetimepicker",
+      "expo-image",
+      "expo-sqlite",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash.png",
+          "resizeMode": "cover",
+          "backgroundColor": "#ffffff",
+          "enableFullScreenImage_legacy": true
+        }
+      ]
     ],
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": false,
+      "deploymentTarget": "16.4",
       "bundleIdentifier": "com.bazim.claudioncheckin",
       "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
@@ -53,7 +74,9 @@
         "NSBarcodeScannerUsageDescription": "Allow $(PRODUCT_NAME) to access your camera to enable essential functionality, such as scanning QR codes and capturing photos for employee activity tracking and verification.",
         "NSMicrophoneUsageDescription": "Allow $(PRODUCT_NAME) to access your microphone",
         "ITSAppUsesNonExemptEncryption": false,
-        "UIBackgroundModes": ["remote-notification"]
+        "UIBackgroundModes": [
+          "remote-notification"
+        ]
       },
       "buildNumber": "13",
       "appleTeamId": "VWL956UDWG"
@@ -89,7 +112,7 @@
       }
     },
     "owner": "erpgulf",
-    "runtimeVersion": "1.2.1",
+    "runtimeVersion": "1.2.1-sdk57",
     "updates": {
       "url": "https://u.expo.dev/ee37c3a6-1da3-43ae-ad14-6b34a26c92ac",
       "enabled": true,

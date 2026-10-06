@@ -41,6 +41,12 @@ You can also provide a full URL instead of a method path.
 
 The `ios/` project is committed and contains native configuration. Use `npm run ios` for local builds; inspect any intentional prebuild changes before keeping them. In Xcode, ensure Push Notifications and Background Modes (Remote notifications) are enabled on the app target.
 
+SDK 57 uses Node 22.14.0 (Volta / `.nvmrc` / EAS build profiles), React Native
+0.86.3 and iOS 16.4 or newer. The maintained iOS project opts into Expo's scene
+lifecycle for Xcode 27/iOS 27. Do not clean-prebuild the production native
+folders. See [the native audit](docs/expo-native-upgrade-audit.md) and
+[migration validation record](docs/expo-sdk57-migration.md).
+
 ## Testing EAS OTA updates on Android and iOS
 
 This project is already configured for EAS Update:
@@ -49,6 +55,12 @@ This project is already configured for EAS Update:
 - `updates.url` points to the Expo project.
 - `runtimeVersion` is an explicit string in `app.json`; iOS reads `EXUpdatesRuntimeVersion` from `ios/ClaudionCheckin/Supporting/Expo.plist`.
 - EAS build channels are defined in `eas.json`.
+
+The SDK 57 binary uses runtime `1.2.1-sdk57`, separate from existing SDK 54
+runtime `1.2.1`. Publish SDK 57 bundles only for the new runtime. SDK 55+ also
+requires an explicit EAS environment when publishing; the update scripts select
+`preview` or `production`. Ensure that environment contains the intended public
+lookup configuration before publishing. No update is published by local tests.
 
 When you bump the app version, keep the runtime version in `app.json` and the native Expo update config aligned. Review the [versioning guide](CLAUDE.md#versioning-gotcha): the committed iOS project does not automatically receive `app.json` changes. Changes to native modules or native configuration require a new binary.
 

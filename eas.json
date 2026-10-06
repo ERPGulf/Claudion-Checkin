@@ -7,11 +7,13 @@
   },
   "build": {
     "development": {
+      "node": "22.14.0",
       "developmentClient": true,
       "distribution": "internal",
       "channel": "development"
     },
     "preview": {
+      "node": "22.14.0",
       "distribution": "internal",
       "android": {
         "buildType": "apk"
@@ -19,6 +21,7 @@
       "channel": "preview"
     },
     "production": {
+      "node": "22.14.0",
       "android": {
         "buildType": "app-bundle"
       },

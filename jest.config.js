@@ -12,7 +12,8 @@ module.exports = {
   // Ignored here rather than deleted: removing 255 tracked files is a
   // repository decision, not a test-config one, and the directory should be
   // dropped in its own commit. Until then this keeps the test run honest.
-  testPathIgnorePatterns: ["/node_modules/", "<rootDir>/.git-rewrite/"],
+  testPathIgnorePatterns: ["/node_modules/", "<rootDir>/.git-rewrite/", "<rootDir>/.expo/"],
+  modulePathIgnorePatterns: ["<rootDir>/.git-rewrite/", "<rootDir>/.expo/"],
 
   transformIgnorePatterns: [
     "node_modules/(?!(" +
@@ -40,6 +41,12 @@ module.exports = {
   moduleNameMapper: {
     "^@erpgulf/auth-sdk$": "<rootDir>/node_modules/@erpgulf/auth-sdk/dist/index.js",
     "^@erpgulf/server-lookup$": "<rootDir>/node_modules/@erpgulf/server-lookup/dist/index.js",
-    "^expo-modules-core$": "<rootDir>/node_modules/expo-modules-core",
+    "^expo-modules-core$": require.resolve("expo-modules-core", {
+      paths: [require.resolve("expo/package.json")],
+    }),
+    "^expo-modules-core/src/polyfill/dangerous-internal$": require.resolve(
+      "expo-modules-core/src/polyfill/dangerous-internal",
+      { paths: [require.resolve("expo/package.json")] },
+    ),
   },
 };

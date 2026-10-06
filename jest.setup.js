@@ -95,3 +95,8 @@ jest.mock("@react-native-firebase/messaging", () => {
 
   return messaging;
 });
+// Expo's URL implementation uses TextEncoder. Jest's jsdom environment does
+// not expose Node's encoders, although both are available in the native runtime.
+const { TextEncoder, TextDecoder } = require("node:util");
+global.TextEncoder ??= TextEncoder;
+global.TextDecoder ??= TextDecoder;
