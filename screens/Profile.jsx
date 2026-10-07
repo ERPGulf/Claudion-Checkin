@@ -26,6 +26,7 @@ import AppearanceSetting from "../components/settings/AppearanceSetting";
 import OfflineSyncSetting from "../components/settings/OfflineSyncSetting";
 import AttendanceRecoverySetting from "../components/settings/AttendanceRecoverySetting";
 import FeatureSettingsStatus from "../components/settings/FeatureSettingsStatus";
+import CrashlyticsTestSetting from "../components/settings/CrashlyticsTestSetting";
 // TEMPORARY: New Home Experience experiment — remove with the feature.
 import HomeExperienceSetting from "../components/experimental/HomeExperienceSetting";
 import user from "../assets/images/user.png";
@@ -569,6 +570,9 @@ function Profile() {
         {/* TEMPORARY: New Home Experience experiment — delete this line and
             its import when the experiment ends. */}
         <HomeExperienceSetting />
+
+        {/* Renders nothing outside development and preview builds. */}
+        <CrashlyticsTestSetting />
 
         {/* -------------------- SESSION -------------------- */}
         <SectionHeader

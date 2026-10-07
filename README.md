@@ -47,6 +47,25 @@ lifecycle for Xcode 27/iOS 27. Do not clean-prebuild the production native
 folders. See [the native audit](docs/expo-native-upgrade-audit.md) and
 [migration validation record](docs/expo-sdk57-migration.md).
 
+## Crash reporting (Firebase Crashlytics)
+
+`@react-native-firebase/crashlytics` (24.0.0, the same version as app/messaging) reports native crashes, uncaught JS errors and a few deliberately chosen non-fatal errors to the existing Firebase project.
+
+- **Code:** everything goes through `services/crashlytics.service.js`; never import the package directly. The package creates its native module on import, so the service requires it lazily and turns every call into a no-op on binaries built before it (an OTA can deliver this JS to them).
+- **Collection:** `firebase.json` enables release builds only (`crashlytics_debug_enabled: false`). To test from a debug build, set it to `true` and rebuild the native app.
+- **Context:** a hashed employee ID (first 16 hex characters of SHA-256 of `<employee_code>@<tenant host>`), tenant host, sign-in method, current screen, UI mode and the running OTA update. No names, phone numbers, tokens or payloads. To find one employee's crashes: `printf '%s' 'HR-EMP-00042@acme.example.com' | shasum -a 256 | cut -c1-16`.
+- **Native:** iOS uploads dSYMs from the `[CP-User] [RNFB] Crashlytics Configuration` build phase that `pod install` added. Android applies the Crashlytics Gradle plugin through the config plugin when EAS prebuilds the gitignored `android/`. Adding the package needs a new store build; an OTA alone leaves crash reporting inactive.
+- **Local Android builds:** `npx expo prebuild --platform android` regenerates `android/` (SDK 57's prebuild cleans by default; `--no-clean` opts out). Never prebuild iOS: it would regenerate the committed `ios/` project.
+
+### Verifying a build
+
+Use an internal (`preview`) or development build, never Expo Go, and do not launch it from Xcode: Crashlytics cannot capture crashes while a debugger is attached.
+
+1. Profile → **Crash reporting test** (shown only in development and `preview` builds) → **Record test non-fatal**. Close the app completely and reopen it; reports upload on the next launch.
+2. Firebase console → Crashlytics → choose the platform → filter **Non-fatals**. `CRASHLYTICS_TEST_NON_FATAL` appears within a few minutes.
+3. **Force native crash** → confirm. The app closes. Reopen it, then check **Crashes** for the new issue.
+4. Check the stack traces: iOS frames should show symbols, not addresses. If the console reports a missing dSYM, the build phase did not upload it. Android Java/Kotlin frames are readable as-is because R8 is off; enabling it requires the mapping-file upload the plugin performs automatically.
+
 ## Testing EAS OTA updates on Android and iOS
 
 This project is already configured for EAS Update:

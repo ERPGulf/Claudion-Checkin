@@ -22,6 +22,8 @@ import OfflineBanner from "./components/common/OfflineBanner";
 import AutoAttendanceBootstrap from "./components/AutoAttendanceBootstrap";
 import OfflineAttendanceBootstrap from "./components/OfflineAttendanceBootstrap";
 import FeatureSettingsBootstrap from "./components/FeatureSettingsBootstrap";
+import CrashReportingBootstrap from "./components/CrashReportingBootstrap";
+import ErrorBoundary from "./components/common/ErrorBoundary";
 import { selectIsLoggedIn } from "./redux/Slices/AuthSlice";
 import {
   initializeFcm,
@@ -35,7 +37,13 @@ import { hydrate as hydrateAppearance } from "./settings/appearance";
 import { hydrate as hydrateHomeExperience } from "./settings/homeExperience";
 import { hydrate as hydrateOfflineSyncAlerts } from "./settings/offlineSyncAlerts";
 import { installMobileAuthCrypto } from "./utils/mobileAuthCrypto";
+import {
+  initializeCrashReporting,
+  recordNonFatalError,
+} from "./services/crashlytics.service";
 
+// First, so the JS error handler covers everything after it.
+initializeCrashReporting();
 installMobileAuthCrypto();
 
 function cacheFonts(fonts) {
@@ -155,6 +163,9 @@ export default function App() {
           }
         }
       } catch (error) {
+        // Fonts or stored preferences failed to load. The app still boots, so
+        // nothing else would ever say so.
+        recordNonFatalError(error, { feature: "app", action: "startup" });
       } finally {
         setAppReady(true);
         SplashScreen.hideAsync();
@@ -180,7 +191,12 @@ export default function App() {
                 navigator below does not wait on it — it renders off the
                 persisted settings and re-renders if they change. */}
             <FeatureSettingsBootstrap />
-            <Navigator />
+            <CrashReportingBootstrap />
+            {/* Around the navigator only: a render error in a screen must not
+                stop the bootstraps above, which run automatic attendance. */}
+            <ErrorBoundary>
+              <Navigator />
+            </ErrorBoundary>
             {/* Above the navigator so it floats over any screen, below AppToast
                 so a transient toast still wins the top of the screen. */}
             <OfflineBanner />

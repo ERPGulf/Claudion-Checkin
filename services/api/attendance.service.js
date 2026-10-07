@@ -23,6 +23,10 @@ import {
   rememberServerOffset,
   SERVER_TIMESTAMP_FORMAT,
 } from "../../utils/serverClock";
+import {
+  isProgrammingError,
+  recordNonFatalError,
+} from "../crashlytics.service";
 
 export const getServerTime = async () => {
   const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
@@ -391,6 +395,11 @@ export const userCheckIn = async ({ employeeCode, type, locationData }) => {
       location: nearest ?? null, // Full location object for Redux
     };
   } catch (error) {
+    // Refusals, permissions and network failures are expected here and stay
+    // out of Crashlytics; a TypeError building the punch is a bug.
+    if (isProgrammingError(error)) {
+      recordNonFatalError(error, { feature: "attendance", action: "manual_punch", type });
+    }
     return {
       allowed: false,
       message: error.message || "Something went wrong during check-in",
@@ -494,6 +503,10 @@ export const autoCheckInOut = async ({
     };
   } catch (error) {
     console.log(`${logPrefix} Failed:`, error?.message);
+    // Same rule as userCheckIn: only a bug in our own code is reported.
+    if (isProgrammingError(error)) {
+      recordNonFatalError(error, { feature: "attendance", action: "auto_punch", type });
+    }
     return {
       allowed: false,
       message: error?.message || "Automatic attendance failed",

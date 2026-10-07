@@ -14,7 +14,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
  *    `legacy*` branches; keep the modern screen options and Home.
  * 4. screens/Profile.jsx — drop the <HomeExperienceSetting /> line + import.
  * 5. App.js — drop the `await hydrateHomeExperience()` line + import.
- * 6. Optional: AsyncStorage.removeItem('experimental_new_home_experience')
+ * 6. components/CrashReportingBootstrap.jsx — drop the useHomeExperience()
+ *    call and the `ui_mode` effect.
+ * 7. Optional: AsyncStorage.removeItem('experimental_new_home_experience')
  *    once, to clear the stored flag from devices.
  * -----------------------------------------------------------------------
  *

@@ -1,5 +1,6 @@
 // src/services/offline/AttendanceDatabase.js
 import * as SQLite from "expo-sqlite";
+import { recordNonFatalError } from "../crashlytics.service";
 
 /**
  * The offline attendance store.
@@ -331,6 +332,9 @@ export const getDatabase = () => {
       return database;
     })().catch((error) => {
       databasePromise = null;
+      // Every queue read and write goes through here, so this is the one place
+      // an unopenable or unmigratable attendance database shows up.
+      recordNonFatalError(error, { feature: "offline_queue", action: "open_database" });
       throw error;
     });
   }
