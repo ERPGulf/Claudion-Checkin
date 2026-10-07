@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import {
   createLeaveApplication,
   getLeaveApplications,
@@ -7,6 +7,7 @@ import {
   uploadLeaveAttachment,
 } from '../services/api';
 import { useAttachmentPicker } from './useAttachmentPicker';
+import { hapticsMessage } from '../utils/HapticsMessage';
 import useRequestHistory from './useRequestHistory';
 
 /**
@@ -151,14 +152,24 @@ export default function useLeaveRequest() {
 
   /* ---------------------------------------------------------------------
    * Dates
+   *
+   * Android's dialog closes itself, so closing on the first event is right
+   * there. iOS's inline spinner fires `onChange` on every tick of the wheel;
+   * closing on the first one snatched it away mid-scroll. On iOS it stays open
+   * until the screen's Done calls `closeFromPicker` / `closeToPicker` — the same
+   * arrangement as useAttendanceRequest.
    * ------------------------------------------------------------------- */
+
+  const isIOS = Platform.OS === 'ios';
 
   const openFromPicker = useCallback(() => setShowFromPicker(true), []);
   const openToPicker = useCallback(() => setShowToPicker(true), []);
+  const closeFromPicker = useCallback(() => setShowFromPicker(false), []);
+  const closeToPicker = useCallback(() => setShowToPicker(false), []);
 
   const handleFromChange = useCallback(
     (event, selectedDate) => {
-      setShowFromPicker(false);
+      if (!isIOS) setShowFromPicker(false);
 
       if (event?.type === 'dismissed') return;
       if (!selectedDate) return;
@@ -174,11 +185,11 @@ export default function useLeaveRequest() {
         setToDate(validDate);
       }
     },
-    [toDate],
+    [toDate, isIOS],
   );
 
   const handleToChange = useCallback((event, selectedDate) => {
-    setShowToPicker(false);
+    if (!isIOS) setShowToPicker(false);
 
     if (event?.type === 'dismissed') return;
     if (!selectedDate) return;
@@ -189,7 +200,7 @@ export default function useLeaveRequest() {
     if (Number.isNaN(validDate.getTime())) return;
 
     setToDate(validDate);
-  }, []);
+  }, [isIOS]);
 
   /* ---------------------------------------------------------------------
    * Attachment. The sheet is dismissed before the picker opens, then the
@@ -282,6 +293,7 @@ export default function useLeaveRequest() {
       const res = await createLeaveApplication(leaveData);
 
       if (res?.error) {
+        hapticsMessage('error');
         Alert.alert('Error', res.error);
         return;
       }
@@ -305,6 +317,7 @@ export default function useLeaveRequest() {
       await refetchHistory();
       resetHistoryPage();
 
+      hapticsMessage('success');
       Alert.alert('Success', 'Leave request submitted successfully!', [
         {
           text: 'OK',
@@ -312,7 +325,11 @@ export default function useLeaveRequest() {
         },
       ]);
     } catch (err) {
-      Alert.alert('Error', err.message || 'Something went wrong.');
+      // Fixed copy: `err.message` here can be a developer string such as
+      // "Leave docname missing", which means nothing to an employee.
+      console.log('Leave submit failed:', err?.message);
+      hapticsMessage('error');
+      Alert.alert('Error', 'Something went wrong.');
     } finally {
       setLoading(false);
     }
@@ -377,6 +394,11 @@ export default function useLeaveRequest() {
     setShowToPicker,
     handleFromChange,
     handleToChange,
+
+    // iOS keeps the spinner open until an explicit Done; Android never shows it.
+    needsDoneAffordance: isIOS,
+    closeFromPicker,
+    closeToPicker,
 
     // Attachment
     isBottomSheetVisible,

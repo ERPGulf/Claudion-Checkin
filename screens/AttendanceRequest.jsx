@@ -1,6 +1,7 @@
-import React from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   Platform,
+  RefreshControl,
   ScrollView,
   Text,
   View,
@@ -17,7 +18,7 @@ import ActionButton from "../components/common/ActionButton";
 import Card from "../components/common/Card";
 import EmptyState from "../components/common/EmptyState";
 import ModuleCard from "../components/common/ModuleCard";
-import PressableScale from "../components/common/PressableScale";
+import PickerWithDone from "../components/common/PickerWithDone";
 import RecordCard from "../components/common/RecordCard";
 import SectionHeader from "../components/common/SectionHeader";
 import StatusBanner from "../components/common/StatusBanner";
@@ -65,47 +66,6 @@ const pickerValue = (value) =>
  * (two columns), because on iOS `display="spinner"` lays out inline: the wheel
  * has to stay next to the field it edits.
  */
-/**
- * A native picker and, on iOS only, the Done that dismisses it.
- *
- * Android's picker is a modal dialog that closes itself, so it needs nothing
- * here. iOS renders an inline spinner that stays put and reports every tick of
- * the wheel — the screen used to close on the first of those, which snatched the
- * picker away the instant it was touched and committed whichever value was under
- * the finger. The spinner now stays open and this is how it is closed.
- */
-function PickerWithDone({ needsDone, onDone, children }) {
-  const { colors } = useAppTheme();
-
-  if (!needsDone) return children;
-
-  return (
-    <View>
-      {children}
-
-      <PressableScale
-        onPress={onDone}
-        accessibilityRole="button"
-        accessibilityLabel="Done"
-        hitSlop={8}
-        style={{
-          alignSelf: "flex-end",
-          paddingHorizontal: SPACING.md,
-          paddingVertical: SPACING.xs + 2,
-          minHeight: 44,
-          justifyContent: "center",
-        }}
-      >
-        <Text
-          style={{ ...TYPO.body, fontWeight: "600", color: colors.primary2 }}
-        >
-          Done
-        </Text>
-      </PressableScale>
-    </View>
-  );
-}
-
 function FieldGroup({ fields, twoColumns }) {
   if (twoColumns) {
     return (
@@ -192,7 +152,6 @@ function AttendanceRequest() {
     showMoreRequests,
     isFetchingHistory,
     isHistoryError,
-    historyError,
     refetchHistory,
     attendanceRequests,
     onFromDateChange,
@@ -209,7 +168,49 @@ function AttendanceRequest() {
     handlePickDocument,
     handleSubmit,
     dateRangeInvalid,
+    timeRangeInvalid,
+    reasonMissing,
   } = useAttendanceRequest();
+
+  // Inline errors appear only after the first submit attempt, as on Loan
+  // Application and Expense Claims: both times start at "now", so the time
+  // check fails on arrival. They gate nothing — the hook still raises its Alert.
+  const [attempted, setAttempted] = useState(false);
+
+  const onSubmitPress = useCallback(() => {
+    setAttempted(true);
+    handleSubmit();
+  }, [handleSubmit]);
+
+  // The hook blanks the reason once a request is acknowledged; clear the error
+  // marks with it, so a fresh form isn't pre-marked as invalid.
+  useEffect(() => {
+    if (reasonMissing) setAttempted(false);
+  }, [reasonMissing]);
+
+  const timeInvalid = attempted && timeRangeInvalid;
+
+  // The date range has its own banner in the date card.
+  const missing = attempted
+    ? [
+        timeRangeInvalid ? "To time must be after From time." : null,
+        reasonMissing ? "Choose a reason." : null,
+      ]
+        .filter(Boolean)
+        .join(" ") || null
+    : null;
+
+  // Only a pull shows the spinner; the post-submit refetch stays silent.
+  const [pulling, setPulling] = useState(false);
+
+  const onRefresh = useCallback(async () => {
+    setPulling(true);
+    try {
+      await refetchHistory();
+    } finally {
+      setPulling(false);
+    }
+  }, [refetchHistory]);
 
   // iOS-only. Keeps the native wheel on the same palette as the screen; has no
   // bearing on how a value is picked.
@@ -235,6 +236,15 @@ function AttendanceRequest() {
           paddingBottom: SPACING.xxxl,
         }}
         keyboardShouldPersistTaps="handled"
+        refreshControl={
+          <RefreshControl
+            refreshing={pulling}
+            onRefresh={onRefresh}
+            tintColor={colors.textMuted}
+            colors={[colors.primary2]}
+            progressBackgroundColor={colors.cardBackground}
+          />
+        }
       >
         {/* ---------- Introduction ---------- */}
         {/* Icon centred against the two text lines rather than top-aligned, so
@@ -364,6 +374,7 @@ function AttendanceRequest() {
                     icon: "time-outline",
                     onPress: openFromTimePicker,
                     active: showFromTimePicker,
+                    invalid: timeInvalid,
                     picker: showFromTimePicker && (
                       <PickerWithDone
                         needsDone={needsDoneAffordance}
@@ -388,6 +399,7 @@ function AttendanceRequest() {
                     icon: "time-outline",
                     onPress: openToTimePicker,
                     active: showToTimePicker,
+                    invalid: timeInvalid,
                     picker: showToTimePicker && (
                       <PickerWithDone
                         needsDone={needsDoneAffordance}
@@ -454,6 +466,17 @@ function AttendanceRequest() {
           </View>
         </ModuleCard>
 
+        {/* Mirrors the checks handleSubmit already makes, surfaced after the
+            first attempt. It gates nothing — the hook still raises its Alert. */}
+        {!!missing && (
+          <StatusBanner
+            tone="error"
+            title="Finish the form first"
+            message={missing}
+            style={{ marginBottom: SPACING.md }}
+          />
+        )}
+
         {/* ---------- Submit ---------- */}
         <ActionButton
           label="Submit attendance request"
@@ -463,7 +486,7 @@ function AttendanceRequest() {
           elevated
           loading={loading}
           disabled={loading}
-          onPress={handleSubmit}
+          onPress={onSubmitPress}
         />
 
         {/* ---------- What happens next ---------- */}
@@ -495,9 +518,7 @@ function AttendanceRequest() {
               compact
               icon="cloud-offline-outline"
               title="Couldn't load your requests"
-              description={
-                historyError?.message || "Unable to load attendance requests."
-              }
+              description="Unable to load attendance requests."
               actionLabel="Retry"
               onActionPress={refetchHistory}
             />

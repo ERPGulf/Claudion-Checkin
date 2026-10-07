@@ -23,6 +23,9 @@ function PressableScale({
   activeOpacity = 0.9,
   disabled,
   hitSlop = 8,
+  // Defaulted here, not before `{...rest}`: a caller passing an explicit
+  // `undefined` (FeatureTile does) would otherwise strip the button role.
+  accessibilityRole = 'button',
   ...rest
 }) {
   const progress = useRef(new Animated.Value(0)).current;
@@ -56,12 +59,15 @@ function PressableScale({
 
   return (
     <AnimatedPressable
-      accessibilityRole="button"
+      accessibilityRole={accessibilityRole}
       disabled={disabled}
       hitSlop={hitSlop}
       onPressIn={() => animate(1)}
       onPressOut={() => animate(0)}
-      style={[style, !disabled && animatedStyle]}
+      // Always animated: a button that turns disabled (loading) on tap springs
+      // back from its pressed state instead of snapping. A disabled Pressable
+      // never fires onPressIn, so at rest this is scale 1.
+      style={[style, animatedStyle]}
       {...rest}
     >
       {children}

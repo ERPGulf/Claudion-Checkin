@@ -130,6 +130,8 @@ function Notifications() {
    * screen. The bar is hidden until there is something to search: a query over an
    * empty inbox can only ever return nothing.
    */
+  // Shown while loading too, so the bar doesn't pop in and push the list down.
+  const showSearch = loading || total > 0;
   const listHeader = useMemo(
     () => (
       <View style={[GUTTER, { paddingBottom: SPACING.sm }]}>
@@ -137,12 +139,11 @@ function Notifications() {
           style={{
             flexDirection: "row",
             alignItems: "center",
-            marginBottom: total > 0 ? SPACING.md : 0,
+            marginBottom: showSearch ? SPACING.md : 0,
           }}
         >
           <Text
             style={{ ...TYPO.caption, color: colors.textMuted, flex: 1 }}
-            numberOfLines={2}
           >
             {unreadCount > 0
               ? `Stay up to date with your latest activity. ${unreadCount} unread.`
@@ -159,7 +160,7 @@ function Notifications() {
           )}
         </View>
 
-        {total > 0 && (
+        {showSearch && (
           <SearchBar
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -174,6 +175,7 @@ function Notifications() {
       matches,
       searchQuery,
       setSearchQuery,
+      showSearch,
       total,
       unreadCount,
     ],

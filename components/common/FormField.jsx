@@ -1,6 +1,6 @@
 /* eslint-disable react/prop-types */
-import React, { useState } from 'react';
-import { Text, TextInput, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { AccessibilityInfo, Platform, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ICON, RADIUS, SPACING, TYPO } from '../../constants';
 import useAppTheme from '../../hooks/useAppTheme';
@@ -94,6 +94,13 @@ function FormField({
 
   // A message is a failure; a caller should not have to say so twice.
   const isInvalid = invalid || !!errorText;
+
+  // The live region below covers Android; iOS ignores it.
+  useEffect(() => {
+    if (errorText && Platform.OS === 'ios') {
+      AccessibilityInfo.announceForAccessibility(errorText);
+    }
+  }, [errorText]);
 
   // Whole extra lines of body type beyond the three the box is built around, so
   // the container and the input grow together and stay in step.

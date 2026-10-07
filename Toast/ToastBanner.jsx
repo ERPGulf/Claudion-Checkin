@@ -1,6 +1,6 @@
 /* eslint-disable react/prop-types */
-import React, { memo } from "react";
-import { Text, View } from "react-native";
+import React, { memo, useEffect } from "react";
+import { AccessibilityInfo, Platform, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { ICON, RADIUS, SHADOWS, SPACING, TYPO } from "../constants";
 import useAppTheme from "../hooks/useAppTheme";
@@ -12,6 +12,13 @@ const WIDTH = "92%";
 
 /** Past this the banner stops growing, so it doesn't run edge to edge on a tablet. */
 const MAX_WIDTH = 560;
+
+/**
+ * Callers sometimes pass a raw response body (an object) as `text2`; rendering
+ * that inside <Text> throws and takes the whole app down. Drop it instead.
+ */
+const asText = (value) =>
+  typeof value === "string" || typeof value === "number" ? String(value) : null;
 
 /**
  * The app's toast, as one banner rendered for every type.
@@ -38,14 +45,24 @@ const MAX_WIDTH = 560;
 function ToastBanner({
   tone = "neutral",
   icon = "information-circle",
-  text1,
-  text2,
+  text1: rawText1,
+  text2: rawText2,
   text1Style,
   text2Style,
   onPress,
   hide,
 }) {
   const { colors, isDark } = useAppTheme();
+  const text1 = asText(rawText1);
+  const text2 = asText(rawText2);
+  const label = [text1, text2].filter(Boolean).join(". ");
+
+  // iOS ignores accessibilityLiveRegion, so VoiceOver has to be told.
+  useEffect(() => {
+    if (Platform.OS === "ios" && label) {
+      AccessibilityInfo.announceForAccessibility(label);
+    }
+  }, [label]);
 
   const surface = colors[`${tone}Surface`] || colors.neutralSurface;
   const border = colors[`${tone}Border`] || colors.neutralBorder;
@@ -140,7 +157,7 @@ function ToastBanner({
     accessible: true,
     accessibilityRole: "alert",
     accessibilityLiveRegion: "polite",
-    accessibilityLabel: [text1, text2].filter(Boolean).join(". "),
+    accessibilityLabel: label,
   };
 
   // Only pressable when the caller gave it something to do, so a plain toast

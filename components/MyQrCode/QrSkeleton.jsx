@@ -40,7 +40,7 @@ function QrSkeleton() {
         }}
       />
 
-      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'stretch' }}>
         <SkeletonBlock width={44} height={44} circle opacity={opacity} />
         <View style={{ marginStart: SPACING.md }}>
           <SkeletonBlock width={120} height={13} opacity={opacity} />

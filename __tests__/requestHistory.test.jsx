@@ -38,7 +38,7 @@ import {
   describeRecordStatus,
   formatDateRange,
 } from '../utils/records';
-import {
+import useAttendanceRequest, {
   timeRangeInvalid,
   isSameCalendarDay,
 } from '../hooks/useAttendanceRequest';
@@ -238,5 +238,32 @@ describe('isSameCalendarDay', () => {
     expect(
       isSameCalendarDay(new Date(2026, 7, 5), new Date(2026, 7, 6)),
     ).toBe(false);
+  });
+});
+
+/* =====================================================================
+ * useAttendanceRequest pickers — one at a time
+ * ================================================================== */
+
+describe('useAttendanceRequest pickers', () => {
+  it('closes the other pickers when one opens, so two iOS spinners never stack', async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const { result } = renderHook(() => useAttendanceRequest(), {
+      wrapper: ({ children }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      ),
+    });
+
+    act(() => result.current.openFromPicker());
+    act(() => result.current.openToTimePicker());
+
+    expect(result.current.showFromPicker).toBe(false);
+    expect(result.current.showToPicker).toBe(false);
+    expect(result.current.showFromTimePicker).toBe(false);
+    expect(result.current.showToTimePicker).toBe(true);
+
+    await waitFor(() => expect(result.current.isFetchingHistory).toBe(false));
   });
 });

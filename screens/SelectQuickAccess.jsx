@@ -1,13 +1,11 @@
 import { View, ScrollView } from 'react-native';
-import React, { useLayoutEffect } from 'react';
-import { Ionicons } from '@expo/vector-icons';
+import React from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { useNavigation } from '@react-navigation/native';
-import { ICON, RADIUS, SPACING } from '../constants';
+import { SPACING } from '../constants';
 import useAppTheme from '../hooks/useAppTheme';
+import useModernScreenHeader from '../hooks/useModernScreenHeader';
 import Card from '../components/common/Card';
 import FeatureTile from '../components/common/FeatureTile';
-import PressableScale from '../components/common/PressableScale';
 import SectionHeader from '../components/common/SectionHeader';
 import {
   activeButtonsSelector,
@@ -27,40 +25,8 @@ const COLUMNS = 3;
 export { QUICK_ACCESS_OPTIONS };
 
 function SelectQuickAccess() {
-  const navigation = useNavigation();
   const { colors } = useAppTheme();
-
-  useLayoutEffect(() => {
-    navigation.setOptions({
-      headerShadowVisible: false,
-      headerShown: true,
-      headerTitle: 'Quick Access',
-      headerTitleAlign: 'center',
-      headerStyle: { backgroundColor: colors.surfaceSecondary },
-      headerTitleStyle: { color: colors.textPrimary },
-      headerTintColor: colors.textPrimary,
-      headerLeft: () => (
-        <PressableScale
-          onPress={() => navigation.goBack()}
-          accessibilityLabel="Go back"
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: RADIUS.pill,
-            backgroundColor: colors.iconBackground,
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <Ionicons
-            name="chevron-back"
-            size={ICON.md}
-            color={colors.textPrimary}
-          />
-        </PressableScale>
-      ),
-    });
-  }, [navigation, colors.surfaceSecondary, colors.textPrimary, colors.iconBackground]);
+  useModernScreenHeader('Quick Access');
 
   const activeButtons = useSelector(activeButtonsSelector);
   const dispatch = useDispatch();
@@ -96,7 +62,7 @@ function SelectQuickAccess() {
           subtitle={`${pinnedCount} of ${options.length} pinned to your Home screen`}
         />
 
-        <Card style={{ paddingHorizontal: SPACING.md, paddingTop: SPACING.lg }}>
+        <Card style={{ paddingHorizontal: SPACING.md, paddingTop: SPACING.lg, paddingBottom: SPACING.xs }}>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
             {options.map(item => {
               const isPinned = activeButtons?.some(

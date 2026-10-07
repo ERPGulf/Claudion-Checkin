@@ -86,7 +86,20 @@ function PolicyOption({
             backgroundColor: selected ? colors.buttonFill : 'transparent',
           }}
         >
-          <Animated.View style={{ opacity: tick, transform: [{ scale: tick }] }}>
+          <Animated.View
+            style={{
+              opacity: tick,
+              // From 0.6, not 0: nothing in the real world appears from nothing.
+              transform: [
+                {
+                  scale: tick.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0.6, 1],
+                  }),
+                },
+              ],
+            }}
+          >
             <Ionicons
               name="checkmark"
               size={ICON.sm}

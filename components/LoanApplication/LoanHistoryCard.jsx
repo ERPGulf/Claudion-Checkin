@@ -46,137 +46,137 @@ function LoanHistoryCard({ loan, style }) {
     loan?.repayment_amount !== null && loan?.repayment_amount !== undefined;
 
   return (
-    <Card
-      style={[{ padding: SPACING.md }, style]}
-      accessible
-      accessibilityLabel={describeLoanForA11y(loan)}
-    >
-      {/* ---------- Header: which product, and where it stands ---------- */}
-      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-        <View
-          style={{
-            width: 40,
-            height: 40,
-            borderRadius: RADIUS.md,
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: colors.iconBackground,
-          }}
-        >
-          <Ionicons
-            name={loanProductIcon(loan?.loan_product)}
-            size={ICON.md}
-            color={colors.textPrimary}
-          />
-        </View>
-
-        <View style={{ flex: 1, minWidth: 0, marginStart: SPACING.md }}>
-          <Text
-            numberOfLines={1}
-            style={{ ...TYPO.headline, color: colors.textPrimary }}
-          >
-            {loan?.loan_product || 'Loan application'}
-          </Text>
-          <Text
-            numberOfLines={1}
-            style={{ ...TYPO.caption, color: colors.textMuted }}
-          >
-            {formatExpenseDate(loan?.posting_date)}
-          </Text>
-        </View>
-
-        {!!loan?.status && (
-          <StatusBadge
-            tone={tone}
-            icon={statusIcon}
-            label={statusLabel}
-            style={{ marginStart: SPACING.sm }}
-          />
-        )}
-      </View>
-
-      {/* ---------- Amount ---------- */}
-      <Text
-        style={{
-          ...TYPO.title1,
-          color: colors.textPrimary,
-          fontVariant: ['tabular-nums'],
-          marginTop: SPACING.sm,
-        }}
-        numberOfLines={1}
-        adjustsFontSizeToFit
-        minimumFontScale={0.7}
-      >
-        {formatExpenseAmount(loan?.loan_amount)}
-      </Text>
-
-      {/* ---------- Repayment plan ---------- */}
-      {(hasRepayment || !!loan?.repayment_method) && (
-        <>
+    <Card style={[{ padding: SPACING.md }, style]}>
+      {/* Grouped on this unpainted view, not on <Card>: `accessible` on the
+          card greys its surface on Android. */}
+      <View accessible accessibilityLabel={describeLoanForA11y(loan)}>
+        {/* ---------- Header: which product, and where it stands ---------- */}
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <View
             style={{
-              height: 1,
-              backgroundColor: colors.dividerSubtle,
-              marginTop: SPACING.md,
-              marginBottom: SPACING.sm,
+              width: 40,
+              height: 40,
+              borderRadius: RADIUS.md,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: colors.iconBackground,
             }}
-          />
+          >
+            <Ionicons
+              name={loanProductIcon(loan?.loan_product)}
+              size={ICON.md}
+              color={colors.textPrimary}
+            />
+          </View>
 
-          {hasRepayment && (
-            <View
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                marginBottom: loan?.repayment_method ? SPACING.xs : 0,
-              }}
-            >
-              <Text
-                style={{ ...TYPO.caption, color: colors.textMuted, flex: 1 }}
-              >
-                Repayment
-              </Text>
-              <Text
-                style={{
-                  ...TYPO.subhead,
-                  fontWeight: '600',
-                  color: colors.textSecondary,
-                  fontVariant: ['tabular-nums'],
-                }}
-                numberOfLines={1}
-              >
-                {`${formatExpenseAmount(loan.repayment_amount)} / month`}
-              </Text>
-            </View>
-          )}
-
-          {!!loan?.repayment_method && (
+          <View style={{ flex: 1, minWidth: 0, marginStart: SPACING.md }}>
             <Text
-              numberOfLines={2}
+              numberOfLines={1}
+              style={{ ...TYPO.headline, color: colors.textPrimary }}
+            >
+              {loan?.loan_product || 'Loan application'}
+            </Text>
+            <Text
+              numberOfLines={1}
               style={{ ...TYPO.caption, color: colors.textMuted }}
             >
-              {loan.repayment_method}
+              {formatExpenseDate(loan?.posting_date)}
             </Text>
-          )}
-        </>
-      )}
+          </View>
 
-      {/* ---------- Reason ---------- */}
-      {!!loan?.reason && (
+          {!!loan?.status && (
+            <StatusBadge
+              tone={tone}
+              icon={statusIcon}
+              label={statusLabel}
+              style={{ marginStart: SPACING.sm }}
+            />
+          )}
+        </View>
+
+        {/* ---------- Amount ---------- */}
         <Text
-          numberOfLines={2}
           style={{
-            ...TYPO.subhead,
-            fontWeight: '400',
-            color: colors.textSecondary,
+            ...TYPO.title1,
+            color: colors.textPrimary,
+            fontVariant: ['tabular-nums'],
             marginTop: SPACING.sm,
-            // Frappe reasons are regularly Arabic; align to the script the text
-            // actually contains rather than assuming Latin.
-            textAlign: resolveTextAlign(loan.reason),
           }}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.7}
         >
-          {loan.reason}
+          {formatExpenseAmount(loan?.loan_amount)}
         </Text>
-      )}
+
+        {/* ---------- Repayment plan ---------- */}
+        {(hasRepayment || !!loan?.repayment_method) && (
+          <>
+            <View
+              style={{
+                height: 1,
+                backgroundColor: colors.dividerSubtle,
+                marginTop: SPACING.md,
+                marginBottom: SPACING.sm,
+              }}
+            />
+
+            {hasRepayment && (
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  marginBottom: loan?.repayment_method ? SPACING.xs : 0,
+                }}
+              >
+                <Text
+                  style={{ ...TYPO.caption, color: colors.textMuted, flex: 1 }}
+                >
+                  Repayment
+                </Text>
+                <Text
+                  style={{
+                    ...TYPO.subhead,
+                    fontWeight: '600',
+                    color: colors.textSecondary,
+                    fontVariant: ['tabular-nums'],
+                  }}
+                  numberOfLines={1}
+                >
+                  {`${formatExpenseAmount(loan.repayment_amount)} / month`}
+                </Text>
+              </View>
+            )}
+
+            {!!loan?.repayment_method && (
+              <Text
+                numberOfLines={2}
+                style={{ ...TYPO.caption, color: colors.textMuted }}
+              >
+                {loan.repayment_method}
+              </Text>
+            )}
+          </>
+        )}
+
+        {/* ---------- Reason ---------- */}
+        {!!loan?.reason && (
+          <Text
+            numberOfLines={2}
+            style={{
+              ...TYPO.subhead,
+              fontWeight: '400',
+              color: colors.textSecondary,
+              marginTop: SPACING.sm,
+              // Frappe reasons are regularly Arabic; align to the script the text
+              // actually contains rather than assuming Latin.
+              textAlign: resolveTextAlign(loan.reason),
+            }}
+          >
+            {loan.reason}
+          </Text>
+        )}
+      </View>
     </Card>
   );
 }

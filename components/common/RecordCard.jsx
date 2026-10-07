@@ -40,130 +40,131 @@ function RecordCard({
   const { colors } = useAppTheme();
 
   const shownRows = rows.filter(
-    row => row?.value !== null && row?.value !== undefined && row?.value !== '',
+    (row) =>
+      row?.value !== null && row?.value !== undefined && row?.value !== '',
   );
 
   return (
-    <Card
-      style={[{ padding: SPACING.md }, style]}
-      accessible
-      accessibilityLabel={accessibilityLabel}
-    >
-      {/* ---------- Header ---------- */}
-      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-        <View
-          style={{
-            width: 40,
-            height: 40,
-            borderRadius: RADIUS.md,
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: colors.iconBackground,
-          }}
-        >
-          <Ionicons name={icon} size={ICON.md} color={colors.textPrimary} />
-        </View>
-
-        <View style={{ flex: 1, minWidth: 0, marginStart: SPACING.md }}>
-          <Text
-            numberOfLines={1}
-            style={{ ...TYPO.headline, color: colors.textPrimary }}
+    <Card style={[{ padding: SPACING.md }, style]}>
+      {/* One screen-reader stop, grouped on a view that paints nothing:
+          `accessible` on <Card> itself greys its surface on Android. */}
+      <View accessible accessibilityLabel={accessibilityLabel}>
+        {/* ---------- Header ---------- */}
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <View
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: RADIUS.md,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: colors.iconBackground,
+            }}
           >
-            {title}
-          </Text>
-          {!!subtitle && (
+            <Ionicons name={icon} size={ICON.md} color={colors.textPrimary} />
+          </View>
+
+          <View style={{ flex: 1, minWidth: 0, marginStart: SPACING.md }}>
             <Text
               numberOfLines={1}
-              style={{ ...TYPO.caption, color: colors.textMuted }}
+              style={{ ...TYPO.headline, color: colors.textPrimary }}
             >
-              {subtitle}
+              {title}
             </Text>
+            {!!subtitle && (
+              <Text
+                numberOfLines={1}
+                style={{ ...TYPO.caption, color: colors.textMuted }}
+              >
+                {subtitle}
+              </Text>
+            )}
+          </View>
+
+          {!!status?.label && (
+            <StatusBadge
+              tone={status.tone}
+              icon={status.icon}
+              label={status.label}
+              style={{ marginStart: SPACING.sm }}
+            />
           )}
         </View>
 
-        {!!status?.label && (
-          <StatusBadge
-            tone={status.tone}
-            icon={status.icon}
-            label={status.label}
-            style={{ marginStart: SPACING.sm }}
-          />
+        {/* ---------- The span ---------- */}
+        {!!headline && (
+          <Text
+            numberOfLines={2}
+            style={{
+              ...TYPO.title3,
+              color: colors.textPrimary,
+              marginTop: SPACING.sm,
+            }}
+          >
+            {headline}
+          </Text>
+        )}
+
+        {/* ---------- Detail rows ---------- */}
+        {shownRows.length > 0 && (
+          <>
+            <View
+              style={{
+                height: 1,
+                backgroundColor: colors.dividerSubtle,
+                marginTop: SPACING.md,
+                marginBottom: SPACING.sm,
+              }}
+            />
+
+            {shownRows.map((row, index) => (
+              <View
+                key={row.label}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  marginTop: index > 0 ? SPACING.xs : 0,
+                }}
+              >
+                <Text
+                  style={{ ...TYPO.caption, color: colors.textMuted, flex: 1 }}
+                  numberOfLines={1}
+                >
+                  {row.label}
+                </Text>
+                <Text
+                  style={{
+                    ...TYPO.subhead,
+                    fontWeight: '600',
+                    color: colors.textSecondary,
+                  }}
+                  numberOfLines={1}
+                >
+                  {row.value}
+                </Text>
+              </View>
+            ))}
+          </>
+        )}
+
+        {/* ---------- Free text ---------- */}
+        {!!note && (
+          <Text
+            numberOfLines={2}
+            style={{
+              ...TYPO.subhead,
+              fontWeight: '400',
+              color: colors.textSecondary,
+              marginTop: SPACING.sm,
+              // Frappe free text is regularly Arabic; align to the script the
+              // text actually contains rather than assuming Latin.
+              textAlign: resolveTextAlign(note),
+            }}
+          >
+            {note}
+          </Text>
         )}
       </View>
-
-      {/* ---------- The span ---------- */}
-      {!!headline && (
-        <Text
-          numberOfLines={2}
-          style={{
-            ...TYPO.title3,
-            color: colors.textPrimary,
-            marginTop: SPACING.sm,
-          }}
-        >
-          {headline}
-        </Text>
-      )}
-
-      {/* ---------- Detail rows ---------- */}
-      {shownRows.length > 0 && (
-        <>
-          <View
-            style={{
-              height: 1,
-              backgroundColor: colors.dividerSubtle,
-              marginTop: SPACING.md,
-              marginBottom: SPACING.sm,
-            }}
-          />
-
-          {shownRows.map((row, index) => (
-            <View
-              key={row.label}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                marginTop: index > 0 ? SPACING.xs : 0,
-              }}
-            >
-              <Text
-                style={{ ...TYPO.caption, color: colors.textMuted, flex: 1 }}
-                numberOfLines={1}
-              >
-                {row.label}
-              </Text>
-              <Text
-                style={{
-                  ...TYPO.subhead,
-                  fontWeight: '600',
-                  color: colors.textSecondary,
-                }}
-                numberOfLines={1}
-              >
-                {row.value}
-              </Text>
-            </View>
-          ))}
-        </>
-      )}
-
-      {/* ---------- Free text ---------- */}
-      {!!note && (
-        <Text
-          numberOfLines={2}
-          style={{
-            ...TYPO.subhead,
-            fontWeight: '400',
-            color: colors.textSecondary,
-            marginTop: SPACING.sm,
-            // Frappe free text is regularly Arabic; align to the script the
-            // text actually contains rather than assuming Latin.
-            textAlign: resolveTextAlign(note),
-          }}
-        >
-          {note}
-        </Text>
-      )}
     </Card>
   );
 }

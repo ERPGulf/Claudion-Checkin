@@ -5,6 +5,7 @@ import {
   uploadComplaintAttachment,
 } from '../services/api/complaint.service';
 import { useAttachmentPicker } from './useAttachmentPicker';
+import { hapticsMessage } from '../utils/HapticsMessage';
 
 /**
  * Everything the complaint form does, lifted out of the screen so the modern UI
@@ -23,12 +24,13 @@ import { useAttachmentPicker } from './useAttachmentPicker';
  *   overwrites it with `getServerTime()` — the call keeps its original shape
  *   rather than a tidier-looking one.
  * - A failed attachment upload still fails the whole submit (it is not caught
- *   separately), so the error Alert is the same one the classic screen shows.
+ *   separately). Thrown failures show fixed copy rather than `error.message`;
+ *   the service's own `{ error }` copy is still shown as-is.
  *
  * `screens/ComplaintsLegacy.jsx` deliberately does not use this hook: it keeps
  * its own inline copy so the classic screen is byte-identical to what shipped.
- * `hasMessage` / `attachmentCount` are additions for the modern summary card;
- * they are derived from state that already exists and gate nothing.
+ * `hasMessage` is an addition for the modern screen's inline validation; it is
+ * derived from state that already exists and gates nothing.
  */
 export default function useComplaint() {
   const [message, setMessage] = useState('');
@@ -93,8 +95,12 @@ export default function useComplaint() {
 
       const result = await createComplaint({ date, message });
 
+      // The service's own copy, shown as-is; everything thrown below gets the
+      // fixed message instead.
       if (result.error) {
-        throw new Error(result.error);
+        hapticsMessage('error');
+        Alert.alert('Error', result.error);
+        return;
       }
 
       const docname = result?.message?.message?.name;
@@ -107,12 +113,17 @@ export default function useComplaint() {
         await uploadComplaintAttachment(file, docname);
       }
 
+      hapticsMessage('success');
       Alert.alert('Success', 'Complaint submitted successfully');
 
       setMessage('');
       setFile(null);
     } catch (error) {
-      Alert.alert('Error', error?.message || 'Failed to submit complaint');
+      // Fixed copy: `error.message` here can be a developer string such as
+      // "Complaint created but docname missing".
+      console.log('Complaint submit failed:', error?.message);
+      hapticsMessage('error');
+      Alert.alert('Error', 'Failed to submit complaint');
     } finally {
       setLoading(false);
     }
@@ -140,8 +151,7 @@ export default function useComplaint() {
     // Submit
     submitComplaint,
 
-    // Display-only, for the modern summary card
+    // Display-only mirror of submitComplaint's check (modern screen)
     hasMessage: !!message.trim(),
-    attachmentCount: file ? 1 : 0,
   };
 }

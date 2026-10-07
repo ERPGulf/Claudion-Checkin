@@ -123,6 +123,9 @@ function HistorySkeleton({ groups = 2, rowsPerGroup = 3 }) {
               opacity,
               marginTop: groupIndex === 0 ? SPACING.xl : SPACING.xxl,
               marginBottom: SPACING.md,
+              // The real day header is inset a further SPACING.lg inside the
+              // list padding; match it so the title doesn't jump on hand-off.
+              marginStart: SPACING.lg,
             }}
           />
           <View

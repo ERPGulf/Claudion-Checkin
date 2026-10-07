@@ -1,6 +1,6 @@
 /* eslint-disable react/prop-types */
 import React from 'react';
-import { ActivityIndicator, Text } from 'react-native';
+import { ActivityIndicator, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ICON, RADIUS, SHADOWS, SPACING, TYPO } from '../../constants';
 import useAppTheme from '../../hooks/useAppTheme';
@@ -56,8 +56,11 @@ function ActionButton({
   const outline = variant === 'outline';
   const accent = variant === 'accent';
   const inert = disabled || loading;
+  // Loading keeps the button's own colours: "working" must not look like
+  // "unavailable". Only a plain disabled button greys out.
+  const greyed = disabled && !loading;
 
-  const foreground = inert
+  const foreground = greyed
     ? colors.textMuted
     : tinted
       ? colors[`${tone}Text`]
@@ -70,7 +73,7 @@ function ActionButton({
   const background = (() => {
     if (tinted) return colors[`${tone}Surface`];
     if (outline) return colors.cardBackground;
-    if (inert) return colors.iconBackground;
+    if (greyed) return colors.iconBackground;
     return accent ? colors.accentFill : colors.buttonFill;
   })();
 
@@ -79,7 +82,7 @@ function ActionButton({
     if (outline) return colors.cardBorder;
     // A disabled fill drops to `iconBackground`, which is a whisker away from
     // the page colour — the hairline is what keeps it legible as a control.
-    return inert ? colors.cardBorder : null;
+    return greyed ? colors.cardBorder : null;
   })();
 
   return (
@@ -103,7 +106,7 @@ function ActionButton({
           ...(border ? { borderWidth: 1, borderColor: border } : null),
           // Shadows are invisible over a near-black page, so dark mode leans on
           // the surface step instead — same rule as <Card>.
-          ...(elevated && !isDark && !inert ? SHADOWS.card : null),
+          ...(elevated && !isDark && !greyed ? SHADOWS.card : null),
         },
         style,
       ]}
@@ -125,6 +128,9 @@ function ActionButton({
         )
       )}
       <Text style={{ ...metrics.type, color: foreground }}>{label}</Text>
+      {/* A spinner with no icon to replace would push the label sideways;
+          balance it so the label stays centred. */}
+      {loading && !icon && <View style={{ width: 20 + SPACING.sm }} />}
     </PressableScale>
   );
 }

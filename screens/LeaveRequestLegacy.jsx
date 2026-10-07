@@ -60,6 +60,9 @@ export default function LeaveRequestLegacy() {
     setShowToPicker,
     handleFromChange,
     handleToChange,
+    needsDoneAffordance,
+    closeFromPicker,
+    closeToPicker,
     isBottomSheetVisible,
     pickAttachment,
     closeBottomSheet,
@@ -153,16 +156,26 @@ export default function LeaveRequestLegacy() {
           <Text>{formatDate(fromDate)}</Text>
         </TouchableOpacity>
         {showFromPicker && (
-          <DateTimePicker
-            value={
-              fromDate instanceof Date && !isNaN(fromDate)
-                ? fromDate
-                : new Date()
-            }
-            mode="date"
-            display={Platform.OS === "ios" ? "spinner" : "default"}
-            onChange={handleFromChange}
-          />
+          <>
+            <DateTimePicker
+              value={
+                fromDate instanceof Date && !isNaN(fromDate)
+                  ? fromDate
+                  : new Date()
+              }
+              mode="date"
+              display={Platform.OS === "ios" ? "spinner" : "default"}
+              onChange={handleFromChange}
+            />
+            {needsDoneAffordance && (
+              <TouchableOpacity
+                onPress={closeFromPicker}
+                className="self-end px-3 py-2 mb-2"
+              >
+                <Text className="text-blue-600 font-medium">Done</Text>
+              </TouchableOpacity>
+            )}
+          </>
         )}
 
         {/* To Date */}
@@ -174,15 +187,25 @@ export default function LeaveRequestLegacy() {
           <Text>{formatDate(toDate)}</Text>
         </TouchableOpacity>
         {showToPicker && (
-          <DateTimePicker
-            value={
-              toDate instanceof Date && !isNaN(toDate) ? toDate : new Date()
-            }
-            mode="date"
-            minimumDate={fromDate} //
-            display={Platform.OS === "ios" ? "spinner" : "default"}
-            onChange={handleToChange}
-          />
+          <>
+            <DateTimePicker
+              value={
+                toDate instanceof Date && !isNaN(toDate) ? toDate : new Date()
+              }
+              mode="date"
+              minimumDate={fromDate} //
+              display={Platform.OS === "ios" ? "spinner" : "default"}
+              onChange={handleToChange}
+            />
+            {needsDoneAffordance && (
+              <TouchableOpacity
+                onPress={closeToPicker}
+                className="self-end px-3 py-2 mb-2"
+              >
+                <Text className="text-blue-600 font-medium">Done</Text>
+              </TouchableOpacity>
+            )}
+          </>
         )}
         {/* Remote Work Acknowledgement Section */}
         {leaveType === "Remote" && (

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { AccessibilityInfo, ActivityIndicator, Animated, Easing, I18nManager, KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Animated, Easing, I18nManager, KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { BUILD_TAG, ICON, RADIUS, SPACING, TYPO } from '../../constants';
@@ -24,10 +24,9 @@ function ErrorBanner({ message }) {
     animation.start();
     return () => animation.stop();
   }, [enter]);
-  // One haptic and one announcement per failure, in the frame it appears.
+  // One haptic per failure, in the frame it appears (StatusBanner speaks it).
   useEffect(() => {
     hapticsMessage('error');
-    AccessibilityInfo.announceForAccessibility(message);
   }, [message]);
   const rise = enter.interpolate({ inputRange: [0, 1], outputRange: [-6, 0] });
   return (

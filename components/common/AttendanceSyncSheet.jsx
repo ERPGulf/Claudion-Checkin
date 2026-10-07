@@ -1,6 +1,6 @@
 /* eslint-disable react/prop-types */
 import React from "react";
-import { Text, View } from "react-native";
+import { ScrollView, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { ICON, RADIUS, SPACING, TYPO } from "../../constants";
 import { navigateSafely } from "../../navigation/rootNavigation";
@@ -236,26 +236,36 @@ function AttendanceSyncSheet({ visible, onClose, rows = [] }) {
           : `${rows.length} records haven't reached the server yet.`
       }
     >
-      {rows.length === 0 ? (
-        <Text style={{ ...TYPO.body, color: colors.textSecondary }}>
-          Everything has synced.
-        </Text>
-      ) : (
-        rows.map((row) => (
-          <QueueRowCard key={row.id} row={row} onCorrect={handleCorrect} />
-        ))
-      )}
-
-      <Text
-        style={{
-          ...TYPO.caption,
-          color: colors.textMuted,
-          marginTop: SPACING.xs,
+      {/* The sheet adds no inset of its own, and a long queue has to scroll
+          to reach the last row's correction button. */}
+      <ScrollView
+        contentContainerStyle={{
+          paddingHorizontal: SPACING.lg,
+          paddingTop: SPACING.md,
         }}
+        showsVerticalScrollIndicator={false}
       >
-        Your attendance is stored on this device and is never discarded, even if
-        it takes days to reach the server.
-      </Text>
+        {rows.length === 0 ? (
+          <Text style={{ ...TYPO.body, color: colors.textSecondary }}>
+            Everything has synced.
+          </Text>
+        ) : (
+          rows.map((row) => (
+            <QueueRowCard key={row.id} row={row} onCorrect={handleCorrect} />
+          ))
+        )}
+
+        <Text
+          style={{
+            ...TYPO.caption,
+            color: colors.textMuted,
+            marginTop: SPACING.xs,
+          }}
+        >
+          Your attendance is stored on this device and is never discarded, even
+          if it takes days to reach the server.
+        </Text>
+      </ScrollView>
     </BottomSheet>
   );
 }

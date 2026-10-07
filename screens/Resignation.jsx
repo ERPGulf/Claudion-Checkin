@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { Platform, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -17,6 +17,7 @@ import FormField from "../components/common/FormField";
 import PickerField from "../components/common/PickerField";
 import UploadField from "../components/common/UploadField";
 import AttachmentSheet from "../components/common/AttachmentSheet";
+import PickerWithDone from "../components/common/PickerWithDone";
 
 /**
  * Employee resignation.
@@ -24,6 +25,9 @@ import AttachmentSheet from "../components/common/AttachmentSheet";
  * Presentation only — state, validation, the confirmation prompt and the API
  * call live in hooks/useResignation.js. Laid out like Complaints: an intro card,
  * one dense form card, an inline submit button and a "what happens next" note.
+ *
+ * The inline error appears only after the first submit attempt, as on Loan
+ * Application. It gates nothing — the hook still raises its Alert.
  */
 function Resignation() {
   const { colors, isDark } = useAppTheme();
@@ -48,9 +52,26 @@ function Resignation() {
     handlePickGallery,
     handlePickDocument,
     openDatePicker,
+    closeDatePicker,
+    needsDoneAffordance,
     handleDateChange,
     submitResignation,
   } = useResignation();
+
+  const [attempted, setAttempted] = useState(false);
+
+  const onSubmitPress = useCallback(() => {
+    setAttempted(true);
+    submitResignation();
+  }, [submitResignation]);
+
+  const reasonMissing = !reason.trim();
+
+  // The hook blanks the reason once a resignation is sent; clear the error mark
+  // with it, so a fresh form isn't pre-marked as invalid.
+  useEffect(() => {
+    if (reasonMissing) setAttempted(false);
+  }, [reasonMissing]);
 
   // iOS-only. Keeps the native wheel on the same palette as the screen.
   const pickerTheme =
@@ -66,12 +87,14 @@ function Resignation() {
     >
       <ScrollView
         contentContainerStyle={{
-          paddingHorizontal: SPACING.lg,
-          paddingTop: SPACING.md,
-          paddingBottom: SPACING.xl,
+          padding: SPACING.lg,
+          paddingBottom: SPACING.xxxl,
         }}
         keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="interactive"
+        keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
+        // iOS only: lifts the focused field above the keyboard. Android pans
+        // the window instead (softwareKeyboardLayoutMode "pan").
+        automaticallyAdjustKeyboardInsets
       >
         {/* ---------- Introduction ---------- */}
         <Card style={{ marginBottom: SPACING.md, padding: SPACING.md }}>
@@ -144,14 +167,19 @@ function Resignation() {
             {/* Next to the field it edits: on iOS `display="spinner"` lays out
                 inline. */}
             {showDatePicker && (
-              <DateTimePicker
-                value={resignationDate}
-                mode="date"
-                minimumDate={earliestResignationDate()}
-                display={Platform.OS === "ios" ? "spinner" : "default"}
-                themeVariant={pickerTheme}
-                onChange={handleDateChange}
-              />
+              <PickerWithDone
+                needsDone={needsDoneAffordance}
+                onDone={closeDatePicker}
+              >
+                <DateTimePicker
+                  value={resignationDate}
+                  mode="date"
+                  minimumDate={earliestResignationDate()}
+                  display={Platform.OS === "ios" ? "spinner" : "default"}
+                  themeVariant={pickerTheme}
+                  onChange={handleDateChange}
+                />
+              </PickerWithDone>
             )}
 
             <View style={{ marginTop: SPACING.md }}>
@@ -165,6 +193,7 @@ function Resignation() {
                 align="auto"
                 accessibilityLabel="Resignation reason"
                 accessibilityHint="Describe your reason for resigning"
+                invalid={attempted && reasonMissing}
               />
             </View>
           </View>
@@ -200,6 +229,18 @@ function Resignation() {
           </View>
         </ModuleCard>
 
+        {/* Mirrors the check submitResignation already makes, surfaced after
+            the first attempt. It gates nothing — the hook still raises its
+            Alert. */}
+        {attempted && reasonMissing && (
+          <StatusBanner
+            tone="error"
+            title="Finish the form first"
+            message="Add a reason for your resignation."
+            style={{ marginBottom: SPACING.md }}
+          />
+        )}
+
         {/* ---------- Submit ---------- */}
         <ActionButton
           label="Submit resignation"
@@ -209,7 +250,7 @@ function Resignation() {
           elevated
           loading={loading}
           disabled={loading}
-          onPress={submitResignation}
+          onPress={onSubmitPress}
         />
 
         {/* ---------- What happens next ---------- */}

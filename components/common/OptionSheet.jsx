@@ -134,7 +134,7 @@ function OptionSheet({
                     <Ionicons
                       name="checkmark-circle"
                       size={ICON.md}
-                      color={colors.successText}
+                      color={colors.accentText}
                     />
                   )}
                 </PressableScale>

@@ -39,6 +39,7 @@ import { isFeatureEnabled, isRouteEnabled } from "../../utils/featureSettings";
 import ModuleCard from "../common/ModuleCard";
 import FeatureTile from "../common/FeatureTile";
 import PressableScale from "../common/PressableScale";
+import { SkeletonBlock, useSkeletonPulse } from "../common/Skeleton";
 
 const SHORTCUT_CACHE_KEY = "user_shortcuts_cache_v2";
 
@@ -141,7 +142,7 @@ const ShortcutButton = React.memo(({ shortcut, navigation }) => {
 
 /** Placeholder tiles that match the real grid geometry, so nothing shifts. */
 function ShortcutSkeleton() {
-  const { colors } = useAppTheme();
+  const opacity = useSkeletonPulse();
 
   return (
     <>
@@ -155,22 +156,17 @@ function ShortcutSkeleton() {
             alignItems: "center",
           }}
         >
-          <View
-            style={{
-              width: 48,
-              height: 48,
-              borderRadius: RADIUS.lg,
-              backgroundColor: colors.skeleton,
-            }}
+          <SkeletonBlock
+            width={48}
+            height={48}
+            radius={RADIUS.lg}
+            opacity={opacity}
           />
-          <View
-            style={{
-              width: 44,
-              height: 10,
-              borderRadius: RADIUS.sm,
-              backgroundColor: colors.skeleton,
-              marginTop: SPACING.sm,
-            }}
+          <SkeletonBlock
+            width={44}
+            height={10}
+            opacity={opacity}
+            style={{ marginTop: SPACING.sm }}
           />
         </View>
       ))}
@@ -229,7 +225,11 @@ function LavaMenu() {
    * Fetch shortcuts incrementally (no blocking)
    * --------------------------------------------------- */
   useEffect(() => {
-    if (!employeeCode) return;
+    // No code means nothing to fetch; without this the skeleton never ends.
+    if (!employeeCode) {
+      setLoadingShortcuts(false);
+      return;
+    }
 
     const configs = [
       {
@@ -350,6 +350,7 @@ function LavaMenu() {
       {/* -------------------- FOOTER LINK -------------------- */}
       <PressableScale
         onPress={() => Linking.openURL("https://erpgulf.com")}
+        accessibilityRole="link"
         accessibilityLabel="Open ERPGulf.com"
         style={{
           flexDirection: "row",

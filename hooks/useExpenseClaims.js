@@ -10,6 +10,7 @@ import {
   uploadExpenseAttachment,
 } from '../services/api';
 import { claimMatchesQuery } from '../utils/expenseClaims';
+import { hapticsMessage } from '../utils/HapticsMessage';
 
 /** Claims revealed per "Load more" press. Unchanged from the classic screen. */
 export const PAGE_SIZE = 5;
@@ -89,6 +90,7 @@ export default function useExpenseClaims() {
 
       await refetch();
 
+      hapticsMessage('success');
       Alert.alert('Success', 'Expense claim submitted successfully!', [
         {
           text: 'OK',
@@ -99,6 +101,7 @@ export default function useExpenseClaims() {
       ]);
     },
     onError: err => {
+      hapticsMessage('error');
       Alert.alert('Error', err.message || 'Failed to create expense claim.');
     },
   });

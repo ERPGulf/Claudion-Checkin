@@ -1,5 +1,11 @@
-import React from "react";
-import { Platform, ScrollView, Text, View } from "react-native";
+import React, { useCallback, useEffect, useState } from "react";
+import {
+  Platform,
+  RefreshControl,
+  ScrollView,
+  Text,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Ionicons } from "@expo/vector-icons";
@@ -22,6 +28,7 @@ import UploadField from "../components/common/UploadField";
 import OptionSheet from "../components/common/OptionSheet";
 import AttachmentSheet from "../components/common/AttachmentSheet";
 import PressableScale from "../components/common/PressableScale";
+import PickerWithDone from "../components/common/PickerWithDone";
 // "6 Aug 2026" — the app's canonical date string, already what Attendance
 // History, Attendance Request and Expense Claims render.
 import { formatLogDate } from "../utils/attendanceHistory";
@@ -55,6 +62,10 @@ const pickerValue = (value) =>
  * The submit button stays inline rather than pinned: the "what happens next"
  * card sits below it, and a sticky button would either cover that or push it off
  * the screen. Same arrangement as Attendance Request.
+ *
+ * Inline errors appear only after the first submit attempt, as on Loan
+ * Application and Expense Claims. They gate nothing — pressing submit still runs
+ * the hook's checks and raises its Alerts.
  */
 function LeaveRequest() {
   const { colors, isDark } = useAppTheme();
@@ -82,6 +93,9 @@ function LeaveRequest() {
     showToPicker,
     openFromPicker,
     openToPicker,
+    needsDoneAffordance,
+    closeFromPicker,
+    closeToPicker,
     handleFromChange,
     handleToChange,
     isBottomSheetVisible,
@@ -93,13 +107,14 @@ function LeaveRequest() {
     handlePickDocument,
     handleSubmit,
     dateRangeInvalid,
+    typeMissing,
+    agreementMissing,
     leaveApplications,
     visibleLeaves,
     hasMoreLeaves,
     showMoreLeaves,
     isFetchingHistory,
     isHistoryError,
-    historyError,
     refetchHistory,
   } = useLeaveRequest();
 
@@ -114,6 +129,41 @@ function LeaveRequest() {
   const typeChosen = !!leaveType && leaveType !== NO_LEAVE_TYPE;
   const duration = formatLeaveDuration(countLeaveDays(fromDate, toDate));
 
+  const [attempted, setAttempted] = useState(false);
+
+  const onSubmitPress = useCallback(() => {
+    setAttempted(true);
+    handleSubmit();
+  }, [handleSubmit]);
+
+  // The hook blanks the form once a request is acknowledged; clear the error
+  // marks with it, so a fresh form isn't pre-marked as invalid.
+  useEffect(() => {
+    if (typeMissing) setAttempted(false);
+  }, [typeMissing]);
+
+  // The date range has its own banner in the period card. A Remote type is the
+  // only one with an agreement, so the two never apply at once.
+  const missing = !attempted
+    ? null
+    : typeMissing
+      ? "Choose a leave type."
+      : agreementMissing
+        ? "Agree to the remote work policy."
+        : null;
+
+  // Only a pull shows the spinner; the post-submit refetch stays silent.
+  const [pulling, setPulling] = useState(false);
+
+  const onRefresh = useCallback(async () => {
+    setPulling(true);
+    try {
+      await refetchHistory();
+    } finally {
+      setPulling(false);
+    }
+  }, [refetchHistory]);
+
   return (
     <SafeAreaView
       style={{ flex: 1, backgroundColor: colors.surfaceSecondary }}
@@ -125,6 +175,19 @@ function LeaveRequest() {
           paddingBottom: SPACING.xxxl,
         }}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
+        // iOS only: lifts the focused field above the keyboard. Android pans
+        // the window instead (softwareKeyboardLayoutMode "pan").
+        automaticallyAdjustKeyboardInsets
+        refreshControl={
+          <RefreshControl
+            refreshing={pulling}
+            onRefresh={onRefresh}
+            tintColor={colors.textMuted}
+            colors={[colors.primary2]}
+            progressBackgroundColor={colors.cardBackground}
+          />
+        }
       >
         {/* ---------- Introduction ---------- */}
         <Card style={{ marginBottom: SPACING.md, padding: SPACING.md }}>
@@ -184,6 +247,7 @@ function LeaveRequest() {
               icon={typeChosen ? leaveTypeIcon(leaveType) : "list-outline"}
               onPress={openTypeSheet}
               active={isTypeSheetVisible}
+              invalid={attempted && typeMissing}
             />
 
             <FormField
@@ -196,22 +260,13 @@ function LeaveRequest() {
               style={{ marginTop: SPACING.md }}
             />
 
-            <View style={{ marginTop: SPACING.md }}>
-              <Text
-                style={{
-                  ...TYPO.caption,
-                  color: colors.textSecondary,
-                  marginBottom: SPACING.xs,
-                }}
-              >
-                Attachment
-              </Text>
-              <UploadField
-                file={attachment}
-                onPick={pickAttachment}
-                onRemove={removeAttachment}
-              />
-            </View>
+            <UploadField
+              label="Attachment"
+              file={attachment}
+              onPick={pickAttachment}
+              onRemove={removeAttachment}
+              style={{ marginTop: SPACING.md }}
+            />
           </View>
         </ModuleCard>
 
@@ -310,13 +365,18 @@ function LeaveRequest() {
                 lays out inline, so hoisting it would move the wheel away from
                 the control it belongs to. */}
             {showFromPicker && (
-              <DateTimePicker
-                value={pickerValue(fromDate)}
-                mode="date"
-                display={Platform.OS === "ios" ? "spinner" : "default"}
-                themeVariant={pickerTheme}
-                onChange={handleFromChange}
-              />
+              <PickerWithDone
+                needsDone={needsDoneAffordance}
+                onDone={closeFromPicker}
+              >
+                <DateTimePicker
+                  value={pickerValue(fromDate)}
+                  mode="date"
+                  display={Platform.OS === "ios" ? "spinner" : "default"}
+                  themeVariant={pickerTheme}
+                  onChange={handleFromChange}
+                />
+              </PickerWithDone>
             )}
 
             <PickerField
@@ -330,14 +390,19 @@ function LeaveRequest() {
             />
 
             {showToPicker && (
-              <DateTimePicker
-                value={pickerValue(toDate)}
-                mode="date"
-                minimumDate={fromDate}
-                display={Platform.OS === "ios" ? "spinner" : "default"}
-                themeVariant={pickerTheme}
-                onChange={handleToChange}
-              />
+              <PickerWithDone
+                needsDone={needsDoneAffordance}
+                onDone={closeToPicker}
+              >
+                <DateTimePicker
+                  value={pickerValue(toDate)}
+                  mode="date"
+                  minimumDate={fromDate}
+                  display={Platform.OS === "ios" ? "spinner" : "default"}
+                  themeVariant={pickerTheme}
+                  onChange={handleToChange}
+                />
+              </PickerWithDone>
             )}
 
             {/* Read-only: the form sets this to today and there is nothing to
@@ -371,12 +436,14 @@ function LeaveRequest() {
             created yet, so there is no state to report — and no entitlement
             figure, which only the backend can decide. */}
         {typeChosen && !!duration && (
-          <Card
-            style={{ padding: SPACING.md, marginBottom: SPACING.md }}
-            accessible
-            accessibilityLabel={`Summary. ${leaveType}, ${duration}.`}
-          >
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
+          <Card style={{ padding: SPACING.md, marginBottom: SPACING.md }}>
+            {/* Grouped on this unpainted row, not on <Card>: `accessible` on the
+                card greys its surface on Android. */}
+            <View
+              style={{ flexDirection: "row", alignItems: "center" }}
+              accessible
+              accessibilityLabel={`Summary. ${leaveType}, ${duration}.`}
+            >
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={{ ...TYPO.caption, color: colors.textMuted }}>
                   Duration
@@ -416,6 +483,17 @@ function LeaveRequest() {
           </Card>
         )}
 
+        {/* Mirrors the checks handleSubmit already makes, surfaced after the
+            first attempt. It gates nothing — the hook still raises its Alert. */}
+        {!!missing && (
+          <StatusBanner
+            tone="error"
+            title="Finish the form first"
+            message={missing}
+            style={{ marginBottom: SPACING.md }}
+          />
+        )}
+
         {/* ---------- Submit ---------- */}
         <ActionButton
           label="Submit leave request"
@@ -425,7 +503,7 @@ function LeaveRequest() {
           elevated
           loading={loading}
           disabled={loading}
-          onPress={handleSubmit}
+          onPress={onSubmitPress}
         />
 
         {/* ---------- What happens next ---------- */}
@@ -456,9 +534,7 @@ function LeaveRequest() {
               compact
               icon="cloud-offline-outline"
               title="Couldn't load your leave"
-              description={
-                historyError?.message || "Unable to load leave applications."
-              }
+              description="Unable to load leave applications."
               actionLabel="Retry"
               onActionPress={refetchHistory}
             />

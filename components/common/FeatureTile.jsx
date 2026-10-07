@@ -56,7 +56,7 @@ function FeatureTile({
   return (
     <PressableScale
       onPress={onPress}
-      scaleTo={0.93}
+      scaleTo={0.96}
       accessibilityLabel={accessibilityLabel || text}
       accessibilityRole={accessibilityRole}
       accessibilityState={accessibilityState}
@@ -102,7 +102,8 @@ function FeatureTile({
               borderColor: colors.cardBackground,
             }}
           >
-            <Ionicons name="checkmark" size={10} color={colors.white} />
+            {/* The fill's own text colour: white on mint read at 1.7:1. */}
+            <Ionicons name="checkmark" size={10} color={colors.accentFillText} />
           </View>
         )}
         {!selected && badge != null && badge !== false && (

@@ -1,6 +1,6 @@
 /* eslint-disable react/prop-types */
-import React from 'react';
-import { View, Text } from 'react-native';
+import React, { useEffect } from 'react';
+import { AccessibilityInfo, Platform, View, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ICON, RADIUS, SPACING, TYPO } from '../../constants';
 import useAppTheme from '../../hooks/useAppTheme';
@@ -20,13 +20,31 @@ const TONE_ICON = {
  * success background and an error icon. Text is left-aligned rather than
  * centred — centred paragraphs are hard to scan once they wrap past one line.
  */
-function StatusBanner({ tone = 'info', icon, title, message, style }) {
+function StatusBanner({
+  tone = 'info',
+  icon,
+  title,
+  message,
+  // Errors appear because something just failed, so they are spoken; other
+  // tones are often on screen from the start and would only add noise.
+  announce = tone === 'error',
+  style,
+}) {
   const { colors } = useAppTheme();
+  const label = [title, message].filter(Boolean).join('. ');
+
+  // Android reads the live region below; iOS ignores it and must be told.
+  useEffect(() => {
+    if (announce && label && Platform.OS === 'ios') {
+      AccessibilityInfo.announceForAccessibility(label);
+    }
+  }, [announce, label]);
 
   return (
     <View
       accessible
       accessibilityRole="summary"
+      accessibilityLiveRegion={announce ? 'polite' : 'none'}
       style={[
         {
           flexDirection: 'row',

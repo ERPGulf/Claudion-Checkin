@@ -536,7 +536,7 @@ describe('useLoanApplication', () => {
     expect(result.current.file2).toBeNull();
   });
 
-  it('raises both classic notices when the request fails', async () => {
+  it('raises a single Error alert when the request fails', async () => {
     LoanApplicationRequest.mockRejectedValue(new Error('Server said no'));
 
     const { result } = renderLoanHook();
@@ -549,9 +549,8 @@ describe('useLoanApplication', () => {
     });
 
     expect(Alert.alert).toHaveBeenCalledWith('Error', 'Server said no');
-    expect(Alert.alert).toHaveBeenCalledWith(
-      ...toast('Failed to submit loan application.'),
-    );
+    // No second "Notice" stacked on top of the mutation's Alert.
+    expect(Alert.alert).toHaveBeenCalledTimes(1);
   });
 
   it('routes a picked file to the slot it was opened for', async () => {

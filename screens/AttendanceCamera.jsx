@@ -2,21 +2,23 @@ import {
   View,
   Text,
   TouchableOpacity,
-  SafeAreaView,
   ActivityIndicator,
+  Linking,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Image } from "expo-image";
-import { Entypo, MaterialCommunityIcons } from "@expo/vector-icons";
-import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+import React, { useRef, useState } from "react";
 import { CameraView, useCameraPermissions } from "expo-camera";
-import Constants from "expo-constants";
 import { Ionicons } from "@expo/vector-icons";
 import { useDispatch, useSelector } from "react-redux";
 import { Toast } from "react-native-toast-message/lib/src/Toast";
 import { useNavigation } from "@react-navigation/native";
 import { format } from "date-fns";
-import { COLORS, SIZES } from "../constants";
+import { RADIUS, SPACING, TYPO } from "../constants";
+import useAppTheme from "../hooks/useAppTheme";
+import useModernScreenHeader from "../hooks/useModernScreenHeader";
+import ActionButton from "../components/common/ActionButton";
 import {
   selectCheckin,
   setCheckin,
@@ -42,26 +44,11 @@ import { resolveNearestOffice } from "../services/offline/offlineAttendanceGate"
 function AttendanceCamera() {
   const navigation = useNavigation();
   const dispatch = useDispatch();
-  useLayoutEffect(() => {
-    navigation.setOptions({
-      headerShadowVisible: false,
-      headerShown: true,
-      headerTitle: "Attendance Camera",
-      headerTitleAlign: "center",
-      headerLeft: () => (
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Entypo
-            name="chevron-left"
-            size={SIZES.xxxLarge - 5}
-            color={COLORS.primary}
-          />
-        </TouchableOpacity>
-      ),
-    });
-  }, [navigation]);
+  const { colors } = useAppTheme();
+  // The themed stack header — the one back button on this screen.
+  useModernScreenHeader("Attendance Camera");
   const [permission, requestPermission] = useCameraPermissions();
   const [facing, setFacing] = useState("front");
-  const [mode, setMode] = useState("camera");
   const [photo, setPhoto] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const checkin = useSelector(selectCheckin);
@@ -72,10 +59,6 @@ function AttendanceCamera() {
 
   const toggleCameraFacing = () => {
     setFacing((current) => (current === "back" ? "front" : "back"));
-  };
-
-  const changeMode = () => {
-    setMode(mode === "camera" ? "video" : "camera");
   };
 
   const takePicture = async () => {
@@ -98,6 +81,8 @@ function AttendanceCamera() {
 
   // ✅ CHECK-IN / CHECK-OUT HANDLER
   const handleChecking = async (type, custom_in) => {
+    const failedTitle = type === "IN" ? "Check-in failed" : "Check-out failed";
+
     try {
       setIsLoading(true);
 
@@ -124,6 +109,7 @@ function AttendanceCamera() {
 
         // If not within radius, block
         if (locationData && !locationData.withinRadius) {
+          hapticsMessage("error");
           Toast.show({
             type: "error",
             text1: "Location Error",
@@ -192,8 +178,16 @@ function AttendanceCamera() {
         return;
       }
 
+      // `outcome.response.message` is the curated refusal (out of radius, the
+      // manual-offline notice…) — the one failure text meant for the employee.
       if (outcome.status === TRANSITION_RESULT.FAILED) {
-        throw new Error(outcome.response?.message || "Check-in failed");
+        hapticsMessage("error");
+        Toast.show({
+          type: "error",
+          text1: failedTitle,
+          text2: outcome.response?.message,
+        });
+        return;
       }
 
       const { session } = outcome;
@@ -231,10 +225,15 @@ function AttendanceCamera() {
         // Upload photo
         await uploadPicture(docname);
       } catch (uploadError) {
+        console.log("AttendanceCamera photo upload failed:", uploadError?.message);
+        hapticsMessage("warning");
         Toast.show({
           type: "error",
-          text1: `CHECKED ${type}, photo not saved`,
-          text2: uploadError.message,
+          text1:
+            type === "IN"
+              ? "Checked in — photo not saved"
+              : "Checked out — photo not saved",
+          text2: "Your attendance was recorded without the photo.",
         });
         navigation.navigate("Attendance action");
         return;
@@ -243,15 +242,18 @@ function AttendanceCamera() {
       hapticsMessage("success");
       Toast.show({
         type: "success",
-        text1: `CHECKED ${type}`,
+        text1: type === "IN" ? "Checked in" : "Checked out",
       });
 
       navigation.navigate("Attendance action");
     } catch (error) {
+      // Raw error text (network, native, JS) stays in the log.
+      console.log("AttendanceCamera.handleChecking error:", error?.message);
+      hapticsMessage("error");
       Toast.show({
         type: "error",
-        text1: "Check-in failed",
-        text2: error.message,
+        text1: failedTitle,
+        text2: "Please try again.",
       });
     } finally {
       setIsLoading(false);
@@ -259,91 +261,121 @@ function AttendanceCamera() {
   };
 
   // ✅ UPLOAD PHOTO FUNCTION
+  // Throws on failure; the caller owns the one toast for the outcome.
   const uploadPicture = async (docname) => {
-    try {
-      if (!photo?.uri) throw new Error("No photo available for upload");
+    if (!photo?.uri) throw new Error("No photo available for upload");
 
-      Toast.show({
-        type: "info",
-        text1: "Uploading photo...",
-        autoHide: true,
-        visibilityTime: 2000,
-      });
+    const file = {
+      uri: photo.uri,
+      name: `${docname}_${Date.now()}.jpg`,
+      type: "image/jpeg",
+    };
 
-      const file = {
-        uri: photo.uri,
-        name: `${docname}_${Date.now()}.jpg`,
-        type: "image/jpeg",
-      };
+    // 1️⃣ Upload photo to ERP
+    const uploadResponse = await userFileUpload(file, docname);
 
-      // 1️⃣ Upload photo to ERP
-      const uploadResponse = await userFileUpload(file, docname);
+    // The API returns: { message: ["/files/yourfile.png"] }
+    const uploadedFileUrl = uploadResponse?.message?.[0];
+    if (!uploadedFileUrl) throw new Error("Upload failed: No file URL received");
 
-      // The API returns: { message: ["/files/yourfile.png"] }
-      const uploadedFileUrl = uploadResponse?.message?.[0];
-      if (!uploadedFileUrl)
-        throw new Error("Upload failed: No file URL received");
-
-      // 2️⃣ Update custom_image field in Employee Checkin doctype
-      const updateFormData = new FormData();
-      updateFormData.append("custom_image", uploadedFileUrl);
-      await putUserFile(updateFormData, docname);
-    } catch (error) {
-      Toast.show({
-        type: "error",
-        text1: "Photo Upload Failed",
-        text2: error.message || "Unknown error",
-      });
-      throw error;
-    }
+    // 2️⃣ Update custom_image field in Employee Checkin doctype
+    const updateFormData = new FormData();
+    updateFormData.append("custom_image", uploadedFileUrl);
+    await putUserFile(updateFormData, docname);
   };
+
+  const page = { flex: 1, backgroundColor: colors.surfaceSecondary };
 
   if (!permission)
     return (
-      <SafeAreaView className="flex-1 items-center justify-center bg-white">
-        <ActivityIndicator size="large" />
-        <Text>Loading camera...</Text>
+      <SafeAreaView
+        style={[page, { alignItems: "center", justifyContent: "center" }]}
+        edges={["bottom", "left", "right"]}
+      >
+        <ActivityIndicator size="large" color={colors.textMuted} />
+        <Text
+          style={{
+            ...TYPO.subhead,
+            color: colors.textMuted,
+            marginTop: SPACING.sm,
+          }}
+        >
+          Loading camera...
+        </Text>
       </SafeAreaView>
     );
 
   if (!permission.granted)
     return (
-      <SafeAreaView className="flex-1 items-center justify-center bg-white">
-        <Text className="text-center mb-4">
+      <SafeAreaView
+        style={[page, { justifyContent: "center", padding: SPACING.lg }]}
+        edges={["bottom", "left", "right"]}
+      >
+        <Text
+          style={{
+            ...TYPO.body,
+            color: colors.textPrimary,
+            textAlign: "center",
+            marginBottom: SPACING.lg,
+          }}
+        >
           We need your permission to show the camera
         </Text>
-        <TouchableOpacity
-          onPress={requestPermission}
-          className="bg-blue-500 px-4 py-2 rounded"
-        >
-          <Text className="text-white">Grant Permission</Text>
-        </TouchableOpacity>
+        {/* Once the OS stops asking, the request resolves silently — only
+            Settings can grant it then. */}
+        {permission.canAskAgain ? (
+          <ActionButton
+            icon="camera-outline"
+            label="Allow camera"
+            onPress={requestPermission}
+          />
+        ) : (
+          <ActionButton
+            icon="settings-outline"
+            label="Open Settings"
+            onPress={() => Linking.openSettings()}
+          />
+        )}
       </SafeAreaView>
     );
 
   if (photo)
     return (
-      <View
-        style={{ paddingTop: Constants.statusBarHeight, paddingBottom: 20 }}
-        className="flex-1 items-center justify-center bg-white"
-      >
-        <View className="w-full border-b border-black/30 px-3">
-          <View className="flex-row pb-4 pt-2 items-center justify-center relative">
-            <TouchableOpacity
-              className="absolute left-0"
-              // onPress={() => setPhoto(null)}
-              onPress={() => {
-                setPhoto(null);
-                setTimeout(() => {}, 120);
+      <SafeAreaView style={page} edges={["bottom", "left", "right"]}>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+            paddingHorizontal: SPACING.md,
+            paddingTop: SPACING.sm,
+            paddingBottom: SPACING.lg,
+            borderBottomWidth: 1,
+            borderBottomColor: colors.dividerSubtle,
+          }}
+        >
+          <TouchableOpacity
+            style={{ position: "absolute", left: SPACING.md }}
+            onPress={() => setPhoto(null)}
+            disabled={isLoading}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: isLoading }}
+          >
+            <Text
+              style={{
+                ...TYPO.body,
+                color: isLoading ? colors.textMuted : colors.errorText,
               }}
             >
-              <Text className="text-base text-red-500">Retake</Text>
-            </TouchableOpacity>
-            <Text className="text-xl font-medium">Preview</Text>
-          </View>
+              Retake
+            </Text>
+          </TouchableOpacity>
+          <Text style={{ ...TYPO.title3, color: colors.textPrimary }}>
+            Preview
+          </Text>
         </View>
 
-        <View style={{ width: SIZES.width }} className="flex-1 px-3 bg-white">
+        <View style={{ flex: 1, paddingHorizontal: SPACING.md }}>
           <Image
             cachePolicy="disk"
             contentFit="cover"
@@ -351,65 +383,28 @@ function AttendanceCamera() {
               width: "100%",
               height: "100%",
               flex: 1,
-              borderRadius: 12,
-              marginVertical: 12,
+              borderRadius: RADIUS.md,
+              marginVertical: SPACING.md,
             }}
-            // source={{ uri: `data:image/jpg;base64,${photo.base64}` }}
             source={{ uri: photo.uri }}
           />
-          <View className="w-full items-center justify-center">
-            {checkin ? (
-              <TouchableOpacity
-                className="justify-center items-center mb-3 bg-blue-500 w-full h-16 rounded-2xl"
-                onPress={() => handleChecking("OUT", 0)}
-                disabled={isLoading}
-              >
-                {isLoading ? (
-                  <ActivityIndicator size="large" color="white" />
-                ) : (
-                  <Text className="text-lg font-semibold text-white">
-                    CHECK OUT
-                  </Text>
-                )}
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                className="justify-center items-center mb-3 bg-blue-500 w-full h-16 rounded-2xl"
-                onPress={() => handleChecking("IN", 1)}
-                disabled={isLoading}
-              >
-                {isLoading ? (
-                  <ActivityIndicator size="large" color="white" />
-                ) : (
-                  <Text className="text-lg font-semibold text-white">
-                    CHECK IN
-                  </Text>
-                )}
-              </TouchableOpacity>
-            )}
-          </View>
+          <ActionButton
+            size="lg"
+            icon={checkin ? "log-out-outline" : "log-in-outline"}
+            label={checkin ? "Check out" : "Check in"}
+            loading={isLoading}
+            onPress={() =>
+              checkin ? handleChecking("OUT", 0) : handleChecking("IN", 1)
+            }
+            style={{ marginBottom: SPACING.md }}
+          />
         </View>
-      </View>
+      </SafeAreaView>
     );
 
   return (
     <View style={{ flex: 1 }}>
       <CameraView facing={facing} ref={cameraRef} style={{ flex: 1 }} />
-      <View
-        style={{
-          position: "absolute",
-          top: Constants.statusBarHeight,
-          left: 12,
-          zIndex: 1,
-        }}
-      >
-        <Ionicons
-          name="chevron-back"
-          color="white"
-          size={SIZES.xxxLarge - SIZES.xSmall}
-          onPress={() => navigation.goBack()}
-        />
-      </View>
 
       <View
         style={{
@@ -421,8 +416,12 @@ function AttendanceCamera() {
         }}
         className="flex-row items-center justify-center w-full px-3"
       >
+        {/* White over the live feed in both themes — this chrome sits on the
+            camera image, not on an app surface. */}
         <TouchableOpacity
           onPress={takePicture}
+          accessibilityRole="button"
+          accessibilityLabel="Take photo"
           style={{ width: 80, height: 80 }}
           className="bg-white justify-center items-center rounded-full"
         >
@@ -431,23 +430,12 @@ function AttendanceCamera() {
 
         <TouchableOpacity
           onPress={toggleCameraFacing}
+          accessibilityRole="button"
+          accessibilityLabel="Switch camera"
           style={{ width: 80, height: 80, position: "absolute", left: 16 }}
           className="justify-center items-center rounded-full"
         >
           <Ionicons name="refresh" size={44} color="white" />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          disabled={mode === "camera"}
-          onPress={changeMode}
-          style={{ width: 80, height: 80, position: "absolute", right: 16 }}
-          className="justify-center items-center rounded-full"
-        >
-          <Ionicons
-            name={mode === "camera" ? "videocam" : "camera"}
-            size={44}
-            color={mode === "camera" ? "grey" : "white"}
-          />
         </TouchableOpacity>
       </View>
     </View>

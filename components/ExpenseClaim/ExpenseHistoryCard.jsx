@@ -52,89 +52,93 @@ function ExpenseHistoryCard({ claim, baseUrl = '', style }) {
   const typeLabel = formatExpenseType(claim?.expense_type);
 
   return (
-    <Card
-      style={[{ padding: SPACING.md }, style]}
-      // One sentence per card, so a screen reader announces "Travel, 1,250.00,
-      // 5 Aug 2026, Approved, 1 attachment" instead of six loose fragments.
-      accessible
-      accessibilityLabel={describeClaimForA11y(claim, attachments.length)}
-    >
-      {/* ---------- Header: what it was, and where it stands ---------- */}
-      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-        <View
+    <Card style={[{ padding: SPACING.md }, style]}>
+      {/* One sentence for the summary, so a screen reader announces "Travel,
+          1,250.00, 5 Aug 2026, Approved, 1 attachment" instead of six loose
+          fragments. Grouped on this unpainted view rather than on <Card> —
+          `accessible` on the card greys its surface on Android — and stopping
+          above the receipt, so its "Open" link stays reachable on its own. */}
+      <View
+        accessible
+        accessibilityLabel={describeClaimForA11y(claim, attachments.length)}
+      >
+        {/* ---------- Header: what it was, and where it stands ---------- */}
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <View
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: RADIUS.md,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: colors.iconBackground,
+            }}
+          >
+            <Ionicons
+              name={expenseTypeIcon(claim?.expense_type)}
+              size={ICON.md}
+              color={colors.textPrimary}
+            />
+          </View>
+
+          <View style={{ flex: 1, minWidth: 0, marginStart: SPACING.md }}>
+            <Text
+              numberOfLines={1}
+              style={{ ...TYPO.headline, color: colors.textPrimary }}
+            >
+              {typeLabel}
+            </Text>
+            <Text
+              numberOfLines={1}
+              style={{ ...TYPO.caption, color: colors.textMuted }}
+            >
+              {formatExpenseDate(claim?.expense_date)}
+            </Text>
+          </View>
+
+          {!!claim?.status && (
+            <StatusBadge
+              tone={tone}
+              icon={statusIcon}
+              label={statusLabel}
+              style={{ marginStart: SPACING.sm }}
+            />
+          )}
+        </View>
+
+        {/* ---------- Amount ---------- */}
+        <Text
           style={{
-            width: 40,
-            height: 40,
-            borderRadius: RADIUS.md,
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: colors.iconBackground,
+            ...TYPO.title1,
+            color: colors.textPrimary,
+            fontVariant: ['tabular-nums'],
+            marginTop: SPACING.sm,
           }}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.7}
         >
-          <Ionicons
-            name={expenseTypeIcon(claim?.expense_type)}
-            size={ICON.md}
-            color={colors.textPrimary}
-          />
-        </View>
+          {formatExpenseAmount(claim?.amount)}
+        </Text>
 
-        <View style={{ flex: 1, minWidth: 0, marginStart: SPACING.md }}>
+        {/* ---------- Description ---------- */}
+        {!!claim?.description && (
           <Text
-            numberOfLines={1}
-            style={{ ...TYPO.headline, color: colors.textPrimary }}
+            numberOfLines={2}
+            style={{
+              ...TYPO.subhead,
+              fontWeight: '400',
+              color: colors.textSecondary,
+              marginTop: 2,
+              // Frappe descriptions are regularly Arabic; align to the script the
+              // text actually contains rather than assuming Latin.
+              textAlign: resolveTextAlign(claim.description),
+            }}
           >
-            {typeLabel}
+            {claim.description}
           </Text>
-          <Text
-            numberOfLines={1}
-            style={{ ...TYPO.caption, color: colors.textMuted }}
-          >
-            {formatExpenseDate(claim?.expense_date)}
-          </Text>
-        </View>
-
-        {!!claim?.status && (
-          <StatusBadge
-            tone={tone}
-            icon={statusIcon}
-            label={statusLabel}
-            style={{ marginStart: SPACING.sm }}
-          />
         )}
       </View>
-
-      {/* ---------- Amount ---------- */}
-      <Text
-        style={{
-          ...TYPO.title1,
-          color: colors.textPrimary,
-          fontVariant: ['tabular-nums'],
-          marginTop: SPACING.sm,
-        }}
-        numberOfLines={1}
-        adjustsFontSizeToFit
-        minimumFontScale={0.7}
-      >
-        {formatExpenseAmount(claim?.amount)}
-      </Text>
-
-      {/* ---------- Description ---------- */}
-      {!!claim?.description && (
-        <Text
-          numberOfLines={2}
-          style={{
-            ...TYPO.subhead,
-            fontWeight: '400',
-            color: colors.textSecondary,
-            marginTop: 2,
-            // Frappe descriptions are regularly Arabic; align to the script the
-            // text actually contains rather than assuming Latin.
-            textAlign: resolveTextAlign(claim.description),
-          }}
-        >
-          {claim.description}
-        </Text>
-      )}
 
       {/* ---------- Receipt ---------- */}
       {attachments.length > 0 && (

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert, StyleSheet } from 'react-native';
+import { Alert, Platform, StyleSheet } from 'react-native';
 import {
   render,
   renderHook,
@@ -388,20 +388,52 @@ describe('useResignation', () => {
   });
 
   it('ignores a dismissed or invalid date pick', () => {
-    const { result } = renderHook(() => useResignation());
-    const before = result.current.resignationDate;
+    const original = Platform.OS;
+    // Android: the dialog reports its own dismissal and closes with it.
+    Platform.OS = 'android';
+    try {
+      const { result } = renderHook(() => useResignation());
+      const before = result.current.resignationDate;
 
-    act(() => result.current.openDatePicker());
-    expect(result.current.showDatePicker).toBe(true);
+      act(() => result.current.openDatePicker());
+      expect(result.current.showDatePicker).toBe(true);
 
-    act(() =>
-      result.current.handleDateChange({ type: 'dismissed' }, new Date(2030, 0, 1)),
-    );
-    expect(result.current.showDatePicker).toBe(false);
-    expect(result.current.resignationDate).toBe(before);
+      act(() =>
+        result.current.handleDateChange(
+          { type: 'dismissed' },
+          new Date(2030, 0, 1),
+        ),
+      );
+      expect(result.current.showDatePicker).toBe(false);
+      expect(result.current.resignationDate).toBe(before);
 
-    act(() => result.current.handleDateChange({ type: 'set' }, 'not a date'));
-    expect(result.current.resignationDate).toBe(before);
+      act(() => result.current.handleDateChange({ type: 'set' }, 'not a date'));
+      expect(result.current.resignationDate).toBe(before);
+    } finally {
+      Platform.OS = original;
+    }
+  });
+
+  it('keeps the iOS spinner open across ticks until Done', () => {
+    const original = Platform.OS;
+    Platform.OS = 'ios';
+    try {
+      const { result } = renderHook(() => useResignation());
+      const tick = new Date(2030, 0, 15);
+
+      act(() => result.current.openDatePicker());
+      act(() => result.current.handleDateChange({ type: 'set' }, tick));
+
+      // A wheel tick commits the value but must not tear the picker away.
+      expect(result.current.showDatePicker).toBe(true);
+      expect(result.current.resignationDate).toEqual(tick);
+      expect(result.current.needsDoneAffordance).toBe(true);
+
+      act(() => result.current.closeDatePicker());
+      expect(result.current.showDatePicker).toBe(false);
+    } finally {
+      Platform.OS = original;
+    }
   });
 
   it('accepts a chosen date', () => {

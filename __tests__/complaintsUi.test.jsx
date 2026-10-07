@@ -135,8 +135,11 @@ describe('modern Complaints screen', () => {
     expect(getByText('Upload supporting document')).toBeTruthy();
     expect(getByText('PDF • JPG • PNG')).toBeTruthy();
     expect(getByText('Optional')).toBeTruthy();
+    // Captioned through UploadField's own `label`, which also prefixes the
+    // announcement.
+    expect(getByText('Attachment')).toBeTruthy();
     expect(
-      getByLabelText('Upload supporting document. Optional.'),
+      getByLabelText('Attachment. Upload supporting document. Optional.'),
     ).toBeTruthy();
   });
 
@@ -179,50 +182,32 @@ describe('modern Complaints screen', () => {
 });
 
 /* =====================================================================
- * Summary — derived from state the screen already has
+ * Inline validation — shown only after an attempt, like Loan Application
  * ================================================================== */
 
-describe('complaint summary', () => {
-  it('stays hidden until there is something to send', () => {
+describe('complaint inline validation', () => {
+  it('stays quiet until the first submit attempt', () => {
     const { queryByText } = render(<Complaints />);
 
+    expect(queryByText('Finish the form first')).toBeNull();
+    // The summary card that echoed the form back is gone.
     expect(queryByText('Ready to submit')).toBeNull();
   });
 
-  it('appears once a message is typed', () => {
-    const { getByLabelText, getByText } = render(<Complaints />);
+  it('marks an empty message after an attempt, beside the hook Alert', () => {
+    const { getByLabelText, getByText, queryByText } = render(<Complaints />);
+
+    fireEvent.press(getByLabelText('Submit complaint'));
+
+    expect(getByText('Finish the form first')).toBeTruthy();
+    expect(getByText('Add a message.')).toBeTruthy();
+    expect(Alert.alert).toHaveBeenCalledWith(
+      'Validation',
+      'Please enter complaint message',
+    );
 
     fireEvent.changeText(getByLabelText('Complaint message'), 'The AC is off');
-
-    expect(getByText('Ready to submit')).toBeTruthy();
-    expect(getByText('None')).toBeTruthy();
-  });
-
-  it('counts an attached file', () => {
-    mockHookOverride = {
-      message: 'The AC is off',
-      file: FILE,
-      loading: false,
-      isBottomSheetVisible: false,
-      setMessage: jest.fn(),
-      setFile: jest.fn(),
-      pickFile: jest.fn(),
-      closeBottomSheet: jest.fn(),
-      removeFile: jest.fn(),
-      handlePickCamera: jest.fn(),
-      handlePickGallery: jest.fn(),
-      handlePickDocument: jest.fn(),
-      submitComplaint: jest.fn(),
-      hasMessage: true,
-      attachmentCount: 1,
-    };
-
-    const { getByText } = render(<Complaints />);
-
-    expect(getByText('1 file attached')).toBeTruthy();
-    // And the shared upload target shows the filename with a remove button.
-    expect(getByText('evidence.pdf')).toBeTruthy();
-    expect(getByText('icon:document-text-outline')).toBeTruthy();
+    expect(queryByText('Finish the form first')).toBeNull();
   });
 });
 
@@ -351,9 +336,10 @@ describe('useComplaint', () => {
     withMessage(result);
     await submit(result);
 
+    // Fixed copy: the thrown developer string stays in the log.
     expect(Alert.alert).toHaveBeenCalledWith(
       'Error',
-      'Complaint created but docname missing',
+      'Failed to submit complaint',
     );
     expect(uploadComplaintAttachment).not.toHaveBeenCalled();
   });
@@ -365,7 +351,10 @@ describe('useComplaint', () => {
     withMessage(result);
     await submit(result);
 
-    expect(Alert.alert).toHaveBeenCalledWith('Error', 'Network down');
+    expect(Alert.alert).toHaveBeenCalledWith(
+      'Error',
+      'Failed to submit complaint',
+    );
     expect(result.current.loading).toBe(false);
   });
 
@@ -389,7 +378,6 @@ describe('useComplaint', () => {
 
     expect(mockPickers.pickDocument).toHaveBeenCalledTimes(1);
     expect(result.current.file).toEqual(FILE);
-    expect(result.current.attachmentCount).toBe(1);
 
     jest.useRealTimers();
   });
@@ -418,7 +406,6 @@ describe('useComplaint', () => {
     act(() => result.current.removeFile());
 
     expect(result.current.file).toBeNull();
-    expect(result.current.attachmentCount).toBe(0);
   });
 });
 

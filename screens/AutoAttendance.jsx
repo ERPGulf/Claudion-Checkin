@@ -194,6 +194,7 @@ function AutoAttendance() {
         }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
       >
         {/* ---------- Overview ---------- */}
         <Card style={{ padding: SPACING.md }}>
@@ -327,7 +328,7 @@ function AutoAttendance() {
                   onValueChange={handleToggleEnabled}
                   disabled={busy}
                   trackColor={{ true: colors.primary2 }}
-                  accessibilityLabel="Turn on automatic attendance"
+                  accessibilityLabel="Automatic attendance"
                 />
               </SettingsRow>
             </>
@@ -417,12 +418,24 @@ function AutoAttendance() {
         ) : null}
 
         {active && reliabilityWarning ? (
-          <StatusBanner
-            tone="warning"
-            title="Monitoring may be delayed"
-            message={reliabilityWarning}
-            style={{ marginTop: SPACING.md }}
-          />
+          <>
+            <StatusBanner
+              tone="warning"
+              title="Monitoring may be delayed"
+              message={reliabilityWarning}
+              style={{ marginTop: SPACING.md }}
+            />
+            {/* Right under the warning that sends people to Settings. Both
+                platforms: Linking.openSettings opens this app's page on iOS too. */}
+            <ActionButton
+              label="Open app settings"
+              icon="settings-outline"
+              variant="outline"
+              size="md"
+              onPress={() => Linking.openSettings()}
+              style={{ marginTop: SPACING.sm }}
+            />
+          </>
         ) : null}
 
         {active ? (
@@ -434,28 +447,16 @@ function AutoAttendance() {
           // for the geofence broadcast); the real risks are an explicit "Force
           // stop" from Settings, or OEM battery management (common on Xiaomi,
           // Huawei, Oppo, Vivo, OnePlus, Samsung) killing it in the background.
-          <>
-            <StatusBanner
-              tone="info"
-              title="Keep the app running"
-              message={
-                Platform.OS === "ios"
-                  ? "Don't swipe this app away from the App Switcher while monitoring — it stops automatic check-in/out until you reopen the app. Locking the screen or pressing Home is fine."
-                  : "Don't \"Force stop\" this app from Settings while monitoring — it stops automatic check-in/out until you reopen the app. Swiping it away from Recents is fine. Also check your phone maker's battery settings (Xiaomi, Huawei, Oppo, Vivo, OnePlus, Samsung, etc. often restrict background apps by default)."
-              }
-              style={{ marginTop: SPACING.md }}
-            />
-            {Platform.OS === "android" ? (
-              <ActionButton
-                label="Open app settings"
-                icon="settings-outline"
-                variant="outline"
-                size="md"
-                onPress={() => Linking.openSettings()}
-                style={{ marginTop: SPACING.sm }}
-              />
-            ) : null}
-          </>
+          <StatusBanner
+            tone="info"
+            title="Keep the app running"
+            message={
+              Platform.OS === "ios"
+                ? "Don't swipe this app away from the App Switcher while monitoring — it stops automatic check-in/out until you reopen the app. Locking the screen or pressing Home is fine."
+                : "Don't \"Force stop\" this app from Settings while monitoring — it stops automatic check-in/out until you reopen the app. Swiping it away from Recents is fine. Also check your phone maker's battery settings (Xiaomi, Huawei, Oppo, Vivo, OnePlus, Samsung, etc. often restrict background apps by default)."
+            }
+            style={{ marginTop: SPACING.md }}
+          />
         ) : null}
 
         {/* ---------- Developer tools (dev builds only) ---------- */}

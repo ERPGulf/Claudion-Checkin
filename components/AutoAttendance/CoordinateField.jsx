@@ -20,7 +20,8 @@ function CoordinateField({ label, value, onChangeText, editable = true, hint }) 
   const { colors } = useAppTheme();
 
   return (
-    <View style={{ minWidth: 0 }}>
+    // `flex: 1` so a Latitude/Longitude pair splits its row evenly.
+    <View style={{ flex: 1, minWidth: 0 }}>
       <Text
         style={{
           ...TYPO.caption,

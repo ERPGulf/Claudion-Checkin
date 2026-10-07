@@ -13,9 +13,10 @@ import useAppTheme from '../../hooks/useAppTheme';
  * <SettingsRow> children, which carry their own horizontal padding so their
  * dividers can run edge to edge.
  *
- * Remaining props land on the underlying <View>, so a card that represents one
- * record can carry `accessible` and a combined `accessibilityLabel` and be
- * announced as a single item rather than as a pile of loose text nodes.
+ * Remaining props land on the underlying <View>. To announce a card as one
+ * item, do NOT pass `accessible` here — on Android it repaints the surface
+ * #ECECEC. Put `accessible` and the combined `accessibilityLabel` on an inner
+ * <View> that paints nothing (see RecordCard, QrBadgeCard, GreetingCard).
  */
 function Card({ children, style, padded = false, ...rest }) {
   const { colors, isDark } = useAppTheme();
