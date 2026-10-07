@@ -47,6 +47,13 @@ lifecycle for Xcode 27/iOS 27. Do not clean-prebuild the production native
 folders. See [the native audit](docs/expo-native-upgrade-audit.md) and
 [migration validation record](docs/expo-sdk57-migration.md).
 
+After a framework upgrade, rebuild and install the native app with
+`npm run android` or `npm run ios` before loading the new Metro bundle. An
+Android emulator still running the SDK 54 / React Native 0.81.5 binary can fail
+with `[runtime not ready]: ReferenceError: Property 'MessageQueue' doesn't exist`
+when it receives SDK 57 / React Native 0.86.3 JavaScript. Installing the matching
+native build resolves this mismatch; restarting Metro alone cannot update it.
+
 ## Crash reporting (Firebase Crashlytics)
 
 `@react-native-firebase/crashlytics` (24.0.0, the same version as app/messaging) reports native crashes, uncaught JS errors and a few deliberately chosen non-fatal errors to the existing Firebase project.
