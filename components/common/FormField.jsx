@@ -75,6 +75,10 @@ function FormField({
   autoFocus = false,
   returnKeyType,
   onSubmitEditing,
+  // `submitBehavior="submit"` keeps the keyboard up when "next" hands focus to
+  // the following field (reached through `ref`, a plain prop in React 19).
+  submitBehavior,
+  ref,
   onBlur,
   textContentType,
   autoComplete,
@@ -195,6 +199,8 @@ function FormField({
         )}
 
         <TextInput
+          ref={ref}
+          submitBehavior={submitBehavior}
           value={value}
           onChangeText={onChangeText}
           placeholder={placeholder}

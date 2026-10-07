@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { I18nManager, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ICON, RADIUS, SPACING, TYPO } from '../../constants';
@@ -6,12 +6,13 @@ import useAppTheme from '../../hooks/useAppTheme';
 import ActionButton from '../common/ActionButton';
 import Card from '../common/Card';
 import FormField from '../common/FormField';
+import OrDivider from '../common/OrDivider';
 import PressableScale from '../common/PressableScale';
 import AuthStepLayout from './AuthStepLayout';
 import { useMobileLoginFlow } from './MobileLoginContext';
 import { mobileLoginCopy } from './mobileLoginCopy';
 
-function CompanySelection() {
+function CompanySelection({ onNext }) {
   const { login } = useMobileLoginFlow();
   const { colors } = useAppTheme();
   const busy = login.isLoading || login.isHydrating;
@@ -75,6 +76,8 @@ function CompanySelection() {
         autoCorrect={false}
         autoComplete="off"
         returnKeyType="next"
+        submitBehavior="submit"
+        onSubmitEditing={onNext}
         align={align}
       />
     </View>
@@ -83,13 +86,15 @@ function CompanySelection() {
 
 export default function AccountStep() {
   const { login, navigation } = useMobileLoginFlow();
-  const { colors } = useAppTheme();
   const busy = login.isLoading || login.isHydrating;
+  const mobileRef = useRef(null);
+  const submit = () => { if (!busy) login.begin(); };
   const subtitle = login.backendUrl ? 'mobileSubtitle' : login.discovery === 'server' ? 'serverSubtitle' : 'companySubtitle';
   return (
     <AuthStepLayout title={mobileLoginCopy('mobileTitle')} subtitle={mobileLoginCopy(subtitle)}>
-      <CompanySelection />
+      <CompanySelection onNext={() => mobileRef.current?.focus()} />
       <FormField
+        ref={mobileRef}
         label={mobileLoginCopy('mobileNumber')}
         icon="call-outline"
         placeholder={mobileLoginCopy('mobilePlaceholder')}
@@ -101,14 +106,12 @@ export default function AccountStep() {
         autoComplete="tel"
         autoCapitalize="none"
         disabled={busy}
+        returnKeyType="go"
+        onSubmitEditing={submit}
         align={I18nManager.isRTL ? 'right' : 'left'}
       />
       <ActionButton label={mobileLoginCopy('continue')} icon={I18nManager.isRTL ? 'arrow-back' : 'arrow-forward'} variant="accent" size="lg" loading={login.isLoading} disabled={busy} onPress={login.begin} />
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: SPACING.md }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-        <View style={{ flex: 1, height: 1, backgroundColor: colors.cardBorder }} />
-        <Text style={{ ...TYPO.caption, color: colors.textMuted }}>{mobileLoginCopy('or')}</Text>
-        <View style={{ flex: 1, height: 1, backgroundColor: colors.cardBorder }} />
-      </View>
+      <OrDivider label={mobileLoginCopy('or')} />
       <ActionButton
         label={mobileLoginCopy('scanQr')}
         icon="qr-code-outline"

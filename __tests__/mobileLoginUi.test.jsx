@@ -201,7 +201,12 @@ it('keeps OTP errors on the OTP screen and disables empty code submission', () =
   expect(screen.getByText('The verification code is invalid or expired.')).toBeTruthy();
   expect(screen.getByLabelText('Verification code')).toBeTruthy();
   fireEvent.press(screen.getByLabelText('Verify code'));
+  fireEvent(screen.getByLabelText('Verification code'), 'submitEditing');
   expect(mockLogin.submitOtp).not.toHaveBeenCalled();
+  mockLogin.otp = '000000';
+  screen.rerender(<MobileLogin />);
+  fireEvent(screen.getByLabelText('Verification code'), 'submitEditing');
+  expect(mockLogin.submitOtp).toHaveBeenCalledTimes(1);
 });
 
 it.each(['PASSWORD_OPTION', 'PASSWORD_CREATE'])('separates %s creation from OTP and submits valid confirmed passwords', step => {
@@ -234,8 +239,11 @@ it('offers a visible optional-password skip even when the draft password is inva
   const screen = render(<MobileLogin />);
 
   expect(screen.getByText('Secure your account')).toBeTruthy();
-  expect(screen.getByText('Use at least 8 characters.')).toBeTruthy();
+  // A draft rule waits for the field to be left; an empty field's error shows at once.
+  expect(screen.queryByText('Use at least 8 characters.')).toBeNull();
   expect(screen.getByText('Passwords do not match.')).toBeTruthy();
+  fireEvent(screen.getByLabelText('New password'), 'blur');
+  expect(screen.getByText('Use at least 8 characters.')).toBeTruthy();
   fireEvent.press(screen.getByLabelText('Create password'));
   expect(mockLogin.submitNewPassword).not.toHaveBeenCalled();
   expect(screen.getByLabelText('Skip for now').props.accessibilityState.disabled).toBe(false);

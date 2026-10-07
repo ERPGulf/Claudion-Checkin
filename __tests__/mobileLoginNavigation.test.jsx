@@ -359,10 +359,15 @@ it('displays password validation inline while keeping Create disabled and Skip a
   await start(screen);
   await enterOtp(screen);
   enterNewPassword(screen, 'short');
+  // Rule messages wait until the field is left, not the first keystroke.
+  expect(screen.queryByText('Password must be at least 8 characters.')).toBeNull();
+  fireEvent(screen.getByLabelText('New password'), 'blur');
   expect(screen.getByText('Password must be at least 8 characters.')).toBeTruthy();
   expect(screen.getByLabelText('Create password').props.accessibilityState.disabled).toBe(true);
   expect(screen.getByLabelText('Skip for now').props.accessibilityState.disabled).toBe(false);
   enterNewPassword(screen, PASSWORD, 'different-password');
+  expect(screen.queryByText('Passwords do not match.')).toBeNull();
+  fireEvent(screen.getByLabelText('Confirm password'), 'blur');
   expect(screen.getByText('Passwords do not match.')).toBeTruthy();
   expect(screen.getByLabelText('Create password').props.accessibilityState.disabled).toBe(true);
   expectOnlyInputs(screen, ['New password', 'Confirm password']);

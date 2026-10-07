@@ -1,14 +1,16 @@
 import React from 'react';
-import { I18nManager } from 'react-native';
+import { I18nManager, View } from 'react-native';
 import ActionButton from '../common/ActionButton';
 import FormField from '../common/FormField';
-import AuthStepLayout from './AuthStepLayout';
+import AuthStepLayout, { TextAction } from './AuthStepLayout';
 import { useMobileLoginFlow } from './MobileLoginContext';
 import { mobileLoginCopy } from './mobileLoginCopy';
 
 export default function PasswordSignInStep() {
   const { login } = useMobileLoginFlow();
   const busy = login.isLoading || login.isHydrating;
+  const canSubmit = !busy && !!login.password?.trim();
+  const submit = () => { if (canSubmit) login.continuePasswordSignIn(); };
   const needsOtp = login.flow?.credentials?.otp?.requirement && login.flow.credentials.otp.requirement !== 'disabled';
   return (
     <AuthStepLayout title={mobileLoginCopy('passwordTitle')} subtitle={mobileLoginCopy('passwordSubtitle', login.mobileNumber)}>
@@ -24,12 +26,19 @@ export default function PasswordSignInStep() {
         autoCorrect={false}
         autoComplete="password"
         textContentType="password"
+        autoFocus
         disabled={busy}
+        returnKeyType="go"
+        onSubmitEditing={submit}
         align={I18nManager.isRTL ? 'right' : 'left'}
       />
-      <ActionButton label={mobileLoginCopy(needsOtp ? 'continue' : 'signIn')} variant="accent" size="lg" loading={login.isLoading} disabled={busy || !login.password?.trim()} onPress={login.continuePasswordSignIn} />
-      {login.canResetPassword && <ActionButton label={mobileLoginCopy('forgotPassword')} variant="outline" size="lg" disabled={busy} onPress={login.startResetPassword} />}
-      {login.canCreatePassword && <ActionButton label={mobileLoginCopy('createTitle')} variant="outline" size="lg" disabled={busy} onPress={login.startCreatePassword} />}
+      <ActionButton label={mobileLoginCopy(needsOtp ? 'continue' : 'signIn')} variant="accent" size="lg" loading={login.isLoading} disabled={!canSubmit} onPress={login.continuePasswordSignIn} />
+      {(login.canResetPassword || login.canCreatePassword) && (
+        <View>
+          {login.canResetPassword && <TextAction label={mobileLoginCopy('forgotPassword')} disabled={busy} onPress={login.startResetPassword} />}
+          {login.canCreatePassword && <TextAction label={mobileLoginCopy('createTitle')} disabled={busy} onPress={login.startCreatePassword} />}
+        </View>
+      )}
     </AuthStepLayout>
   );
 }

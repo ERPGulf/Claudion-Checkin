@@ -4,7 +4,7 @@ import { SPACING, TYPO } from '../../constants';
 import useAppTheme from '../../hooks/useAppTheme';
 import ActionButton from '../common/ActionButton';
 import FormField from '../common/FormField';
-import AuthStepLayout from './AuthStepLayout';
+import AuthStepLayout, { TextAction } from './AuthStepLayout';
 import { useMobileLoginFlow } from './MobileLoginContext';
 import { mobileLoginCopy } from './mobileLoginCopy';
 
@@ -12,10 +12,14 @@ export default function OtpStep() {
   const { login } = useMobileLoginFlow();
   const { colors } = useAppTheme();
   const busy = login.isLoading || login.isHydrating;
+  const canSubmit = !busy && !!login.otp?.trim();
+  const submit = () => { if (canSubmit) login.submitOtp(); };
   const resendDisabled = busy || login.resendSeconds > 0;
   const passwordFollows = login.passwordMode || (
     login.flow?.action === 'SIGN_UP' && login.flow?.credentials?.password?.requirement !== 'disabled'
   );
+  const showCreate = login.canCreatePassword && !login.passwordMode;
+  const showReset = login.canResetPassword && !login.passwordMode;
   return (
     <AuthStepLayout
       title={mobileLoginCopy('otpTitle')}
@@ -34,22 +38,28 @@ export default function OtpStep() {
           autoComplete="sms-otp"
           autoCapitalize="none"
           autoCorrect={false}
+          // Keyboard up on arrival, so the SMS code suggestion is one tap away.
+          autoFocus
           disabled={busy}
           returnKeyType="done"
+          onSubmitEditing={submit}
           align={I18nManager.isRTL ? 'right' : 'left'}
         />
         {!!passwordFollows && <Text style={{ ...TYPO.caption, color: colors.textMuted, textAlign: I18nManager.isRTL ? 'right' : 'left' }}>{mobileLoginCopy(login.passwordMode ? 'recoveryOtpHint' : 'signupOtpHint')}</Text>}
+        <TextAction
+          label={mobileLoginCopy(login.resendSeconds > 0 ? 'resendSeconds' : 'resendCode', login.resendSeconds)}
+          disabled={resendDisabled}
+          onPress={login.resendOtp}
+          style={{ alignSelf: 'flex-start', paddingHorizontal: 0 }}
+        />
       </View>
-      <ActionButton label={mobileLoginCopy('verifyCode')} variant="accent" size="lg" loading={login.isLoading} disabled={busy || !login.otp?.trim()} onPress={login.submitOtp} />
-      <ActionButton
-        label={mobileLoginCopy(login.resendSeconds > 0 ? 'resendSeconds' : 'resendCode', login.resendSeconds)}
-        variant="outline"
-        size="lg"
-        disabled={resendDisabled}
-        onPress={login.resendOtp}
-      />
-      {login.canCreatePassword && !login.passwordMode && <ActionButton label={mobileLoginCopy('createTitle')} icon="lock-closed-outline" variant="outline" size="lg" disabled={busy} onPress={login.startCreatePassword} />}
-      {login.canResetPassword && !login.passwordMode && <ActionButton label={mobileLoginCopy('forgotPassword')} variant="outline" size="lg" disabled={busy} onPress={login.startResetPassword} />}
+      <ActionButton label={mobileLoginCopy('verifyCode')} variant="accent" size="lg" loading={login.isLoading} disabled={!canSubmit} onPress={login.submitOtp} />
+      {(showCreate || showReset) && (
+        <View>
+          {showCreate && <TextAction label={mobileLoginCopy('createTitle')} disabled={busy} onPress={login.startCreatePassword} />}
+          {showReset && <TextAction label={mobileLoginCopy('forgotPassword')} disabled={busy} onPress={login.startResetPassword} />}
+        </View>
+      )}
     </AuthStepLayout>
   );
 }

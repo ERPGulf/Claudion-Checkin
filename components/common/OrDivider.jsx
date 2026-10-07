@@ -8,7 +8,7 @@ import useAppTheme from '../../hooks/useAppTheme';
  * "── or ──" between a screen's own action and the other ways to sign in.
  * Decorative, so screen readers skip it; the buttons carry their own labels.
  */
-function OrDivider({ style }) {
+function OrDivider({ label = 'or', style }) {
   const { colors } = useAppTheme();
   const line = <View style={{ flex: 1, height: 1, backgroundColor: colors.cardBorder }} />;
 
@@ -20,7 +20,7 @@ function OrDivider({ style }) {
     >
       {line}
       <Text style={{ ...TYPO.caption, color: colors.textMuted, marginHorizontal: SPACING.md }}>
-        or
+        {label}
       </Text>
       {line}
     </View>
