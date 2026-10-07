@@ -259,6 +259,7 @@ describe('useQrScanner', () => {
 
     // App_key padded to a `==` tail, exactly as before.
     expect(stored.app_key).toBe('abcdefgh==');
+    expect(await AsyncStorage.getItem('auth_method')).toBe('qr');
 
     // Redux got the same four values.
     const { user } = store.getState();
@@ -380,6 +381,22 @@ describe('QR scanner container', () => {
 
     expect(getByText('SELECT FROM PHOTOS')).toBeTruthy();
     expect(queryByText('Align the QR code inside the frame.')).toBeNull();
+  });
+
+  it('records QR as the last method after scanning in the classic screen', async () => {
+    mockNewHomeEnabled = false;
+    await AsyncStorage.setItem('auth_method', 'mobile');
+    const { getByTestId } = renderScreen();
+
+    await act(async () => {
+      await getByTestId('camera-view').props.onBarcodeScanned({
+        type: 'qr',
+        data: VALID_QR,
+      });
+    });
+
+    expect(await AsyncStorage.getItem('auth_method')).toBe('qr');
+    expect(mockNavigate).toHaveBeenCalledWith('login');
   });
 });
 

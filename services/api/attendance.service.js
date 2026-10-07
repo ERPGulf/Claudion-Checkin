@@ -15,6 +15,9 @@ import {
   toTimestampMs,
 } from "../../utils/attendanceSession";
 import { scoreLocations, pickNearest } from "../../utils/attendanceLocations";
+import { assertCompleteAttendancePolicy } from "../offline/attendanceConfigCache";
+import { getAuthSessionGeneration } from "../../utils/authSessionGuard";
+import { createAttendanceScopeChangedError } from "../offline/attendanceQueueProvenance";
 import {
   parseServerWallClock,
   rememberServerOffset,
@@ -84,6 +87,7 @@ export const resolveServerTimestampAt = async (occurredAt, nowMs = Date.now()) =
 
 export const getOfficeLocation = async (employeeCode) => {
   const logPrefix = "[attendance.service/getOfficeLocation]";
+  const generation = getAuthSessionGeneration();
 
   if (!employeeCode) throw new Error("Employee ID is required");
 
@@ -113,6 +117,10 @@ export const getOfficeLocation = async (employeeCode) => {
   );
 
   const employee = data?.message || {};
+  if (await AsyncStorage.getItem("auth_method") === "mobile") {
+    if (generation !== getAuthSessionGeneration()) throw createAttendanceScopeChangedError();
+    assertCompleteAttendancePolicy(employee);
+  }
 
   const sanitizeNumber = (value, defaultValue = 0) => {
     const parsed = Number(value);
@@ -149,6 +157,7 @@ export const getOfficeLocation = async (employeeCode) => {
     locationsCount: locations.length,
   });
 
+  if (generation !== getAuthSessionGeneration()) throw createAttendanceScopeChangedError();
   await AsyncStorage.multiSet([
     ["restrict_location", String(restrictLocation)],
 
@@ -242,8 +251,14 @@ export const userCheckIn = async ({ employeeCode, type, locationData }) => {
     const token = await AsyncStorage.getItem("access_token");
     if (!token) throw new Error("Token missing");
 
-    const restrictLocation =
-      Number(await AsyncStorage.getItem("restrict_location")) || 0;
+    const restriction = await AsyncStorage.getItem("restrict_location");
+    if (
+      await AsyncStorage.getItem("auth_method") === "mobile" &&
+      !["0", "1"].includes(restriction)
+    ) {
+      throw new Error("Attendance configuration is unavailable. Please sign in again or contact your administrator.");
+    }
+    const restrictLocation = Number(restriction) || 0;
 
     const unrestrictedCheckout =
       Number(await AsyncStorage.getItem("unrestricted_checkout_location")) || 0;

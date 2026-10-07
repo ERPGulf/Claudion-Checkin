@@ -1,6 +1,6 @@
 /* eslint-disable react/prop-types */
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, Platform, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Platform, Text, View } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
 import { ICON, RADIUS, SPACING, TYPO } from '../../constants';
@@ -14,6 +14,7 @@ import StatusBanner from '../common/StatusBanner';
 import PickerField from '../common/PickerField';
 import UploadField from '../common/UploadField';
 import AttachmentSheet from '../common/AttachmentSheet';
+import PickerWithDone from '../common/PickerWithDone';
 import ExpenseTypeSheet from './ExpenseTypeSheet';
 import FormField from '../common/FormField';
 // "5 Aug 2026" — the same string Attendance History and Attendance Request
@@ -91,6 +92,8 @@ function ClaimFormSection({ addClaim, isCreating, resetFormFlag }) {
     showPicker,
     showDatePicker,
     handleDateChange,
+    needsDoneAffordance,
+    closeDatePicker,
     isTypeSheetVisible,
     openTypeSheet,
     closeTypeSheet,
@@ -120,43 +123,6 @@ function ClaimFormSection({ addClaim, isCreating, resetFormFlag }) {
   useEffect(() => {
     setAttempted(false);
   }, [resetFormFlag]);
-
-  /* ---------------------------------------------------------------------
-   * Success affirmation
-   *
-   * `resetFormFlag` flips only after a claim was created and the user dismissed
-   * the Alert, so it is the one reliable "it worked" signal available without
-   * touching the mutation. The first render is skipped, since the flag has a
-   * value from the start.
-   * ------------------------------------------------------------------- */
-
-  const [showSuccess, setShowSuccess] = useState(false);
-  const successOpacity = useRef(new Animated.Value(0)).current;
-  const firstRender = useRef(true);
-
-  useEffect(() => {
-    if (firstRender.current) {
-      firstRender.current = false;
-      return undefined;
-    }
-
-    setShowSuccess(true);
-    Animated.timing(successOpacity, {
-      toValue: 1,
-      duration: 220,
-      useNativeDriver: true,
-    }).start();
-
-    const timer = setTimeout(() => {
-      Animated.timing(successOpacity, {
-        toValue: 0,
-        duration: 220,
-        useNativeDriver: true,
-      }).start(({ finished }) => finished && setShowSuccess(false));
-    }, 4000);
-
-    return () => clearTimeout(timer);
-  }, [resetFormFlag, successOpacity]);
 
   // iOS-only. Keeps the native wheel on the same palette as the screen; has no
   // bearing on how a date is picked.
@@ -214,18 +180,6 @@ function ClaimFormSection({ addClaim, isCreating, resetFormFlag }) {
         </View>
       </Card>
 
-      {showSuccess && (
-        <Animated.View
-          style={{ opacity: successOpacity, marginBottom: SPACING.md }}
-        >
-          <StatusBanner
-            tone="success"
-            title="Claim submitted"
-            message="It's now with your approver and appears in your history below."
-          />
-        </Animated.View>
-      )}
-
       {/* ================= CREATE CLAIM ================= */}
       <SectionHeader title="Create claim" subtitle="Required fields are marked" />
 
@@ -251,13 +205,18 @@ function ClaimFormSection({ addClaim, isCreating, resetFormFlag }) {
               lays out inline, so hoisting it would move the wheel away from
               the control it belongs to. */}
           {showPicker && (
-            <DateTimePicker
-              value={pickerValue(expenseDate)}
-              mode="date"
-              themeVariant={pickerTheme}
-              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-              onChange={handleDateChange}
-            />
+            <PickerWithDone
+              needsDone={needsDoneAffordance}
+              onDone={closeDatePicker}
+            >
+              <DateTimePicker
+                value={pickerValue(expenseDate)}
+                mode="date"
+                themeVariant={pickerTheme}
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                onChange={handleDateChange}
+              />
+            </PickerWithDone>
           )}
 
           {/* Same field component as the date, so the two read as one pair.

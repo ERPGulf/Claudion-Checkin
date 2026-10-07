@@ -29,7 +29,12 @@ import {
  *
  * WelcomeCard is left untouched for the classic screen.
  */
-function StatusCard() {
+/**
+ * `onBreak` / `breakStartTime` come from useAttendanceAction, which owns the real
+ * break flow. They used to be read from Redux, which only the DEV presets ever
+ * wrote — so during a real break this stat stayed frozen and untinted.
+ */
+function StatusCard({ onBreak = false, breakStartTime = null }) {
   const { colors } = useAppTheme();
   const location = useSelector(selectLocation);
   const checkin = useSelector(selectCheckin);
@@ -38,8 +43,6 @@ function StatusCard() {
   const todayTotal = useSelector(selectTodayHours);
   const monthlyTotal = useSelector(selectMonthlyHours);
   const breakMinutes = useSelector(selectBreakMinutes);
-  const onBreak = useSelector(state => state.attendance.onBreak);
-  const breakStartTime = useSelector(state => state.attendance.breakStartTime);
   const [liveBreakMinutes, setLiveBreakMinutes] = useState(0);
   const breakIntervalRef = useRef(null);
   const [sessionMinutes, setSessionMinutes] = useState(0);
@@ -128,8 +131,8 @@ function StatusCard() {
               alignSelf: 'flex-start',
               flexDirection: 'row',
               alignItems: 'center',
-              paddingHorizontal: SPACING.sm + 2,
-              paddingVertical: 5,
+              paddingHorizontal: SPACING.sm,
+              paddingVertical: SPACING.xs,
               borderRadius: RADIUS.pill,
               backgroundColor: colors[`${badgeTone}Surface`],
             }}
@@ -140,7 +143,7 @@ function StatusCard() {
                 height: 6,
                 borderRadius: 3,
                 backgroundColor: colors[`${badgeTone}Text`],
-                marginEnd: SPACING.xs + 2,
+                marginEnd: SPACING.xs,
               }}
             />
             <Text
@@ -170,7 +173,7 @@ function StatusCard() {
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
-                  marginTop: 2,
+                  marginTop: SPACING.xs,
                 }}
               >
                 <Ionicons
@@ -229,7 +232,7 @@ function StatusCard() {
                   ...TYPO.subhead,
                   fontWeight: '400',
                   color: colors.textMuted,
-                  marginTop: 2,
+                  marginTop: SPACING.xs,
                 }}
               >
                 Check in before you start working.
@@ -293,4 +296,6 @@ function StatusCard() {
   );
 }
 
-export default StatusCard;
+// Memoised: its props are primitives, and the parent screen re-renders on every
+// hook state change. The card's own timers keep it live.
+export default React.memo(StatusCard);

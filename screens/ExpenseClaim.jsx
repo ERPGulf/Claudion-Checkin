@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import { Platform, RefreshControl, SectionList, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { SPACING } from "../constants";
@@ -7,7 +7,6 @@ import useModernScreenHeader from "../hooks/useModernScreenHeader";
 import useExpenseClaims from "../hooks/useExpenseClaims";
 import Card from "../components/common/Card";
 import EmptyState from "../components/common/EmptyState";
-import StatusBanner from "../components/common/StatusBanner";
 import {
   AppearingItem,
   ClaimFormSection,
@@ -72,9 +71,7 @@ function ExpenseClaim() {
     visibleClaims,
     isFetching,
     isError,
-    error,
     refetch,
-    isRefetching,
     refresh,
     searchQuery,
     setSearchQuery,
@@ -167,20 +164,13 @@ function ExpenseClaim() {
     if (isError) {
       return (
         <View style={GUTTER}>
-          <StatusBanner
-            tone="error"
-            title="Couldn't load your claims"
-            message={
-              error?.message ||
-              "Something went wrong while fetching expense claims."
-            }
-          />
-          <Card style={{ marginTop: SPACING.md }}>
+          <Card>
             <EmptyState
-              icon="refresh-outline"
-              title="Nothing to show"
-              description="Check your connection, then try again."
-              actionLabel="Try again"
+              compact
+              icon="cloud-offline-outline"
+              title="Couldn't load your claims"
+              description="Unable to load expense claims."
+              actionLabel="Retry"
               onActionPress={refetch}
             />
           </Card>
@@ -224,7 +214,6 @@ function ExpenseClaim() {
     visibleClaims.length,
     isFetching,
     isError,
-    error,
     refetch,
     isSearching,
     setSearchQuery,
@@ -244,6 +233,18 @@ function ExpenseClaim() {
     ),
     [hasMore, visibleClaims.length, isError, refetch],
   );
+
+  // Only a pull shows the spinner; the post-submit refetch stays silent.
+  const [pulling, setPulling] = useState(false);
+
+  const onRefresh = useCallback(async () => {
+    setPulling(true);
+    try {
+      await refresh();
+    } finally {
+      setPulling(false);
+    }
+  }, [refresh]);
 
   const listHeader = useMemo(
     () => (
@@ -278,6 +279,9 @@ function ExpenseClaim() {
         // Dragging the results puts the keyboard away, which is what you want
         // the moment you stop typing and start reading.
         keyboardDismissMode="on-drag"
+        // iOS only: lifts the focused field above the keyboard. Android pans
+        // the window instead (softwareKeyboardLayoutMode "pan").
+        automaticallyAdjustKeyboardInsets
         // An element, not a function component: passing `() => <X/>` would make
         // the header a new component *type* every render, which remounts it —
         // and remounting a form throws away what the user has typed and drops
@@ -298,8 +302,8 @@ function ExpenseClaim() {
         onEndReachedThreshold={0.5}
         refreshControl={
           <RefreshControl
-            refreshing={isRefetching}
-            onRefresh={refresh}
+            refreshing={pulling}
+            onRefresh={onRefresh}
             tintColor={colors.textMuted}
             colors={[colors.primary2]}
             progressBackgroundColor={colors.cardBackground}

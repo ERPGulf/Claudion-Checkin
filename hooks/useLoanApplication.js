@@ -9,6 +9,7 @@ import {
 import { LOAN_REPAYMENT_METHODS } from '../utils/loanApplication';
 import { useAttachmentPicker } from './useAttachmentPicker';
 import useRequestHistory from './useRequestHistory';
+import { hapticsMessage } from '../utils/HapticsMessage';
 
 export { PAGE_SIZE } from './useRequestHistory';
 
@@ -37,10 +38,9 @@ export { PAGE_SIZE } from './useRequestHistory';
  *   changing the rule.
  * - The 300ms beat before opening a picker (the classic loan form's value; other
  *   screens use 400/500).
- * - A failed submit raises *both* the mutation's "Error" Alert and the form's
- *   "Failed to submit loan application." toast, because `mutateAsync` rejects
- *   into `handleSubmit`'s catch. That double notice is what ships today, so it is
- *   kept rather than quietly tidied.
+ * - A failed submit raises only the mutation's "Error" Alert. `mutateAsync`
+ *   still rejects into `handleSubmit`'s catch, which swallows it rather than
+ *   stacking the classic form's second "Failed to submit" notice on top.
  *
  * Dropped in the move: three `console.log` debug lines.
  *
@@ -247,6 +247,7 @@ export default function useLoanApplication() {
       await refetchHistory();
       resetPagination();
 
+      hapticsMessage('success');
       Alert.alert('Success', 'Loan application submitted successfully.', [
         {
           text: 'OK',
@@ -256,6 +257,7 @@ export default function useLoanApplication() {
     },
 
     onError: err => {
+      hapticsMessage('error');
       Alert.alert('Error', err.message || 'Failed to submit loan application.');
     },
   });
@@ -309,9 +311,9 @@ export default function useLoanApplication() {
     try {
       return await submitRequest(payload);
     } catch {
-      // The mutation's onError has already raised the "Error" Alert; this is the
-      // classic form's own catch, kept so the notice pair is unchanged.
-      return showToast('Failed to submit loan application.');
+      // The mutation's onError has already raised the "Error" Alert; a second
+      // notice here would stack another Alert on top of it.
+      return undefined;
     }
   }, [
     productName,

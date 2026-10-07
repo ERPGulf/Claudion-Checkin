@@ -1,5 +1,5 @@
 /* eslint-disable react/prop-types */
-import React from 'react';
+import React, { useRef } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ICON, RADIUS, SPACING, TYPO } from '../../constants';
@@ -26,8 +26,14 @@ import {
  * The date line is the same `date` string the classic sheet showed, read through
  * the app's own formatters ("Today · 2:33 PM") instead of printed raw.
  */
-function NotificationSheet({ notification, onClose }) {
+function NotificationSheet({ notification: selected, onClose }) {
   const { colors } = useAppTheme();
+
+  // The sheet stays mounted for its exit; keep showing the last notification so
+  // the panel doesn't blank and shrink while it slides away.
+  const lastRef = useRef(selected);
+  if (selected) lastRef.current = selected;
+  const notification = selected || lastRef.current;
 
   const { icon, tone } = notificationIcon(notification?.type);
   const time = notification?.date
@@ -40,7 +46,7 @@ function NotificationSheet({ notification, onClose }) {
 
   return (
     <BottomSheet
-      visible={!!notification}
+      visible={!!selected}
       onClose={onClose}
       title={notification?.title || 'Notification'}
       subtitle={stamp || undefined}
@@ -52,7 +58,7 @@ function NotificationSheet({ notification, onClose }) {
             flexDirection: 'row',
             alignItems: 'center',
             paddingHorizontal: SPACING.lg,
-            paddingBottom: SPACING.md,
+            paddingVertical: SPACING.md,
           }}
         >
           <View

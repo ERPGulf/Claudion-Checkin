@@ -1,7 +1,8 @@
-import React, { useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
+  Easing,
   RefreshControl,
   SectionList,
   Text,
@@ -40,16 +41,33 @@ function AttendanceHistory() {
   const {
     isLoading,
     isError,
-    error,
     records,
     sections,
     hasNextPage,
     isFetchingNextPage,
-    isRefreshing,
     loadMore,
     refetch,
     refreshAll,
   } = useAttendanceHistory();
+
+  // Spinner only for a pull the employee made. The hook's `isRefreshing` also
+  // covers React Query's background refetch, so a plain revisit showed the
+  // pull spinner with nobody pulling.
+  const [pulling, setPulling] = useState(false);
+  const onRefresh = useCallback(async () => {
+    setPulling(true);
+    try {
+      await refreshAll();
+    } finally {
+      setPulling(false);
+    }
+  }, [refreshAll]);
+
+  // TanStack keeps `isError` true when a refetch or next page fails while data
+  // is already on screen. Those records (queued "Pending sync" rows included)
+  // stay visible; only a first load with nothing to show gets the full-screen
+  // skeleton or error.
+  const showSkeleton = isLoading && !records.length;
 
   const page = {
     flex: 1,
@@ -60,18 +78,20 @@ function AttendanceHistory() {
   // Deliberately not a per-row stagger: rows get recycled during pagination, so
   // a per-row animation would re-fire on scroll for content already on screen.
   // Declared before the early returns to keep hook order stable.
-  const listOpacity = useRef(new Animated.Value(0)).current;
+  // Starts visible when there is nothing to hand off from (a cached revisit).
+  const listOpacity = useRef(new Animated.Value(showSkeleton ? 0 : 1)).current;
 
   useEffect(() => {
-    if (isLoading) return;
+    if (showSkeleton) return;
     Animated.timing(listOpacity, {
       toValue: 1,
       duration: 220,
+      easing: Easing.bezier(0.23, 1, 0.32, 1),
       useNativeDriver: true,
     }).start();
-  }, [isLoading, listOpacity]);
+  }, [showSkeleton, listOpacity]);
 
-  if (isLoading) {
+  if (showSkeleton) {
     return (
       <SafeAreaView style={page} edges={["bottom", "left", "right"]}>
         <HistorySkeleton />
@@ -83,17 +103,14 @@ function AttendanceHistory() {
   // found" — an error and an empty result were treated as one state there. Here
   // they're told apart, because "something went wrong" and "you have no records
   // yet" call for different responses from the user.
-  if (isError) {
+  if (isError && !records.length) {
     return (
       <SafeAreaView style={page} edges={["bottom", "left", "right"]}>
         <View style={{ padding: SPACING.lg }}>
           <StatusBanner
             tone="error"
             title="Couldn't load your history"
-            message={
-              error?.message ||
-              "Something went wrong while fetching attendance history."
-            }
+            message="Something went wrong while fetching attendance history."
           />
           <Card style={{ marginTop: SPACING.lg }}>
             <EmptyState
@@ -138,6 +155,16 @@ function AttendanceHistory() {
           // record id instead.
           keyExtractor={(rows) => rows[0]?.name ?? "day"}
           stickySectionHeadersEnabled
+          ListHeaderComponent={
+            isError ? (
+              <StatusBanner
+                tone="warning"
+                title="Couldn't refresh"
+                message="Showing saved records. Pull down to try again."
+                style={{ marginTop: SPACING.lg }}
+              />
+            ) : null
+          }
           contentContainerStyle={{
             paddingHorizontal: SPACING.lg,
             paddingBottom: SPACING.xxxl,
@@ -183,7 +210,9 @@ function AttendanceHistory() {
           )}
           ListFooterComponent={
             <View style={{ paddingTop: SPACING.xl, alignItems: "center" }}>
-              {isFetchingNextPage ? (
+              {/* `isLoading` too: queued rows can show before the first
+                  server page lands, and that is not "everything". */}
+              {isFetchingNextPage || isLoading ? (
                 <ActivityIndicator color={colors.textMuted} />
               ) : (
                 !hasNextPage && (
@@ -205,8 +234,8 @@ function AttendanceHistory() {
               // redraw the same "Pending sync" chip it was already showing —
               // the one place the problem is visible was the one place nothing
               // could be done about it.
-              refreshing={isRefreshing}
-              onRefresh={refreshAll}
+              refreshing={pulling}
+              onRefresh={onRefresh}
               tintColor={colors.textMuted}
               colors={[colors.primary2]}
               progressBackgroundColor={colors.cardBackground}

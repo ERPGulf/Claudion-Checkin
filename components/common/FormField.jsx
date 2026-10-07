@@ -1,6 +1,6 @@
 /* eslint-disable react/prop-types */
-import React, { useState } from 'react';
-import { Text, TextInput, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { AccessibilityInfo, Platform, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ICON, RADIUS, SPACING, TYPO } from '../../constants';
 import useAppTheme from '../../hooks/useAppTheme';
@@ -75,10 +75,15 @@ function FormField({
   autoFocus = false,
   returnKeyType,
   onSubmitEditing,
+  // `submitBehavior="submit"` keeps the keyboard up when "next" hands focus to
+  // the following field (reached through `ref`, a plain prop in React 19).
+  submitBehavior,
+  ref,
   onBlur,
   textContentType,
   autoComplete,
   autoCapitalize,
+  autoCorrect,
   accessibilityLabel,
   accessibilityHint,
   style,
@@ -89,6 +94,13 @@ function FormField({
 
   // A message is a failure; a caller should not have to say so twice.
   const isInvalid = invalid || !!errorText;
+
+  // The live region below covers Android; iOS ignores it.
+  useEffect(() => {
+    if (errorText && Platform.OS === 'ios') {
+      AccessibilityInfo.announceForAccessibility(errorText);
+    }
+  }, [errorText]);
 
   // Whole extra lines of body type beyond the three the box is built around, so
   // the container and the input grow together and stay in step.
@@ -114,26 +126,30 @@ function FormField({
 
   return (
     <View style={[{ minWidth: 0 }, style]}>
-      <View
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          marginBottom: compact ? 2 : SPACING.xs,
-        }}
-      >
-        <Text
-          style={{ ...TYPO.caption, color: colors.textSecondary, flex: 1 }}
-          numberOfLines={1}
+      {/* No label row when a control above already names the field; the
+          input still announces `accessibilityLabel`. */}
+      {(!!label || optional) && (
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            marginBottom: compact ? 2 : SPACING.xs,
+          }}
         >
-          {label}
-        </Text>
-
-        {optional && (
-          <Text style={{ ...TYPO.caption2, color: colors.textMuted }}>
-            Optional
+          <Text
+            style={{ ...TYPO.caption, color: colors.textSecondary, flex: 1 }}
+            numberOfLines={1}
+          >
+            {label}
           </Text>
-        )}
-      </View>
+
+          {optional && (
+            <Text style={{ ...TYPO.caption2, color: colors.textMuted }}>
+              Optional
+            </Text>
+          )}
+        </View>
+      )}
 
       <View
         style={{
@@ -190,6 +206,8 @@ function FormField({
         )}
 
         <TextInput
+          ref={ref}
+          submitBehavior={submitBehavior}
           value={value}
           onChangeText={onChangeText}
           placeholder={placeholder}
@@ -204,6 +222,7 @@ function FormField({
           textContentType={textContentType}
           autoComplete={autoComplete}
           autoCapitalize={autoCapitalize}
+          autoCorrect={autoCorrect}
           onFocus={() => setFocused(true)}
           // The caller's handler still runs — Formik marks the field touched on
           // blur, and swallowing it here would silence every validation message.

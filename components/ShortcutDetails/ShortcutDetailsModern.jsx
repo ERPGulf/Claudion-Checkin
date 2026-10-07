@@ -225,8 +225,6 @@ function ShortcutDetailsModern({ title, data, loading }) {
               server's own — the tone is the only thing decided here. */}
           {!!countdown && countdown.days !== null && (
             <Card
-              accessible
-              accessibilityLabel={`${remaining.label}, ${countdown.days} days, ${countdown.caption}`}
               style={{
                 padding: SPACING.lg,
                 marginBottom: SPACING.md,
@@ -234,7 +232,13 @@ function ShortcutDetailsModern({ title, data, loading }) {
                 borderColor: colors[`${countdown.tone}Border`],
               }}
             >
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              {/* Grouped on the row, not the Card: `accessible` on <Card>
+                  repaints its surface on Android. */}
+              <View
+                accessible
+                accessibilityLabel={`${remaining.label}, ${countdown.days} days, ${countdown.caption}`}
+                style={{ flexDirection: 'row', alignItems: 'center' }}
+              >
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text
                     style={{

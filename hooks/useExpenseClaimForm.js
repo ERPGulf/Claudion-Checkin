@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, Platform, ToastAndroid } from 'react-native';
+import { format } from 'date-fns';
 import { getExpenseTypes } from '../services/api/expense.service';
 import { useAttachmentPicker } from './useAttachmentPicker';
 
@@ -67,17 +68,26 @@ export default function useExpenseClaimForm({ onSubmit, resetSignal } = {}) {
 
   /* ---------------------------------------------------------------------
    * Date
+   *
+   * Android's dialog closes itself; iOS's inline spinner fires `onChange` on
+   * every tick, so there it stays open until the screen's Done calls
+   * `closeDatePicker` — the same arrangement as useAttendanceRequest.
    * ------------------------------------------------------------------- */
 
+  const isIOS = Platform.OS === 'ios';
+
   const showDatePicker = useCallback(() => setShowPicker(true), []);
+  const closeDatePicker = useCallback(() => setShowPicker(false), []);
 
   const handleDateChange = useCallback((event, selectedDate) => {
-    setShowPicker(false);
+    if (!isIOS) setShowPicker(false);
     if (selectedDate) {
-      const formatted = selectedDate.toISOString().split('T')[0];
+      // Local calendar date: the picker returns local midnight, which
+      // toISOString() shifts to the previous day east of UTC (e.g. Qatar).
+      const formatted = format(selectedDate, 'yyyy-MM-dd');
       setExpenseDate(formatted);
     }
-  }, []);
+  }, [isIOS]);
 
   /* ---------------------------------------------------------------------
    * Expense type
@@ -105,34 +115,25 @@ export default function useExpenseClaimForm({ onSubmit, resetSignal } = {}) {
     setBottomSheetVisible(false);
     setTimeout(async () => {
       const file = await pickFromCamera();
-      if (file) {
-        setFileUrl(file);
-        showToast(`✅ Photo attached: ${file.name}`);
-      }
+      if (file) setFileUrl(file);
     }, 500);
-  }, [pickFromCamera, showToast]);
+  }, [pickFromCamera]);
 
   const handlePickGallery = useCallback(() => {
     setBottomSheetVisible(false);
     setTimeout(async () => {
       const file = await pickFromGallery();
-      if (file) {
-        setFileUrl(file);
-        showToast(`✅ Image attached: ${file.name}`);
-      }
+      if (file) setFileUrl(file);
     }, 500);
-  }, [pickFromGallery, showToast]);
+  }, [pickFromGallery]);
 
   const handlePickDocument = useCallback(() => {
     setBottomSheetVisible(false);
     setTimeout(async () => {
       const file = await pickDocument();
-      if (file) {
-        setFileUrl(file);
-        showToast(`✅ File attached: ${file.name}`);
-      }
+      if (file) setFileUrl(file);
     }, 500);
-  }, [pickDocument, showToast]);
+  }, [pickDocument]);
 
   /* ---------------------------------------------------------------------
    * Submit
@@ -186,6 +187,10 @@ export default function useExpenseClaimForm({ onSubmit, resetSignal } = {}) {
     showPicker,
     showDatePicker,
     handleDateChange,
+
+    // iOS keeps the spinner open until an explicit Done; Android never shows it.
+    needsDoneAffordance: isIOS,
+    closeDatePicker,
 
     // Expense type
     isTypeSheetVisible,

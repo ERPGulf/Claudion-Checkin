@@ -50,4 +50,23 @@ export const readProvisioning = async () => {
 /** `readProvisioning().provisioned`, for callers that need nothing else. */
 export const isProvisioned = async () => (await readProvisioning()).provisioned;
 
-export default { PROVISIONING_KEYS, isProvisioned, readProvisioning };
+/** Keep QR provisioning authoritative while remembering the mobile choice. */
+export const readInitialAuthRoute = async ({ mobileAvailable = false } = {}) => {
+  const { provisioned, baseUrl } = await readProvisioning();
+  if (provisioned) return 'login';
+
+  try {
+    const values = Object.fromEntries(
+      await AsyncStorage.multiGet(['auth_method', 'backendUrl']),
+    );
+    if (mobileAvailable && values.auth_method === 'mobile' && (baseUrl || values.backendUrl)) {
+      return 'mobile login';
+    }
+  } catch {
+    // A failed preference read must leave a usable onboarding screen.
+  }
+
+  return 'welcome';
+};
+
+export default { PROVISIONING_KEYS, isProvisioned, readProvisioning, readInitialAuthRoute };

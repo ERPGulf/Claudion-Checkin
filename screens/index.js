@@ -6,6 +6,7 @@ import AttendanceAction from './AttendanceAction';
 import AttendanceActionLegacy from './AttendanceActionLegacy';
 import QrScan from './QrScan';
 import Login from './Login';
+import MobileLogin from './MobileLogin';
 import WelcomeScreen from './WelcomeScreen';
 import AttendanceHistory from './AttendanceHistory';
 import AttendanceHistoryLegacy from './AttendanceHistoryLegacy';
@@ -53,6 +54,7 @@ export {
   AttendanceActionLegacy,
   QrScan,
   Login,
+  MobileLogin,
   WelcomeScreen,
   AttendanceHistory,
   AttendanceHistoryLegacy,

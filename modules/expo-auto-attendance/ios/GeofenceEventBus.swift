@@ -23,6 +23,11 @@ final class GeofenceEventBus {
   private init() {}
 
   func emit(_ eventName: String, _ payload: [String: Any?]) {
+    if eventName == GeofenceEvents.enter || eventName == GeofenceEvents.exit {
+      // Persistence happens before emit. A scene-less native wake must start
+      // the app's existing JS replay/submission path, even with no listener yet.
+      NotificationCenter.default.post(name: Notification.Name("ClaudionGeofenceTransition"), object: nil)
+    }
     listener?(eventName, payload)
   }
 }

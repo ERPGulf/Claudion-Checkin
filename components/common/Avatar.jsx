@@ -1,6 +1,7 @@
 /* eslint-disable react/prop-types */
 import React from 'react';
 import { View, Text } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { RADIUS } from '../../constants';
 import useAppTheme from '../../hooks/useAppTheme';
 import { getInitials } from '../../utils/textDirection';
@@ -31,7 +32,7 @@ function Avatar({ name, size = 44, style, children }) {
         style,
       ]}
     >
-      {children || (
+      {children || (initials ? (
         <Text
           allowFontScaling={false}
           style={{
@@ -40,9 +41,11 @@ function Avatar({ name, size = 44, style, children }) {
             color: colors.primary2,
           }}
         >
-          {initials || '·'}
+          {initials}
         </Text>
-      )}
+      ) : (
+        <Ionicons name="person" size={Math.round(size * 0.5)} color={colors.primary2} />
+      ))}
     </View>
   );
 }

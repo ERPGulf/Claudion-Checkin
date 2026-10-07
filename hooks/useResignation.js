@@ -1,9 +1,10 @@
 import { useCallback, useRef, useState } from 'react';
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import { submitResignation as submitResignationRequest } from '../services/api/resignation.service';
 import { useAttachmentPicker } from './useAttachmentPicker';
 import { formatResignationDate } from '../utils/resignation';
 import { formatLogDate } from '../utils/attendanceHistory';
+import { hapticsMessage } from '../utils/HapticsMessage';
 
 /**
  * Everything the resignation form does, shared by screens/Resignation.jsx and
@@ -88,12 +89,19 @@ export default function useResignation() {
 
   /* ---------------------------------------------------------------------
    * Date
+   *
+   * Android's dialog closes itself; iOS's inline spinner fires `onChange` on
+   * every tick, so there it stays open until the screen's Done calls
+   * `closeDatePicker` — the same arrangement as useAttendanceRequest.
    * ------------------------------------------------------------------- */
 
+  const isIOS = Platform.OS === 'ios';
+
   const openDatePicker = useCallback(() => setShowDatePicker(true), []);
+  const closeDatePicker = useCallback(() => setShowDatePicker(false), []);
 
   const handleDateChange = useCallback((event, selectedDate) => {
-    setShowDatePicker(false);
+    if (!isIOS) setShowDatePicker(false);
 
     if (event?.type === 'dismissed') return;
     if (!selectedDate) return;
@@ -104,7 +112,7 @@ export default function useResignation() {
     if (Number.isNaN(validDate.getTime())) return;
 
     setResignationDate(validDate);
-  }, []);
+  }, [isIOS]);
 
   /* ---------------------------------------------------------------------
    * Submit
@@ -124,6 +132,7 @@ export default function useResignation() {
       });
 
       if (result?.error) {
+        hapticsMessage('error');
         Alert.alert('Error', result.error);
         return;
       }
@@ -134,6 +143,7 @@ export default function useResignation() {
       setFile2(null);
       setResignationDate(new Date());
 
+      hapticsMessage('success');
       Alert.alert('Success', 'Your resignation has been submitted');
     } finally {
       inFlight.current = false;
@@ -188,6 +198,10 @@ export default function useResignation() {
     // Date
     openDatePicker,
     handleDateChange,
+
+    // iOS keeps the spinner open until an explicit Done; Android never shows it.
+    needsDoneAffordance: isIOS,
+    closeDatePicker,
 
     // Submit
     submitResignation,

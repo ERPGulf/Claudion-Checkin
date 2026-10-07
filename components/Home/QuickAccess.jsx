@@ -35,8 +35,9 @@ function QuickAccess() {
     <View style={{ width: '100%' }}>
       <SectionHeader
         title="Quick Access"
-        actionLabel={hasShortcuts ? 'Edit' : 'Add New'}
-        actionIcon={hasShortcuts ? 'options-outline' : 'add'}
+        // Empty: the card's own "Add shortcuts" button is the one action.
+        actionLabel={hasShortcuts ? 'Edit' : undefined}
+        actionIcon="options-outline"
         onActionPress={openPicker}
       />
 

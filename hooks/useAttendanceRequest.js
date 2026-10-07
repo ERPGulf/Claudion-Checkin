@@ -11,6 +11,7 @@ import {
 } from '../services/api/attendance.service';
 import { useAttachmentPicker } from './useAttachmentPicker';
 import useRequestHistory from './useRequestHistory';
+import { hapticsMessage } from '../utils/HapticsMessage';
 
 /**
  * Minutes since midnight — used to compare two times that carry their own,
@@ -132,10 +133,22 @@ export default function useAttendanceRequest() {
 
   const isIOS = Platform.OS === 'ios';
 
-  const openFromPicker = useCallback(() => setShowFromPicker(true), []);
-  const openToPicker = useCallback(() => setShowToPicker(true), []);
-  const openFromTimePicker = useCallback(() => setShowFromTimePicker(true), []);
-  const openToTimePicker = useCallback(() => setShowToTimePicker(true), []);
+  // One picker at a time: opening one closes the rest, so two iOS spinners can
+  // never be on screen together.
+  const openOnly = useCallback(show => {
+    setShowFromPicker(show === 'fromDate');
+    setShowToPicker(show === 'toDate');
+    setShowFromTimePicker(show === 'fromTime');
+    setShowToTimePicker(show === 'toTime');
+  }, []);
+
+  const openFromPicker = useCallback(() => openOnly('fromDate'), [openOnly]);
+  const openToPicker = useCallback(() => openOnly('toDate'), [openOnly]);
+  const openFromTimePicker = useCallback(
+    () => openOnly('fromTime'),
+    [openOnly],
+  );
+  const openToTimePicker = useCallback(() => openOnly('toTime'), [openOnly]);
 
   const closeFromPicker = useCallback(() => setShowFromPicker(false), []);
   const closeToPicker = useCallback(() => setShowToPicker(false), []);
@@ -267,6 +280,7 @@ export default function useAttendanceRequest() {
       const res = await createAttendanceRequest(payload);
 
       if (!res.success) {
+        hapticsMessage('error');
         Alert.alert('Error', res.message);
         return;
       }
@@ -306,6 +320,7 @@ export default function useAttendanceRequest() {
       await refetchHistory();
       resetHistoryPage();
 
+      hapticsMessage('success');
       Alert.alert('Success', 'Attendance request submitted!');
 
       // Reset
@@ -316,6 +331,7 @@ export default function useAttendanceRequest() {
       setFromTime(new Date());
       setToTime(new Date());
     } catch (error) {
+      hapticsMessage('error');
       Alert.alert('Error', 'Something went wrong');
     } finally {
       setLoading(false);

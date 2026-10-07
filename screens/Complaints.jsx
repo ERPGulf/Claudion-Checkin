@@ -1,5 +1,5 @@
-import React from "react";
-import { ScrollView, Text, View } from "react-native";
+import React, { useCallback, useEffect, useState } from "react";
+import { Platform, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { ICON, RADIUS, SPACING, TYPO } from "../constants";
@@ -33,6 +33,10 @@ import AttachmentSheet from "../components/common/AttachmentSheet";
  * This form holds one field, so it is laid out on the dense rhythm — a roomy
  * card header above a single input is most of a screenful of chrome for one
  * question.
+ *
+ * The inline error appears only after the first submit attempt, as on Loan
+ * Application and Expense Claims. It gates nothing — pressing submit still raises
+ * the hook's Alert.
  */
 function Complaints() {
   const { colors } = useAppTheme();
@@ -52,8 +56,22 @@ function Complaints() {
     handlePickDocument,
     submitComplaint,
     hasMessage,
-    attachmentCount,
   } = useComplaint();
+
+  const [attempted, setAttempted] = useState(false);
+
+  const onSubmitPress = useCallback(() => {
+    setAttempted(true);
+    submitComplaint();
+  }, [submitComplaint]);
+
+  // The hook blanks the message once a complaint is sent; clear the error mark
+  // with it, so a fresh form isn't pre-marked as invalid.
+  useEffect(() => {
+    if (!hasMessage) setAttempted(false);
+  }, [hasMessage]);
+
+  const messageMissing = attempted && !hasMessage;
 
   /** ModuleCard's body already ends with a 4pt inset; this takes it to 12. */
   const cardBody = { paddingBottom: SPACING.sm };
@@ -65,12 +83,14 @@ function Complaints() {
     >
       <ScrollView
         contentContainerStyle={{
-          paddingHorizontal: SPACING.lg,
-          paddingTop: SPACING.md,
-          paddingBottom: SPACING.xl,
+          padding: SPACING.lg,
+          paddingBottom: SPACING.xxxl,
         }}
         keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="interactive"
+        keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
+        // iOS only: lifts the focused field above the keyboard. Android pans
+        // the window instead (softwareKeyboardLayoutMode "pan").
+        automaticallyAdjustKeyboardInsets
       >
         {/* ---------- Introduction ---------- */}
         {/* Icon centred against the two text lines rather than top-aligned, so
@@ -139,80 +159,34 @@ function Complaints() {
               align="auto"
               accessibilityLabel="Complaint message"
               accessibilityHint="Describe the issue you want to report"
+              invalid={messageMissing}
             />
 
-            <View style={{ marginTop: SPACING.md }}>
-              <Text
-                style={{
-                  ...TYPO.caption,
-                  color: colors.textSecondary,
-                  marginBottom: SPACING.xs,
-                }}
-              >
-                Attachment
-              </Text>
-              {/* The same upload target as Attendance Request, Leave
-                  Application and Expense Claims: the prompt, the accepted
-                  formats, the Optional chip, and the filename / file glyph /
-                  remove button once something is picked. `compact` because this
-                  is the only other control on the screen. */}
-              <UploadField
-                compact
-                file={file}
-                onPick={pickFile}
-                onRemove={removeFile}
-              />
-            </View>
+            {/* The same upload target as Attendance Request, Leave Application
+                and Expense Claims: the prompt, the accepted formats, the
+                Optional chip, and the filename / file glyph / remove button once
+                something is picked. `compact` because this is the only other
+                control on the screen. */}
+            <UploadField
+              compact
+              label="Attachment"
+              file={file}
+              onPick={pickFile}
+              onRemove={removeFile}
+              style={{ marginTop: SPACING.md }}
+            />
           </View>
         </ModuleCard>
 
-        {/* ---------- Summary ---------- */}
-        {/* Only what is already on this screen: that there is something to send,
-            and whether a file is going with it. No status, no reference number —
-            nothing has been created yet, so there is nothing else to report. */}
-        {hasMessage && (
-          <Card
-            style={{ padding: SPACING.md, marginBottom: SPACING.md }}
-            accessible
-            accessibilityLabel={`Summary. Complaint ready to submit. ${
-              attachmentCount === 1 ? "1 file attached" : "No attachment"
-            }.`}
-          >
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={{ ...TYPO.caption, color: colors.textMuted }}>
-                  Complaint
-                </Text>
-                <Text
-                  numberOfLines={1}
-                  style={{ ...TYPO.title3, color: colors.textPrimary }}
-                >
-                  Ready to submit
-                </Text>
-              </View>
-
-              <View
-                style={{
-                  width: 1,
-                  alignSelf: "stretch",
-                  backgroundColor: colors.dividerSubtle,
-                  marginHorizontal: SPACING.md,
-                }}
-              />
-
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={{ ...TYPO.caption, color: colors.textMuted }}>
-                  Attachment
-                </Text>
-                <Text
-                  numberOfLines={1}
-                  style={{ ...TYPO.title3, color: colors.textPrimary }}
-                >
-                  {attachmentCount === 1 ? "1 file attached" : "None"}
-                </Text>
-              </View>
-            </View>
-          </Card>
+        {/* Mirrors the check submitComplaint already makes, surfaced after the
+            first attempt. It gates nothing — the hook still raises its Alert. */}
+        {messageMissing && (
+          <StatusBanner
+            tone="error"
+            title="Finish the form first"
+            message="Add a message."
+            style={{ marginBottom: SPACING.md }}
+          />
         )}
 
         {/* ---------- Submit ---------- */}
@@ -228,7 +202,7 @@ function Complaints() {
           elevated
           loading={loading}
           disabled={loading}
-          onPress={submitComplaint}
+          onPress={onSubmitPress}
         />
 
         {/* ---------- What happens next ---------- */}

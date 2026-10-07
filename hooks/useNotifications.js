@@ -54,7 +54,9 @@ export default function useNotifications() {
     if (!employeeId) return;
 
     const res = await getNotifications(employeeId);
-    setList(res);
+    // The service answers every failure with []; a failed refresh must not
+    // replace a full inbox with "No notifications yet".
+    setList(prev => (res.length === 0 && prev.length > 0 ? prev : res));
   }, []);
 
   useEffect(() => {

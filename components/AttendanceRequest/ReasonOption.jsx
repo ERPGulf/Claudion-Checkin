@@ -4,6 +4,7 @@ import { Animated, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ICON, RADIUS, SPACING, TYPO } from '../../constants';
 import useAppTheme from '../../hooks/useAppTheme';
+import useReducedMotion from '../../hooks/useReducedMotion';
 import PressableScale from '../common/PressableScale';
 
 /** Row height. 46 clears the 44pt target with nothing to spare on the eye. */
@@ -29,6 +30,7 @@ export const REASON_ROW_HEIGHT = 46;
  */
 function ReasonOption({ label, icon, selected, onPress, showDivider = false }) {
   const { colors } = useAppTheme();
+  const reduceMotion = useReducedMotion();
 
   // Only the tick is animated, and only on transform/opacity, so it can run on
   // the native driver. Colours switch instantly — animating one would force the
@@ -36,13 +38,25 @@ function ReasonOption({ label, icon, selected, onPress, showDivider = false }) {
   const tick = useRef(new Animated.Value(selected ? 1 : 0)).current;
 
   useEffect(() => {
+    if (reduceMotion) {
+      tick.setValue(selected ? 1 : 0);
+      return;
+    }
+
     Animated.spring(tick, {
       toValue: selected ? 1 : 0,
       useNativeDriver: true,
       speed: 26,
       bounciness: 6,
     }).start();
-  }, [selected, tick]);
+  }, [selected, tick, reduceMotion]);
+
+  // Grows from 0.6 rather than from nothing: a mark scaling up from a point
+  // reads as appearing out of thin air.
+  const tickScale = tick.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.6, 1],
+  });
 
   return (
     <>
@@ -91,7 +105,9 @@ function ReasonOption({ label, icon, selected, onPress, showDivider = false }) {
             marginStart: SPACING.sm,
           }}
         >
-          <Animated.View style={{ opacity: tick, transform: [{ scale: tick }] }}>
+          <Animated.View
+            style={{ opacity: tick, transform: [{ scale: tickScale }] }}
+          >
             <Ionicons
               name="checkmark"
               size={ICON.sm}

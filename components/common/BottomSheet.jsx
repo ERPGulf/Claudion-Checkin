@@ -2,8 +2,12 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
+  Easing,
+  Keyboard,
+  KeyboardAvoidingView,
   Modal,
   PanResponder,
+  Platform,
   Pressable,
   Text,
   View,
@@ -13,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ICON, RADIUS, SHADOWS, SPACING, TYPO } from '../../constants';
 import useAppTheme from '../../hooks/useAppTheme';
+import useReducedMotion from '../../hooks/useReducedMotion';
 import PressableScale from './PressableScale';
 
 /** How far down the sheet must be dragged before letting go dismisses it. */
@@ -23,6 +28,9 @@ const DISMISS_VELOCITY = 0.6;
 
 const ENTER_MS = 260;
 const EXIT_MS = 200;
+
+/** The iOS sheet curve: moves at once, settles long. */
+const EASE_SHEET = Easing.bezier(0.32, 0.72, 0, 1);
 
 /**
  * The app's bottom sheet: dimmed backdrop, rounded top corners, a grab handle,
@@ -58,6 +66,12 @@ function BottomSheet({
   const { colors, isDark } = useAppTheme();
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
+  const reduceMotion = useReducedMotion();
+
+  // The panel's own height, so it starts just off-screen rather than a fixed
+  // 75% of the window down — a short sheet used to stay invisible for half of
+  // its entrance.
+  const [panelHeight, setPanelHeight] = useState(0);
 
   // Kept mounted through the exit animation; see the note above.
   const [mounted, setMounted] = useState(visible);
@@ -76,11 +90,13 @@ function BottomSheet({
         Animated.timing(progress, {
           toValue: 0,
           duration: EXIT_MS,
+          easing: EASE_SHEET,
           useNativeDriver: true,
         }),
         Animated.timing(drag, {
           toValue: 0,
           duration: EXIT_MS,
+          easing: EASE_SHEET,
           useNativeDriver: true,
         }),
       ]).start(({ finished }) => finished && onDone?.());
@@ -90,11 +106,15 @@ function BottomSheet({
 
   useEffect(() => {
     if (visible) {
+      // A field focused behind the sheet would keep its keyboard over the
+      // sheet (on iOS the keyboard window sits above the Modal).
+      Keyboard.dismiss();
       setMounted(true);
       drag.setValue(0);
       Animated.timing(progress, {
         toValue: 1,
         duration: ENTER_MS,
+        easing: EASE_SHEET,
         useNativeDriver: true,
       }).start();
       return;
@@ -110,6 +130,14 @@ function BottomSheet({
     onCloseRef.current = onClose;
   }, [onClose]);
 
+  const springBack = () =>
+    Animated.spring(drag, {
+      toValue: 0,
+      useNativeDriver: true,
+      speed: 18,
+      bounciness: 4,
+    }).start();
+
   const panResponder = useRef(
     PanResponder.create({
       // Claim the gesture only once it is clearly a downward drag, so a tap on
@@ -122,8 +150,11 @@ function BottomSheet({
         drag.setValue(Math.max(0, gesture.dy));
       },
       onPanResponderRelease: (_, gesture) => {
+        // A flick closes whatever the distance; a long drag closes unless the
+        // finger was already heading back up.
         const shouldClose =
-          gesture.dy > DISMISS_DISTANCE || gesture.vy > DISMISS_VELOCITY;
+          gesture.vy > DISMISS_VELOCITY ||
+          (gesture.dy > DISMISS_DISTANCE && gesture.vy > -0.1);
 
         if (shouldClose) {
           // Report the dismissal now and let the `visible` change drive the
@@ -133,13 +164,11 @@ function BottomSheet({
           return;
         }
 
-        Animated.spring(drag, {
-          toValue: 0,
-          useNativeDriver: true,
-          speed: 18,
-          bounciness: 4,
-        }).start();
+        springBack();
       },
+      // A system gesture or a call can steal the drag; don't leave the sheet
+      // hanging part-way down.
+      onPanResponderTerminate: springBack,
     }),
   ).current;
 
@@ -152,7 +181,8 @@ function BottomSheet({
       inputRange: [0, 1],
       // Far enough that a tall sheet is fully clear of the screen before the
       // fade finishes.
-      outputRange: [windowHeight * maxHeightRatio, 0],
+      // Reduced motion: no slide, the panel fades with the backdrop instead.
+      outputRange: [reduceMotion ? 0 : panelHeight || maxHeight, 0],
     }),
     drag,
   );
@@ -183,107 +213,126 @@ function BottomSheet({
       </Animated.View>
 
       {/* The panel is a sibling of the backdrop, not a child: nesting it would
-          make it inherit the backdrop's fading opacity as well as its own. */}
-      <Animated.View
+          make it inherit the backdrop's fading opacity as well as its own.
+          The avoiding view lifts a sheet that holds an input above the iOS
+          keyboard; it spans the screen but passes touches to the backdrop. */}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         pointerEvents="box-none"
         style={{
           position: 'absolute',
+          top: 0,
           left: 0,
           right: 0,
           bottom: 0,
-          maxHeight,
-          transform: [{ translateY }],
+          justifyContent: 'flex-end',
         }}
       >
-        <View
+        <Animated.View
+          pointerEvents="box-none"
+          onLayout={(event) => setPanelHeight(event.nativeEvent.layout.height)}
           style={{
-            backgroundColor: colors.cardBackground,
-            borderTopStartRadius: RADIUS.xxl,
-            borderTopEndRadius: RADIUS.xxl,
-            borderTopWidth: 1,
-            borderColor: colors.cardBorder,
-            paddingBottom: Math.max(insets.bottom, SPACING.lg),
-            // Casts upward, over the page the sheet covers.
-            ...(isDark ? null : SHADOWS.floating),
+            maxHeight,
+            flexShrink: 1,
+            opacity: reduceMotion ? progress : 1,
+            transform: [{ translateY }],
           }}
         >
-          {/* Grab area: the handle and the header. Dragging here dismisses;
+          <View
+            style={{
+              // Without this the panel clamps at maxHeight but its content
+              // doesn't, so a long list runs off the bottom of the screen.
+              flexShrink: 1,
+              backgroundColor: colors.cardBackground,
+              borderTopStartRadius: RADIUS.xxl,
+              borderTopEndRadius: RADIUS.xxl,
+              borderTopWidth: 1,
+              borderColor: colors.cardBorder,
+              paddingBottom: Math.max(insets.bottom, SPACING.lg),
+              // Casts upward, over the page the sheet covers.
+              ...(isDark ? null : SHADOWS.floating),
+            }}
+          >
+            {/* Grab area: the handle and the header. Dragging here dismisses;
               dragging the body scrolls it. */}
-          <View {...panResponder.panHandlers}>
-            <View
-              accessible
-              accessibilityLabel="Swipe down to dismiss"
-              style={{
-                alignSelf: 'center',
-                width: 36,
-                height: 4,
-                borderRadius: RADIUS.pill,
-                backgroundColor: colors.cardBorder,
-                marginTop: SPACING.md,
-                marginBottom: SPACING.sm,
-              }}
-            />
-
-            <View
-              style={{
-                flexDirection: 'row',
-                alignItems: 'flex-start',
-                paddingHorizontal: SPACING.lg,
-                paddingBottom: SPACING.md,
-              }}
-            >
-              <View style={{ flex: 1, minWidth: 0, paddingEnd: SPACING.sm }}>
-                <Text
-                  accessibilityRole="header"
-                  style={{ ...TYPO.title3, color: colors.textPrimary }}
-                >
-                  {title}
-                </Text>
-                {!!subtitle && (
-                  <Text
-                    style={{
-                      ...TYPO.subhead,
-                      fontWeight: '400',
-                      color: colors.textSecondary,
-                      marginTop: 2,
-                    }}
-                  >
-                    {subtitle}
-                  </Text>
-                )}
-              </View>
-
-              {/* Top-right, not a full-width Cancel at the bottom: the bottom of
-                  a sheet is where the last option lives, and a button there gets
-                  hit by accident. */}
-              <PressableScale
-                onPress={onClose}
-                accessibilityRole="button"
-                accessibilityLabel={closeLabel}
-                hitSlop={8}
+            <View {...panResponder.panHandlers}>
+              <View
+                accessible
+                accessibilityLabel="Swipe down to dismiss"
                 style={{
-                  width: 32,
-                  height: 32,
+                  alignSelf: 'center',
+                  width: 36,
+                  height: 4,
                   borderRadius: RADIUS.pill,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: colors.iconBackground,
+                  backgroundColor: colors.cardBorder,
+                  marginTop: SPACING.md,
+                  marginBottom: SPACING.sm,
+                }}
+              />
+
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'flex-start',
+                  paddingHorizontal: SPACING.lg,
+                  paddingBottom: SPACING.md,
                 }}
               >
-                <Ionicons
-                  name="close"
-                  size={ICON.sm}
-                  color={colors.textSecondary}
-                />
-              </PressableScale>
+                <View style={{ flex: 1, minWidth: 0, paddingEnd: SPACING.sm }}>
+                  <Text
+                    accessibilityRole="header"
+                    style={{ ...TYPO.title3, color: colors.textPrimary }}
+                  >
+                    {title}
+                  </Text>
+                  {!!subtitle && (
+                    <Text
+                      style={{
+                        ...TYPO.subhead,
+                        fontWeight: '400',
+                        color: colors.textSecondary,
+                        marginTop: 2,
+                      }}
+                    >
+                      {subtitle}
+                    </Text>
+                  )}
+                </View>
+
+                {/* Top-right, not a full-width Cancel at the bottom: the bottom of
+                  a sheet is where the last option lives, and a button there gets
+                  hit by accident. */}
+                <PressableScale
+                  onPress={onClose}
+                  accessibilityRole="button"
+                  accessibilityLabel={closeLabel}
+                  hitSlop={8}
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: RADIUS.pill,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: colors.iconBackground,
+                  }}
+                >
+                  <Ionicons
+                    name="close"
+                    size={ICON.sm}
+                    color={colors.textSecondary}
+                  />
+                </PressableScale>
+              </View>
+
+              <View
+                style={{ height: 1, backgroundColor: colors.dividerSubtle }}
+              />
             </View>
 
-            <View style={{ height: 1, backgroundColor: colors.dividerSubtle }} />
+            {children}
           </View>
-
-          {children}
-        </View>
-      </Animated.View>
+        </Animated.View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

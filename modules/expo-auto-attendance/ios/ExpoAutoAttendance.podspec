@@ -11,7 +11,7 @@ Pod::Spec.new do |s|
   s.author         = 'ERPGulf'
   s.homepage       = 'https://erpgulf.com'
   s.platforms      = {
-    :ios => '15.1'
+    :ios => '16.4'
   }
   s.swift_version  = '5.9'
   s.source         = { git: '' }

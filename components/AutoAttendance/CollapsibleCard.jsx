@@ -1,6 +1,6 @@
 /* eslint-disable react/prop-types */
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Text, View } from 'react-native';
+import { Animated, Easing, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ICON, RADIUS, SHADOWS, SPACING, TYPO } from '../../constants';
 import useAppTheme from '../../hooks/useAppTheme';
@@ -42,6 +42,7 @@ function CollapsibleCard({
     Animated.timing(spin, {
       toValue: expanded ? 1 : 0,
       duration: 180,
+      easing: Easing.bezier(0.23, 1, 0.32, 1),
       useNativeDriver: true,
     }).start();
   }, [expanded, spin]);

@@ -34,6 +34,9 @@ import { hydrate as hydrateAppearance } from "./settings/appearance";
 // TEMPORARY: New Home Experience experiment — remove with the feature.
 import { hydrate as hydrateHomeExperience } from "./settings/homeExperience";
 import { hydrate as hydrateOfflineSyncAlerts } from "./settings/offlineSyncAlerts";
+import { installMobileAuthCrypto } from "./utils/mobileAuthCrypto";
+
+installMobileAuthCrypto();
 
 function cacheFonts(fonts) {
   return fonts.map((font) => Font.loadAsync(font));

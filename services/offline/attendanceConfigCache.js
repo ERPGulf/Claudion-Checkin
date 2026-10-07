@@ -1,7 +1,12 @@
 // src/services/offline/attendanceConfigCache.js
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { fetchEmployeeData } from "../api/employee.service";
-import { assertAttendanceQueueScope, captureAttendanceQueueScope } from "./attendanceQueueProvenance";
+import {
+  assertAttendanceQueueScope,
+  captureAttendanceQueueScope,
+  createAttendanceScopeChangedError,
+} from "./attendanceQueueProvenance";
+import { resolveLocationCoordinates } from "../../utils/attendanceLocations";
 
 /**
  * The attendance rules, kept on the device so a check-in can be validated with
@@ -42,6 +47,34 @@ export const CONFIG_STALE_AFTER_MS = 6 * 60 * 60 * 1000; // 6 hours
 const toNumber = (value, fallback = 0) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const isKnownPolicyFlag = (value) => {
+  if (typeof value === "boolean") return true;
+  if (typeof value === "string") return value.trim() === "0" || value.trim() === "1";
+  return value === 0 || value === 1;
+};
+
+/** Mobile sign-in has no QR policy to fall back to when a response is partial. */
+export const assertCompleteAttendancePolicy = (employee) => {
+  const flags = [
+    employee?.restrict_location,
+    employee?.unrestricted_checkout_location,
+    employee?.photo,
+  ];
+  if (!flags.every(isKnownPolicyFlag)) {
+    throw new Error("Attendance configuration is incomplete. Please contact your administrator.");
+  }
+
+  if (toNumber(employee.restrict_location) === 1) {
+    const locations = employee?.employee_locations;
+    const hasUsableLocation = Array.isArray(locations) && locations.some(
+      (location) => resolveLocationCoordinates(location) && toNumber(location?.reporting_radius) > 0,
+    );
+    if (!hasUsableLocation) {
+      throw new Error("Reporting locations are not configured. Please contact your administrator.");
+    }
+  }
 };
 
 /**
@@ -165,8 +198,13 @@ export const hasAttendanceConfig = async () => !!(await readAttendanceConfig());
  * anything changed, not whether the caller should worry.
  *
  * @returns {Promise<{refreshed: boolean, config: object|null, error?: string}>}
+ * @param {object} [options] Mobile hand-off may supply a prevalidated employee
+ * response and require complete policy before publishing the authenticated UI.
  */
-export const refreshAttendanceConfig = async (employeeId) => {
+export const refreshAttendanceConfig = async (
+  employeeId,
+  { requireCompletePolicy = false, employeeData, expectedGeneration } = {},
+) => {
   const logPrefix = "[attendanceConfigCache/refresh]";
 
   if (!employeeId) {
@@ -175,7 +213,16 @@ export const refreshAttendanceConfig = async (employeeId) => {
 
   try {
     const scope = await captureAttendanceQueueScope(employeeId);
-    const employee = await fetchEmployeeData(employeeId);
+    if (expectedGeneration !== undefined && expectedGeneration !== scope.generation) {
+      throw createAttendanceScopeChangedError();
+    }
+    const authMethod = await AsyncStorage.getItem("auth_method");
+    const employee = employeeData === undefined
+      ? await fetchEmployeeData(employeeId)
+      : employeeData;
+    if (requireCompletePolicy || authMethod === "mobile") {
+      assertCompleteAttendancePolicy(employee);
+    }
     const config = buildConfig(employee, { employeeId });
     await assertAttendanceQueueScope(scope);
     config.tenantKey = scope.tenantKey;
@@ -246,6 +293,7 @@ export default {
   CONFIG_KEY,
   CONFIG_STALE_AFTER_MS,
   NO_CONFIG_MESSAGE,
+  assertCompleteAttendancePolicy,
   buildConfig,
   clearAttendanceConfig,
   hasAttendanceConfig,

@@ -2,7 +2,6 @@ import React, { useEffect, useRef } from "react";
 import {
   Animated,
   Easing,
-  I18nManager,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,15 +10,14 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { BlurView } from "expo-blur";
-import { useNavigation } from "@react-navigation/native";
 import { BUILD_TAG, SPACING, TYPO } from "../constants";
 import useAppTheme from "../hooks/useAppTheme";
 import useReducedMotion from "../hooks/useReducedMotion";
-import ActionButton from "../components/common/ActionButton";
 import {
   BrandMark,
   BRAND_MARK_MAX_WIDTH,
   ShimmerField,
+  SignInOptions,
 } from "../components/Welcome";
 
 /** Entrance timings. Short enough to feel like the screen settling, not a show. */
@@ -52,7 +50,7 @@ const BLUR_INTENSITY = 40;
  * Modern Welcome / Get Started.
  *
  * Presentation only. Still the first screen of the auth stack, still the same
- * `BUILD_TAG`, and the button still does exactly one thing — `navigate("Qrscan")`.
+ * `BUILD_TAG`, and each sign-in option does exactly one thing — navigate to its route.
  * No provisioning, storage or startup work lives here; the classic screen had
  * none and neither does this.
  *
@@ -65,7 +63,7 @@ const BLUR_INTENSITY = 40;
  *      light-ink and a dark-ink variant, so <BrandMark> just picks the right one,
  *   2. the title and one two-line subtitle, grouped tight under it,
  *   3. flexible space,
- *   4. the CTA on the standard filled control,
+ *   4. the two sign-in methods as peers — QR and mobile are equally valid ways in,
  *   5. the build stamp as a footnote beneath it.
  *
  * No saturated colour of its own anywhere: the atmosphere is the mark's mint and
@@ -83,7 +81,6 @@ const BLUR_INTENSITY = 40;
  * string's line count.
  */
 function WelcomeScreenModern() {
-  const navigation = useNavigation();
   const { colors, isDark } = useAppTheme();
   const { width } = useWindowDimensions();
   const reduceMotion = useReducedMotion();
@@ -253,16 +250,7 @@ function WelcomeScreenModern() {
           <Animated.View style={{ opacity: ctaProgress }}>
             <View style={{ paddingVertical: SPACING.xl }}>
               <View style={{ paddingHorizontal: SPACING.xl }}>
-                {/* The shared button — the standard filled control as the action
-                    itself. The arrow follows the reading direction, so it points
-                    forward rather than backwards in an RTL layout. */}
-                <ActionButton
-                  label="Get Started"
-                  icon={I18nManager.isRTL ? "arrow-back" : "arrow-forward"}
-                  size="lg"
-                  elevated
-                  onPress={() => navigation.navigate("Qrscan")}
-                />
+                <SignInOptions />
               </View>
             </View>
 

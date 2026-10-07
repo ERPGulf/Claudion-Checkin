@@ -15,6 +15,10 @@ export default function SubmitButton({
     <TouchableOpacity
       onPress={onPress}
       disabled={isDisabled}
+      // The spinner replaces the label, so name the button explicitly.
+      accessibilityRole="button"
+      accessibilityLabel={title}
+      accessibilityState={{ disabled: isDisabled, busy: loading }}
       style={[
         {
           backgroundColor: isDisabled ? "#9ca3af" : "#16a34a",

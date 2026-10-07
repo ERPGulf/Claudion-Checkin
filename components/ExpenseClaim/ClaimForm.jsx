@@ -40,6 +40,8 @@ function ClaimForm({ onSubmit, isLoading, resetSignal }) {
     showPicker,
     showDatePicker,
     handleDateChange,
+    needsDoneAffordance,
+    closeDatePicker,
     isBottomSheetVisible,
     pickFile,
     closeBottomSheet,
@@ -71,12 +73,22 @@ function ClaimForm({ onSubmit, isLoading, resetSignal }) {
       </TouchableOpacity>
 
       {showPicker && (
-        <DateTimePicker
-          value={expenseDate ? new Date(expenseDate) : new Date()}
-          mode="date"
-          display="default"
-          onChange={handleDateChange}
-        />
+        <>
+          <DateTimePicker
+            value={expenseDate ? new Date(expenseDate) : new Date()}
+            mode="date"
+            display="default"
+            onChange={handleDateChange}
+          />
+          {needsDoneAffordance && (
+            <TouchableOpacity
+              onPress={closeDatePicker}
+              className="self-end px-3 py-2 mb-2"
+            >
+              <Text className="text-blue-600 font-medium">Done</Text>
+            </TouchableOpacity>
+          )}
+        </>
       )}
 
       {/* Expense Type */}

@@ -1,7 +1,7 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { View, Text } from 'react-native';
 import { useSelector } from 'react-redux';
-import { useNavigation } from '@react-navigation/native';
+import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { RADIUS, SHADOWS, SPACING, TYPO } from '../../constants';
 import useAppTheme from '../../hooks/useAppTheme';
 import { resolveTextAlign } from '../../utils/textDirection';
@@ -31,7 +31,10 @@ function WelcomeCard() {
     state => state.notification?.unreadCount ?? 0,
   );
 
-  const greeting = useMemo(() => getGreeting(new Date().getHours()), []);
+  // The Home tab never unmounts: re-read the hour on every focus, or the
+  // morning greeting lasts all day.
+  useIsFocused();
+  const greeting = getGreeting(new Date().getHours());
   // Arabic names align to their own script so the block never reads as ragged.
   const align = resolveTextAlign(fullname, 'left');
 
@@ -78,7 +81,7 @@ function WelcomeCard() {
             marginTop: 2,
           }}
         >
-          {fullname || 'username'}
+          {fullname || 'Welcome'}
         </Text>
 
         {!!employeeCode && (

@@ -1,12 +1,5 @@
-import React, { useState } from "react";
-import {
-  View,
-  Text,
-  ActivityIndicator,
-  ScrollView,
-  RefreshControl,
-  StyleSheet,
-} from "react-native";
+import React, { useRef, useState } from "react";
+import { View, Text, ScrollView, RefreshControl } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import {
   SafeAreaView,
@@ -25,6 +18,7 @@ import StatusBanner from "../components/common/StatusBanner";
 import BottomSheet from "../components/common/BottomSheet";
 import FormField from "../components/common/FormField";
 import StatusCard from "../components/AttendanceAction/StatusCard";
+import BreakClock from "../components/AttendanceAction/BreakClock";
 import { SESSION_ORIGIN } from "../utils/attendanceSessionState";
 
 /** Break presets, previously nine hand-styled buttons in six different colours. */
@@ -45,6 +39,9 @@ function AttendanceAction() {
   // Break reason — collected when a break is started, optional throughout.
   const [isBreakSheetVisible, setBreakSheetVisible] = useState(false);
   const [breakReasonInput, setBreakReasonInput] = useState("");
+  // Which button started the in-flight request, so only that one spins. Both
+  // stay disabled while `actionLoading`, so a double tap is still impossible.
+  const tapRef = useRef(null);
 
   const {
     checkin,
@@ -58,7 +55,7 @@ function AttendanceAction() {
     ready,
     distanceInfo,
     onBreak,
-    liveBreakTime,
+    breakStartTime,
     breakMinutes,
     breakCompleted,
     breakFeatureEnabled,
@@ -80,11 +77,14 @@ function AttendanceAction() {
   // Identical gating to the classic screen — only the presentation differs.
   const checkoutBlocked =
     restrictLocation === 1 && !inTarget && !allowCheckoutAnywhere;
-  const breakBlocked =
-    actionLoading ||
+  // The rule decides the label; a request in flight only disables the button.
+  // Folding `actionLoading` into the rule made every check-in/out read
+  // "Break not allowed" for the length of the request.
+  const breakUnavailable =
     (restrictLocation === 1 && !inTarget) ||
     breakCompleted ||
     breakMinutes >= 120;
+  const breakBlocked = actionLoading || breakUnavailable;
 
   const locationValue =
     restrictLocation === 0
@@ -95,31 +95,14 @@ function AttendanceAction() {
           ? "In bound"
           : "Out of bound";
 
+  // A local AsyncStorage read, over in a frame or two. A spinner and "Loading
+  // settings..." here only flashed on every visit; a blank page does not.
   if (!restrictionLoaded) {
     return (
       <SafeAreaView
         style={{ flex: 1, backgroundColor: colors.surfaceSecondary }}
         edges={["bottom", "left", "right"]}
-      >
-        <View
-          style={{
-            flex: 1,
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <ActivityIndicator size="large" color={colors.textMuted} />
-          <Text
-            style={{
-              ...TYPO.subhead,
-              color: colors.textMuted,
-              marginTop: SPACING.sm,
-            }}
-          >
-            Loading settings...
-          </Text>
-        </View>
-      </SafeAreaView>
+      />
     );
   }
 
@@ -128,33 +111,6 @@ function AttendanceAction() {
       style={{ flex: 1, backgroundColor: colors.surfaceSecondary }}
       edges={["bottom", "left", "right"]}
     >
-      {actionLoading && (
-        <View
-          style={[
-            StyleSheet.absoluteFillObject,
-            {
-              zIndex: 50,
-              backgroundColor: "rgba(0,0,0,0.5)",
-              paddingTop: insets.top,
-              paddingBottom: insets.bottom,
-              alignItems: "center",
-              justifyContent: "center",
-            },
-          ]}
-        >
-          <ActivityIndicator size="large" color="white" />
-          <Text
-            style={{
-              ...TYPO.body,
-              color: "white",
-              marginTop: SPACING.sm,
-            }}
-          >
-            Processing...
-          </Text>
-        </View>
-      )}
-
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{
@@ -203,14 +159,14 @@ function AttendanceAction() {
                 fontVariant: ["tabular-nums"],
               }}
             >
-              {liveBreakTime || "00:00:00"}
+              <BreakClock startTime={breakStartTime} />
             </Text>
             <Text
               style={{
                 ...TYPO.caption,
                 textAlign: "center",
                 color: colors.textMuted,
-                marginTop: 2,
+                marginTop: SPACING.xs,
               }}
             >
               Auto-ends at 02:00:00
@@ -219,7 +175,7 @@ function AttendanceAction() {
         )}
 
         {/* -------------------- STATUS -------------------- */}
-        <StatusCard />
+        <StatusCard onBreak={onBreak} breakStartTime={breakStartTime} />
 
         {checkin && autoActionsEnabled && (
           <StatusBanner
@@ -276,18 +232,33 @@ function AttendanceAction() {
             elevated
             icon={checkin ? "log-out-outline" : "log-in-outline"}
             label={checkin ? "Check out" : "Check in"}
-            onPress={handlePrimaryAction}
-            loading={actionLoading}
-            disabled={checkoutBlocked}
+            onPress={() => {
+              tapRef.current = "primary";
+              handlePrimaryAction();
+            }}
+            loading={actionLoading && tapRef.current === "primary"}
+            disabled={checkoutBlocked || actionLoading}
           />
 
           {checkoutBlocked && (
-            <StatusBanner
-              tone="warning"
-              title="You're outside the allowed area"
-              message="Move within the office radius to record this action."
-              style={{ marginTop: SPACING.md }}
-            />
+            <>
+              <StatusBanner
+                tone="warning"
+                title="You're outside the allowed area"
+                message="Move within the office radius to record this action."
+                style={{ marginTop: SPACING.md }}
+              />
+              {/* Location is otherwise only read on mount and pull-to-refresh,
+                  so walking into the office left this screen stuck here. */}
+              <ActionButton
+                variant="outline"
+                icon="locate-outline"
+                label="Check my location again"
+                loading={!ready}
+                onPress={fetchStatusAndLocation}
+                style={{ marginTop: SPACING.sm }}
+              />
+            </>
           )}
 
           {/* Hidden, not disabled, when the tenant has breaks switched off: a
@@ -299,14 +270,14 @@ function AttendanceAction() {
                 size="lg"
                 variant="outline"
                 icon={
-                  breakBlocked
+                  breakUnavailable
                     ? "cafe-outline"
                     : onBreak
                       ? "play-outline"
                       : "cafe-outline"
                 }
                 label={
-                  breakBlocked
+                  breakUnavailable
                     ? "Break not allowed"
                     : onBreak
                       ? "End break"
@@ -316,12 +287,14 @@ function AttendanceAction() {
                   // A reason is asked for when starting a break and never when
                   // ending one — the same rule the classic screen follows.
                   if (onBreak) {
+                    tapRef.current = "break";
                     handleBreak();
                   } else {
                     setBreakReasonInput("");
                     setBreakSheetVisible(true);
                   }
                 }}
+                loading={actionLoading && tapRef.current === "break"}
                 disabled={breakBlocked}
                 style={{ marginTop: SPACING.lg }}
               />
@@ -483,7 +456,13 @@ function AttendanceAction() {
         closeLabel="Cancel"
         maxHeightRatio={0.6}
       >
-        <View style={{ paddingBottom: SPACING.md }}>
+        <View
+          style={{
+            paddingHorizontal: SPACING.lg,
+            paddingTop: SPACING.lg,
+            paddingBottom: SPACING.md,
+          }}
+        >
           <FormField
             label="Reason"
             optional
@@ -503,6 +482,7 @@ function AttendanceAction() {
             size="lg"
             onPress={() => {
               setBreakSheetVisible(false);
+              tapRef.current = "break";
               handleBreak(breakReasonInput.trim());
             }}
             style={{ marginTop: SPACING.md }}

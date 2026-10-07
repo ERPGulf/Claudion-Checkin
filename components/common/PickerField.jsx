@@ -1,6 +1,6 @@
 /* eslint-disable react/prop-types */
 import React from 'react';
-import { Text, View } from 'react-native';
+import { Keyboard, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ICON, RADIUS, SHADOWS, SPACING, TYPO } from '../../constants';
 import useAppTheme from '../../hooks/useAppTheme';
@@ -28,6 +28,9 @@ export const MIN_VALUE_WIDTH = 84;
 
 /** One line of value plus padding. Comfortably past the 44pt target. */
 export const FIELD_HEIGHT = 56;
+
+/** The `compact` row FormField imports; without it a compact field collapsed. */
+export const COMPACT_FIELD_HEIGHT = 48;
 
 /**
  * Whether two fields still fit side by side at this window width.
@@ -197,7 +200,12 @@ function Field({ readOnly, onPress, label, display, style, children }) {
 
   return (
     <PressableScale
-      onPress={onPress}
+      // A keyboard left up from a text field would cover the picker (an iOS
+      // spinner opens inline, under it).
+      onPress={() => {
+        Keyboard.dismiss();
+        onPress?.();
+      }}
       scaleTo={0.98}
       hitSlop={0}
       accessibilityRole="button"

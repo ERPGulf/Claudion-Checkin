@@ -236,6 +236,34 @@ describe("AttendanceAction break rules", () => {
     });
   });
 
+  // A request in flight disables the button; it is not a rule the employee hit.
+  it("keeps the break label while a break request is pending", async () => {
+    attendanceService.employeeBreak.mockReturnValue(new Promise(() => {}));
+
+    const screen = renderScreen({ checkin: true });
+
+    await waitFor(() => {
+      expect(screen.getByText("Take break")).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByText("Take break"));
+    await waitFor(() => {
+      expect(screen.getByText("Start break")).toBeTruthy();
+    });
+    fireEvent.press(screen.getByText("Start break"));
+
+    await waitFor(() => {
+      expect(attendanceService.employeeBreak).toHaveBeenCalled();
+    });
+
+    expect(screen.queryByText("Break not allowed")).toBeNull();
+    expect(screen.queryByText("Processing...")).toBeNull();
+    expect(screen.getByText("Take break")).toBeTruthy();
+    expect(
+      screen.getByLabelText("Take break").props.accessibilityState,
+    ).toEqual(expect.objectContaining({ disabled: true, busy: true }));
+  });
+
   it("continues break timer after screen remount using saved breakStartTime", async () => {
     jest.useFakeTimers();
 

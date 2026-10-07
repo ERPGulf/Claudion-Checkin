@@ -15,6 +15,7 @@ import {
 } from "../redux/Slices/AttendanceSlice";
 
 import { updateDateTime } from "../utils/TimeServices";
+import { hapticsMessage } from "../utils/HapticsMessage";
 import { saveTokens } from "../services/api/apiClient";
 import {
   userCheckIn,
@@ -94,7 +95,6 @@ export default function useAttendanceAction() {
   const [unrestrictedCheckout, setUnrestrictedCheckout] = useState(0);
   const [restrictionLoaded, setRestrictionLoaded] = useState(false);
   const [onBreak, setOnBreak] = useState(false);
-  const [liveBreakTime, setLiveBreakTime] = useState("00:00:00");
   const [breakStartTime, setBreakStartTime] = useState(null);
   const breakTriggeredRef = useRef(false);
   const isMountedRef = useRef(true);
@@ -465,25 +465,14 @@ export default function useAttendanceAction() {
     loadBreak();
   }, []);
 
+  // Only the 2-hour auto-end lives here. The visible clock is <BreakClock>,
+  // which ticks on its own — a per-second state update in this hook used to
+  // re-render the whole Attendance Action screen for the length of a break.
   useEffect(() => {
-    if (!onBreak || !breakStartTime) {
-      setLiveBreakTime("00:00:00");
-      return;
-    }
+    if (!onBreak || !breakStartTime) return;
 
     const interval = setInterval(async () => {
       const diff = Date.now() - breakStartTime;
-      const currentBreakSeconds = Math.floor(diff / 1000);
-
-      const hrs = String(Math.floor(currentBreakSeconds / 3600)).padStart(
-        2,
-        "0",
-      );
-      const mins = String(
-        Math.floor((currentBreakSeconds % 3600) / 60),
-      ).padStart(2, "0");
-      const secs = String(currentBreakSeconds % 60).padStart(2, "0");
-      setLiveBreakTime(`${hrs}:${mins}:${secs}`);
 
       if (diff >= BREAK_LIMIT_MS && !breakTriggeredRef.current) {
         breakTriggeredRef.current = true;
@@ -566,6 +555,7 @@ export default function useAttendanceAction() {
         }
 
         if (outcome.status === TRANSITION_RESULT.FAILED) {
+          hapticsMessage("error");
           Toast.show({
             type: "error",
             text1: "Action blocked",
@@ -603,6 +593,7 @@ export default function useAttendanceAction() {
         const breakData = await refreshAttendanceData();
         syncBreakState(breakData);
 
+        hapticsMessage("success");
         Toast.show({
           type: "success",
           text1: type === "IN" ? "Checked in!" : "Checked out!",
@@ -614,6 +605,7 @@ export default function useAttendanceAction() {
           responseData: error?.response?.data,
         });
 
+        hapticsMessage("error");
         Toast.show({
           type: "error",
           text1: "Failed",
@@ -823,21 +815,28 @@ export default function useAttendanceAction() {
       }
     }
 
-    // ✅ FIRST check from backend (important)
-    const breakDataCheck = await getTodayBreaks(employeeCode, getTodayString());
-
-    if (isBreakCompleted(breakDataCheck)) {
-      Toast.show({
-        type: "error",
-        text1: "Break already completed for today",
-      });
-      return;
-    }
-
     const type = onBreak ? "OUT" : "IN";
 
     try {
+      // Loading goes up before the pre-check, not after it: the check is a
+      // round-trip, and without this the button gave no feedback for it and a
+      // second tap could start a second request.
       setActionLoading(true);
+
+      // ✅ FIRST check from backend (important)
+      const breakDataCheck = await getTodayBreaks(
+        employeeCode,
+        getTodayString(),
+      );
+
+      if (isBreakCompleted(breakDataCheck)) {
+        Toast.show({
+          type: "error",
+          text1: "Break already completed for today",
+        });
+        return;
+      }
+
       const response = await employeeBreak({
         employeeCode,
         type,
@@ -998,7 +997,7 @@ export default function useAttendanceAction() {
     distanceInfo,
     // break state
     onBreak,
-    liveBreakTime,
+    breakStartTime,
     breakMinutes,
     breakCompleted,
     monthlyCapMessage,

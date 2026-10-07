@@ -20,6 +20,7 @@ import {
 } from "react-native-safe-area-context";
 import { COLORS, SIZES } from "../constants";
 import WelcomeCard from "../components/AttendanceAction/WelcomeCard";
+import BreakClock from "../components/AttendanceAction/BreakClock";
 import { SESSION_ORIGIN } from "../utils/attendanceSessionState";
 import useAttendanceAction from "../hooks/useAttendanceAction";
 
@@ -50,7 +51,7 @@ function AttendanceActionLegacy() {
     ready,
     distanceInfo,
     onBreak,
-    liveBreakTime,
+    breakStartTime,
     breakMinutes,
     breakCompleted,
     breakFeatureEnabled,
@@ -153,7 +154,7 @@ function AttendanceActionLegacy() {
                 className="mt-1 text-center text-2xl font-extrabold text-white"
                 style={{ fontVariant: ["tabular-nums"] }}
               >
-                {liveBreakTime || "00:00:00"}
+                <BreakClock startTime={breakStartTime} />
               </Text>
               <Text className="mt-1 text-center text-xs text-amber-100">
                 Auto-ends at 02:00:00

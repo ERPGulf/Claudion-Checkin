@@ -1,5 +1,11 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { ScrollView, Text, View } from "react-native";
+import {
+  Platform,
+  RefreshControl,
+  ScrollView,
+  Text,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { ICON, RADIUS, SPACING, TYPO } from "../constants";
@@ -107,7 +113,6 @@ function LoanApplication() {
     showMoreLoans,
     isFetchingHistory,
     isHistoryError,
-    historyError,
     refetchHistory,
     loanApplications,
   } = useLoanApplication();
@@ -141,6 +146,18 @@ function LoanApplication() {
     file1Missing,
   ]);
 
+  // Only a pull shows the spinner; the post-submit refetch stays silent.
+  const [pulling, setPulling] = useState(false);
+
+  const onRefresh = useCallback(async () => {
+    setPulling(true);
+    try {
+      await refetchHistory();
+    } finally {
+      setPulling(false);
+    }
+  }, [refetchHistory]);
+
   /** ModuleCard's body already ends with a 4pt inset; this takes it to 12. */
   const cardBody = { paddingBottom: SPACING.sm };
 
@@ -172,12 +189,23 @@ function LoanApplication() {
     >
       <ScrollView
         contentContainerStyle={{
-          paddingHorizontal: SPACING.lg,
-          paddingTop: SPACING.md,
-          paddingBottom: SPACING.xl,
+          padding: SPACING.lg,
+          paddingBottom: SPACING.xxxl,
         }}
         keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="interactive"
+        keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
+        // iOS only: lifts the focused field above the keyboard. Android pans
+        // the window instead (softwareKeyboardLayoutMode "pan").
+        automaticallyAdjustKeyboardInsets
+        refreshControl={
+          <RefreshControl
+            refreshing={pulling}
+            onRefresh={onRefresh}
+            tintColor={colors.textMuted}
+            colors={[colors.primary2]}
+            progressBackgroundColor={colors.cardBackground}
+          />
+        }
       >
         {/* ---------- Introduction ---------- */}
         {/* Icon centred against the two text lines rather than top-aligned, so
@@ -347,78 +375,102 @@ function LoanApplication() {
             no eligibility, no reference number — those are the approver's and the
             backend's to decide. */}
         {hasSummary && (
-          <Card
-            style={{ padding: SPACING.md, marginBottom: SPACING.md }}
-            accessible
-            accessibilityLabel={`Summary. ${
-              productMissing ? "No product selected" : productName
-            }, ${
-              amountMissing ? "no amount entered" : formatExpenseAmount(amount)
-            }, ${
-              repaymentAmountMissing
-                ? "no repayment entered"
-                : `${formatExpenseAmount(repaymentAmount)} per month`
-            }, ${attachmentCount} of 2 attachments.`}
-          >
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
-              <View style={{ flex: 1.2, minWidth: 0 }}>
-                <Text style={{ ...TYPO.caption, color: colors.textMuted }}>
-                  Loan product
-                </Text>
-                <Text
-                  numberOfLines={1}
-                  style={{ ...TYPO.title3, color: colors.textPrimary }}
-                >
-                  {productMissing ? "—" : productName}
-                </Text>
+          <Card style={{ padding: SPACING.md, marginBottom: SPACING.md }}>
+            {/* Grouped on this unpainted view, not on <Card>: `accessible` on
+                the card greys its surface on Android. */}
+            <View
+              accessible
+              accessibilityLabel={`Summary. ${
+                productMissing ? "No product selected" : productName
+              }, ${
+                amountMissing ? "no amount entered" : formatExpenseAmount(amount)
+              }, ${
+                repaymentAmountMissing
+                  ? "no repayment entered"
+                  : `${formatExpenseAmount(repaymentAmount)} per month`
+              }, ${attachmentCount} of 2 attachments.`}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <View style={{ flex: 1.2, minWidth: 0 }}>
+                  <Text style={{ ...TYPO.caption, color: colors.textMuted }}>
+                    Loan product
+                  </Text>
+                  <Text
+                    numberOfLines={1}
+                    style={{ ...TYPO.title3, color: colors.textPrimary }}
+                  >
+                    {productMissing ? "—" : productName}
+                  </Text>
+                </View>
+
+                <View
+                  style={{
+                    width: 1,
+                    alignSelf: "stretch",
+                    backgroundColor: colors.dividerSubtle,
+                    marginHorizontal: SPACING.md,
+                  }}
+                />
+
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={{ ...TYPO.caption, color: colors.textMuted }}>
+                    Requested
+                  </Text>
+                  <Text
+                    numberOfLines={1}
+                    style={{
+                      ...TYPO.title3,
+                      color: colors.textPrimary,
+                      fontVariant: ["tabular-nums"],
+                    }}
+                  >
+                    {amountMissing ? "—" : formatExpenseAmount(amount)}
+                  </Text>
+                </View>
               </View>
 
               <View
                 style={{
-                  width: 1,
-                  alignSelf: "stretch",
+                  height: 1,
                   backgroundColor: colors.dividerSubtle,
-                  marginHorizontal: SPACING.md,
+                  marginVertical: SPACING.md,
                 }}
               />
 
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={{ ...TYPO.caption, color: colors.textMuted }}>
-                  Requested
-                </Text>
-                <Text
-                  numberOfLines={1}
+              {/* The repayment line only once there is a figure to show, so an
+                  untouched form isn't padded with a dash. */}
+              {!repaymentAmountMissing && (
+                <View
                   style={{
-                    ...TYPO.title3,
-                    color: colors.textPrimary,
-                    fontVariant: ["tabular-nums"],
+                    flexDirection: "row",
+                    alignItems: "center",
+                    marginBottom: SPACING.md,
                   }}
                 >
-                  {amountMissing ? "—" : formatExpenseAmount(amount)}
-                </Text>
-              </View>
-            </View>
+                  <Ionicons
+                    name="repeat-outline"
+                    size={ICON.sm}
+                    color={colors.textMuted}
+                    style={{ marginEnd: SPACING.sm }}
+                  />
+                  <Text
+                    style={{
+                      ...TYPO.subhead,
+                      fontWeight: "400",
+                      flex: 1,
+                      minWidth: 0,
+                      color: colors.textSecondary,
+                    }}
+                    numberOfLines={1}
+                  >
+                    {`${formatExpenseAmount(repaymentAmount)} per month`}
+                  </Text>
+                </View>
+              )}
 
-            <View
-              style={{
-                height: 1,
-                backgroundColor: colors.dividerSubtle,
-                marginVertical: SPACING.md,
-              }}
-            />
-
-            {/* The repayment line only once there is a figure to show, so an
-                untouched form isn't padded with a dash. */}
-            {!repaymentAmountMissing && (
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  marginBottom: SPACING.md,
-                }}
-              >
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
                 <Ionicons
-                  name="repeat-outline"
+                  name="attach-outline"
                   size={ICON.sm}
                   color={colors.textMuted}
                   style={{ marginEnd: SPACING.sm }}
@@ -431,33 +483,12 @@ function LoanApplication() {
                     minWidth: 0,
                     color: colors.textSecondary,
                   }}
-                  numberOfLines={1}
                 >
-                  {`${formatExpenseAmount(repaymentAmount)} per month`}
+                  {attachmentCount === 0
+                    ? "No documents attached"
+                    : `${attachmentCount} of 2 documents attached`}
                 </Text>
               </View>
-            )}
-
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
-              <Ionicons
-                name="attach-outline"
-                size={ICON.sm}
-                color={colors.textMuted}
-                style={{ marginEnd: SPACING.sm }}
-              />
-              <Text
-                style={{
-                  ...TYPO.subhead,
-                  fontWeight: "400",
-                  flex: 1,
-                  minWidth: 0,
-                  color: colors.textSecondary,
-                }}
-              >
-                {attachmentCount === 0
-                  ? "No documents attached"
-                  : `${attachmentCount} of 2 documents attached`}
-              </Text>
             </View>
           </Card>
         )}
@@ -524,9 +555,7 @@ function LoanApplication() {
               compact
               icon="cloud-offline-outline"
               title="Couldn't load your applications"
-              description={
-                historyError?.message || "Unable to load loan applications."
-              }
+              description="Unable to load loan applications."
               actionLabel="Retry"
               onActionPress={refetchHistory}
             />

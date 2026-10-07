@@ -428,9 +428,10 @@ export default function useAutoAttendance() {
       );
     } catch (error) {
       console.log('[AutoAttendance] Failed to enable monitoring:', error);
+      // Fixed copy: the error is native/network text, not something to show.
       Alert.alert(
         'Could not turn on monitoring',
-        error?.message || 'Something went wrong.',
+        'Something went wrong. Check your connection and try again.',
       );
     } finally {
       setBusy(false);

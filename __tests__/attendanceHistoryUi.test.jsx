@@ -1,6 +1,6 @@
 import React from 'react';
 import { ActivityIndicator, Animated, View } from 'react-native';
-import { render, fireEvent } from '@testing-library/react-native';
+import { render, fireEvent, act } from '@testing-library/react-native';
 
 let mockScheme = 'light';
 jest.mock('react-native/Libraries/Utilities/useColorScheme', () => ({
@@ -346,10 +346,47 @@ describe('AttendanceHistory pull-to-refresh', () => {
     expect(mockHistory.refetch).not.toHaveBeenCalled();
   });
 
-  it('spins for the whole gesture, drain included', () => {
+  it('spins for the whole gesture, drain included', async () => {
+    let finish;
+    mockHistory.refreshAll.mockImplementationOnce(
+      () => new Promise((resolve) => { finish = resolve; }),
+    );
+    const tree = render(<AttendanceHistory />);
+
+    await act(async () => {
+      refreshControlOf(tree).props.onRefresh();
+    });
+    expect(refreshControlOf(tree).props.refreshing).toBe(true);
+
+    await act(async () => finish());
+    expect(refreshControlOf(tree).props.refreshing).toBe(false);
+  });
+
+  // React Query's background refetch on a revisit is not a pull.
+  it('does not spin when nobody pulled', () => {
     mockHistory.isRefreshing = true;
     const tree = render(<AttendanceHistory />);
 
-    expect(refreshControlOf(tree).props.refreshing).toBe(true);
+    expect(refreshControlOf(tree).props.refreshing).toBe(false);
+  });
+});
+
+/**
+ * TanStack v5 keeps `isError` true when a refetch or next page fails while data
+ * is already loaded. That used to swap the whole list — queued "Pending sync"
+ * rows included — for the error screen.
+ */
+describe('AttendanceHistory failed refresh', () => {
+  afterEach(() => {
+    mockHistory.isError = false;
+  });
+
+  it('keeps the records on screen and warns above them', () => {
+    mockHistory.isError = true;
+    const tree = render(<AttendanceHistory />);
+
+    expect(tree.UNSAFE_getByType(SectionList)).toBeTruthy();
+    expect(tree.getByText("Couldn't refresh")).toBeTruthy();
+    expect(tree.queryByText("Couldn't load your history")).toBeNull();
   });
 });

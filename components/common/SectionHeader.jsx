@@ -51,6 +51,8 @@ function SectionHeader({
         <PressableScale
           onPress={onActionPress}
           accessibilityLabel={actionLabel}
+          // An 18pt line: reach the 44pt target vertically.
+          hitSlop={{ top: 13, bottom: 13, left: 8, right: 8 }}
           style={{ flexDirection: 'row', alignItems: 'center' }}
         >
           <Text

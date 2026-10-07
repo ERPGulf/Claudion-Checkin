@@ -1,4 +1,4 @@
-import { requireOptionalNativeModule } from "expo-modules-core";
+import { requireOptionalNativeModule } from "expo";
 
 /**
  * JS API for the `expo-auto-attendance` local Expo module (Android + iOS).

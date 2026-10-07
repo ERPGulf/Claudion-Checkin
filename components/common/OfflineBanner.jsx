@@ -194,7 +194,7 @@ function OfflineBanner() {
     const animation = Animated.timing(progress, {
       toValue: visible ? 1 : 0,
       duration: visible ? ENTER_MS : EXIT_MS,
-      easing: visible ? Easing.out(Easing.cubic) : Easing.in(Easing.quad),
+      easing: visible ? Easing.out(Easing.cubic) : Easing.out(Easing.quad),
       useNativeDriver: true,
     });
 

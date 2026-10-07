@@ -53,6 +53,13 @@ jest.mock("expo-sqlite", () => ({
   ),
 }));
 
+// expo-haptics ships untransformed ESM; the mobile sign-in error banner buzzes.
+jest.mock("expo-haptics", () => ({
+  __esModule: true,
+  notificationAsync: jest.fn(() => Promise.resolve()),
+  NotificationFeedbackType: { Success: "success", Warning: "warning", Error: "error" },
+}));
+
 // NetInfo's real module reaches for the native bridge at import time. The
 // default is "online", so a test that never touches connectivity behaves as it
 // would with a working connection; tests that care override these.
@@ -95,3 +102,8 @@ jest.mock("@react-native-firebase/messaging", () => {
 
   return messaging;
 });
+// Expo's URL implementation uses TextEncoder. Jest's jsdom environment does
+// not expose Node's encoders, although both are available in the native runtime.
+const { TextEncoder, TextDecoder } = require("node:util");
+global.TextEncoder ??= TextEncoder;
+global.TextDecoder ??= TextDecoder;
