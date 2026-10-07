@@ -4,12 +4,13 @@ Employees can choose the existing QR/password method or mobile sign-in, and
 the app presents them at equal weight: both Welcome variants show the two as
 matching option cards, and both password Login variants offer QR rescan and
 mobile as matching alternatives below Login.
-The new screen uses the SDK's resolved credential requirements for password,
-OTP, optional password creation, and password reset. It never starts cold-boot
+The unchanged `"mobile login"` route uses a themed auth shell with focused
+mobile/account, OTP, password sign-in, and password creation steps. Each step
+uses the SDK's resolved credential requirements. It never starts cold-boot
 reauthentication during app launch or background geofence relaunch.
 
 Dependencies are `@erpgulf/auth-sdk@0.1.2`, `@erpgulf/server-lookup@1.0.0`, and
-Expo SDK 54's `expo-crypto@~15.0.9`. Both ERPGulf packages ship ESM; Jest maps
+Expo SDK 57's `expo-crypto@~57.0.3`. Both ERPGulf packages ship ESM; Jest maps
 their published entry points and transforms them. Expo's own UTF-8 TextDecoder
 is exercised by the sealed-token regression test.
 
@@ -61,17 +62,25 @@ HTTP status to the SDK, and reports failures as cause-free `TIMEOUT` or
 `NETWORK_ERROR`. It is required lazily, so loading the module at startup (which
 QR users also do) cannot fail on the native fetch module.
 
-Development builds log every SDK exchange as `[auth-sdk] METHOD URL → status`
-with its request and response, plus the flow `begin()` resolved
-(`[auth-sdk] flow`). `access_token`, `refresh_token`, `password`,
-`new_password` and `otp` are masked as `***`; a failed request logs only
-`TIMEOUT` or `NETWORK_ERROR`, never the native error. Release builds log none
-of it. Read them in the Metro terminal or with `adb logcat -s ReactNativeJS`.
+For the requested test-instance debugging, development builds (`__DEV__`) log
+unredacted SDK exchanges under `[auth-sdk]`: request URL, headers, raw and decoded
+form, response status/headers, exact response body, duration, and a request ID.
+This includes OTPs, passwords, managed passwords, and tokens. `[auth-sdk] flow`
+shows the result of `begin()`. `[mobile-auth]` traces screen changes, operations,
+employee/profile downloads, identity and attendance-policy validation, token
+storage, session publication, and rollback. `handoff.failed` names the failing
+stage; `employee.failed` includes the HTTP response and original error/stack.
+Native SDK transport failures are logged before the same cause-free SDK error
+is thrown. Diagnostics never retry requests or write credentials to storage.
+Release builds omit these logs and retain only `{ code, httpStatus, retryable }`
+failure diagnostics. Read development logs in the Metro terminal or with
+`adb logcat -s ReactNativeJS`.
 
 Resend is manual, with a 45-second cooldown, or the code's `expiresIn` when
 that is shorter. A password the employee chooses (sign-up, create, reset) needs
-a matching confirmation, at least 8 characters, and not only spaces. An
-untouched optional sign-up password is omitted, so the SDK sends a managed one.
+a matching confirmation, at least 8 characters, and not only spaces. Choosing
+**Skip for now** during optional sign-up omits the password, so the SDK sends a
+managed one.
 Create/reset is offered only on `SIGN_IN`, and reset never on
 `ENTER_PASSWORD_AND_OTP`, where a code-only reset would bypass the password.
 After `setPasswordWithOtp`, including an outcome the SDK cannot confirm, the
@@ -79,6 +88,45 @@ old flow is discarded and `begin()` runs again. A rejected OTP or password is
 cleared from its field. `AUTH_CAFM_GAP_ANALYSIS.md` lists the remaining
 deliberate differences from the CAFM reference, including the absence of
 cold-boot re-authentication.
+
+## Focused authentication steps
+
+The mobile/account step keeps company selection and mobile entry together;
+it contains no OTP or password fields. After `begin()`, explicit step state
+renders the next screen while retaining the original SDK flow, company, and
+mobile context in memory. Navigation does not call `begin()` or send OTP again.
+
+Sign-up always starts with the standalone OTP step. If the resolved password
+purpose is `create`, entering a nonblank code advances to a separate password
+screen. Required passwords show **Create password** without a Skip action.
+Optional passwords show both **Create password** and a visible secondary
+**Skip for now** button. Disabled passwords finish from the OTP screen.
+
+The installed SDK has no independent OTP-verification operation. For sign-up
+with a password decision, the first step captures the code; server verification
+happens when `complete(originalFlow, { otp, password })` or
+`complete(originalFlow, { otp })` is submitted. The employee enters the code
+once. Create/reset similarly captures it before the separate new-password
+screen and submits it through `setPasswordWithOtp`. A final OTP rejection
+returns to the OTP step so the employee can correct the code or manually resend.
+These transitions do not claim that an intermediate code was server-verified.
+
+OTP-only sign-in finishes from the OTP screen. Password-only sign-in uses a
+dedicated password screen. When the SDK requires both credentials, sign-in
+captures the password first, then sends OTP once and opens the OTP screen;
+completion submits both credentials together. The SDK selects a single sign-in
+factor for an Optional password / Optional OTP policy: an employee with a
+user-known password gets password sign-in; an employee without one gets OTP.
+The app offers the method allowed by resolved `credentials`, plus separate
+capability-based create/reset actions, and does not invent an OTP alternative
+for a password-only resolved flow.
+
+Back moves between steps without sending another code. Returning to OTP from
+a sign-up password decision reuses the existing flow and cooldown. Cancelling
+the flow, changing company or mobile number, or resetting authentication clears
+temporary credentials and invalidates stale operations. Successful completion
+also clears them. Raw OTPs and passwords remain in transient hook state only;
+they are never written to AsyncStorage, SecureStore, or persisted Redux state.
 
 ## Authentication modes
 
@@ -89,16 +137,16 @@ end to end.
 
 | Mode | Backend policy: sign-up password · sign-in · cold boot (password / OTP) | Sign-up | Sign-in | Cold boot |
 | --- | --- | --- | --- | --- |
-| Password | Mandatory · Mandatory / No · Mandatory / No | new password + code | password | password |
+| Password | Mandatory · Mandatory / No · Mandatory / No | code → create password | password | password |
 | OTP | No · No / Mandatory · No / Mandatory | code | code | code |
-| Optional | Optional · Optional / Optional · Optional / Optional | code + optional new password | password if the employee has one, otherwise code | as sign-in |
-| Both | Mandatory · Mandatory / Mandatory · Mandatory / No | new password + code | password + code | password |
+| Optional | Optional · Optional / Optional · Optional / Optional | code → create password or Skip for now | password if the employee has one, otherwise code | as sign-in |
+| Both | Mandatory · Mandatory / Mandatory · Mandatory / No | code → create password | password → code | password |
 
-Sign-up OTP is always Mandatory. There is no Skip button: an optional new
-password is labelled Optional and may be left empty, and the code is still
-required. A required password, including an Optional-mode employee's existing
-one, cannot be skipped, and a code cannot replace it. Cold boot is listed for
-completeness; the app does not run it.
+Sign-up OTP is always Mandatory. Only an optional new sign-up password can be
+skipped. The SDK handles its managed-password behavior when the app submits only
+the captured OTP. A required password, including an Optional-mode employee's
+existing one, cannot be skipped, and a code cannot replace it. Cold boot is
+listed for completeness; the app does not run it.
 
 ## Identity and attendance hand-off
 
@@ -164,7 +212,7 @@ with disposable employees. Before rollout, supply that setup and verify:
 
 Native/Metro builds and mock-based tests do not substitute for these live checks.
 
-## Local verification
+## Earlier SDK integration verification
 
 The pre-change baseline passed 73 Jest suites and 1,675 tests. This checkout
 already excludes `.git-rewrite` from Jest's test paths; the snapshot still
@@ -188,3 +236,23 @@ form in light and dark themes. iOS also exercised native secure random values
 and Expo's UTF-8 decoder in Hermes. An existing development notification warning
 was dismissed for the iOS screen captures; Android's captured error log was
 empty. These smoke checks did not submit lookup requests or credentials.
+
+## Authentication UI verification (2026-10-07)
+
+The step redesign passed all 83 Jest suites and 1,904 tests, using
+`--runInBand --watchman=false --forceExit`. `mobileAuthSteps` exercises real SDK
+policy resolution and completion against synthetic transport responses;
+`mobileLoginNavigation` combines the real hook and SDK with focused screens
+and a mocked native stack. These cover Create/Skip, mandatory and disabled
+passwords, both-factor sign-in, recovery, invalid credentials, manual resend,
+back navigation, company/mobile changes, and credential cleanup. Route-blur
+tests also verify that cancelled operations cannot complete and that a
+successful Redux hand-off is not invalidated while notifications are pending.
+Presentation tests cover light/dark themes and Arabic/RTL.
+
+Production Metro exports passed for Android and iOS without new dependencies.
+The redesigned native stack, keyboard/autofill behavior, and gestures have not
+been exercised on devices in this change; neither have live backend calls.
+Manually check code expiry while choosing a password, resend after correction,
+Skip followed by logout/OTP sign-in, password create/reset, native back, company
+switching, and QR hand-off on disposable staging employees before rollout.

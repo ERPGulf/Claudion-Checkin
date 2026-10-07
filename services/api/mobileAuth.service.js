@@ -30,9 +30,14 @@ import {
 } from "../offline/attendanceQueueProvenance";
 import { SESSION_STATE_KEY, clearSessionState } from "../../utils/attendanceSessionState";
 import { CHECKIN_START_TIME_KEY, clearPersistedCheckinStartTime } from "../../utils/attendanceSession";
+import { debugHeaders, logMobileAuthDebug } from "../../utils/mobileAuthDebug";
 
 const clients = new Map();
-const handoffError = (code) => Object.assign(new Error("Mobile sign-in could not be completed."), { code });
+let requestSequence = 0;
+const handoffError = (code, details) => {
+  logMobileAuthDebug("handoff.rejected", { code, ...details });
+  return Object.assign(new Error("Mobile sign-in could not be completed."), { code });
+};
 const nonblank = (value) => typeof value === "string" && value.trim().length > 0;
 const HANDOFF_KEYS = [
   "baseUrl", "backendUrl", "api_key", "app_key", "company", "employee_code",
@@ -50,48 +55,53 @@ const parseBody = (text) => {
   }
 };
 
-// Development builds log every SDK exchange; these values never reach a log.
-const SECRET_KEYS = new Set(["access_token", "refresh_token", "password", "new_password", "otp"]);
-const masked = (value) => JSON.stringify(value, (key, field) => (SECRET_KEYS.has(key) ? "***" : field));
-
 /**
  * React Native's global fetch (XHR) ignores the SDK's `redirect: "error"`, so a
  * redirect could replay the form body and master bearer. expo/fetch enforces it.
  * Every HTTP status is a response; failures are fresh errors with no cause,
- * because a native error can carry request credentials. No retries; logs only
- * in development builds, with credentials masked.
+ * because a native error can carry request credentials. No retries. The current
+ * test-instance diagnostics log unredacted exchanges only in development.
  */
 const authTransport = {
   async request({ method, url, headers, body, timeoutMs = 15000 }) {
+    const requestId = ++requestSequence;
+    const started = Date.now();
+    const requestHeaders = { "Cache-Control": "no-store", ...headers };
     const controller = new AbortController();
     let timedOut = false;
     const timer = setTimeout(() => {
       timedOut = true;
       controller.abort();
     }, timeoutMs);
+    logMobileAuthDebug("request", {
+      requestId, method, url, headers: requestHeaders, body, timeoutMs,
+      form: body ? Object.fromEntries(new URLSearchParams(body)) : undefined,
+      redirect: "error", credentials: "omit",
+    }, "auth-sdk");
     try {
       // Required lazily: QR users load this module at startup too.
       const { fetch } = require("expo/fetch");
       const response = await fetch(url, {
         method,
         body,
-        headers: { "Cache-Control": "no-store", ...headers },
+        headers: requestHeaders,
         redirect: "error",
         credentials: "omit",
         signal: controller.signal,
       });
-      const parsed = parseBody(await response.text());
-      if (__DEV__) {
-        console.log(
-          `[auth-sdk] ${method} ${url} → ${response.status}`,
-          body ? `request=${masked(Object.fromEntries(new URLSearchParams(body)))}` : "",
-          `response=${masked(parsed)}`,
-        );
-      }
+      const rawBody = await response.text();
+      const parsed = parseBody(rawBody);
+      logMobileAuthDebug("response", {
+        requestId, method, url, status: response.status,
+        elapsedMs: Date.now() - started, headers: debugHeaders(response.headers),
+        rawBody, body: parsed,
+      }, "auth-sdk");
       return { status: response.status, body: parsed };
-    } catch {
-      // The native error itself can carry credentials; log only its class.
-      if (__DEV__) console.log(`[auth-sdk] ${method} ${url} failed: ${timedOut ? "TIMEOUT" : "NETWORK_ERROR"}`);
+    } catch (error) {
+      logMobileAuthDebug("request.failed", {
+        requestId, method, url, elapsedMs: Date.now() - started,
+        code: timedOut ? "TIMEOUT" : "NETWORK_ERROR", error,
+      }, "auth-sdk");
       throw new AuthError(timedOut ? "TIMEOUT" : "NETWORK_ERROR", "Authentication request failed.");
     } finally {
       clearTimeout(timer);
@@ -101,6 +111,7 @@ const authTransport = {
 
 /** A client retains only its own tenant's in-memory master token. */
 export const getMobileAuthClient = (baseUrl) => {
+  logMobileAuthDebug("client", { baseUrl, reused: clients.has(baseUrl) }, "auth-sdk");
   if (!clients.has(baseUrl)) {
     clients.set(baseUrl, createAuthClient({
       baseUrl,
@@ -124,7 +135,10 @@ export const resolveMobileEmployeeIdentity = (result, employee) => {
   const docnames = [employee?.name, employee?.employee].filter(nonblank).map((value) => value.trim());
   const codes = [employee?.employee_code, employee?.employee_field_value].filter(nonblank).map((value) => value.trim());
   if (!docnames.length || new Set(docnames).size !== 1 || !codes.length || new Set(codes).size !== 1) {
-    throw handoffError("MOBILE_IDENTITY_UNVERIFIED");
+    throw handoffError("MOBILE_IDENTITY_UNVERIFIED", {
+      reason: "Missing or conflicting employee document names or attendance identifiers",
+      sdkEmployee: result?.employee, employee, docnames, codes,
+    });
   }
   const docname = docnames[0];
   const sdkEmployee = result?.employee;
@@ -132,25 +146,42 @@ export const resolveMobileEmployeeIdentity = (result, employee) => {
     ![sdkEmployee?.id, sdkEmployee?.name].includes(docname) ||
     !nonblank(employee?.employee_name)
   ) {
-    throw handoffError("MOBILE_IDENTITY_UNVERIFIED");
+    throw handoffError("MOBILE_IDENTITY_UNVERIFIED", {
+      reason: "Employee document name does not match SDK identity, or display name is missing",
+      sdkEmployee, employee, docname,
+    });
   }
   return { employeeCode: codes[0], fullName: employee.employee_name.trim(), employeeDocname: docname };
 };
 
 /** SDK fetch stays inside the SDK; this is the separate attendance policy API. */
 const downloadEmployeeContext = async (baseUrl, result) => {
+  const url = `${baseUrl}/api/method/employee_app.attendance_api.get_employee_data`;
+  const params = { employee_id: result.employee.id };
+  const headers = { Authorization: `Bearer ${result.token.accessToken}` };
+  const started = Date.now();
+  logMobileAuthDebug("employee.request", { method: "GET", url, params, headers, timeoutMs: 10000 });
   try {
-    const { data } = await plainAxios.get(
-      `${baseUrl}/api/method/employee_app.attendance_api.get_employee_data`,
+    const response = await plainAxios.get(
+      url,
       {
-        params: { employee_id: result.employee.id },
-        headers: { Authorization: `Bearer ${result.token.accessToken}` },
+        params,
+        headers,
         timeout: 10000,
       },
     );
-    return data?.message;
-  } catch {
-    // Do not forward Axios response bodies into SDK diagnostics or the UI.
+    logMobileAuthDebug("employee.response", {
+      url, status: response.status, headers: debugHeaders(response.headers),
+      elapsedMs: Date.now() - started, body: response.data, employee: response.data?.message,
+    });
+    return response.data?.message;
+  } catch (error) {
+    logMobileAuthDebug("employee.failed", {
+      url, params, elapsedMs: Date.now() - started, error,
+      status: error?.response?.status, headers: debugHeaders(error?.response?.headers),
+      body: error?.response?.data,
+    });
+    // Keep the app-owned error contract; raw data belongs only to dev logs.
     throw handoffError("MOBILE_POLICY_UNAVAILABLE");
   }
 };
@@ -164,115 +195,152 @@ export const completeMobileSignIn = async ({
   isCancelled = () => false,
 }) => {
   const generation = invalidateAuthSession();
+  let stage = "availability";
+  const traceStage = (next, details) => {
+    stage = next;
+    logMobileAuthDebug("handoff.stage", { stage, generation, ...details });
+  };
   const assertCurrent = () => {
     if (generation !== getAuthSessionGeneration() || isCancelled()) {
+      logMobileAuthDebug("handoff.cancelled", { stage, generation, currentGeneration: getAuthSessionGeneration() });
       throw createAttendanceScopeChangedError();
     }
   };
 
-  if (!isMobileAuthAvailable()) throw handoffError("MOBILE_AUTH_UNAVAILABLE");
-  assertCurrent();
-  const completion = await auth.complete(flow, credentials);
-  assertCurrent();
-  const result = completion?.status === "authenticated" ? completion.result : null;
-  if (!nonblank(result?.token?.accessToken) || !nonblank(result?.token?.refreshToken)) {
-    throw handoffError("MOBILE_SESSION_INCOMPLETE");
-  }
-  if (!nonblank(result?.employee?.id)) throw handoffError("MOBILE_IDENTITY_UNVERIFIED");
-
-  // No provisioning, tokens or Redux writes until the backend supplies a
-  // verifiable identity and complete attendance policy for this new employee.
-  const employee = await downloadEmployeeContext(baseUrl, result);
-  assertCurrent();
-  const identity = resolveMobileEmployeeIdentity(result, employee);
+  logMobileAuthDebug("handoff.start", { baseUrl, generation, flow, credentials });
   try {
-    assertCompleteAttendancePolicy(employee);
-  } catch {
-    throw handoffError("MOBILE_POLICY_UNAVAILABLE");
-  }
-  const previousState = await AsyncStorage.multiGet(HANDOFF_KEYS);
-  const previousBaseUrl = Object.fromEntries(previousState).baseUrl;
-  assertCurrent();
-
-  try {
-    await AsyncStorage.multiRemove([
-      "api_key", "app_key", "company", CONFIG_KEY,
-      "photo", "restrict_location", "unrestricted_checkout_location",
-      "employee_locations", "geotagging",
-    ]);
+    if (!isMobileAuthAvailable()) throw handoffError("MOBILE_AUTH_UNAVAILABLE");
     assertCurrent();
-    await clearOfflineCapability();
+    traceStage("sdk.complete", { baseUrl, flow, credentials });
+    const completion = await auth.complete(flow, credentials);
+    logMobileAuthDebug("handoff.sdk.result", { completion });
     assertCurrent();
-    await AsyncStorage.multiSet([
-      ["baseUrl", baseUrl],
-      ["backendUrl", baseUrl],
-      ["employee_code", identity.employeeCode],
-      ["employee_id", identity.employeeCode],
-      ["full_name", identity.fullName],
-      ["auth_method", "mobile"],
-      // Conservative values until the prevalidated download is mirrored.
-      ["restrict_location", "1"],
-      ["unrestricted_checkout_location", "0"],
-      ["photo", "1"],
-    ]);
-    assertCurrent();
-
-    // Match generateToken's generation check and sole token persistence path.
-    await saveTokens(result.token.accessToken, result.token.refreshToken, generation);
-    assertCurrent();
-    const policy = await refreshAttendanceConfig(identity.employeeCode, {
-      requireCompletePolicy: true,
-      employeeData: employee,
-      expectedGeneration: generation,
-    });
-    assertCurrent();
-    if (!policy.refreshed) throw handoffError("MOBILE_POLICY_UNAVAILABLE");
-
-    if (
-      previousBaseUrl &&
-      normalizeAttendanceTenantKey(previousBaseUrl) !== normalizeAttendanceTenantKey(baseUrl)
-    ) {
-      // The existing owner key compares employee codes, which can collide
-      // between tenants. Preserve same-tenant sessions and all queue records.
-      await clearSessionState();
-      assertCurrent();
-      await clearPersistedCheckinStartTime();
-      assertCurrent();
+    traceStage("session.validate");
+    const result = completion?.status === "authenticated" ? completion.result : null;
+    if (!nonblank(result?.token?.accessToken) || !nonblank(result?.token?.refreshToken)) {
+      throw handoffError("MOBILE_SESSION_INCOMPLETE", { result });
     }
+    if (!nonblank(result?.employee?.id)) throw handoffError("MOBILE_IDENTITY_UNVERIFIED", { result });
 
-    dispatch(setUsername(null));
-    dispatch(setUserDetails(null));
-    dispatch(setBaseUrl(baseUrl));
-    dispatch(setEmployeeCode(identity.employeeCode));
-    dispatch(setFullname(identity.fullName));
-    dispatch(setSignIn({ isLoggedIn: true, token: result.token.accessToken }));
-  } catch (error) {
-    // A failed old operation must never tear down a newer employee's session.
-    if (generation === getAuthSessionGeneration()) {
-      const cleanup = clearTokens();
-      const cleanupGeneration = getAuthSessionGeneration();
-      await cleanup;
-      if (cleanupGeneration === getAuthSessionGeneration()) {
-        const absentKeys = previousState.filter(([, value]) => value == null).map(([key]) => key);
-        if (absentKeys.length) await AsyncStorage.multiRemove(absentKeys);
-        if (cleanupGeneration === getAuthSessionGeneration()) {
-          await AsyncStorage.multiSet(previousState.filter(([, value]) => value != null));
-        }
+    // No provisioning, tokens or Redux writes until the backend supplies a
+    // verifiable identity and complete attendance policy for this new employee.
+    traceStage("employee.fetch");
+    const employee = await downloadEmployeeContext(baseUrl, result);
+    assertCurrent();
+    traceStage("employee.identity", { sdkEmployee: result.employee, employee });
+    const identity = resolveMobileEmployeeIdentity(result, employee);
+    traceStage("employee.policy", { employee });
+    try {
+      assertCompleteAttendancePolicy(employee);
+    } catch (error) {
+      logMobileAuthDebug("employee.policy.invalid", { error, employee });
+      throw handoffError("MOBILE_POLICY_UNAVAILABLE");
+    }
+    traceStage("provisioning.snapshot");
+    const previousState = await AsyncStorage.multiGet(HANDOFF_KEYS);
+    logMobileAuthDebug("handoff.provisioning.previous", { values: Object.fromEntries(previousState) });
+    const previousBaseUrl = Object.fromEntries(previousState).baseUrl;
+    assertCurrent();
+
+    try {
+      traceStage("provisioning.clear");
+      await AsyncStorage.multiRemove([
+        "api_key", "app_key", "company", CONFIG_KEY,
+        "photo", "restrict_location", "unrestricted_checkout_location",
+        "employee_locations", "geotagging",
+      ]);
+      assertCurrent();
+      traceStage("capability.clear");
+      await clearOfflineCapability();
+      assertCurrent();
+      traceStage("provisioning.write", { baseUrl, identity });
+      await AsyncStorage.multiSet([
+        ["baseUrl", baseUrl],
+        ["backendUrl", baseUrl],
+        ["employee_code", identity.employeeCode],
+        ["employee_id", identity.employeeCode],
+        ["full_name", identity.fullName],
+        ["auth_method", "mobile"],
+        // Conservative values until the prevalidated download is mirrored.
+        ["restrict_location", "1"],
+        ["unrestricted_checkout_location", "0"],
+        ["photo", "1"],
+      ]);
+      assertCurrent();
+
+      // Match generateToken's generation check and sole token persistence path.
+      traceStage("tokens.save", { token: result.token });
+      await saveTokens(result.token.accessToken, result.token.refreshToken, generation);
+      assertCurrent();
+      traceStage("policy.cache");
+      const policy = await refreshAttendanceConfig(identity.employeeCode, {
+        requireCompletePolicy: true,
+        employeeData: employee,
+        expectedGeneration: generation,
+      });
+      logMobileAuthDebug("handoff.policy.cache.result", { policy });
+      assertCurrent();
+      if (!policy.refreshed) throw handoffError("MOBILE_POLICY_UNAVAILABLE", { policy });
+
+      if (
+        previousBaseUrl &&
+        normalizeAttendanceTenantKey(previousBaseUrl) !== normalizeAttendanceTenantKey(baseUrl)
+      ) {
+        // The existing owner key compares employee codes, which can collide
+        // between tenants. Preserve same-tenant sessions and all queue records.
+        traceStage("attendance.session.clear", { previousBaseUrl, baseUrl });
+        await clearSessionState();
+        assertCurrent();
+        await clearPersistedCheckinStartTime();
+        assertCurrent();
       }
+
+      traceStage("session.publish", { identity });
+      dispatch(setUsername(null));
+      dispatch(setUserDetails(null));
+      dispatch(setBaseUrl(baseUrl));
+      dispatch(setEmployeeCode(identity.employeeCode));
+      dispatch(setFullname(identity.fullName));
+      dispatch(setSignIn({ isLoggedIn: true, token: result.token.accessToken }));
+    } catch (error) {
+      logMobileAuthDebug("handoff.persistence.failed", { stage, error });
+      // A failed old operation must never tear down a newer employee's session.
+      if (generation === getAuthSessionGeneration()) {
+        logMobileAuthDebug("handoff.rollback.start", { generation });
+        const cleanup = clearTokens();
+        const cleanupGeneration = getAuthSessionGeneration();
+        await cleanup;
+        if (cleanupGeneration === getAuthSessionGeneration()) {
+          const absentKeys = previousState.filter(([, value]) => value == null).map(([key]) => key);
+          if (absentKeys.length) await AsyncStorage.multiRemove(absentKeys);
+          if (cleanupGeneration === getAuthSessionGeneration()) {
+            await AsyncStorage.multiSet(previousState.filter(([, value]) => value != null));
+          }
+        }
+        logMobileAuthDebug("handoff.rollback.end", { cleanupGeneration, currentGeneration: getAuthSessionGeneration() });
+      }
+      throw error;
     }
+
+    // Same best-effort unread count and success toast as useLogin. A successful
+    // setSignIn normally unmounts this screen; do not treat that as cancellation.
+    traceStage("notifications.fetch", { employeeCode: identity.employeeCode });
+    try {
+      const notifications = await getNotifications(identity.employeeCode);
+      logMobileAuthDebug("handoff.notifications.result", { notifications });
+      if (generation === getAuthSessionGeneration()) {
+        dispatch(setUnreadCount(notifications.filter((item) => Number(item.read) === 0).length));
+      }
+    } catch (error) {
+      logMobileAuthDebug("handoff.notifications.failed", { error, nonfatal: true });
+    }
+    if (generation === getAuthSessionGeneration()) {
+      Toast.show({ type: "success", text1: "Login successful", autoHide: true, visibilityTime: 3000 });
+    }
+    logMobileAuthDebug("handoff.complete", { generation, currentGeneration: getAuthSessionGeneration() });
+    return { status: "authenticated" };
+  } catch (error) {
+    logMobileAuthDebug("handoff.failed", { stage, generation, currentGeneration: getAuthSessionGeneration(), error });
     throw error;
   }
-
-  // Same best-effort unread count and success toast as useLogin. A successful
-  // setSignIn normally unmounts this screen; do not treat that as cancellation.
-  try {
-    const notifications = await getNotifications(identity.employeeCode);
-    if (generation === getAuthSessionGeneration()) {
-      dispatch(setUnreadCount(notifications.filter((item) => Number(item.read) === 0).length));
-    }
-  } catch {}
-  if (generation === getAuthSessionGeneration()) {
-    Toast.show({ type: "success", text1: "Login successful", autoHide: true, visibilityTime: 3000 });
-  }
-  return { status: "authenticated" };
 };

@@ -297,7 +297,7 @@ describe("SDK transport", () => {
     expect(error.message).not.toContain("fake-master-token");
   });
 
-  it("logs every exchange in development with credentials masked", async () => {
+  it("logs exact SDK exchanges in development with unredacted credentials", async () => {
     replies((url) => [200, url.endsWith("master_token") ? masterBody
       : url.endsWith("get_employee_login_policy") ? policyBody() : sdkSuccess()]);
     const auth = getMobileAuthClient("https://transport-5.example.test");
@@ -308,8 +308,62 @@ describe("SDK transport", () => {
     expect(logged).toContain("sign_in_policy");
     expect(logged).toContain("sign_in_api");
     for (const secret of ["fake-master-token", "fake-master-refresh", "fake-password", ACCESS, REFRESH]) {
-      expect(logged).not.toContain(secret);
+      expect(logged).toContain(secret);
     }
+    const request = console.log.mock.calls
+      .filter(([label]) => label === "[auth-sdk] request")
+      .map(([, payload]) => JSON.parse(payload))
+      .find(({ url }) => url.endsWith("sign_in_api"));
+    expect(request.headers.Authorization).toBe("Bearer fake-master-token");
+    expect(request.form.password).toBe("fake-password");
+    expect(request.body).toContain("password=fake-password");
+    const response = console.log.mock.calls
+      .filter(([label]) => label === "[auth-sdk] response")
+      .map(([, payload]) => JSON.parse(payload))
+      .find(({ url }) => url.endsWith("sign_in_api"));
+    expect(JSON.parse(response.rawBody)).toEqual(sdkSuccess());
+    expect(response.body.data.token.refresh_token).toBe(REFRESH);
+    expect(response.requestId).toBe(request.requestId);
+  });
+
+  it("logs the supplied OTP and SDK-managed password exactly as transmitted", async () => {
+    const success = sdkSuccess();
+    success.data.password_policy = "No";
+    success.data.otp_policy = "Mandatory";
+    replies((url) => [200, url.endsWith("master_token") ? masterBody
+      : url.endsWith("get_employee_login_policy") ? policyBody("No", "Mandatory") : success]);
+    const auth = getMobileAuthClient("https://transport-otp-debug.example.test");
+    const flow = await auth.begin({ mobileNumber: "5550001" });
+    await auth.complete(flow, { otp: "123456" });
+    const request = console.log.mock.calls
+      .filter(([label]) => label === "[auth-sdk] request")
+      .map(([, payload]) => JSON.parse(payload))
+      .find(({ url }) => url.endsWith("sign_in_api"));
+    expect(request.form.otp).toBe("123456");
+    expect(request.form.password).toMatch(/^egf_[A-Za-z0-9]+$/);
+    expect(new URLSearchParams(request.body).get("otp")).toBe("123456");
+  });
+
+  it("does not log SDK credentials in release builds", async () => {
+    const previousDev = global.__DEV__;
+    global.__DEV__ = false;
+    try {
+      replies((url) => [200, url.endsWith("master_token") ? masterBody
+        : url.endsWith("get_employee_login_policy") ? policyBody() : sdkSuccess()]);
+      const auth = getMobileAuthClient("https://transport-release-debug.example.test");
+      const flow = await auth.begin({ mobileNumber: "5550001" });
+      await auth.complete(flow, { password: "fake-password" });
+      expect(console.log).not.toHaveBeenCalled();
+    } finally {
+      global.__DEV__ = previousDev;
+    }
+  });
+
+  it("keeps authentication working when the debug console fails", async () => {
+    console.log.mockImplementation(() => { throw new Error("synthetic console failure"); });
+    replies((url) => [200, url.endsWith("master_token") ? masterBody : policyBody()]);
+    await expect(getMobileAuthClient("https://transport-console-failure.example.test").begin({ mobileNumber: "5550001" }))
+      .resolves.toMatchObject({ nextStep: "ENTER_PASSWORD" });
   });
 
   it("aborts at the client timeout and reports TIMEOUT", async () => {
@@ -325,6 +379,69 @@ describe("SDK transport", () => {
     } finally {
       jest.useRealTimers();
     }
+  });
+});
+
+describe("hand-off diagnostics", () => {
+  const payloads = label => console.log.mock.calls
+    .filter(([event]) => event === `[mobile-auth] ${label}`)
+    .map(([, payload]) => JSON.parse(payload));
+
+  it("distinguishes successful OTP authentication from a failed employee-policy HTTP request", async () => {
+    plainMock.resetHandlers();
+    plainMock.onGet().reply(403, { message: "synthetic employee access denied", exception: "synthetic traceback" });
+    const success = sdkSuccess();
+    success.data.password_policy = "No";
+    success.data.otp_policy = "Mandatory";
+    await expect(complete({
+      success, passwordPolicy: "No", otpPolicy: "Mandatory", credentials: { otp: "123456" },
+    })).rejects.toMatchObject({ code: "MOBILE_POLICY_UNAVAILABLE" });
+    expect(payloads("handoff.sdk.result")[0].completion.status).toBe("authenticated");
+    expect(payloads("employee.request")[0]).toMatchObject({
+      params: { employee_id: DOCNAME }, headers: { Authorization: `Bearer ${ACCESS}` }, timeoutMs: 10000,
+    });
+    expect(payloads("employee.failed")[0]).toMatchObject({
+      status: 403, body: { message: "synthetic employee access denied", exception: "synthetic traceback" },
+      error: { message: "Request failed with status code 403" },
+    });
+    expect(payloads("handoff.failed")[0]).toMatchObject({ stage: "employee.fetch", error: { code: "MOBILE_POLICY_UNAVAILABLE" } });
+    expect(saveSpy).not.toHaveBeenCalled();
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it("logs the full identity response and the exact rejection reason without relaxing validation", async () => {
+    plainMock.resetHandlers();
+    plainMock.onGet().reply(200, { message: rawEmployee({ employee_code: undefined }) });
+    await expect(complete()).rejects.toMatchObject({ code: "MOBILE_IDENTITY_UNVERIFIED" });
+    expect(payloads("employee.response")[0].body.message.name).toBe(DOCNAME);
+    expect(payloads("handoff.rejected")[0]).toMatchObject({
+      code: "MOBILE_IDENTITY_UNVERIFIED", docnames: [DOCNAME], codes: [],
+      reason: "Missing or conflicting employee document names or attendance identifiers",
+    });
+    expect(payloads("handoff.failed")[0].stage).toBe("employee.identity");
+    expect(saveSpy).not.toHaveBeenCalled();
+  });
+
+  it("logs policy validation's original error and the employee flags", async () => {
+    plainMock.resetHandlers();
+    plainMock.onGet().reply(200, { message: rawEmployee({ photo: undefined }) });
+    await expect(complete()).rejects.toMatchObject({ code: "MOBILE_POLICY_UNAVAILABLE" });
+    expect(payloads("employee.policy.invalid")[0]).toMatchObject({
+      error: { message: "Attendance configuration is incomplete. Please contact your administrator." },
+      employee: { restrict_location: 1, unrestricted_checkout_location: 0 },
+    });
+    expect(payloads("employee.policy.invalid")[0].error.stack).toContain("assertCompleteAttendancePolicy");
+    expect(payloads("handoff.failed")[0].stage).toBe("employee.policy");
+    expect(saveSpy).not.toHaveBeenCalled();
+  });
+
+  it("logs token persistence failures and rollback without publishing login", async () => {
+    saveSpy.mockRejectedValueOnce(new Error("synthetic disk failure"));
+    await expect(complete()).rejects.toThrow("synthetic disk failure");
+    expect(payloads("handoff.persistence.failed")[0]).toMatchObject({ stage: "tokens.save", error: { message: "synthetic disk failure" } });
+    expect(payloads("handoff.rollback.end")).toHaveLength(1);
+    expect(await AsyncStorage.getItem("api_key")).toBe("old-fake-qr-key");
+    expect(dispatch).not.toHaveBeenCalled();
   });
 });
 

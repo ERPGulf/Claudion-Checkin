@@ -79,6 +79,52 @@ const start = async view => {
   await act(async () => { await view.result.current.begin(); });
 };
 
+it('reports employee-policy failure after OTP sign-in without blaming or resending the code', async () => {
+  client.begin.mockResolvedValue(makeFlow('ENTER_OTP', { action: 'SIGN_IN' }));
+  const failure = Object.assign(new Error('Synthetic employee endpoint timeout'), { code: 'MOBILE_POLICY_UNAVAILABLE' });
+  completeMobileSignIn.mockRejectedValue(failure);
+  const view = await mount(backend);
+  await start(view);
+  act(() => view.result.current.setOtp('123456'));
+  await act(async () => { await view.result.current.submitOtp(); });
+  expect(view.result.current.error).toBe('Your attendance settings could not be loaded. Please contact your administrator.');
+  expect(view.result.current.step).toBe('OTP');
+  expect(view.result.current.otp).toBe('123456');
+  expect(view.result.current.otpError).toBe('');
+  expect(view.result.current.isLoading).toBe(false);
+  expect(client.sendOtp).toHaveBeenCalledTimes(1);
+  expect(console.log).toHaveBeenCalledWith('Mobile sign-in failed', {
+    code: 'MOBILE_POLICY_UNAVAILABLE', httpStatus: undefined, retryable: undefined,
+  });
+  const details = JSON.parse(console.log.mock.calls.find(([event]) => event === '[mobile-auth] operation.failed')[1]);
+  expect(details.error).toMatchObject({ code: 'MOBILE_POLICY_UNAVAILABLE', message: failure.message });
+  expect(details.error.stack).toContain(failure.message);
+  expect(JSON.stringify(await AsyncStorage.multiGet(await AsyncStorage.getAllKeys()))).not.toContain('123456');
+  view.unmount();
+});
+
+it('keeps release failure logs code-only even when an error carries credentials', async () => {
+  const previousDev = global.__DEV__;
+  let view;
+  global.__DEV__ = false;
+  try {
+    client.begin.mockResolvedValue(makeFlow('ENTER_OTP', { action: 'SIGN_IN' }));
+    completeMobileSignIn.mockRejectedValue(Object.assign(new Error('Synthetic private detail'), {
+      code: 'MOBILE_POLICY_UNAVAILABLE', otp: '123456', password: 'synthetic-password',
+    }));
+    view = await mount(backend);
+    await start(view);
+    act(() => view.result.current.setOtp('123456'));
+    await act(async () => { await view.result.current.submitOtp(); });
+    expect(console.log.mock.calls).toEqual([['Mobile sign-in failed', {
+      code: 'MOBILE_POLICY_UNAVAILABLE', httpStatus: undefined, retryable: undefined,
+    }]]);
+  } finally {
+    view?.unmount();
+    global.__DEV__ = previousDev;
+  }
+});
+
 it('looks up a normalized company once, begins before persisting its URL, and sends the required OTP once', async () => {
   await AsyncStorage.setItem('baseUrl', 'https://previous-qr.example.test');
   const view = await mount();
@@ -207,7 +253,7 @@ it('provides Arabic lookup copy and rethrows unknown lookup failures', async () 
   view.unmount();
 });
 
-it('rethrows an unexpected SDK error from lookup without classifying or logging it', async () => {
+it('rethrows an unexpected SDK error from lookup while preserving its debug details', async () => {
   const unexpected = new AuthError('SERVER_ERROR', 'untrusted lookup exception');
   lookupServer.mockRejectedValue(unexpected);
   const view = await mount();
@@ -215,7 +261,8 @@ it('rethrows an unexpected SDK error from lookup without classifying or logging 
   await act(async () => { await expect(view.result.current.begin()).rejects.toBe(unexpected); });
   expect(view.result.current.error).toBe('');
   expect(view.result.current.isLoading).toBe(false);
-  expect(console.log).not.toHaveBeenCalled();
+  expect(console.log.mock.calls.some(([label]) => label === 'Mobile sign-in failed')).toBe(false);
+  expect(JSON.stringify(console.log.mock.calls)).toContain('untrusted lookup exception');
   expect(getMobileAuthClient).not.toHaveBeenCalled();
   view.unmount();
 });
@@ -229,7 +276,7 @@ it('never sends OTP for a password-only flow and omits disabled credentials whil
     view.result.current.setPassword('  exact password bytes  ');
     view.result.current.setOtp('hidden-stale-otp');
   });
-  await act(async () => { await view.result.current.complete(); });
+  await act(async () => { await view.result.current.continuePasswordSignIn(); });
   expect(completeMobileSignIn).toHaveBeenCalledWith(expect.objectContaining({
     credentials: { password: '  exact password bytes  ' }, baseUrl: backend, dispatch: mockDispatch,
   }));
@@ -241,11 +288,13 @@ it('never sends OTP for a password-only flow and omits disabled credentials whil
 it('omits an untouched optional password and validates required OTP before completing', async () => {
   const view = await mount(backend);
   await start(view);
-  await act(async () => { await view.result.current.complete(); });
+  await act(async () => { await view.result.current.submitOtp(); });
   expect(completeMobileSignIn).not.toHaveBeenCalled();
   expect(view.result.current.error).toBe('Enter the OTP.');
   act(() => view.result.current.setOtp('123456'));
-  await act(async () => { await view.result.current.complete(); });
+  await act(async () => { await view.result.current.submitOtp(); });
+  expect(view.result.current.step).toBe('PASSWORD_OPTION');
+  await act(async () => { await view.result.current.skipPassword(); });
   expect(completeMobileSignIn.mock.calls[0][0].credentials).toEqual({ otp: '123456' });
   view.unmount();
 });
@@ -263,11 +312,11 @@ it('requires a resolved existing password even when the raw policy is Optional /
   await start(view);
   expect(client.sendOtp).not.toHaveBeenCalled();
   act(() => view.result.current.setOtp('123456')); // a code cannot stand in for the password
-  await act(async () => { await view.result.current.complete(); });
+  await act(async () => { await view.result.current.continuePasswordSignIn(); });
   expect(view.result.current.error).toBe('Enter your password.');
   expect(completeMobileSignIn).not.toHaveBeenCalled();
   act(() => view.result.current.setPassword('known password'));
-  await act(async () => { await view.result.current.complete(); });
+  await act(async () => { await view.result.current.continuePasswordSignIn(); });
   expect(completeMobileSignIn.mock.calls[0][0].credentials).toEqual({ password: 'known password' });
   view.unmount();
 });
@@ -280,7 +329,8 @@ it('strips whitespace a paste brings into the code, never from a password', asyn
   await start(view);
   act(() => { view.result.current.setOtp(' 123 456 '); view.result.current.setPassword(' pass word '); });
   expect(view.result.current.otp).toBe('123456');
-  await act(async () => { await view.result.current.complete(); });
+  await act(async () => { await view.result.current.continuePasswordSignIn(); });
+  await act(async () => { await view.result.current.submitOtp(); });
   expect(completeMobileSignIn.mock.calls[0][0].credentials).toEqual({ password: ' pass word ', otp: '123456' });
   view.unmount();
 });
@@ -303,19 +353,20 @@ it.each([
     : {}));
   const view = await mount(backend);
   await start(view);
+  act(() => view.result.current.setOtp('123456'));
+  await act(async () => { await view.result.current.submitOtp(); });
   act(() => {
-    view.result.current.setOtp('123456');
-    view.result.current.setPassword(password);
+    view.result.current.setNewPassword(password);
     view.result.current.setConfirmPassword(confirmation);
   });
-  await act(async () => { await view.result.current.complete(); });
+  await act(async () => { await view.result.current.submitNewPassword(); });
   expect(view.result.current.error).toContain(expected);
   expect(completeMobileSignIn).not.toHaveBeenCalled();
   act(() => {
-    view.result.current.setPassword('  chosen bytes  ');
+    view.result.current.setNewPassword('  chosen bytes  ');
     view.result.current.setConfirmPassword('  chosen bytes  ');
   });
-  await act(async () => { await view.result.current.complete(); });
+  await act(async () => { await view.result.current.submitNewPassword(); });
   expect(completeMobileSignIn.mock.calls[0][0].credentials).toEqual({ password: '  chosen bytes  ', otp: '123456' });
   view.unmount();
 });
@@ -335,7 +386,7 @@ it('obeys expiresIn for manual resend and never repeats a failed OTP automatical
   expect(client.sendOtp).toHaveBeenCalledTimes(2);
   expect(view.result.current.error).toContain('could not be confirmed');
   expect(console.log).toHaveBeenCalledWith('Mobile sign-in failed', { code: 'TIMEOUT', httpStatus: undefined, retryable: false });
-  expect(JSON.stringify(console.log.mock.calls)).not.toContain('sensitive server text');
+  expect(JSON.stringify(console.log.mock.calls)).toContain('sensitive server text');
   view.unmount();
 });
 
@@ -362,11 +413,12 @@ it('never offers reset on a password-and-OTP step, nor password help outside sig
   expect(view.result.current.canResetPassword).toBe(false);
   await act(async () => { await view.result.current.startResetPassword(); });
   expect(view.result.current.passwordMode).toBeNull();
-  expect(client.sendOtp).toHaveBeenCalledTimes(1);
+  expect(client.sendOtp).not.toHaveBeenCalled();
 
   client.begin.mockResolvedValue(makeFlow('ENTER_OTP_OPTIONAL_PASSWORD', {
     capabilities: { canCreatePassword: true, canResetPassword: true },
   }));
+  act(() => view.result.current.cancelFlow());
   await act(async () => { await view.result.current.begin(); });
   expect(view.result.current.canCreatePassword).toBe(false);
   expect(view.result.current.canResetPassword).toBe(false);
@@ -380,8 +432,9 @@ const openCreatePassword = async () => {
   const view = await mount(backend);
   await start(view);
   await act(async () => { await view.result.current.startCreatePassword(); });
+  act(() => view.result.current.setOtp('123456'));
+  await act(async () => { await view.result.current.submitOtp(); });
   act(() => {
-    view.result.current.setOtp('123456');
     view.result.current.setNewPassword('new secret bytes');
     view.result.current.setConfirmPassword('new secret bytes');
   });
@@ -394,7 +447,7 @@ it('treats an unconfirmed password change as applied and begins a fresh flow', a
   const fresh = makeFlow('ENTER_PASSWORD', { action: 'SIGN_IN' });
   client.begin.mockResolvedValue(fresh);
   client.setPasswordWithOtp.mockRejectedValue(new AuthError('TIMEOUT', 'untrusted outcome', { retryable: false }));
-  await act(async () => { await view.result.current.savePassword(); });
+  await act(async () => { await view.result.current.submitNewPassword(); });
   expect(client.begin).toHaveBeenCalledTimes(2);
   expect(view.result.current.flow).toBe(fresh);
   expect(view.result.current.flow).not.toBe(stale);
@@ -412,7 +465,7 @@ it.each([
   const view = await openCreatePassword();
   const flow = view.result.current.flow;
   client.setPasswordWithOtp.mockRejectedValue(new AuthError(code, 'untrusted server text', { httpStatus: 417 }));
-  await act(async () => { await view.result.current.savePassword(); });
+  await act(async () => { await view.result.current.submitNewPassword(); });
   expect(client.begin).toHaveBeenCalledTimes(1);
   expect(view.result.current.flow).toBe(flow);
   expect(view.result.current.passwordMode).toBe('create');
@@ -427,13 +480,14 @@ it('clears the rejected OTP or password after a failed sign-in', async () => {
   const view = await mount(backend);
   await start(view);
   act(() => { view.result.current.setPassword('known password'); view.result.current.setOtp('111111'); });
+  await act(async () => { await view.result.current.continuePasswordSignIn(); });
   client.complete.mockRejectedValueOnce(new AuthError('INVALID_OR_EXPIRED_OTP', 'untrusted', { httpStatus: 417 }));
-  await act(async () => { await view.result.current.complete(); });
+  await act(async () => { await view.result.current.submitOtp(); });
   expect(view.result.current).toMatchObject({ otp: '', password: 'known password' });
   expect(view.result.current.error).toContain('invalid or expired');
   act(() => view.result.current.setOtp('222222'));
   client.complete.mockRejectedValueOnce(new AuthError('INVALID_PASSWORD', 'untrusted', { httpStatus: 417 }));
-  await act(async () => { await view.result.current.complete(); });
+  await act(async () => { await view.result.current.submitOtp(); });
   expect(view.result.current).toMatchObject({ otp: '222222', password: '' });
   expect(view.result.current.error).toContain('password is incorrect');
   view.unmount();
@@ -449,17 +503,20 @@ it.each(['create', 'reset'])('gates %s password capability, updates the password
   client.begin.mockResolvedValue(makeFlow('ENTER_PASSWORD', {
     action: 'SIGN_IN', capabilities: { canCreatePassword: mode === 'create', canResetPassword: mode === 'reset' },
   }));
+  act(() => view.result.current.cancelFlow());
   await act(async () => { await view.result.current.begin(); });
   await act(async () => {
     await (mode === 'create' ? view.result.current.startCreatePassword() : view.result.current.startResetPassword());
   });
   expect(view.result.current.passwordMode).toBe(mode);
-  act(() => { view.result.current.setOtp('123456'); view.result.current.setNewPassword('  new secret bytes  '); });
-  await act(async () => { await view.result.current.savePassword(); });
+  act(() => view.result.current.setOtp('123456'));
+  await act(async () => { await view.result.current.submitOtp(); });
+  act(() => view.result.current.setNewPassword('  new secret bytes  '));
+  await act(async () => { await view.result.current.submitNewPassword(); });
   expect(view.result.current.error).toContain('do not match');
   expect(client.setPasswordWithOtp).not.toHaveBeenCalled();
   act(() => view.result.current.setConfirmPassword('  new secret bytes  '));
-  await act(async () => { await view.result.current.savePassword(); });
+  await act(async () => { await view.result.current.submitNewPassword(); });
   expect(client.setPasswordWithOtp).toHaveBeenCalledWith({ mobileNumber: '+5550001', otp: '123456', newPassword: '  new secret bytes  ' });
   expect(client.begin).toHaveBeenCalledTimes(3);
   expect(completeMobileSignIn).not.toHaveBeenCalled();
@@ -505,12 +562,13 @@ it('never retries a nonretryable completion or accepts a simultaneous double sub
   const view = await mount(backend);
   await start(view);
   act(() => view.result.current.setOtp('123456'));
+  await act(async () => { await view.result.current.submitOtp(); });
   const pending = deferred();
   client.complete.mockReturnValue(pending.promise);
   let first;
   act(() => {
-    first = view.result.current.complete();
-    view.result.current.complete();
+    first = view.result.current.skipPassword();
+    view.result.current.skipPassword();
   });
   expect(client.complete).toHaveBeenCalledTimes(1);
   await act(async () => {
@@ -519,7 +577,7 @@ it('never retries a nonretryable completion or accepts a simultaneous double sub
   });
   expect(view.result.current.error).toContain('could not be confirmed');
   expect(client.complete).toHaveBeenCalledTimes(1);
-  expect(JSON.stringify(console.log.mock.calls)).not.toContain('not-for-consumers');
+  expect(JSON.stringify(console.log.mock.calls)).toContain('not-for-consumers');
   view.unmount();
 });
 
@@ -547,8 +605,9 @@ it('marks an unmounted completion cancelled without invalidating a newly establi
   const view = await mount(backend);
   await start(view);
   act(() => view.result.current.setOtp('123456'));
+  await act(async () => { await view.result.current.submitOtp(); });
   let completion;
-  act(() => { completion = view.result.current.complete(); });
+  act(() => { completion = view.result.current.skipPassword(); });
   const generation = getAuthSessionGeneration();
   view.unmount();
   expect(completionOptions.isCancelled()).toBe(true);
@@ -581,9 +640,10 @@ it('changing company invalidates an in-progress completion and prevents stale ha
   const view = await mount(backend);
   await start(view);
   act(() => view.result.current.setOtp('123456'));
+  await act(async () => { await view.result.current.submitOtp(); });
   const generation = getAuthSessionGeneration();
   let completion;
-  act(() => { completion = view.result.current.complete(); });
+  act(() => { completion = view.result.current.skipPassword(); });
   expect(completionOptions.isCancelled()).toBe(false);
   await act(async () => { await view.result.current.changeCompany(); });
   expect(completionOptions.isCancelled()).toBe(true);

@@ -18,6 +18,8 @@ import {
 } from '../services/api/mobileAuth.service';
 import { invalidateAuthSession } from '../utils/authSessionGuard';
 import { isMobileAuthAvailable } from '../utils/mobileAuthCrypto';
+import { MOBILE_AUTH_STEPS as STEPS, initialMobileAuthStep, signupPasswordStep } from '../utils/mobileAuthFlow';
+import { logMobileAuthDebug } from '../utils/mobileAuthDebug';
 
 const copy = (english, arabic) => I18nManager.isRTL ? arabic : english;
 
@@ -88,7 +90,14 @@ function authErrorCopy(error, phase) {
     case 'INVALID_RESPONSE':
       return copy('Sign-in is not available for this account. Please contact support.', 'تسجيل الدخول غير متاح لهذا الحساب. يُرجى التواصل مع الدعم.');
     case 'INVALID_CLIENT_CONFIG':
+    case 'MOBILE_AUTH_UNAVAILABLE':
       return copy('Mobile sign-in is unavailable in this app build. Please update the app.', 'تسجيل الدخول برقم الهاتف غير متاح في هذا الإصدار. يُرجى تحديث التطبيق.');
+    case 'MOBILE_IDENTITY_UNVERIFIED':
+      return copy('Your employee profile could not be verified. Please contact your administrator.', 'تعذّر التحقق من ملف الموظف. يُرجى التواصل مع مسؤول النظام.');
+    case 'MOBILE_POLICY_UNAVAILABLE':
+      return copy('Your attendance settings could not be loaded. Please contact your administrator.', 'تعذّر تحميل إعدادات الحضور. يُرجى التواصل مع مسؤول النظام.');
+    case 'MOBILE_SESSION_INCOMPLETE':
+      return copy('The sign-in service returned an incomplete session. Please contact support.', 'أعادت خدمة تسجيل الدخول جلسة غير مكتملة. يُرجى التواصل مع الدعم.');
     case 'NETWORK_ERROR':
     case 'TIMEOUT':
       return error.retryable
@@ -116,6 +125,8 @@ export default function useMobileLogin() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [flow, setFlow] = useState(null);
+  const [step, setStep] = useState(STEPS.MOBILE);
+  const stepRef = useRef(STEPS.MOBILE);
   const [passwordMode, setPasswordMode] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isHydrating, setIsHydrating] = useState(true);
@@ -123,6 +134,10 @@ export default function useMobileLogin() {
   const [companyCodeError, setCompanyCodeError] = useState('');
   const [serverAddressError, setServerAddressError] = useState('');
   const [mobileNumberError, setMobileNumberError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [newPasswordFieldError, setNewPasswordFieldError] = useState('');
+  const [confirmPasswordError, setConfirmPasswordError] = useState('');
+  const [otpError, setOtpError] = useState('');
   const [otpSent, setOtpSent] = useState(false);
   const [resendDeadline, setResendDeadline] = useState(0);
   const [resendSeconds, setResendSeconds] = useState(0);
@@ -133,11 +148,28 @@ export default function useMobileLogin() {
   const preferenceWrites = useRef(Promise.resolve());
 
   const isCurrent = pending => mounted.current && operation.current === pending;
+  const moveTo = next => {
+    logMobileAuthDebug('step', {
+      from: stepRef.current, to: next, backendUrl, mobileNumber,
+      action: flow?.action, passwordMode, otpSent, resendSeconds,
+      previousCredentials: { password, otp, newPassword, confirmPassword },
+    });
+    stepRef.current = next;
+    setStep(next);
+  };
+  const clearFieldErrors = () => {
+    setPasswordError('');
+    setNewPasswordFieldError('');
+    setConfirmPasswordError('');
+    setOtpError('');
+  };
   const clearSecrets = () => {
+    logMobileAuthDebug('credentials.clear');
     setPassword('');
     setOtp('');
     setNewPassword('');
     setConfirmPassword('');
+    clearFieldErrors();
   };
   // Password help belongs to sign-in only, and reset never to a password + OTP
   // step: a code-only reset would bypass the password that step demands.
@@ -152,8 +184,10 @@ export default function useMobileLogin() {
     setResendDeadline(0);
     setResendSeconds(0);
     clearSecrets();
+    moveTo(STEPS.MOBILE);
   };
   const cancelCurrent = () => {
+    logMobileAuthDebug('operation.cancel', { operation: operation.current, step: stepRef.current });
     if (operation.current?.kind === 'complete') invalidateAuthSession();
     operation.current = null;
     setIsLoading(false);
@@ -190,14 +224,27 @@ export default function useMobileLogin() {
   }, [resendDeadline]);
 
   const run = async (kind, task) => {
-    if (operation.current || isHydrating || !isMobileAuthAvailable()) return;
+    if (operation.current || isHydrating || !isMobileAuthAvailable()) {
+      logMobileAuthDebug('operation.blocked', { kind, operation: operation.current, isHydrating });
+      return;
+    }
     const pending = { id: ++sequence.current, kind, phase: kind };
     operation.current = pending;
     setIsLoading(true);
     setError('');
+    logMobileAuthDebug('operation.start', {
+      operation: pending, step: stepRef.current, backendUrl, mobileNumber, flow, passwordMode,
+      credentials: { password, otp, newPassword, confirmPassword }, otpSent, resendSeconds,
+    });
     try {
-      return await task(pending);
+      const result = await task(pending);
+      logMobileAuthDebug('operation.result', { operation: pending, current: isCurrent(pending), result });
+      return result;
     } catch (caught) {
+      logMobileAuthDebug('operation.failed', {
+        operation: pending, step: stepRef.current, current: isCurrent(pending),
+        backendUrl, mobileNumber, error: caught,
+      });
       if (!isCurrent(pending)) return;
       const lookupCopy = lookupErrorCopy(caught);
       if (lookupCopy) {
@@ -211,20 +258,43 @@ export default function useMobileLogin() {
           retryable: caught.retryable,
         });
         // The rejected credential is cleared so the next attempt starts clean.
-        if (caught.code === 'INVALID_OR_EXPIRED_OTP') setOtp('');
+        const message = pending.phase === 'manual' && MANUAL_SERVER_FAILURES.has(caught.code)
+          ? copy("We couldn't connect to that server. Check the address and try again.", 'تعذّر الاتصال بهذا الخادم. تحقّق من العنوان وحاول مرة أخرى.')
+          : authErrorCopy(caught, pending.phase);
+        if (caught.code === 'INVALID_OR_EXPIRED_OTP' ||
+          (caught.code === 'AUTHENTICATION_FAILED' && (flow?.action === 'SIGN_UP' || pending.phase === 'password'))) {
+          setOtp('');
+          setOtpError(message);
+          moveTo(STEPS.OTP);
+        }
         if (caught.code === 'INVALID_PASSWORD') {
           setPassword('');
           setNewPassword('');
           setConfirmPassword('');
+          if (passwordMode || flow?.credentials.password.purpose === 'create') {
+            setNewPasswordFieldError(message);
+            moveTo(passwordMode ? STEPS.PASSWORD_CREATE : signupPasswordStep(flow));
+          } else {
+            setPasswordError(message);
+            moveTo(STEPS.PASSWORD_SIGN_IN);
+          }
         }
-        setError(pending.phase === 'manual' && MANUAL_SERVER_FAILURES.has(caught.code)
-          ? copy("We couldn't connect to that server. Check the address and try again.", 'تعذّر الاتصال بهذا الخادم. تحقّق من العنوان وحاول مرة أخرى.')
-          : authErrorCopy(caught, pending.phase));
+        setError(message);
       } else {
-        setError(copy('The request could not be completed. Please try again or contact support.', 'تعذّر إكمال الطلب. يُرجى المحاولة مرة أخرى أو التواصل مع الدعم.'));
+        // Hand-off errors are app-owned, not AuthError instances. Previously
+        // these silently fell through to the generic banner with no diagnostics.
+        console.log('Mobile sign-in failed', {
+          code: caught?.code,
+          httpStatus: caught?.httpStatus,
+          retryable: caught?.retryable,
+        });
+        setError(typeof caught?.code === 'string' && caught.code.startsWith('MOBILE_')
+          ? authErrorCopy(caught, pending.phase)
+          : copy('The request could not be completed. Please try again or contact support.', 'تعذّر إكمال الطلب. يُرجى المحاولة مرة أخرى أو التواصل مع الدعم.'));
       }
     } finally {
       if (isCurrent(pending)) {
+        logMobileAuthDebug('operation.end', { operation: pending, step: stepRef.current });
         operation.current = null;
         setIsLoading(false);
       }
@@ -236,6 +306,7 @@ export default function useMobileLogin() {
     // repeat it within the same flow, including when entering recovery.
     otpAttempted.current = true;
     const sent = await auth.sendOtp({ mobileNumber: activeFlow.mobileNumber });
+    logMobileAuthDebug('otp.send.result', { mobileNumber: activeFlow.mobileNumber, current: isCurrent(pending), sent });
     if (!isCurrent(pending)) return;
     const cooldown = Math.min(RESEND_SECONDS, sent.expiresIn);
     setOtpSent(true);
@@ -246,7 +317,7 @@ export default function useMobileLogin() {
   const applyFlow = async (auth, activeFlow, pending) => {
     if (!isCurrent(pending)) return;
     // The SDK's resolved flow (step, fields, policy snapshot); it holds no credentials.
-    if (__DEV__) console.log('[auth-sdk] flow', JSON.stringify(activeFlow));
+    logMobileAuthDebug('flow', activeFlow, 'auth-sdk');
     clearSecrets();
     setPasswordMode(null);
     setFlow(activeFlow);
@@ -254,12 +325,17 @@ export default function useMobileLogin() {
     setOtpSent(false);
     setResendDeadline(0);
     setResendSeconds(0);
-    if (activeFlow.credentials.otp.requirement === 'required') {
+    const next = initialMobileAuthStep(activeFlow);
+    moveTo(next);
+    // Both-factor sign-in asks for the password first. Navigation itself never
+    // sends; only entry to a new OTP transaction or explicit Resend does.
+    if (next === STEPS.OTP && activeFlow.credentials.otp.requirement === 'required') {
       await sendOtp(auth, activeFlow, pending);
     }
   };
 
   const begin = async () => {
+    if (operation.current || stepRef.current !== STEPS.MOBILE) return;
     setCompanyCodeError('');
     setServerAddressError('');
     setMobileNumberError('');
@@ -291,6 +367,16 @@ export default function useMobileLogin() {
       }
     }
     return run('begin', async pending => {
+      // Returning to the unchanged account keeps the OTP transaction/cooldown.
+      // Editing company/mobile discards flow, so a different account begins anew.
+      if (flow && flow.mobileNumber === mobile && backendUrl) {
+        const next = initialMobileAuthStep(flow);
+        moveTo(next);
+        if (next === STEPS.OTP && !otpAttempted.current) {
+          await sendOtp(getMobileAuthClient(backendUrl), flow, pending);
+        }
+        return;
+      }
       let resolvedUrl = backendUrl || manualUrl;
       if (!resolvedUrl) {
         pending.phase = 'lookup';
@@ -324,27 +410,41 @@ export default function useMobileLogin() {
     });
   };
 
-  const complete = async () => {
-    if (!flow || passwordMode) return;
+  const validateOtp = () => {
+    if (otp.trim()) return true;
+    const message = copy('Enter the OTP.', 'أدخل رمز التحقق.');
+    setOtpError(message);
+    setError(message);
+    return false;
+  };
+
+  const validateNewPassword = () => {
+    const issue = newPasswordError(newPassword, confirmPassword);
+    setNewPasswordFieldError(newPassword.trim() && newPassword.length >= MIN_PASSWORD_LENGTH ? '' : issue);
+    setConfirmPasswordError(newPassword.trim() && newPassword.length >= MIN_PASSWORD_LENGTH ? issue : '');
+    if (issue) setError(issue);
+    return !issue;
+  };
+
+  const complete = async ({ skipPassword = false } = {}) => {
+    if (!flow || passwordMode || operation.current || stepRef.current === STEPS.COMPLETE) return;
     const credentials = {};
-    for (const [name, value] of [['password', password], ['otp', otp]]) {
+    const chosenPassword = flow.credentials.password.purpose === 'create' ? newPassword : password;
+    for (const [name, value] of [['password', skipPassword ? '' : chosenPassword], ['otp', otp]]) {
       const requirement = flow.credentials[name].requirement;
       if (requirement === 'required' && !value.trim()) {
-        setError(name === 'password'
+        const message = name === 'password'
           ? copy('Enter your password.', 'أدخل كلمة المرور.')
-          : copy('Enter the OTP.', 'أدخل رمز التحقق.'));
+          : copy('Enter the OTP.', 'أدخل رمز التحقق.');
+        setError(message);
+        if (name === 'otp') { setOtpError(message); moveTo(STEPS.OTP); }
+        else setPasswordError(message);
         return;
       }
       if (requirement !== 'disabled' && value.trim()) credentials[name] = value;
     }
     // An untouched optional password stays omitted so the SDK can manage one.
-    if (flow.credentials.password.purpose === 'create' && password) {
-      const issue = newPasswordError(password, confirmPassword);
-      if (issue) {
-        setError(issue);
-        return;
-      }
-    }
+    if (flow.credentials.password.purpose === 'create' && !skipPassword && !validateNewPassword()) return;
     return run('complete', async pending => {
       const auth = getMobileAuthClient(backendUrl);
       const result = await completeMobileSignIn({
@@ -355,13 +455,18 @@ export default function useMobileLogin() {
         dispatch,
         isCancelled: () => !isCurrent(pending),
       });
-      if (isCurrent(pending)) clearSecrets();
+      if (isCurrent(pending)) {
+        clearFlow();
+        moveTo(STEPS.COMPLETE);
+      }
       return result;
     });
   };
 
   const resendOtp = () => {
-    if (!flow || resendSeconds > 0 || (!passwordMode && flow.credentials.otp.requirement !== 'required')) return;
+    if (!flow || operation.current || stepRef.current !== STEPS.OTP || resendSeconds > 0 || (!passwordMode && flow.credentials.otp.requirement !== 'required')) return;
+    setOtp('');
+    setOtpError('');
     return run('otp', pending => sendOtp(getMobileAuthClient(backendUrl), flow, pending));
   };
 
@@ -370,13 +475,14 @@ export default function useMobileLogin() {
     clearSecrets();
     setError('');
     setPasswordMode(mode);
+    moveTo(STEPS.OTP);
     if (!otpAttempted.current) {
       return run('otp', pending => sendOtp(getMobileAuthClient(backendUrl), flow, pending));
     }
   };
 
   const savePassword = () => {
-    if (!flow || !passwordMode) return;
+    if (!flow || !passwordMode || operation.current) return;
     if (!otp.trim() || !newPassword.trim()) {
       setError(copy('Enter the OTP and your new password.', 'أدخل رمز التحقق وكلمة المرور الجديدة.'));
       return;
@@ -392,6 +498,7 @@ export default function useMobileLogin() {
       try {
         await auth.setPasswordWithOtp({ mobileNumber: flow.mobileNumber, otp, newPassword });
       } catch (caught) {
+        logMobileAuthDebug('password.change.failed', { error: caught, unconfirmed: passwordChangeUnconfirmed(caught) });
         // The flow is a policy snapshot: if the change may have landed, it is stale.
         if (!passwordChangeUnconfirmed(caught)) throw caught;
         unconfirmed = true;
@@ -413,6 +520,7 @@ export default function useMobileLogin() {
     setBackendUrl('');
     setCompanyCodeState('');
     setServerAddressState('');
+    setMobileNumberState('');
     setError('');
     setCompanyCodeError('');
     setServerAddressError('');
@@ -431,11 +539,78 @@ export default function useMobileLogin() {
     setMobileNumberState(value);
   };
 
+  const continuePasswordSignIn = () => {
+    if (!flow || stepRef.current !== STEPS.PASSWORD_SIGN_IN || operation.current) return;
+    if (!password.trim()) {
+      const message = copy('Enter your password.', 'أدخل كلمة المرور.');
+      setPasswordError(message);
+      setError(message);
+      return;
+    }
+    setPasswordError('');
+    setError('');
+    if (flow.credentials.otp.requirement !== 'required') return complete();
+    moveTo(STEPS.OTP);
+    if (!otpAttempted.current) {
+      return run('otp', pending => sendOtp(getMobileAuthClient(backendUrl), flow, pending));
+    }
+  };
+
+  const submitOtp = () => {
+    if (!flow || stepRef.current !== STEPS.OTP || operation.current || !validateOtp()) return;
+    setOtpError('');
+    setError('');
+    // No SDK verifyOtp exists: retain this code only in memory until the final
+    // signup/password-change API consumes it. Never label it server-verified.
+    if (passwordMode || (flow.action === 'SIGN_UP' && flow.credentials.password.purpose === 'create')) {
+      moveTo(passwordMode ? STEPS.PASSWORD_CREATE : signupPasswordStep(flow));
+      return;
+    }
+    return complete();
+  };
+
+  const submitNewPassword = () => {
+    if (![STEPS.PASSWORD_CREATE, STEPS.PASSWORD_OPTION].includes(stepRef.current) || operation.current || !validateNewPassword()) return;
+    return passwordMode ? savePassword() : complete();
+  };
+
+  const skipPassword = () => {
+    if (stepRef.current !== STEPS.PASSWORD_OPTION || flow?.action !== 'SIGN_UP' || flow.credentials.password.requirement !== 'optional' || operation.current) return;
+    return complete({ skipPassword: true });
+  };
+
+  const goBack = () => {
+    if (operation.current || !flow) return;
+    setError('');
+    clearFieldErrors();
+    if ([STEPS.PASSWORD_CREATE, STEPS.PASSWORD_OPTION].includes(stepRef.current)) {
+      moveTo(STEPS.OTP);
+    } else if (stepRef.current === STEPS.OTP && passwordMode) {
+      clearSecrets();
+      setPasswordMode(null);
+      moveTo(initialMobileAuthStep(flow));
+    } else if (stepRef.current === STEPS.OTP && initialMobileAuthStep(flow) === STEPS.PASSWORD_SIGN_IN) {
+      setOtp('');
+      moveTo(STEPS.PASSWORD_SIGN_IN);
+    } else {
+      clearSecrets();
+      setPasswordMode(null);
+      moveTo(STEPS.MOBILE);
+    }
+  };
+
+  const cancelFlow = () => {
+    cancelCurrent();
+    clearFlow();
+    setError('');
+  };
+
   return {
     backendUrl,
     companyCode,
     setCompanyCode: value => {
       cancelCurrent();
+      clearFlow();
       setCompanyCodeError('');
       setError('');
       setCompanyCodeState(value);
@@ -443,6 +618,7 @@ export default function useMobileLogin() {
     discovery,
     setDiscovery: mode => {
       cancelCurrent();
+      clearFlow();
       setError('');
       setCompanyCodeError('');
       setServerAddressError('');
@@ -451,6 +627,7 @@ export default function useMobileLogin() {
     serverAddress,
     setServerAddress: value => {
       cancelCurrent();
+      clearFlow();
       setServerAddressError('');
       setError('');
       setServerAddressState(value);
@@ -459,15 +636,16 @@ export default function useMobileLogin() {
     mobileNumber,
     setMobileNumber,
     password,
-    setPassword,
+    setPassword: value => { setPassword(value); setPasswordError(''); setError(''); },
     otp,
     // Codes are digits; drop whitespace a paste can bring (passwords stay untouched).
-    setOtp: value => setOtp(value.replace(/\s/g, '')),
+    setOtp: value => { setOtp(value.replace(/\s/g, '')); setOtpError(''); setError(''); },
     newPassword,
-    setNewPassword,
+    setNewPassword: value => { setNewPassword(value); setNewPasswordFieldError(''); setConfirmPasswordError(''); setError(''); },
     confirmPassword,
-    setConfirmPassword,
+    setConfirmPassword: value => { setConfirmPassword(value); setConfirmPasswordError(''); setError(''); },
     flow,
+    step,
     passwordMode,
     canCreatePassword,
     canResetPassword,
@@ -477,20 +655,25 @@ export default function useMobileLogin() {
     error,
     companyCodeError,
     mobileNumberError,
+    passwordError,
+    newPasswordError: newPasswordFieldError || (newPassword && (!newPassword.trim() || newPassword.length < MIN_PASSWORD_LENGTH)
+      ? newPasswordError(newPassword, confirmPassword) : ''),
+    confirmPasswordError: confirmPasswordError || (confirmPassword && newPassword !== confirmPassword
+      ? copy('Passwords do not match.', 'كلمتا المرور غير متطابقتين.') : ''),
+    otpError,
+    isNewPasswordValid: !!newPassword.trim() && newPassword.length >= MIN_PASSWORD_LENGTH && newPassword === confirmPassword,
     resendSeconds,
     otpSent,
     begin,
-    complete,
     resendOtp,
     changeCompany,
+    continuePasswordSignIn,
+    submitOtp,
+    submitNewPassword,
+    skipPassword,
+    goBack,
+    cancelFlow,
     startCreatePassword: () => startPasswordMode('create'),
     startResetPassword: () => startPasswordMode('reset'),
-    cancelPasswordMode: () => {
-      if (operation.current) return;
-      clearSecrets();
-      setPasswordMode(null);
-      setError('');
-    },
-    savePassword,
   };
 }
