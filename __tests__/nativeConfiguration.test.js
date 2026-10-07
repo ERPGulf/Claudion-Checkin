@@ -71,6 +71,14 @@ it('retains one Firebase initialization, APNs environments and notification back
   expect(digest('ios/ClaudionCheckin/GoogleService-Info.plist')).toBe(digest('GoogleService-Info.plist'));
 });
 
+it('includes a motion purpose string in the shipped iOS plist and keeps Expo config aligned', () => {
+  // expo-location links CoreMotion even when the app does not request motion
+  // permission. EAS does not regenerate the committed native Info.plist.
+  expect(typeof info.NSMotionUsageDescription).toBe('string');
+  expect(info.NSMotionUsageDescription.trim()).not.toBe('');
+  expect(info.NSMotionUsageDescription).toBe(app.ios.infoPlist.NSMotionUsageDescription);
+});
+
 it('keeps native geofence launch subscription and Android background receivers registered', () => {
   const moduleConfig = require('../modules/expo-auto-attendance/expo-module.config.json');
   expect(moduleConfig.apple.appDelegateSubscribers).toContain('AutoAttendanceAppDelegateSubscriber');

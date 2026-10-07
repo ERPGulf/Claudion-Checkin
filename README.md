@@ -41,6 +41,12 @@ You can also provide a full URL instead of a method path.
 
 The `ios/` project is committed and contains native configuration. Use `npm run ios` for local builds; inspect any intentional prebuild changes before keeping them. In Xcode, ensure Push Notifications and Background Modes (Remote notifications) are enabled on the app target.
 
+Keep `NSMotionUsageDescription` in both `app.json` and the committed
+`ios/ClaudionCheckin/Info.plist`: the location SDK links Core Motion APIs even
+though the app does not request motion permission. Its absence causes App Store
+Connect error ITMS-90683. Fixing the submitted bundle requires a new native build
+with an incremented iOS build number; an OTA cannot update the purpose string.
+
 SDK 57 uses Node 22.14.0 (Volta / `.nvmrc` / EAS build profiles), React Native
 0.86.3 and iOS 16.4 or newer. The maintained iOS project opts into Expo's scene
 lifecycle for Xcode 27/iOS 27. Do not clean-prebuild the production native
