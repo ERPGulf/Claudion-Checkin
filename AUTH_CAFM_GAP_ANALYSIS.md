@@ -212,7 +212,7 @@ Touch: `SDK` = `AUTH_SDK_ONLY`. No proposed change touches a `SHARED` or `QR_ONL
 | Password optional | Blank omitted (SDK managed); whitespace-only silently dropped | Blank omitted; whitespace-only is an error | FIX | Apply create rules to any typed value | SDK |
 | Password disabled | Hidden, never sent; SDK generates `egf_` | Same | KEEP | — | — |
 | Existing-password behavior | Never inferred; flow-derived only | Same | KEEP | — | — |
-| Managed passwords | App never generates/stores; requested dev diagnostics include the SDK-managed password; blank optional omitted | Same | KEEP | — | — |
+| Managed passwords | App never generates/stores/logs; blank optional omitted | Same | KEEP | — | — |
 | OTP send | After `begin()` iff required; never auto-retried; late results dropped | Same | KEEP | — | — |
 | First OTP send fails | Flow kept, error shown, manual Resend | New login: flow discarded, Continue re-begins | INTENTIONAL DIFFERENCE (single-screen design; next send is still user-initiated) | — | — |
 | Resend cooldown | Server `expiresIn` (commonly ~300 s lockout) | Fixed 45 s | FIX | `min(45 s, expiresIn)` (never outlives a short-lived code) | SDK |
@@ -230,10 +230,10 @@ Touch: `SDK` = `AUTH_SDK_ONLY`. No proposed change touches a `SHARED` or `QR_ONL
 | Session restoration | Persisted `isLoggedIn` + AsyncStorage tokens; reactive refresh; only terminal rejection logs out | Session+config pair; reactive refresh; refresh 401/403 logs out | INTENTIONAL DIFFERENCE / PROTECTED (shared with QR; equivalent semantics) | — | — |
 | Persistence | Nothing before `complete()` except `backendUrl` after `begin()`; strict hand-off order with rollback | Nothing until success; config → session → workspace | INTENTIONAL DIFFERENCE (documented preference; stricter hand-off) | — | — |
 | Token storage | AsyncStorage via shared `saveTokens` | SecureStore | PROTECTED_QR (shared with QR) | — | — |
-| Identity mapping | Profile download, explicit attendance code | `employee.id` | INTENTIONAL DIFFERENCE (app-specific attendance identifier) | — | — |
+| Identity mapping | Profile download; canonical ID match first, explicit attendance code when present, verified docname otherwise | `employee.id` | INTENTIONAL DIFFERENCE (app-specific attendance identifier) | — | — |
 | Navigation | No imperative navigation; navigator swap; mobile route gated by crypto | Same principle | KEEP | — | — |
 | Logout | Shared logout; SDK client cache retained | `resetAuthClients()` | INTENTIONAL DIFFERENCE (master token is an unauthenticated, tenant-scoped service credential; nothing user-bound cached; avoids editing shared logout) | — | — |
-| Error handling | Code-only copy; release diagnostics `{ code, httpStatus, retryable }`; development builds log unredacted SDK exchanges, credentials, resolved flow, and hand-off stages/errors for requested test-instance debugging | Code-only copy; dev-only `{ code, httpStatus, retryable }`; transport logs nothing | INTENTIONAL DIFFERENCE (dev-only diagnostics, requested for debugging) | — | SDK |
+| Error handling | Code-only copy; release diagnostics `{ code, httpStatus, retryable }`; development builds log SDK metadata, normalized identity match/rejection reasons, and hand-off stages while omitting credentials/raw payloads/free-text errors | Code-only copy; dev-only `{ code, httpStatus, retryable }`; transport logs nothing | INTENTIONAL DIFFERENCE (dev-only diagnostics, requested for debugging) | — | SDK |
 | Race conditions | Synchronous operation ref, operation identity for late results, generation guard, cancel on edit/company change | State-based disabling, flow identity | KEEP (stronger) | — | — |
 | Dead code | OTP `optional` prop (resolved OTP is never optional); upper-cased requirement compare | — | REMOVE | Simplify | SDK |
 | Discovery | `@erpgulf/server-lookup` / typed HTTPS origin; `begin()` validates the server | Directory + ping | INTENTIONAL DIFFERENCE (outside the SDK) | — | — |
@@ -324,7 +324,7 @@ holding nothing user-specific. Shared logout stays unchanged.
 
 | # | Change | File (classification) | QR regression risk |
 |---|---|---|---|
-| 1 | `expo/fetch` transport (`redirect:'error'`, `credentials:'omit'`, `Cache-Control: no-store`, own timer → `TIMEOUT`, cause-less `NETWORK_ERROR`, every status returned, no retries, requested unredacted test-instance diagnostics in development builds only); lazy `require` so a missing native module surfaces as `NETWORK_ERROR`, never a startup crash | `services/api/mobileAuth.service.js` (AUTH_SDK_ONLY) | None: only SDK clients use it; module import has no new side effect |
+| 1 | `expo/fetch` transport (`redirect:'error'`, `credentials:'omit'`, `Cache-Control: no-store`, own timer → `TIMEOUT`, cause-less `NETWORK_ERROR`, every status returned, no retries, credential-free diagnostics in development builds only); lazy `require` so a missing native module surfaces as `NETWORK_ERROR`, never a startup crash | `services/api/mobileAuth.service.js` (AUTH_SDK_ONLY) | None: only SDK clients use it; module import has no new side effect |
 | 2 | Resend cooldown `min(45 s, expiresIn)` | `hooks/useMobileLogin.js` (AUTH_SDK_ONLY) | None |
 | 3 | Create/reset only on `SIGN_IN`; no reset on `ENTER_PASSWORD_AND_OTP`; hook exposes `canCreatePassword`/`canResetPassword` | `hooks/useMobileLogin.js`, `screens/MobileLogin.jsx` (AUTH_SDK_ONLY) | None |
 | 4 | Unknown `setPasswordWithOtp` outcome → discard flow, `begin()` again, explain | `hooks/useMobileLogin.js` | None |

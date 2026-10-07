@@ -39,6 +39,7 @@ const handoffError = (code, details) => {
   return Object.assign(new Error("Mobile sign-in could not be completed."), { code });
 };
 const nonblank = (value) => typeof value === "string" && value.trim().length > 0;
+const normalizeIdentifier = (value) => nonblank(value) ? value.trim() : null;
 const HANDOFF_KEYS = [
   "baseUrl", "backendUrl", "api_key", "app_key", "company", "employee_code",
   "employee_id", "full_name", "auth_method", "photo", "restrict_location",
@@ -60,7 +61,7 @@ const parseBody = (text) => {
  * redirect could replay the form body and master bearer. expo/fetch enforces it.
  * Every HTTP status is a response; failures are fresh errors with no cause,
  * because a native error can carry request credentials. No retries. The current
- * test-instance diagnostics log unredacted exchanges only in development.
+ * diagnostics omit credentials and raw payloads, and run only in development.
  */
 const authTransport = {
   async request({ method, url, headers, body, timeoutMs = 15000 }) {
@@ -127,37 +128,53 @@ export const getMobileAuthClient = (baseUrl) => {
 };
 
 /**
- * Require explicit backend identity rather than assuming an SDK id is the QR
- * Employee_Code. Tenants may use a separate field for online attendance.
- * Staging must still verify the deployment's actual response contract.
+ * SDK `id` is the canonical identity; SDK `name` is only a display name.
+ * Keep explicit attendance codes when supplied. A verified canonical docname
+ * supplies the app's employee identifier when the profile omits those codes.
+ * Policy employeeId is SDK-validated and used only if SDK id is unavailable.
  */
-export const resolveMobileEmployeeIdentity = (result, employee) => {
-  const docnames = [employee?.name, employee?.employee].filter(nonblank).map((value) => value.trim());
-  const codes = [employee?.employee_code, employee?.employee_field_value].filter(nonblank).map((value) => value.trim());
-  if (!docnames.length || new Set(docnames).size !== 1 || !codes.length || new Set(codes).size !== 1) {
-    throw handoffError("MOBILE_IDENTITY_UNVERIFIED", {
-      reason: "Missing or conflicting employee document names or attendance identifiers",
-      sdkEmployee: result?.employee, employee, docnames, codes,
-    });
-  }
-  const docname = docnames[0];
+export const resolveMobileEmployeeIdentity = (result, employee, policy) => {
   const sdkEmployee = result?.employee;
-  if (
-    ![sdkEmployee?.id, sdkEmployee?.name].includes(docname) ||
-    !nonblank(employee?.employee_name)
-  ) {
-    throw handoffError("MOBILE_IDENTITY_UNVERIFIED", {
-      reason: "Employee document name does not match SDK identity, or display name is missing",
-      sdkEmployee, employee, docname,
-    });
+  const sdkId = normalizeIdentifier(sdkEmployee?.id);
+  const fetchedDocname = normalizeIdentifier(employee?.name);
+  const docnames = [fetchedDocname, normalizeIdentifier(employee?.employee)].filter(Boolean);
+  const codes = [employee?.employee_code, employee?.employee_field_value].map(normalizeIdentifier).filter(Boolean);
+  const identifiers = { sdkEmployeeId: sdkId, employeeDocname: fetchedDocname, docnames, codes };
+  const reject = (reason) => {
+    logMobileAuthDebug("employee.identity.rejected", { reason, ...identifiers });
+    throw handoffError("MOBILE_IDENTITY_UNVERIFIED", { reason, ...identifiers });
+  };
+
+  // A secondary identifier must never mask a canonical conflict.
+  const hasCanonicalIds = Boolean(sdkId && fetchedDocname);
+  if (hasCanonicalIds && sdkId !== fetchedDocname) reject("canonical-id-mismatch");
+  if (new Set(docnames).size > 1) reject("conflicting-document-identifiers");
+  if (new Set(codes).size > 1) reject("conflicting-attendance-identifiers");
+
+  const docname = docnames[0];
+  let matchedBy = "canonical-document-id";
+  if (!hasCanonicalIds) {
+    // Preserve the strong legacy docname + explicit-code checks. SDK policy
+    // employeeId replaces the old, unsafe comparison with SDK's display name.
+    const trustedId = sdkId || normalizeIdentifier(policy?.employeeId);
+    if (!docname || !codes.length || !trustedId) reject("missing-trusted-identifiers");
+    if (trustedId !== docname) reject("fallback-id-mismatch");
+    matchedBy = sdkId ? "document-alias" : "sdk-policy-document-id";
   }
-  return { employeeCode: codes[0], fullName: employee.employee_name.trim(), employeeDocname: docname };
+
+  logMobileAuthDebug("employee.identity.verified", {
+    matchedBy, sdkEmployeeId: sdkId, employeeDocname: docname,
+  });
+  // These fields are presentation only and are never compared as identifiers.
+  const fullName = [employee?.employee_name, employee?.first_name, sdkEmployee?.name]
+    .map(normalizeIdentifier).find(Boolean) || docname;
+  return { employeeCode: codes[0] || docname, fullName, employeeDocname: docname };
 };
 
 /** SDK fetch stays inside the SDK; this is the separate attendance policy API. */
-const downloadEmployeeContext = async (baseUrl, result) => {
+const downloadEmployeeContext = async (baseUrl, result, employeeLookupId) => {
   const url = `${baseUrl}/api/method/employee_app.attendance_api.get_employee_data`;
-  const params = { employee_id: result.employee.id };
+  const params = { employee_id: employeeLookupId };
   const headers = { Authorization: `Bearer ${result.token.accessToken}` };
   const started = Date.now();
   logMobileAuthDebug("employee.request", { method: "GET", url, params, headers, timeoutMs: 10000 });
@@ -220,15 +237,16 @@ export const completeMobileSignIn = async ({
     if (!nonblank(result?.token?.accessToken) || !nonblank(result?.token?.refreshToken)) {
       throw handoffError("MOBILE_SESSION_INCOMPLETE", { result });
     }
-    if (!nonblank(result?.employee?.id)) throw handoffError("MOBILE_IDENTITY_UNVERIFIED", { result });
+    const employeeLookupId = normalizeIdentifier(result?.employee?.id) || normalizeIdentifier(flow?.policy?.employeeId);
+    if (!employeeLookupId) throw handoffError("MOBILE_IDENTITY_UNVERIFIED", { reason: "missing-sdk-identifier" });
 
     // No provisioning, tokens or Redux writes until the backend supplies a
     // verifiable identity and complete attendance policy for this new employee.
     traceStage("employee.fetch");
-    const employee = await downloadEmployeeContext(baseUrl, result);
+    const employee = await downloadEmployeeContext(baseUrl, result, employeeLookupId);
     assertCurrent();
     traceStage("employee.identity", { sdkEmployee: result.employee, employee });
-    const identity = resolveMobileEmployeeIdentity(result, employee);
+    const identity = resolveMobileEmployeeIdentity(result, employee, flow?.policy);
     traceStage("employee.policy", { employee });
     try {
       assertCompleteAttendancePolicy(employee);

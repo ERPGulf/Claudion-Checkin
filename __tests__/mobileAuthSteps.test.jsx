@@ -276,7 +276,7 @@ it('keeps rejected sign-in OTP on the OTP step, clears its value, and never auto
   expect(view.result.current).toMatchObject({ step: 'OTP', otp: '' });
   expect(view.result.current.otpError).toContain('invalid or expired');
   expect(client.sendOtp).toHaveBeenCalledTimes(1);
-  expect(JSON.stringify(console.log.mock.calls)).toContain('untrusted backend text');
+  expect(JSON.stringify(console.log.mock.calls)).not.toContain('untrusted backend text');
   view.unmount();
 });
 

@@ -9,7 +9,7 @@ import { createAuthClient } from "@erpgulf/auth-sdk";
 import * as apiClient from "../services/api/apiClient";
 import { getNotifications } from "../services/api/notification.service";
 import { Toast } from "react-native-toast-message/lib/src/Toast";
-import { completeMobileSignIn, getMobileAuthClient } from "../services/api/mobileAuth.service";
+import { completeMobileSignIn, getMobileAuthClient, resolveMobileEmployeeIdentity } from "../services/api/mobileAuth.service";
 import { invalidateAuthSession, getAuthSessionGeneration } from "../utils/authSessionGuard";
 import { CONFIG_KEY } from "../services/offline/attendanceConfigCache";
 import { SESSION_STATE_KEY } from "../utils/attendanceSessionState";
@@ -167,14 +167,131 @@ it("does not write anything when the SDK completion belongs to an invalidated ge
   expect(dispatch).not.toHaveBeenCalled();
 });
 
-it("refuses an unconfirmed QR code instead of assuming the SDK id is the attendance code", async () => {
+it("completes hand-off with matching canonical IDs, first_name and no secondary attendance code", async () => {
   plainMock.resetHandlers();
-  plainMock.onGet().reply(200, { message: rawEmployee({ employee_code: undefined }) });
+  plainMock.onGet().reply(200, { message: rawEmployee({
+    employee_code: undefined, employee_name: undefined, first_name: "Fake Employee",
+  }) });
+  await expect(complete()).resolves.toEqual({ status: "authenticated" });
+  expect(await AsyncStorage.getItem("employee_code")).toBe(DOCNAME);
+  expect(await AsyncStorage.getItem("employee_id")).toBe(DOCNAME);
+  expect(await AsyncStorage.getItem("full_name")).toBe("Fake Employee");
+  expect(JSON.parse(await AsyncStorage.getItem(CONFIG_KEY))).toMatchObject({
+    employeeId: DOCNAME, employeeDocname: DOCNAME,
+  });
+  expect(saveSpy).toHaveBeenCalledWith(ACCESS, REFRESH, getAuthSessionGeneration());
+  expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({ type: "userAuth/setSignIn" }));
+});
+
+it("normalizes the SDK identifier before employee lookup and identity verification", async () => {
+  const success = sdkSuccess();
+  success.data.employee.id = ` ${DOCNAME} `;
+  await expect(complete({ success })).resolves.toEqual({ status: "authenticated" });
+  expect(plainMock.history.get[0].params).toEqual({ employee_id: DOCNAME });
+  expect(await AsyncStorage.getItem("employee_code")).toBe(EMPLOYEE_CODE);
+});
+
+it("preserves SDK rejection of a malformed authentication result without an employee ID", async () => {
+  const success = sdkSuccess();
+  delete success.data.employee.id;
+  await expect(complete({ success })).rejects.toMatchObject({ code: "INVALID_RESPONSE" });
+  expect(plainMock.history.get).toHaveLength(0);
+  expect(saveSpy).not.toHaveBeenCalled();
+  expect(dispatch).not.toHaveBeenCalled();
+});
+
+it("refuses a canonical conflict before any provisioning or token writes even if the code matches SDK id", async () => {
+  plainMock.resetHandlers();
+  plainMock.onGet().reply(200, { message: rawEmployee({ name: "HR-EMP-OTHER", employee_code: DOCNAME }) });
   await expect(complete()).rejects.toMatchObject({ code: "MOBILE_IDENTITY_UNVERIFIED" });
   expect(saveSpy).not.toHaveBeenCalled();
   expect(AsyncStorage.multiSet).not.toHaveBeenCalled();
   expect(AsyncStorage.multiRemove).not.toHaveBeenCalled();
   expect(await AsyncStorage.getItem("api_key")).toBe("old-fake-qr-key");
+});
+
+describe("employee identity matching", () => {
+  const result = (overrides = {}) => ({ employee: { id: DOCNAME, name: "Fake Employee", phone: "5550001", ...overrides } });
+  const verify = (employee, sdk = result(), policy) => resolveMobileEmployeeIdentity(sdk, employee, policy);
+
+  it("verifies equal canonical IDs without secondary codes or a display name", () => {
+    expect(verify({ name: DOCNAME }, result({ name: undefined }))).toEqual({
+      employeeCode: DOCNAME, employeeDocname: DOCNAME, fullName: DOCNAME,
+    });
+    expect(console.log).toHaveBeenCalledWith("[mobile-auth] employee.identity.verified", JSON.stringify({
+      matchedBy: "canonical-document-id", sdkEmployeeId: DOCNAME, employeeDocname: DOCNAME,
+    }));
+  });
+
+  it("verifies equal canonical IDs and preserves an explicit attendance code", () => {
+    expect(verify(rawEmployee({ employee_field_value: EMPLOYEE_CODE }))).toEqual({
+      employeeCode: EMPLOYEE_CODE, employeeDocname: DOCNAME, fullName: "Fake Employee",
+    });
+  });
+
+  it.each([undefined, DOCNAME])("rejects unequal canonical IDs regardless of secondary code %s", employee_code => {
+    expect(() => verify(rawEmployee({ name: "HR-EMP-OTHER", employee_code })))
+      .toThrow(expect.objectContaining({ code: "MOBILE_IDENTITY_UNVERIFIED" }));
+    expect(console.log).toHaveBeenCalledWith("[mobile-auth] employee.identity.rejected", expect.stringContaining('"reason":"canonical-id-mismatch"'));
+  });
+
+  it("uses the SDK-validated policy ID with legacy docname/code checks when SDK id is absent", () => {
+    expect(verify(rawEmployee(), result({ id: undefined }), { employeeId: DOCNAME }))
+      .toMatchObject({ employeeCode: EMPLOYEE_CODE, employeeDocname: DOCNAME });
+    expect(console.log).toHaveBeenCalledWith("[mobile-auth] employee.identity.verified", expect.stringContaining('"matchedBy":"sdk-policy-document-id"'));
+  });
+
+  it("preserves the employee document alias and explicit-code fallback when name is absent", () => {
+    expect(verify(rawEmployee({ name: undefined, employee: DOCNAME })))
+      .toMatchObject({ employeeCode: EMPLOYEE_CODE, employeeDocname: DOCNAME });
+  });
+
+  it("rejects when neither canonical nor trusted fallback identifiers exist", () => {
+    expect(() => verify({ first_name: "Fake Employee", phone: "5550001" }, result({ id: undefined })))
+      .toThrow(expect.objectContaining({ code: "MOBILE_IDENTITY_UNVERIFIED" }));
+  });
+
+  it("normalizes whitespace on SDK IDs, document aliases, codes and display fields", () => {
+    expect(verify(rawEmployee({ name: ` ${DOCNAME} `, employee: ` ${DOCNAME} `,
+      employee_code: ` ${EMPLOYEE_CODE} `, employee_field_value: ` ${EMPLOYEE_CODE} `,
+      employee_name: " Fake Employee ",
+    }), result({ id: ` ${DOCNAME} ` }))).toEqual({
+      employeeCode: EMPLOYEE_CODE, employeeDocname: DOCNAME, fullName: "Fake Employee",
+    });
+  });
+
+  it("treats blank identifiers as absent and preserves case sensitivity", () => {
+    expect(verify(rawEmployee({ employee_code: "  ", employee: " " }))).toMatchObject({ employeeCode: DOCNAME });
+    expect(() => verify(rawEmployee({ name: DOCNAME.toLowerCase() })))
+      .toThrow(expect.objectContaining({ code: "MOBILE_IDENTITY_UNVERIFIED" }));
+  });
+
+  it("rejects conflicting IDs even when display names and phone numbers match", () => {
+    expect(() => verify(rawEmployee({ name: "HR-EMP-OTHER", first_name: "Fake Employee", phone: "5550001" })))
+      .toThrow(expect.objectContaining({ code: "MOBILE_IDENTITY_UNVERIFIED" }));
+  });
+
+  it("does not interpret the SDK display name as a fallback identifier", () => {
+    expect(() => verify(rawEmployee(), result({ id: undefined, name: DOCNAME })))
+      .toThrow(expect.objectContaining({ code: "MOBILE_IDENTITY_UNVERIFIED" }));
+  });
+
+  it.each([
+    { employee: "HR-EMP-OTHER" },
+    { employee_field_value: "OTHER-CODE" },
+  ])("rejects conflicting aliases despite matching canonical IDs: %j", overrides => {
+    expect(() => verify(rawEmployee(overrides)))
+      .toThrow(expect.objectContaining({ code: "MOBILE_IDENTITY_UNVERIFIED" }));
+  });
+
+  it.each([
+    { employee: rawEmployee({ name: undefined, employee: DOCNAME, employee_code: undefined }), sdk: result() },
+    { employee: rawEmployee({ name: undefined }), sdk: result() },
+    { employee: rawEmployee(), sdk: result({ id: undefined }), policy: { employeeId: "HR-EMP-OTHER" } },
+  ])("retains missing-code/docname and mismatch rejections on fallback paths: %j", ({ employee, sdk, policy }) => {
+    expect(() => verify(employee, sdk, policy))
+      .toThrow(expect.objectContaining({ code: "MOBILE_IDENTITY_UNVERIFIED" }));
+  });
 });
 
 it("does not replace provisioning when the policy is incomplete", async () => {
@@ -297,7 +414,7 @@ describe("SDK transport", () => {
     expect(error.message).not.toContain("fake-master-token");
   });
 
-  it("logs exact SDK exchanges in development with unredacted credentials", async () => {
+  it("logs SDK URLs, statuses and timing without credentials in development", async () => {
     replies((url) => [200, url.endsWith("master_token") ? masterBody
       : url.endsWith("get_employee_login_policy") ? policyBody() : sdkSuccess()]);
     const auth = getMobileAuthClient("https://transport-5.example.test");
@@ -305,28 +422,30 @@ describe("SDK transport", () => {
     await auth.complete(flow, { password: "fake-password" });
     const logged = JSON.stringify(console.log.mock.calls);
     expect(logged).toContain("get_employee_login_policy");
-    expect(logged).toContain("sign_in_policy");
+    expect(flow.policy.signInPolicy).toEqual({ passwordPolicy: "required", otpPolicy: "disabled" });
     expect(logged).toContain("sign_in_api");
     for (const secret of ["fake-master-token", "fake-master-refresh", "fake-password", ACCESS, REFRESH]) {
-      expect(logged).toContain(secret);
+      expect(logged).not.toContain(secret);
     }
     const request = console.log.mock.calls
       .filter(([label]) => label === "[auth-sdk] request")
       .map(([, payload]) => JSON.parse(payload))
       .find(({ url }) => url.endsWith("sign_in_api"));
-    expect(request.headers.Authorization).toBe("Bearer fake-master-token");
-    expect(request.form.password).toBe("fake-password");
-    expect(request.body).toContain("password=fake-password");
+    expect(request.headers).toBe("[Omitted]");
+    expect(request.form).toBe("[Omitted]");
+    expect(request.body).toBe("[Omitted]");
     const response = console.log.mock.calls
       .filter(([label]) => label === "[auth-sdk] response")
       .map(([, payload]) => JSON.parse(payload))
       .find(({ url }) => url.endsWith("sign_in_api"));
-    expect(JSON.parse(response.rawBody)).toEqual(sdkSuccess());
-    expect(response.body.data.token.refresh_token).toBe(REFRESH);
+    expect(response.status).toBe(200);
+    expect(response.elapsedMs).toEqual(expect.any(Number));
+    expect(response.rawBody).toBe("[Omitted]");
+    expect(response.body).toBe("[Omitted]");
     expect(response.requestId).toBe(request.requestId);
   });
 
-  it("logs the supplied OTP and SDK-managed password exactly as transmitted", async () => {
+  it("omits OTP and SDK-managed passwords from logs while transmitting them unchanged", async () => {
     const success = sdkSuccess();
     success.data.password_policy = "No";
     success.data.otp_policy = "Mandatory";
@@ -339,9 +458,15 @@ describe("SDK transport", () => {
       .filter(([label]) => label === "[auth-sdk] request")
       .map(([, payload]) => JSON.parse(payload))
       .find(({ url }) => url.endsWith("sign_in_api"));
-    expect(request.form.otp).toBe("123456");
-    expect(request.form.password).toMatch(/^egf_[A-Za-z0-9]+$/);
-    expect(new URLSearchParams(request.body).get("otp")).toBe("123456");
+    const sent = expoFetch.mock.calls.find(([url]) => url.endsWith("sign_in_api"))[1];
+    const form = new URLSearchParams(sent.body);
+    expect(form.get("otp")).toBe("123456");
+    expect(form.get("password")).toMatch(/^egf_[A-Za-z0-9]+$/);
+    expect(request.form).toBe("[Omitted]");
+    expect(request.body).toBe("[Omitted]");
+    const logged = JSON.stringify(console.log.mock.calls);
+    expect(logged).not.toContain("123456");
+    expect(logged).not.toContain(form.get("password"));
   });
 
   it("does not log SDK credentials in release builds", async () => {
@@ -398,39 +523,40 @@ describe("hand-off diagnostics", () => {
     })).rejects.toMatchObject({ code: "MOBILE_POLICY_UNAVAILABLE" });
     expect(payloads("handoff.sdk.result")[0].completion.status).toBe("authenticated");
     expect(payloads("employee.request")[0]).toMatchObject({
-      params: { employee_id: DOCNAME }, headers: { Authorization: `Bearer ${ACCESS}` }, timeoutMs: 10000,
+      params: { employee_id: DOCNAME }, headers: "[Omitted]", timeoutMs: 10000,
     });
     expect(payloads("employee.failed")[0]).toMatchObject({
-      status: 403, body: { message: "synthetic employee access denied", exception: "synthetic traceback" },
-      error: { message: "Request failed with status code 403" },
+      status: 403, body: "[Omitted]",
     });
     expect(payloads("handoff.failed")[0]).toMatchObject({ stage: "employee.fetch", error: { code: "MOBILE_POLICY_UNAVAILABLE" } });
     expect(saveSpy).not.toHaveBeenCalled();
     expect(dispatch).not.toHaveBeenCalled();
   });
 
-  it("logs the full identity response and the exact rejection reason without relaxing validation", async () => {
+  it("logs identifiers and a precise canonical mismatch reason without authentication secrets", async () => {
     plainMock.resetHandlers();
-    plainMock.onGet().reply(200, { message: rawEmployee({ employee_code: undefined }) });
+    plainMock.onGet().reply(200, { message: rawEmployee({ name: "HR-EMP-OTHER", employee_code: undefined }) });
     await expect(complete()).rejects.toMatchObject({ code: "MOBILE_IDENTITY_UNVERIFIED" });
-    expect(payloads("employee.response")[0].body.message.name).toBe(DOCNAME);
+    expect(payloads("employee.response")[0].employee.name).toBe("HR-EMP-OTHER");
     expect(payloads("handoff.rejected")[0]).toMatchObject({
-      code: "MOBILE_IDENTITY_UNVERIFIED", docnames: [DOCNAME], codes: [],
-      reason: "Missing or conflicting employee document names or attendance identifiers",
+      code: "MOBILE_IDENTITY_UNVERIFIED", docnames: ["HR-EMP-OTHER"], codes: [],
+      reason: "canonical-id-mismatch",
     });
     expect(payloads("handoff.failed")[0].stage).toBe("employee.identity");
     expect(saveSpy).not.toHaveBeenCalled();
+    expect(JSON.stringify(console.log.mock.calls)).not.toContain(ACCESS);
+    expect(JSON.stringify(console.log.mock.calls)).not.toContain(REFRESH);
   });
 
-  it("logs policy validation's original error and the employee flags", async () => {
+  it("logs the policy failure stage and employee flags without raw error text", async () => {
     plainMock.resetHandlers();
     plainMock.onGet().reply(200, { message: rawEmployee({ photo: undefined }) });
     await expect(complete()).rejects.toMatchObject({ code: "MOBILE_POLICY_UNAVAILABLE" });
     expect(payloads("employee.policy.invalid")[0]).toMatchObject({
-      error: { message: "Attendance configuration is incomplete. Please contact your administrator." },
+      error: { name: "Error" },
       employee: { restrict_location: 1, unrestricted_checkout_location: 0 },
     });
-    expect(payloads("employee.policy.invalid")[0].error.stack).toContain("assertCompleteAttendancePolicy");
+    expect(payloads("employee.policy.invalid")[0].error.stack).toBeUndefined();
     expect(payloads("handoff.failed")[0].stage).toBe("employee.policy");
     expect(saveSpy).not.toHaveBeenCalled();
   });
@@ -438,7 +564,7 @@ describe("hand-off diagnostics", () => {
   it("logs token persistence failures and rollback without publishing login", async () => {
     saveSpy.mockRejectedValueOnce(new Error("synthetic disk failure"));
     await expect(complete()).rejects.toThrow("synthetic disk failure");
-    expect(payloads("handoff.persistence.failed")[0]).toMatchObject({ stage: "tokens.save", error: { message: "synthetic disk failure" } });
+    expect(payloads("handoff.persistence.failed")[0]).toMatchObject({ stage: "tokens.save", error: { name: "Error" } });
     expect(payloads("handoff.rollback.end")).toHaveLength(1);
     expect(await AsyncStorage.getItem("api_key")).toBe("old-fake-qr-key");
     expect(dispatch).not.toHaveBeenCalled();

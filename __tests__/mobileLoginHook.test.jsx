@@ -97,8 +97,9 @@ it('reports employee-policy failure after OTP sign-in without blaming or resendi
     code: 'MOBILE_POLICY_UNAVAILABLE', httpStatus: undefined, retryable: undefined,
   });
   const details = JSON.parse(console.log.mock.calls.find(([event]) => event === '[mobile-auth] operation.failed')[1]);
-  expect(details.error).toMatchObject({ code: 'MOBILE_POLICY_UNAVAILABLE', message: failure.message });
-  expect(details.error.stack).toContain(failure.message);
+  expect(details.error).toMatchObject({ code: 'MOBILE_POLICY_UNAVAILABLE', name: 'Error' });
+  expect(details.error.message).toBeUndefined();
+  expect(details.error.stack).toBeUndefined();
   expect(JSON.stringify(await AsyncStorage.multiGet(await AsyncStorage.getAllKeys()))).not.toContain('123456');
   view.unmount();
 });
@@ -262,7 +263,7 @@ it('rethrows an unexpected SDK error from lookup while preserving its debug deta
   expect(view.result.current.error).toBe('');
   expect(view.result.current.isLoading).toBe(false);
   expect(console.log.mock.calls.some(([label]) => label === 'Mobile sign-in failed')).toBe(false);
-  expect(JSON.stringify(console.log.mock.calls)).toContain('untrusted lookup exception');
+  expect(JSON.stringify(console.log.mock.calls)).not.toContain('untrusted lookup exception');
   expect(getMobileAuthClient).not.toHaveBeenCalled();
   view.unmount();
 });
@@ -386,7 +387,7 @@ it('obeys expiresIn for manual resend and never repeats a failed OTP automatical
   expect(client.sendOtp).toHaveBeenCalledTimes(2);
   expect(view.result.current.error).toContain('could not be confirmed');
   expect(console.log).toHaveBeenCalledWith('Mobile sign-in failed', { code: 'TIMEOUT', httpStatus: undefined, retryable: false });
-  expect(JSON.stringify(console.log.mock.calls)).toContain('sensitive server text');
+  expect(JSON.stringify(console.log.mock.calls)).not.toContain('sensitive server text');
   view.unmount();
 });
 
@@ -577,7 +578,7 @@ it('never retries a nonretryable completion or accepts a simultaneous double sub
   });
   expect(view.result.current.error).toContain('could not be confirmed');
   expect(client.complete).toHaveBeenCalledTimes(1);
-  expect(JSON.stringify(console.log.mock.calls)).toContain('not-for-consumers');
+  expect(JSON.stringify(console.log.mock.calls)).not.toContain('not-for-consumers');
   view.unmount();
 });
 

@@ -62,16 +62,17 @@ HTTP status to the SDK, and reports failures as cause-free `TIMEOUT` or
 `NETWORK_ERROR`. It is required lazily, so loading the module at startup (which
 QR users also do) cannot fail on the native fetch module.
 
-For the requested test-instance debugging, development builds (`__DEV__`) log
-unredacted SDK exchanges under `[auth-sdk]`: request URL, headers, raw and decoded
-form, response status/headers, exact response body, duration, and a request ID.
-This includes OTPs, passwords, managed passwords, and tokens. `[auth-sdk] flow`
-shows the result of `begin()`. `[mobile-auth]` traces screen changes, operations,
-employee/profile downloads, identity and attendance-policy validation, token
-storage, session publication, and rollback. `handoff.failed` names the failing
-stage; `employee.failed` includes the HTTP response and original error/stack.
-Native SDK transport failures are logged before the same cause-free SDK error
-is thrown. Diagnostics never retry requests or write credentials to storage.
+Development builds (`__DEV__`) log SDK request URLs, response statuses, duration,
+request IDs, and policy/flow metadata under `[auth-sdk]`. `[mobile-auth]` traces
+screen changes, operations, employee/profile downloads, identity and attendance
+validation, token storage stages, session publication, and rollback.
+`employee.identity.verified` names the matching identifier class;
+`employee.identity.rejected` gives the rejection reason and normalized IDs.
+`handoff.failed` names the failing stage; `employee.failed` includes status,
+timing, and error codes. The logger omits tokens, passwords, managed passwords,
+OTPs, authorization headers, raw request/response payloads, and free-text errors
+or stacks that could contain credentials. Diagnostics never retry requests or
+write credentials to storage.
 Release builds omit these logs and retain only `{ code, httpStatus, retryable }`
 failure diagnostics. Read development logs in the Metro terminal or with
 `adb logcat -s ReactNativeJS`.
@@ -156,14 +157,22 @@ writes, and uses `saveTokens` as the sole token writer. All identity actions
 precede `setSignIn`; the existing unread-count fetch and success toast follow.
 The QR `useLogin` implementation is unchanged.
 
-The authenticated employee-policy response must explicitly supply a Frappe
-docname (`name` or `employee`) matching an SDK employee field, a display name
-(`employee_name`), and the QR attendance identifier (`employee_code` or
-`employee_field_value`). Conflicting or absent identifiers are rejected. SDK
-`id` is used only as the initial profile lookup candidate, never assumed to be
-the QR employee code. This conservative contract needs validation against the
-actual tenant; it is not evidence that the published SDK's backend contract
-works on a live server.
+Identity verification first compares trimmed, case-sensitive SDK `employee.id`
+and fetched `name`. An exact match verifies identity without requiring an
+attendance code; a mismatch rejects immediately, regardless of secondary codes.
+Conflicting fetched `name` / `employee` aliases or `employee_code` /
+`employee_field_value` codes also reject. Explicit attendance codes are preserved;
+when absent after a canonical match, the verified docname supplies the app's
+employee identifier. Verify that the tenant's attendance endpoints accept this
+identifier before rollout.
+
+When a canonical field is absent, fallback retains the fetched docname alias
+and explicit-code checks. It compares that docname with SDK `id`, or the existing
+SDK-validated `flow.policy.employeeId` if `id` is absent. No trusted match means
+rejection. The installed SDK normally requires `id` on successful authentication;
+policy fallback does not bypass its response validation. Display names and phone
+numbers never prove identity. `employee_name`, `first_name`, and SDK `name` are
+used only for display, falling back to the verified docname if needed.
 
 Before any provisioning changes, the app downloads and validates explicit
 `restrict_location`, `unrestricted_checkout_location`, and `photo` flags.
