@@ -121,8 +121,11 @@ const CLAIM_DEPENDENCIES_SQL = `
     SELECT 1 FROM ${QUEUE_TABLE} AS older
      WHERE older.employeeId = candidate.employeeId
        AND (older.tenantKey IS candidate.tenantKey OR older.tenantKey IS NULL)
-       AND (older.timestamp < candidate.timestamp
-         OR (older.timestamp = candidate.timestamp AND older.id < candidate.id))
+       AND (CASE WHEN candidate.sourceEventId IS NOT NULL AND older.sourceEventId IS NOT NULL
+           AND older.tenantKey IS candidate.tenantKey
+         THEN older.id < candidate.id
+         ELSE (older.timestamp < candidate.timestamp
+           OR (older.timestamp = candidate.timestamp AND older.id < candidate.id)) END)
        AND (older.status IN ('pending', 'syncing', 'needs_review')
          OR (older.status = 'blocked' AND IFNULL(older.failureClass, '') <> 'endpoint-missing'))
   ) AND NOT EXISTS (
@@ -130,6 +133,13 @@ const CLAIM_DEPENDENCIES_SQL = `
      WHERE paired.id = candidate.pairedAttendanceId
        AND (paired.tenantKey IS NOT candidate.tenantKey OR paired.employeeId <> candidate.employeeId)
        AND paired.status IN ('pending', 'syncing', 'blocked', 'needs_review')
+  ) AND (
+    (CASE WHEN json_valid(candidate.payload) THEN json_extract(candidate.payload, '$.sourceParentEventId') END) IS NULL OR EXISTS (
+      SELECT 1 FROM ${QUEUE_TABLE} AS parent
+       WHERE parent.sourceEventId = (CASE WHEN json_valid(candidate.payload) THEN json_extract(candidate.payload, '$.sourceParentEventId') END)
+         AND parent.tenantKey IS candidate.tenantKey AND parent.employeeId = candidate.employeeId
+         AND parent.status = 'synced' AND parent.acceptanceConfirmed = 1
+    )
   )`;
 
 // ----------------------
@@ -163,6 +173,7 @@ export const enqueue = async ({
   deviceId = null,
   payload = {},
   sessionId = null,
+  sourceEventId = null,
   now = Date.now(),
 }) => {
   if (!employeeId) throw new Error("enqueue: employeeId is required");
@@ -175,8 +186,8 @@ export const enqueue = async ({
     `INSERT INTO ${QUEUE_TABLE}
        (employeeId, employeeDocname, tenantKey, attendanceType, action, timestamp,
         latitude, longitude, accuracy, address, deviceId, payload,
-        status, retryCount, nextAttemptAt, sessionId, createdAt, updatedAt)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?)
+        status, retryCount, nextAttemptAt, sessionId, sourceEventId, createdAt, updatedAt)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?)
      ON CONFLICT DO NOTHING;`,
     [
       employeeId,
@@ -193,6 +204,7 @@ export const enqueue = async ({
       JSON.stringify(payload ?? {}),
       QUEUE_STATUS.PENDING,
       sessionId,
+      sourceEventId,
       now,
       now,
     ],
@@ -200,7 +212,12 @@ export const enqueue = async ({
 
   const inserted = result?.changes > 0;
 
-  const row = await database.getFirstAsync(
+  const sourceRow = sourceEventId ? await database.getFirstAsync(
+    `SELECT * FROM ${QUEUE_TABLE}
+      WHERE tenantKey IS ? AND employeeId = ? AND sourceEventId = ? LIMIT 1;`,
+    [tenantKey, employeeId, sourceEventId],
+  ) : null;
+  const row = sourceRow ?? await database.getFirstAsync(
     `SELECT * FROM ${QUEUE_TABLE}
       WHERE tenantKey IS ? AND employeeId = ? AND timestamp = ? AND action = ?
       LIMIT 1;`,
@@ -208,6 +225,47 @@ export const enqueue = async ({
   );
 
   return { row: hydrate(row), inserted };
+};
+
+/** Durable handoff recovery is keyed by native identity, never a new clock offset. */
+export const findBySourceEventId = async ({ sourceEventId, tenantKey, employeeId }) => {
+  if (!sourceEventId || !tenantKey || !employeeId) return null;
+  const database = await getDatabase();
+  return hydrate(await database.getFirstAsync(
+    `SELECT * FROM ${QUEUE_TABLE}
+      WHERE sourceEventId = ? AND tenantKey = ? AND employeeId = ? LIMIT 1;`,
+    [sourceEventId, tenantKey, employeeId],
+  ));
+};
+
+/**
+ * Ordering includes retained unknown provenance as a conservative dependency.
+ * A same-code row belonging to a different known tenant must not block this one.
+ */
+export const countUnconfirmedNativePunches = async ({ tenantKey, employeeId }) => {
+  const database = await getDatabase();
+  const row = await database.getFirstAsync(
+    `SELECT COUNT(*) AS total FROM ${QUEUE_TABLE}
+      WHERE tenantKey = ? AND employeeId = ? AND sourceEventId IS NOT NULL
+        AND status NOT IN (?, ?)
+        AND (status <> ? OR acceptanceConfirmed <> 1);`,
+    [tenantKey, employeeId, QUEUE_STATUS.RESOLVED, "cancelled", QUEUE_STATUS.SYNCED],
+  );
+  return Number(row?.total) || 0;
+};
+
+export const countOutstandingByScope = async ({ tenantKey, employeeId }) => {
+  if (!tenantKey || !employeeId) throw new Error("Attendance ordering scope missing.");
+  const database = await getDatabase();
+  const row = await database.getFirstAsync(
+    `SELECT COUNT(*) AS total FROM ${QUEUE_TABLE}
+      WHERE employeeId = ? AND (tenantKey = ? OR tenantKey IS NULL)
+        AND (status IN (?, ?, ?)
+          OR (status = ? AND IFNULL(failureClass, '') <> ?));`,
+    [employeeId, tenantKey, QUEUE_STATUS.PENDING, QUEUE_STATUS.SYNCING,
+      QUEUE_STATUS.NEEDS_REVIEW, QUEUE_STATUS.BLOCKED, FAILURE_CLASS.ENDPOINT_MISSING],
+  );
+  return Number(row?.total) || 0;
 };
 
 /**
@@ -231,6 +289,7 @@ export const pairWithOpenCheckin = async ({
   employeeId,
   tenantKey = null,
   timestamp,
+  sourceParentEventId = null,
   now = Date.now(),
 }) => {
   const database = await getDatabase();
@@ -241,11 +300,11 @@ export const pairWithOpenCheckin = async ({
         AND tenantKey IS ?
         AND action = ?
         AND pairedAttendanceId IS NULL
-        AND timestamp <= ?
+        AND ((? IS NULL AND timestamp <= ?) OR sourceEventId = ?)
         AND status IN (${placeholdersFor(UNRESOLVED_STATUSES)})
       ORDER BY timestamp DESC, id DESC
       LIMIT 1;`,
-    [employeeId, tenantKey, QUEUE_ACTION.CHECKIN, timestamp, ...UNRESOLVED_STATUSES],
+    [employeeId, tenantKey, QUEUE_ACTION.CHECKIN, sourceParentEventId, timestamp, sourceParentEventId, ...UNRESOLVED_STATUSES],
   );
 
   if (!checkin) return null;
@@ -1243,10 +1302,12 @@ export default {
   blockedDelayFor,
   claimNextPending,
   countByStatus,
+  countOutstandingByScope,
   countRecoveryByScope,
   listRecoveryRows,
   enqueue,
   findById,
+  findBySourceEventId,
   findDuplicate,
   findSessionRows,
   hasWorkDue,

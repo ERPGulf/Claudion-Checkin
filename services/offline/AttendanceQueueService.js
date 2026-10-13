@@ -10,7 +10,10 @@ import {
 } from "./AttendanceDatabase";
 import {
   countByStatus,
+  countOutstandingByScope,
+  countUnconfirmedNativePunches,
   enqueue,
+  findBySourceEventId,
   listForHistory,
   listUnresolved,
   markResolved,
@@ -204,15 +207,25 @@ const queueAttendance = async ({
   photoUri = null,
   gate,
   sourceScope,
+  sourceEventId = null,
+  sourceParentEventId = null,
+  timestamp: suppliedTimestamp = null,
+  strictOrdering = false,
 }) => {
   const config = gate?.config ?? (await readAttendanceConfig());
-  const timestamp = await formatOfflineTimestamp(occurredAt ?? Date.now());
+  const timestamp = suppliedTimestamp ?? await formatOfflineTimestamp(occurredAt ?? Date.now());
   let tenantKey = null;
   try {
     await assertAttendanceQueueScope(sourceScope);
     if (sourceScope.employeeId === employeeCode) tenantKey = sourceScope.tenantKey;
-  } catch {
+  } catch (error) {
+    if (strictOrdering) {
+      return { allowed: false, reason: "scope-changed", error, location: null };
+    }
     // Preserve the event, but do not stamp a new account's backend onto it.
+  }
+  if (strictOrdering && (!tenantKey || config?.tenantKey !== tenantKey || config?.employeeId !== employeeCode)) {
+    return { allowed: false, reason: "config-scope-mismatch", message: "Attendance rules must be refreshed for this account.", location: null };
   }
 
   const { row, inserted } = await enqueue({
@@ -222,6 +235,7 @@ const queueAttendance = async ({
     employeeDocname: !tenantKey || (config?.tenantKey === tenantKey && config?.employeeId === employeeCode)
       ? config?.employeeDocname ?? null : null,
     tenantKey,
+    sourceEventId,
     attendanceType,
     action: logTypeToAction(type),
     timestamp,
@@ -231,6 +245,7 @@ const queueAttendance = async ({
     address: gate?.location?.locationName ?? null,
     deviceId: DEVICE_ID,
     payload: {
+      ...(sourceParentEventId ? { sourceParentEventId } : {}),
       location: gate?.location?.locationName,
       distance: gate?.location?.distance,
       radius: gate?.location?.radius,
@@ -248,6 +263,12 @@ const queueAttendance = async ({
     },
   });
 
+  // The older timestamp/action constraint remains intact for server contract
+  // compatibility. It cannot prove a different native input was accepted.
+  if (strictOrdering && sourceEventId && row?.sourceEventId !== sourceEventId) {
+    return { allowed: false, reason: "source-event-collision", row, location: null };
+  }
+
   // Link a check-out to the check-in it closes, so a rejection can invalidate
   // the whole attendance session rather than leaving the server holding an OUT
   // with no matching IN.
@@ -259,6 +280,7 @@ const queueAttendance = async ({
   if (inserted && row && logTypeToAction(type) === QUEUE_ACTION.CHECKOUT) {
     try {
       const checkin = await pairWithOpenCheckin({
+        sourceParentEventId,
         checkoutId: row.id,
         employeeId: employeeCode,
         tenantKey,
@@ -295,6 +317,7 @@ const queueAttendance = async ({
     queued: true,
     alreadyQueued: !inserted,
     row,
+    sourceEventId,
     name: null,
     location: gate?.location ?? null,
     message:
@@ -340,6 +363,17 @@ const submitOnlineOnly = async ({ type, employeeCode, online }) => {
   }
 
   try {
+    // Manual punches remain online-only. A new automatic punch accepted on this
+    // device must reach the server before a manual action can overtake it.
+    // Historical NULL-source rows do not acquire a new blocking rule.
+    const scope = await captureAttendanceQueueScope(employeeCode).catch(() => null);
+    if (scope && await countUnconfirmedNativePunches(scope) > 0) {
+      await assertAttendanceQueueScope(scope);
+      requestQueueDrain({ employeeId: employeeCode, reason: "manual-ordering" });
+      return { allowed: false, reason: "automatic-attendance-unconfirmed", location: null,
+        message: "Earlier automatic attendance needs server confirmation. Synchronize or verify the saved record before this action." };
+    }
+    if (scope) await assertAttendanceQueueScope(scope);
     const result = await online();
 
     if (result?.allowed) {
@@ -411,6 +445,11 @@ export const submitAttendance = async ({
   photoUri = null,
   forceQueue = false,
   sourceScope = undefined,
+  sourceEventId = null,
+  sourceParentEventId = null,
+  timestamp = null,
+  strictOrdering = false,
+  skipPosition = false,
 }) => {
   if (type !== "IN" && type !== "OUT") {
     throw new Error(`submitAttendance: invalid type ${type}`);
@@ -432,6 +471,36 @@ export const submitAttendance = async ({
     sourceScope = occurredAt == null
       ? await captureAttendanceQueueScope(employeeCode).catch(() => null)
       : null;
+  }
+
+  if (strictOrdering) {
+    try {
+      await assertAttendanceQueueScope(sourceScope);
+      if (sourceScope.employeeId !== employeeCode) throw new Error("Attendance employee scope changed.");
+    } catch (error) {
+      return { allowed: false, reason: "scope-changed", error, location: null };
+    }
+  }
+
+  if (sourceEventId && sourceScope?.tenantKey) {
+    const existing = await findBySourceEventId({
+      sourceEventId, tenantKey: sourceScope.tenantKey, employeeId: employeeCode,
+    });
+    if (existing) {
+      if ([QUEUE_STATUS.PENDING, QUEUE_STATUS.SYNCING, QUEUE_STATUS.BLOCKED].includes(existing.status)) {
+        return { allowed: true, queued: true, alreadyQueued: true, row: existing, sourceEventId, name: null, location: null };
+      }
+      if (existing.status === QUEUE_STATUS.SYNCED && existing.acceptanceConfirmed) {
+        return { allowed: true, queued: false, alreadyQueued: true, row: existing, sourceEventId, name: existing.serverCheckinId, location: null };
+      }
+      return { allowed: false, reason: "source-event-needs-review", row: existing, sourceEventId, location: null };
+    }
+  }
+
+  // Enforce both IN and OUT order at the submission seam, so an online EXIT
+  // cannot bypass an earlier queued ENTER. Unknown legacy rows remain blockers.
+  if (strictOrdering && await countOutstandingByScope(sourceScope) > 0) {
+    forceQueue = true;
   }
 
   // "Is there a transport?", NOT "does NetInfo think the internet is reachable?".
@@ -466,6 +535,7 @@ export const submitAttendance = async ({
    */
   const attemptOnline = async () => {
     try {
+      if (strictOrdering) await assertAttendanceQueueScope(sourceScope);
       const result = await online();
 
       if (result?.allowed) {
@@ -519,7 +589,9 @@ export const submitAttendance = async ({
    * attempt by this point.
    */
   const refuseOrFallBack = async (refusal) => {
-    if (!forceQueue || !canGoOnline) return refusal;
+    // New native inputs remain durably retained for retry when admission fails.
+    // The legacy forceQueue fallback is preserved for older callers/binaries.
+    if (strictOrdering || !forceQueue || !canGoOnline) return refusal;
 
     console.log(
       `${LOG_PREFIX} Queue refused a forced ${type} (${refusal.reason}); sending it rather than losing it`,
@@ -572,6 +644,7 @@ export const submitAttendance = async ({
   const gate = await evaluateOfflineAttendance({
     type,
     enforceRadius: attendanceType !== ATTENDANCE_TYPE.AUTO,
+    ...(skipPosition ? { skipPosition: true } : {}),
   });
 
   if (!gate.allowed) {
@@ -592,6 +665,10 @@ export const submitAttendance = async ({
     photoUri,
     gate,
     sourceScope,
+    sourceEventId,
+    sourceParentEventId,
+    timestamp,
+    strictOrdering,
   });
 };
 
@@ -619,6 +696,11 @@ export const submitAutoAttendance = ({
   occurredAt,
   forceQueue = false,
   sourceScope,
+  sourceEventId = null,
+  sourceParentEventId = null,
+  timestamp = null,
+  strictOrdering = false,
+  skipPosition = false,
 }) =>
   submitAttendance({
     type,
@@ -628,6 +710,11 @@ export const submitAutoAttendance = ({
     occurredAt,
     forceQueue,
     sourceScope,
+    sourceEventId,
+    sourceParentEventId,
+    timestamp,
+    strictOrdering,
+    skipPosition,
   });
 
 // ----------------------

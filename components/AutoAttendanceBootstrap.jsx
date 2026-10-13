@@ -1,4 +1,5 @@
-import { useEffect, useRef } from "react";
+import React, { useEffect, useRef } from "react";
+import DurableAutoAttendanceBootstrap from "./DurableAutoAttendanceBootstrap";
 import { useDispatch, useSelector } from "react-redux";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Location from "expo-location";
@@ -40,6 +41,7 @@ import {
   OFFICE_GEOFENCE_IDENTIFIER,
   startGeofence,
   stopGeofence,
+  supportsDurableEvents,
 } from "../modules/expo-auto-attendance";
 import {
   evaluatePendingEvent,
@@ -55,6 +57,9 @@ import { syncNow } from "../services/offline/BackgroundSyncManager";
 import { captureAttendanceQueueScope } from "../services/offline/attendanceQueueProvenance";
 
 const LOG_PREFIX = "[AutoAttendanceBootstrap]";
+
+// New binaries use the scoped journal bootstrap. The component below preserves
+// import/runtime compatibility for binaries predating the additive native API.
 
 /**
  * Keeps automatic check-in/out working regardless of which screen is open.
@@ -84,6 +89,11 @@ const LOG_PREFIX = "[AutoAttendanceBootstrap]";
  * the user explicitly enables it on the AutoAttendance screen).
  */
 export default function AutoAttendanceBootstrap() {
+  return typeof supportsDurableEvents === "function" && supportsDurableEvents()
+    ? <DurableAutoAttendanceBootstrap /> : <LegacyAutoAttendanceBootstrap />;
+}
+
+function LegacyAutoAttendanceBootstrap() {
   const dispatch = useDispatch();
   const isLoggedIn = useSelector(selectIsLoggedIn);
   const active = useSelector(selectAutoAttendanceActive);
@@ -603,15 +613,8 @@ export default function AutoAttendanceBootstrap() {
         return;
       }
 
-      // 3. Either the server says no session is open, or it could not be reached
-      //    with an empty outbox. Both leave the local CHECKED_OUT as the best
-      //    available account of the day, and the device is inside the fence.
-      console.log(
-        `${LOG_PREFIX} Already inside ${office.locationName || "the office"} at startup; checking in`,
-      );
-      // Not a geofence transition: "now" is the only defensible timestamp, and
-      // the replay high-water mark must not move (see performAttendanceAction).
-      await performAttendanceAction("IN", Date.now(), { markProcessed: false });
+      // A current fix cannot prove a crossing. Initial attendance requires the
+      // OS initial-state ENTER callback, including on older native binaries.
     };
 
     // This effect re-runs for several reasons — login, the employee code
@@ -621,11 +624,8 @@ export default function AutoAttendanceBootstrap() {
     // exactly one startup sequence in flight, which is what makes this component
     // safe to be the sole registrar.
     //
-    // Within a run the order matters. Replay first: a real missed crossing
-    // carries the true crossing time, whereas presence reconciliation can only
-    // ever claim "now", so letting presence go first would take the check-in slot
-    // with a worse timestamp. Presence is the backstop for when the OS said
-    // nothing at all.
+    // Replay supplies captured event time. Presence only restores server state;
+    // a location snapshot must never supply an attendance transition.
     startupRef.current = startupRef.current
       .then(async () => {
         if (cancelled) return;

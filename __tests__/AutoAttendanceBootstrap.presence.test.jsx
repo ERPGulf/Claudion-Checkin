@@ -7,7 +7,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 /**
  * Presence reconciliation when monitoring starts.
  *
- * The regression these cover: enabling monitoring while already inside the office
+ * These legacy-binary regressions now require an OS event for attendance. Previously, enabling monitoring while already inside the office
  * used to do nothing until the OS happened to deliver an ENTER. It often never
  * did — Android's INITIAL_TRIGGER_ENTER is judged against a possibly stale
  * location estimate, and iOS's requestState answers `.unknown` when it has no
@@ -195,32 +195,19 @@ describe("AutoAttendanceBootstrap presence reconciliation", () => {
 
   // The reported scenario: monitoring was enabled outside, turned off, the user
   // walked in, and turned it on again while already inside.
-  it("checks in when monitoring starts while the user is already inside", async () => {
+  it("does not manufacture IN from an inside location snapshot", async () => {
     await mountBootstrap();
-
-    await waitFor(() => expect(autoCheckInOut).toHaveBeenCalledTimes(1));
-    expect(autoCheckInOut).toHaveBeenCalledWith(
-      expect.objectContaining({
-        employeeCode: EMPLOYEE_CODE,
-        type: "IN",
-        office: OFFICE_INSIDE,
-      }),
-    );
-
-    const session = await readSession();
-    expect(session).toMatchObject({
-      status: SESSION_STATUS.CHECKED_IN,
-      origin: SESSION_ORIGIN.AUTO,
-    });
-
-    expect(store.getState().attendance.checkin).toBe(true);
-    expect(store.getState().attendance.sessionOrigin).toBe(SESSION_ORIGIN.AUTO);
+    await flushStartup();
+    expect(autoCheckInOut).not.toHaveBeenCalled();
+    expect((await readSession()).status).toBe(SESSION_STATUS.CHECKED_OUT);
+    expect(store.getState().attendance.checkin).toBe(false);
   });
 
   it("registers the fence exactly once and then reconciles presence", async () => {
     await mountBootstrap();
 
-    await waitFor(() => expect(autoCheckInOut).toHaveBeenCalledTimes(1));
+    await flushStartup();
+    expect(autoCheckInOut).not.toHaveBeenCalled();
     expect(startGeofence).toHaveBeenCalledTimes(1);
     expect(startGeofence).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -240,11 +227,9 @@ describe("AutoAttendanceBootstrap presence reconciliation", () => {
 
     await mountBootstrap();
 
-    await waitFor(() => expect(autoCheckInOut).toHaveBeenCalledTimes(1));
+    await flushStartup();
+    expect(autoCheckInOut).not.toHaveBeenCalled();
     expect(startGeofence).not.toHaveBeenCalled();
-    expect(autoCheckInOut).toHaveBeenCalledWith(
-      expect.objectContaining({ type: "IN", office: OFFICE_INSIDE }),
-    );
   });
 
   it("does not check in again when a session is already open", async () => {
@@ -275,13 +260,16 @@ describe("AutoAttendanceBootstrap presence reconciliation", () => {
   it("does not advance the replay high-water mark", async () => {
     await mountBootstrap();
 
-    await waitFor(() => expect(autoCheckInOut).toHaveBeenCalledTimes(1));
+    await flushStartup();
+      expect(autoCheckInOut).not.toHaveBeenCalled();
     expect(await getLastProcessedEventAt()).toBeNull();
   });
 
-  it("leaves a later native EXIT replayable after a presence check-in", async () => {
+  it("leaves a later native EXIT replayable after a manual check-in", async () => {
+    await performSessionTransition({ type: "IN", origin: SESSION_ORIGIN.MANUAL,
+      at: Date.now() - 60000, execute: async () => ({ allowed: true }) });
     await mountBootstrap();
-    await waitFor(() => expect(autoCheckInOut).toHaveBeenCalledTimes(1));
+    await flushStartup();
 
     // The user leaves; the OS records it while JS is not running.
     const leftAt = Date.now();
@@ -373,7 +361,7 @@ describe("AutoAttendanceBootstrap presence reconciliation", () => {
     await flushStartup();
 
     expect(startGeofence).toHaveBeenCalledTimes(1);
-    expect(autoCheckInOut).toHaveBeenCalledTimes(1);
+    expect(autoCheckInOut).not.toHaveBeenCalled();
   });
 
   it("registers after a sync request once permission is granted late", async () => {
@@ -393,7 +381,8 @@ describe("AutoAttendanceBootstrap presence reconciliation", () => {
     });
 
     await waitFor(() => expect(startGeofence).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(autoCheckInOut).toHaveBeenCalledTimes(1));
+    await flushStartup();
+      expect(autoCheckInOut).not.toHaveBeenCalled();
   });
 
   it("does nothing when location permission has not been granted", async () => {
@@ -445,10 +434,8 @@ describe("AutoAttendanceBootstrap presence reconciliation", () => {
 
       await mountBootstrap();
 
-      await waitFor(() => expect(autoCheckInOut).toHaveBeenCalledTimes(1));
-      expect(autoCheckInOut).toHaveBeenCalledWith(
-        expect.objectContaining({ type: "IN" }),
-      );
+      await flushStartup();
+      expect(autoCheckInOut).not.toHaveBeenCalled();
     });
 
     it("restores the server's open session rather than checking in again", async () => {
@@ -464,12 +451,13 @@ describe("AutoAttendanceBootstrap presence reconciliation", () => {
       expect(store.getState().attendance.checkin).toBe(true);
     });
 
-    it("checks in when the server confirms no session is open", async () => {
+    it("waits for an OS event when the server confirms no session is open", async () => {
       mockServerStatus = { custom_in: 0 };
 
       await mountBootstrap();
 
-      await waitFor(() => expect(autoCheckInOut).toHaveBeenCalledTimes(1));
+      await flushStartup();
+      expect(autoCheckInOut).not.toHaveBeenCalled();
     });
 
     // "No answer" is not "no session" — but with an empty outbox the local
@@ -480,7 +468,8 @@ describe("AutoAttendanceBootstrap presence reconciliation", () => {
 
       await mountBootstrap();
 
-      await waitFor(() => expect(autoCheckInOut).toHaveBeenCalledTimes(1));
+      await flushStartup();
+      expect(autoCheckInOut).not.toHaveBeenCalled();
     });
 
     it("does not consult the server at all when a session is already open locally", async () => {
@@ -501,7 +490,8 @@ describe("AutoAttendanceBootstrap presence reconciliation", () => {
 
       await mountBootstrap();
 
-      await waitFor(() => expect(autoCheckInOut).toHaveBeenCalledTimes(1));
+      await flushStartup();
+      expect(autoCheckInOut).not.toHaveBeenCalled();
       // Nothing to drain, so it should not have bothered trying.
       expect(syncNow).not.toHaveBeenCalled();
     });
@@ -530,12 +520,13 @@ describe("AutoAttendanceBootstrap presence reconciliation", () => {
       expect(autoCheckInOut).not.toHaveBeenCalled();
     });
 
-    it("fails open when the queue cannot be read", async () => {
+    it("does not manufacture attendance when the queue cannot be read", async () => {
       getQueueCounts.mockRejectedValueOnce(new Error("database locked"));
 
       await mountBootstrap();
 
-      await waitFor(() => expect(autoCheckInOut).toHaveBeenCalledTimes(1));
+      await flushStartup();
+      expect(autoCheckInOut).not.toHaveBeenCalled();
     });
   });
 });

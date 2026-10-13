@@ -40,6 +40,21 @@ beforeEach(async () => {
   await AsyncStorage.setItem(CONFIG_KEY, JSON.stringify(restrictedConfig));
 });
 
+it("does not wait for an optional GPS tag while admitting a persisted native transition", async () => {
+  const gate = await evaluateOfflineAttendance({ type: "OUT", enforceRadius: false, skipPosition: true });
+  expect(gate.allowed).toBe(true);
+  expect(gate.coords).toBeNull();
+  expect(Location.getCurrentPositionAsync).not.toHaveBeenCalled();
+  expect(Location.getLastKnownPositionAsync).not.toHaveBeenCalled();
+});
+
+it("keeps manual radius validation even if optional GPS skipping is requested", async () => {
+  const gate = await evaluateOfflineAttendance({ type: "IN", enforceRadius: true, skipPosition: true });
+  expect(gate.allowed).toBe(false);
+  expect(gate.reason).toBe("out-of-radius");
+  expect(Location.getCurrentPositionAsync).toHaveBeenCalledTimes(1);
+});
+
 /**
  * The tenant that does not restrict location at all.
  *

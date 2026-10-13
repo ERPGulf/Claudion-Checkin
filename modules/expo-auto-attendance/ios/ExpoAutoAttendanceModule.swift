@@ -15,6 +15,18 @@ struct GeofenceOptions: Record {
 
   @Field
   var identifier: String = "office"
+
+  @Field
+  var tenantKey: String?
+
+  @Field
+  var employeeId: String?
+
+  @Field
+  var registrationId: String?
+
+  @Field
+  var geotagging: Int?
 }
 
 /**
@@ -50,7 +62,7 @@ public class ExpoAutoAttendanceModule: Module {
         )
         return
       }
-      if options.radius <= 0 {
+      if !options.radius.isFinite || options.radius <= 0 {
         promise.reject("ERR_INVALID_OPTIONS", "Radius must be a positive number of meters")
         return
       }
@@ -82,6 +94,10 @@ public class ExpoAutoAttendanceModule: Module {
         latitude: options.latitude,
         longitude: options.longitude,
         radius: options.radius,
+        tenantKey: options.tenantKey,
+        employeeId: options.employeeId,
+        registrationId: options.registrationId,
+        geotagging: options.geotagging,
         resolve: { promise.resolve(nil) },
         reject: { code, message in promise.reject(code, message) }
       )
@@ -118,8 +134,16 @@ public class ExpoAutoAttendanceModule: Module {
       return GeofenceStore.shared.getLastEvent()
     }
 
+    Function("getPendingEvents") { () throws -> [[String: Any]] in
+      return try GeofenceStore.shared.getPendingEvents()
+    }
+
+    Function("acknowledgeEvent") { (eventId: String) throws -> Bool in
+      return try GeofenceStore.shared.acknowledgeEvent(eventId)
+    }
+
     Function("clearLastEvent") {
-      GeofenceStore.shared.clearLastEvent()
+      try GeofenceStore.shared.clearLastEvent()
       NSLog("%@ Last event cleared", GeofenceManager.logTag)
     }
   }

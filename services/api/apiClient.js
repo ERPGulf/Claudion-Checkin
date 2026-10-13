@@ -78,27 +78,17 @@ const getRequestDebugInfo = (config) => ({
       ? `${config.baseURL}${config.url.startsWith("/") ? "" : "/"}${config.url}`
       : (config?.url ?? null),
   headers: getDebugHeaders(config?.headers),
-  data:
-    typeof config?.data === "string"
-      ? config.data
-      : config?.data instanceof URLSearchParams
-        ? config.data.toString()
-        : (config?.data ?? null),
+  // Auth and domain requests can contain credentials or employee information.
+  // Diagnostics need the route/status, never an arbitrary request body.
+  data: config?.data == null ? null : "[omitted]",
   timeout: config?.timeout ?? null,
 });
 
 const getErrorDebugInfo = (err) => {
-  const parsedResponseData = parseJsonString(err?.response?.data);
-  const nestedData = parseJsonString(parsedResponseData?.data);
-
   return {
     status: err?.response?.status ?? null,
-    message: err?.message ?? null,
     code: err?.code ?? null,
     request: getRequestDebugInfo(err?.config),
-    responseData: parsedResponseData,
-    nestedResponseData: nestedData,
-    serverMessages: extractServerMessages(nestedData ?? parsedResponseData),
   };
 };
 
@@ -403,7 +393,7 @@ export const refreshAccessToken = async () => {
     refreshToken: maskToken(refresh),
     request: {
       headers: getDebugHeaders(setCommonHeaders()),
-      data: form.toString(),
+      data: "[omitted]",
     },
   });
 

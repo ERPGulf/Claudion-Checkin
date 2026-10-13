@@ -28,6 +28,18 @@ class GeofenceOptions : Record {
 
   @Field
   val identifier: String = "office"
+
+  @Field
+  val tenantKey: String? = null
+
+  @Field
+  val employeeId: String? = null
+
+  @Field
+  val registrationId: String? = null
+
+  @Field
+  val geotagging: Int? = null
 }
 
 /**
@@ -82,7 +94,13 @@ class ExpoAutoAttendanceModule : Module() {
 
     OnCreate {
       GeofenceEventBus.attach { eventName, payload -> sendEvent(eventName, payload) }
-      appContext.reactContext?.let { registerPowerSaveReceiver(it) }
+      appContext.reactContext?.let {
+        registerPowerSaveReceiver(it)
+        // Play Services has no registration query. A saved flag cannot prove
+        // PendingIntents survived a force-stop/service reset; repair on cold JS
+        // creation using the original scoped config, without GPS or HTTP.
+        GeofenceManager.restoreFromStore(it)
+      }
     }
 
     OnDestroy {
@@ -102,7 +120,7 @@ class ExpoAutoAttendanceModule : Module() {
         )
         return@AsyncFunction
       }
-      if (options.radius <= 0) {
+      if (!options.radius.isFinite() || options.radius <= 0) {
         promise.reject("ERR_INVALID_OPTIONS", "Radius must be a positive number of meters", null)
         return@AsyncFunction
       }
@@ -132,6 +150,10 @@ class ExpoAutoAttendanceModule : Module() {
         latitude = options.latitude,
         longitude = options.longitude,
         radius = options.radius.toFloat(),
+        tenantKey = options.tenantKey,
+        employeeId = options.employeeId,
+        registrationId = options.registrationId,
+        geotagging = options.geotagging,
         onSuccess = { promise.resolve(null) },
         onFailure = { error ->
           promise.reject(
@@ -180,25 +202,22 @@ class ExpoAutoAttendanceModule : Module() {
       if (stored == null || !GeofenceStore.isMonitoring(context)) {
         emptyList()
       } else {
-        listOf(
-          mapOf(
-            "identifier" to stored.optString("identifier"),
-            "latitude" to stored.optDouble("latitude"),
-            "longitude" to stored.optDouble("longitude"),
-            "radius" to stored.optDouble("radius"),
-          ),
-        )
+        listOf(GeofenceStore.asMap(stored))
       }
     }
 
     Function("getLastEvent") {
       GeofenceStore.getLastEvent(context)?.let {
-        mapOf(
-          "transition" to it.optString("transition"),
-          "identifier" to it.optString("identifier"),
-          "timestamp" to it.optLong("timestamp"),
-        )
+        GeofenceStore.asMap(it)
       }
+    }
+
+    Function("getPendingEvents") {
+      GeofenceStore.getPendingEvents(context)
+    }
+
+    Function("acknowledgeEvent") { eventId: String ->
+      GeofenceStore.acknowledgeEvent(context, eventId)
     }
 
     Function("clearLastEvent") {

@@ -17,7 +17,7 @@ import {
 import { scoreLocations, pickNearest } from "../../utils/attendanceLocations";
 import { assertCompleteAttendancePolicy } from "../offline/attendanceConfigCache";
 import { getAuthSessionGeneration } from "../../utils/authSessionGuard";
-import { createAttendanceScopeChangedError } from "../offline/attendanceQueueProvenance";
+import { assertAttendanceQueueScope, createAttendanceScopeChangedError, normalizeAttendanceTenantKey } from "../offline/attendanceQueueProvenance";
 import {
   parseServerWallClock,
   rememberServerOffset,
@@ -28,7 +28,8 @@ import {
   recordNonFatalError,
 } from "../crashlytics.service";
 
-export const getServerTime = async () => {
+export const getServerTime = async ({ syncScope } = {}) => {
+  if (syncScope) await assertAttendanceQueueScope(syncScope);
   const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
   const baseUrl = cleanBaseUrl(rawBaseUrl);
   const token = await AsyncStorage.getItem("access_token");
@@ -37,10 +38,12 @@ export const getServerTime = async () => {
 
   const requestedAt = Date.now();
   const response = await apiClient.get(url, {
+    ...(syncScope ? { attendanceSyncScope: syncScope } : {}),
     headers: {
       Authorization: `Bearer ${token}`,
     },
   });
+  if (syncScope) await assertAttendanceQueueScope(syncScope);
 
   // Extract correct field from API response
   const serverTime = response.data?.message?.server_time;
@@ -49,7 +52,9 @@ export const getServerTime = async () => {
   // drifted from the server's. Offline check-ins are stamped with device time
   // plus this offset, so a wrong phone clock cannot shift a queued punch.
   // Fire-and-forget: a storage failure must never fail a check-in.
-  rememberServerOffset(serverTime, requestedAt).catch(() => {});
+  rememberServerOffset(serverTime, requestedAt, {
+    tenantKey: syncScope?.tenantKey ?? normalizeAttendanceTenantKey(baseUrl),
+  }).catch(() => {});
 
   return serverTime;
 };
@@ -69,8 +74,8 @@ export const getServerTime = async () => {
  * Falls back to the server's current time whenever the event time is unusable,
  * which is exactly the pre-existing behaviour.
  */
-export const resolveServerTimestampAt = async (occurredAt, nowMs = Date.now()) => {
-  const serverNow = await getServerTime();
+export const resolveServerTimestampAt = async (occurredAt, nowMs = Date.now(), options = {}) => {
+  const serverNow = await getServerTime(options);
   const occurredAtMs = toTimestampMs(occurredAt);
 
   if (!occurredAtMs) return serverNow;
@@ -440,9 +445,12 @@ export const autoCheckInOut = async ({
   type,
   office = null,
   occurredAt = null,
+  timestamp: preparedTimestamp,
+  syncScope,
 }) => {
   const logPrefix = "[attendance.service/autoCheckInOut]";
   try {
+    if (syncScope) await assertAttendanceQueueScope(syncScope);
     if (!employeeCode) throw new Error("Employee ID is required");
     if (type !== "IN" && type !== "OUT") {
       throw new Error(`Invalid attendance type: ${type}`);
@@ -455,7 +463,8 @@ export const autoCheckInOut = async ({
     const token = await AsyncStorage.getItem("access_token");
     if (!token) throw new Error("Token missing");
 
-    const timestamp = await resolveServerTimestampAt(occurredAt);
+    const timestamp = preparedTimestamp ?? await resolveServerTimestampAt(occurredAt);
+    if (syncScope) await assertAttendanceQueueScope(syncScope);
 
     const payload = {
       device_id: "MobileAPP",
@@ -478,12 +487,15 @@ export const autoCheckInOut = async ({
       payload.location = office?.locationName || "Automatic (geofence)";
     }
 
-    console.log(`${logPrefix} Auto ${type}`, payload);
+    console.log(`${logPrefix} Auto ${type}`);
 
     const response = await apiClient.post(
       `${baseUrl}/api/method/employee_app.attendance_api.add_log_based_on_employee_field`,
       payload,
-      { headers: { Authorization: `Bearer ${token}` } },
+      {
+        headers: { Authorization: `Bearer ${token}` },
+        ...(syncScope ? { attendanceSyncScope: syncScope } : {}),
+      },
     );
 
     const checkinId = response.data?.message?.name;
@@ -502,7 +514,7 @@ export const autoCheckInOut = async ({
       location: office,
     };
   } catch (error) {
-    console.log(`${logPrefix} Failed:`, error?.message);
+    console.log(`${logPrefix} Failed`, { code: error?.code, httpStatus: error?.response?.status });
     // Same rule as userCheckIn: only a bug in our own code is reported.
     if (isProgrammingError(error)) {
       recordNonFatalError(error, { feature: "attendance", action: "auto_punch", type });
@@ -525,8 +537,10 @@ export const getUserAttendance = async (
   employee_id,
   limit_start = 0,
   limit_page_length = 20,
+  { syncScope } = {},
 ) => {
   try {
+    if (syncScope) await assertAttendanceQueueScope(syncScope);
     const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
     const token = await AsyncStorage.getItem("access_token");
     if (!rawBaseUrl || !token) {
@@ -539,6 +553,7 @@ export const getUserAttendance = async (
     const baseUrl = cleanBaseUrl(rawBaseUrl);
     const url = `${baseUrl}/api/method/employee_app.attendance_api.get_attendance_details`;
     const response = await apiClient.get(url, {
+      ...(syncScope ? { attendanceSyncScope: syncScope } : {}),
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/x-www-form-urlencoded",
@@ -550,6 +565,7 @@ export const getUserAttendance = async (
       },
       timeout: 10000,
     });
+    if (syncScope) await assertAttendanceQueueScope(syncScope);
     // Return the attendance list
     return response.data?.message || [];
   } catch (error) {
@@ -584,16 +600,15 @@ export const getUserAttendance = async (
 //   }
 // };
 
-export const getAttendanceStatus = async () => {
+export const getAttendanceStatus = async ({ syncScope } = {}) => {
   try {
+    if (syncScope) await assertAttendanceQueueScope(syncScope);
     const employee_id =
       (await AsyncStorage.getItem("employee_id")) ||
       (await AsyncStorage.getItem("employee_code"));
     if (!employee_id) return { custom_in: 0 };
 
-    const list = await getUserAttendance(employee_id, 0, 10);
-
-    console.log("ATTENDANCE LIST:", list);
+    const list = await getUserAttendance(employee_id, 0, 10, { syncScope });
 
     // `getUserAttendance` swallows every failure into `{ error }`, which used to
     // arrive here indistinguishable from "no records" and become custom_in: 0 —
@@ -636,7 +651,6 @@ export const getAttendanceStatus = async () => {
 
     const latestLogType = String(latest?.log_type || "").toUpperCase();
 
-    console.log("LATEST RECORD:", latest);
 
     return {
       custom_in:
@@ -647,7 +661,7 @@ export const getAttendanceStatus = async () => {
       log_type: latest?.log_type || null,
     };
   } catch (e) {
-    console.log("STATUS ERROR:", e);
+    console.log("STATUS ERROR:", { code: e?.code, httpStatus: e?.response?.status });
     // Same reasoning as the `list.error` branch above: a thrown failure is not
     // the server reporting a closed session.
     return { custom_in: 0, unavailable: true, error: e?.message };

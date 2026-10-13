@@ -43,6 +43,23 @@ describe("API Client (Interceptors + Token Refresh)", () => {
   // REQUEST INTERCEPTOR TESTS
   // ---------------------------------------------------------
   describe("Request Interceptor", () => {
+    it("omits credential-bearing request bodies and refresh form data from logs", async () => {
+      const refreshValue = "synthetic-private-refresh-value";
+      const password = "synthetic-private-password-value";
+      await AsyncStorage.setItem("refresh_token", refreshValue);
+      mock.onPost("https://example.com/api/private").replyOnce(401);
+      refreshMock.onPost("https://example.com/api/method/employee_app.gauth.create_refresh_token")
+        .reply(200, { data: { access_token: "synthetic-new-access", refresh_token: "synthetic-new-refresh" } });
+      mock.onPost("https://example.com/api/private").reply(200, { ok: true });
+      const output = jest.spyOn(console, "log").mockImplementation(() => {});
+      try {
+        await apiClient.post("https://example.com/api/private", { password });
+        const logs = JSON.stringify(output.mock.calls);
+        expect(logs).not.toContain(refreshValue);
+        expect(logs).not.toContain(password);
+        expect(logs).not.toContain("refresh_token=");
+      } finally { output.mockRestore(); }
+    });
     it("adds baseURL for relative paths", async () => {
       mock.onGet("https://example.com/api/user").reply(200, { ok: true });
 

@@ -1,5 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
+  CHECKIN_START_TIME_KEY,
+  LAST_CHECKOUT_TIME_KEY,
   clearPersistedCheckinStartTime,
   getPersistedSessionTimes,
   persistCheckinStartTime,
@@ -85,9 +87,12 @@ const normalizeSession = (raw) => {
 
   const startedAt = toTimestampMs(raw.startedAt);
   const endedAt = toTimestampMs(raw.endedAt);
+  const source = typeof raw.sourceEventId === "string" && raw.sourceEventId
+    ? { sourceEventId: raw.sourceEventId } : {};
 
   if (raw.status === SESSION_STATUS.CHECKED_IN) {
     return {
+      ...source,
       status: SESSION_STATUS.CHECKED_IN,
       origin: normalizeOrigin(raw.origin, SESSION_ORIGIN.UNKNOWN),
       startedAt,
@@ -97,6 +102,7 @@ const normalizeSession = (raw) => {
   }
 
   return {
+    ...source,
     status: SESSION_STATUS.CHECKED_OUT,
     origin: normalizeOrigin(raw.origin),
     startedAt,
@@ -141,25 +147,28 @@ const writeSession = async (session) => {
   return normalized;
 };
 
-const readSessionUnlocked = async () => {
+const readSessionUnlocked = async ({ strictRead = false } = {}) => {
   let stored = null;
 
   try {
     stored = await AsyncStorage.getItem(SESSION_STATE_KEY);
-  } catch {
+  } catch (error) {
+    if (strictRead) throw error;
     return { ...CLOSED_SESSION };
   }
 
   if (stored != null) {
     try {
       return normalizeSession(JSON.parse(stored));
-    } catch {
+    } catch (error) {
+      if (strictRead) throw error;
       // Corrupt record — fall through to the legacy derivation below.
     }
   }
 
   const migrated = await deriveSessionFromLegacyTimes();
-  await writeSession(migrated).catch(() => {});
+  if (strictRead) await writeSession(migrated);
+  else await writeSession(migrated).catch(() => {});
   return migrated;
 };
 
@@ -200,10 +209,11 @@ export const canTransition = (session, type) =>
     ? !isSessionActive(session)
     : type === "OUT" && isSessionActive(session);
 
-const commitCheckIn = async ({ origin, at }) => {
+const commitCheckIn = async ({ origin, at, sourceEventId }) => {
   const startedAt = await persistCheckinStartTime(at ?? Date.now());
 
   return writeSession({
+    ...(sourceEventId ? { sourceEventId } : {}),
     status: SESSION_STATUS.CHECKED_IN,
     origin: normalizeOrigin(origin, SESSION_ORIGIN.UNKNOWN),
     startedAt,
@@ -218,6 +228,7 @@ const commitCheckOut = async ({ session, origin, at }) => {
   // The closed record keeps the ended session's origin so callers can tell
   // "your manual check-in was closed automatically" from a fully automatic day.
   return writeSession({
+    ...(session?.sourceEventId ? { sourceEventId: session.sourceEventId } : {}),
     status: SESSION_STATUS.CHECKED_OUT,
     origin: session?.origin ?? null,
     startedAt: session?.startedAt ?? null,
@@ -261,25 +272,39 @@ export const performSessionTransition = async ({
   origin,
   execute,
   at,
+  assertCurrent,
+  rejectStale = false,
+  strictRead = false,
+  sourceEventId,
+  withSessionContext = false,
 }) => {
   if (type !== "IN" && type !== "OUT") {
     throw new Error(`Invalid attendance transition: ${type}`);
   }
 
   return withSessionLock(async () => {
-    const previousSession = await readSessionUnlocked();
+    if (assertCurrent) await assertCurrent();
+    const previousSession = await readSessionUnlocked({ strictRead });
 
-    if (!canTransition(previousSession, type)) {
+    const eventAt = toTimestampMs(at);
+    const staleEvent = rejectStale && Number.isFinite(eventAt) && (
+      (Number.isFinite(previousSession.endedAt) && eventAt < previousSession.endedAt) ||
+      (type === "OUT" && Number.isFinite(previousSession.startedAt) && eventAt < previousSession.startedAt)
+    );
+
+    if (staleEvent || !canTransition(previousSession, type)) {
       return {
         status: TRANSITION_RESULT.SKIPPED,
         session: previousSession,
         previousSession,
         queued: false,
         serverConfirmed: false,
+        ...(staleEvent ? { reason: "stale-event" } : {}),
       };
     }
 
-    const response = await execute();
+    if (assertCurrent) await assertCurrent();
+    const response = await (withSessionContext ? execute(previousSession) : execute());
 
     if (!response?.allowed) {
       return {
@@ -292,9 +317,12 @@ export const performSessionTransition = async ({
       };
     }
 
+    // A request already sent cannot be recalled. Its durable source receipt
+    // records the outcome; it must not mutate a newer account's session.
+    if (assertCurrent) await assertCurrent();
     const session =
       type === "IN"
-        ? await commitCheckIn({ origin, at })
+        ? await commitCheckIn({ origin, at, sourceEventId })
         : await commitCheckOut({ session: previousSession, origin, at });
 
     const queued = !!response?.queued;
@@ -384,6 +412,8 @@ export const reconcileSessionFromServer = async ({
       await persistCheckinStartTime(startedAt);
 
       return writeSession({
+        ...(isSessionActive(session) && session.startedAt === startedAt && session.sourceEventId
+          ? { sourceEventId: session.sourceEventId } : {}),
         status: SESSION_STATUS.CHECKED_IN,
         origin: resolvedOrigin,
         startedAt,
@@ -409,12 +439,37 @@ export const reconcileSessionFromServer = async ({
   });
 
 /** Drops the record entirely. See `applySessionOwner` for when that is right. */
-export const clearSessionState = async () => {
-  await AsyncStorage.removeItem(SESSION_STATE_KEY);
-};
+export const clearSessionState = () => withSessionLock(() =>
+  AsyncStorage.removeItem(SESSION_STATE_KEY));
 
 /** Which employee the stored session record belongs to. */
 export const SESSION_OWNER_KEY = "attendanceSessionOwner";
+export const UNVERIFIED_SESSION_OWNER_KEY = "attendanceSessionUnverifiedOwner";
+
+export const readUnverifiedSessionOwner = async () => {
+  const raw = await AsyncStorage.getItem(UNVERIFIED_SESSION_OWNER_KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    // Corrupt evidence still requires reconciliation; it is not proven absent.
+    return { unreadable: true };
+  }
+};
+
+export const clearUnverifiedSessionOwner = () =>
+  AsyncStorage.removeItem(UNVERIFIED_SESSION_OWNER_KEY);
+
+const parseSessionOwner = (raw) => {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object" && parsed.employeeId) return parsed;
+  } catch {
+    // Original owners were plain employee codes.
+  }
+  return { employeeId: raw, tenantKey: null };
+};
 
 /**
  * Keeps the session record tied to the employee who created it.
@@ -431,37 +486,68 @@ export const SESSION_OWNER_KEY = "attendanceSessionOwner";
  * trigger is the employee actually *changing*, which is the only event that
  * makes the record meaningless.
  *
- * First run on a device that already has a session records the current employee
- * as its owner rather than clearing — the session is almost certainly theirs
- * (this ships as an update to a logged-in app), and adopting it keeps automatic
- * check-out working across the upgrade.
+ * Legacy employee-only callers retain their compatibility format. Scoped
+ * callers archive an unproven legacy record/times before clearing them, so the
+ * automatic processor can require server reconciliation for the current owner.
+ * A proven owner switch clears prior session times while retaining punch queues.
  *
  * @param {string|null} employeeCode the authenticated employee
  * @returns {Promise<boolean>} whether a foreign session was cleared
  */
-export const applySessionOwner = async (employeeCode) => {
+export const applySessionOwner = async (employeeCode, { tenantKey = null } = {}) => {
   if (!employeeCode) return false;
+  return withSessionLock(async () => {
+    const previousRaw = await AsyncStorage.getItem(SESSION_OWNER_KEY);
+    const previousOwner = parseSessionOwner(previousRaw);
+    const nextOwner = { employeeId: employeeCode, tenantKey };
+    const sameEmployee = previousOwner?.employeeId === employeeCode;
+    const sameScope = sameEmployee && previousOwner?.tenantKey === tenantKey;
+    if (tenantKey ? sameScope : sameEmployee) return false;
 
-  let previousOwner = null;
-  try {
-    previousOwner = await AsyncStorage.getItem(SESSION_OWNER_KEY);
-  } catch {
-    // Unreadable owner is not evidence of a switch. Leave the session alone.
-    return false;
-  }
+    const verifiedSwitch = !!previousOwner && (
+      !sameEmployee || (tenantKey && previousOwner.tenantKey && previousOwner.tenantKey !== tenantKey)
+    );
+    const needsScopedMigration = !!tenantKey && !previousOwner?.tenantKey;
+    let cleared = false;
 
-  if (previousOwner === employeeCode) return false;
+    if (needsScopedMigration && !verifiedSwitch) {
+      const session = await readSessionUnlocked({ strictRead: true });
+      const times = await getPersistedSessionTimes();
+      if (isSessionActive(session) || Number.isFinite(times.lastCheckoutTime) ||
+        Number.isFinite(times.checkinStartTime) || Number.isFinite(session.endedAt)) {
+        // An existing session has no proven tenant. Save evidence first, then
+        // require a scoped server reconciliation before it can produce an OUT.
+        // Failure to save the marker must leave the existing session untouched.
+        const previousEvidence = await readUnverifiedSessionOwner();
+        if (!previousEvidence) {
+          await AsyncStorage.setItem(UNVERIFIED_SESSION_OWNER_KEY, JSON.stringify({
+            previousOwner,
+            intendedOwner: nextOwner,
+            session,
+            ...times,
+            recordedAt: Date.now(),
+          }));
+        }
+        await AsyncStorage.multiRemove([
+          SESSION_STATE_KEY, CHECKIN_START_TIME_KEY, LAST_CHECKOUT_TIME_KEY,
+        ]);
+        cleared = true;
+      }
+    }
 
-  const isSwitch = !!previousOwner && previousOwner !== employeeCode;
+    if (verifiedSwitch) {
+      await AsyncStorage.multiRemove([
+        SESSION_STATE_KEY, CHECKIN_START_TIME_KEY, LAST_CHECKOUT_TIME_KEY,
+      ]);
+      cleared = true;
+    }
 
-  if (isSwitch) {
-    await clearSessionState().catch(() => {});
-    await clearPersistedCheckinStartTime().catch(() => {});
-  }
-
-  await AsyncStorage.setItem(SESSION_OWNER_KEY, employeeCode).catch(() => {});
-
-  return isSwitch;
+    // Legacy callers retain their plain employee-code storage format. Scoped
+    // callers never downgrade an already scoped owner to an unscoped one.
+    await AsyncStorage.setItem(SESSION_OWNER_KEY, tenantKey
+      ? JSON.stringify(nextOwner) : employeeCode);
+    return cleared;
+  });
 };
 
 export default {
@@ -471,8 +557,10 @@ export default {
   applySessionOwner,
   canTransition,
   clearSessionState,
+  clearUnverifiedSessionOwner,
   isSessionActive,
   performSessionTransition,
   readSession,
+  readUnverifiedSessionOwner,
   reconcileSessionFromServer,
 };

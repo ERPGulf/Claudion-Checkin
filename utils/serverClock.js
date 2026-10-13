@@ -54,6 +54,8 @@ export const parseServerWallClock = (value) => {
 const MAX_PLAUSIBLE_OFFSET_MS = 24 * 60 * 60 * 1000;
 
 let cachedOffsetMs = null;
+const scopedOffsets = new Map();
+const scopedOffsetKey = (tenantKey) => `${SERVER_OFFSET_KEY}:${encodeURIComponent(tenantKey)}`;
 
 /**
  * Records the gap between server and device clocks. Called on every successful
@@ -65,6 +67,7 @@ let cachedOffsetMs = null;
 export const rememberServerOffset = async (
   serverTime,
   deviceNowMs = Date.now(),
+  { tenantKey } = {},
 ) => {
   const wallClock = parseServerWallClock(serverTime);
   if (!wallClock) return null;
@@ -73,9 +76,11 @@ export const rememberServerOffset = async (
   if (Math.abs(offsetMs) > MAX_PLAUSIBLE_OFFSET_MS) return null;
 
   cachedOffsetMs = offsetMs;
+  if (tenantKey) scopedOffsets.set(tenantKey, offsetMs);
 
   try {
     await AsyncStorage.setItem(SERVER_OFFSET_KEY, String(offsetMs));
+    if (tenantKey) await AsyncStorage.setItem(scopedOffsetKey(tenantKey), String(offsetMs));
   } catch {
     // In-memory value still applies for this session.
   }
@@ -84,7 +89,15 @@ export const rememberServerOffset = async (
 };
 
 /** The last recorded offset, or 0 when none has ever been recorded. */
-export const getServerOffset = async () => {
+export const getServerOffset = async ({ tenantKey } = {}) => {
+  if (tenantKey) {
+    if (scopedOffsets.has(tenantKey)) return scopedOffsets.get(tenantKey);
+    const raw = await AsyncStorage.getItem(scopedOffsetKey(tenantKey)).catch(() => null);
+    const parsed = raw == null ? NaN : Number(raw);
+    const offset = Number.isFinite(parsed) && Math.abs(parsed) <= MAX_PLAUSIBLE_OFFSET_MS ? parsed : 0;
+    scopedOffsets.set(tenantKey, offset);
+    return offset;
+  }
   if (cachedOffsetMs !== null) return cachedOffsetMs;
 
   try {
@@ -108,8 +121,8 @@ export const getServerOffset = async () => {
  * @param {number} [atMs] device epoch ms; defaults to now
  * @returns {Promise<string>} e.g. "2026-07-28 01:00:00"
  */
-export const formatOfflineTimestamp = async (atMs = Date.now()) => {
-  const offset = await getServerOffset();
+export const formatOfflineTimestamp = async (atMs = Date.now(), options = {}) => {
+  const offset = await getServerOffset(options);
   const at = Number.isFinite(atMs) ? atMs : Date.now();
   return format(new Date(at + offset), SERVER_TIMESTAMP_FORMAT);
 };
@@ -117,6 +130,7 @@ export const formatOfflineTimestamp = async (atMs = Date.now()) => {
 /** Test seam. */
 export const resetServerClockCache = () => {
   cachedOffsetMs = null;
+  scopedOffsets.clear();
 };
 
 export default {

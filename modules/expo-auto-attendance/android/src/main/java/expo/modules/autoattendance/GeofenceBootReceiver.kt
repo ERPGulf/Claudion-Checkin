@@ -3,7 +3,10 @@ package expo.modules.autoattendance
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Re-registers the persisted geofence after the events that make Android drop
@@ -16,7 +19,25 @@ class GeofenceBootReceiver : BroadcastReceiver() {
     if (action != Intent.ACTION_BOOT_COMPLETED && action != Intent.ACTION_MY_PACKAGE_REPLACED) {
       return
     }
-    Log.i(GeofenceManager.TAG, "System broadcast $action received, restoring geofence")
-    GeofenceManager.restoreFromStore(context)
+    val result = goAsync()
+    val finished = AtomicBoolean(false)
+    val handler = Handler(Looper.getMainLooper())
+    val timeout = Runnable {
+      if (finished.compareAndSet(false, true)) {
+        Log.w(GeofenceManager.TAG, "Geofence restore exceeded broadcast budget")
+        result.finish()
+      }
+    }
+    handler.postDelayed(timeout, 8000L)
+    try {
+      GeofenceManager.restoreFromStore(context) {
+        handler.removeCallbacks(timeout)
+        if (finished.compareAndSet(false, true)) result.finish()
+      }
+    } catch (error: Exception) {
+      handler.removeCallbacks(timeout)
+      if (finished.compareAndSet(false, true)) result.finish()
+      Log.e(GeofenceManager.TAG, "Geofence restore failed")
+    }
   }
 }

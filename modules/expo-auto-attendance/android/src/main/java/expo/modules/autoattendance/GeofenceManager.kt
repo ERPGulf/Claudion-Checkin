@@ -7,6 +7,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.PowerManager
 import android.util.Log
 import androidx.core.content.ContextCompat
@@ -14,6 +16,11 @@ import com.google.android.gms.location.Geofence
 import com.google.android.gms.location.GeofencingClient
 import com.google.android.gms.location.GeofencingRequest
 import com.google.android.gms.location.LocationServices
+import com.google.android.gms.tasks.Tasks
+import java.util.ArrayDeque
+import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Wraps the Play Services [GeofencingClient]. All geofence registration and removal
@@ -27,13 +34,57 @@ object GeofenceManager {
   const val TAG = "ExpoAutoAttendance"
 
   private const val PENDING_INTENT_REQUEST_CODE = 4821
+  private val handler = Handler(Looper.getMainLooper())
+  private val operationGeneration = AtomicLong(0)
+  private val knownIdentifiers = ConcurrentHashMap<String, Long>()
+  private val operations = ArrayDeque<(() -> Unit) -> Unit>()
+  private var operationRunning = false
+
+  private fun withCurrentGeneration(generation: Long, operation: () -> Unit) {
+    synchronized(this) {
+      check(generation == operationGeneration.get()) { "Geofence registration was superseded" }
+      operation()
+    }
+  }
+
+  private fun identifiersToRemove(context: Context, maximumGeneration: Long): List<String> {
+    val stored = listOfNotNull(GeofenceStore.getGeofence(context), GeofenceStore.getPendingGeofence(context))
+      .mapNotNull { registration ->
+        registration.optString("nativeIdentifier").takeIf { it.isNotBlank() && it != "null" }
+          ?: registration.optString("identifier").takeIf { it.isNotBlank() && it != "null" }
+      }
+      .filter { (knownIdentifiers[it] ?: Long.MIN_VALUE) <= maximumGeneration }
+    return (stored + knownIdentifiers.filterValues { it <= maximumGeneration }.keys).distinct()
+  }
+
+  /** Serialize Play Services mutations: a delayed remove must not erase a newer add. */
+  private fun enqueueOperation(operation: (() -> Unit) -> Unit) {
+    handler.post {
+      operations.addLast(operation)
+      runNextOperation()
+    }
+  }
+
+  private fun runNextOperation() {
+    if (operationRunning || operations.isEmpty()) return
+    operationRunning = true
+    var finished = false
+    operations.removeFirst().invoke {
+      if (!finished) {
+        finished = true
+        operationRunning = false
+        runNextOperation()
+      }
+    }
+  }
 
   private fun client(context: Context): GeofencingClient =
     LocationServices.getGeofencingClient(context.applicationContext)
 
   /**
    * Single shared PendingIntent targeting [GeofenceBroadcastReceiver]. Reusing the
-   * same request code lets `removeGeofences(PendingIntent)` drop everything we added.
+   * same request code keeps OS delivery stable. Removal targets physical IDs so
+   * a delayed operation cannot erase a newer registration using this intent.
    */
   private fun geofencePendingIntent(context: Context): PendingIntent {
     val intent = Intent(context.applicationContext, GeofenceBroadcastReceiver::class.java)
@@ -94,59 +145,164 @@ object GeofenceManager {
    * [ExpoAutoAttendanceModule] and [restoreFromStore].
    */
   @SuppressLint("MissingPermission")
+  @Synchronized
   fun startMonitoring(
     context: Context,
     identifier: String,
     latitude: Double,
     longitude: Double,
     radius: Float,
+    tenantKey: String? = null,
+    employeeId: String? = null,
+    registrationId: String? = null,
+    geotagging: Int? = null,
     onSuccess: () -> Unit,
     onFailure: (Exception) -> Unit,
   ) {
-    val geofence = Geofence.Builder()
-      .setRequestId(identifier)
-      .setCircularRegion(latitude, longitude, radius)
-      .setExpirationDuration(Geofence.NEVER_EXPIRE)
-      .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER or Geofence.GEOFENCE_TRANSITION_EXIT)
-      .build()
-
-    val request = GeofencingRequest.Builder()
-      // Fire an ENTER immediately when the device is already inside the region
-      // at registration time, so a check-in is never missed.
-      .setInitialTrigger(GeofencingRequest.INITIAL_TRIGGER_ENTER)
-      .addGeofence(geofence)
-      .build()
-
-    client(context).addGeofences(request, geofencePendingIntent(context))
-      .addOnSuccessListener {
-        GeofenceStore.saveGeofence(context, identifier, latitude, longitude, radius)
-        Log.i(TAG, "Geofence registered: id=$identifier lat=$latitude lng=$longitude radius=${radius}m")
-        Log.i(TAG, "Monitoring started")
-        onSuccess()
+    val generation = operationGeneration.incrementAndGet()
+    // The OS ID changes even when the logical office/config ID stays the same.
+    // Delayed callbacks for a removed registration must never gain new scope.
+    val nativeIdentifier = "attendance:${UUID.randomUUID()}"
+    knownIdentifiers[nativeIdentifier] = generation
+    val registration = mapOf(
+      "identifier" to identifier,
+      "nativeIdentifier" to nativeIdentifier,
+      "latitude" to latitude,
+      "longitude" to longitude,
+      "radius" to radius.toDouble(),
+      "tenantKey" to tenantKey,
+      "employeeId" to employeeId,
+      "registrationId" to registrationId,
+      "geotagging" to geotagging,
+    )
+    enqueueOperation { finish ->
+      if (generation != operationGeneration.get()) {
+        knownIdentifiers.remove(nativeIdentifier)
+        onFailure(IllegalStateException("Geofence registration was superseded"))
+        finish()
+        return@enqueueOperation
       }
-      .addOnFailureListener { error ->
-        Log.e(TAG, "Failed to register geofence: ${error.message}", error)
+      var settled = false
+      lateinit var timeout: Runnable
+      fun fail(error: Exception) {
+        if (settled) return
+        settled = true
+        handler.removeCallbacks(timeout)
+        runCatching { GeofenceStore.clearPendingGeofence(context, nativeIdentifier) }
         onFailure(error)
+        finish()
       }
+      timeout = Runnable { fail(IllegalStateException("Geofence registration timed out")) }
+      handler.postDelayed(timeout, 20000L)
+      try {
+        val obsoleteIdentifiers = identifiersToRemove(context, generation - 1)
+        // Save scope before Play Services can send an initial ENTER broadcast.
+        withCurrentGeneration(generation) { GeofenceStore.savePendingGeofence(context, registration) }
+        val geofence = Geofence.Builder()
+          .setRequestId(nativeIdentifier)
+          .setCircularRegion(latitude, longitude, radius)
+          .setExpirationDuration(Geofence.NEVER_EXPIRE)
+          .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER or Geofence.GEOFENCE_TRANSITION_EXIT)
+          .build()
+        val request = GeofencingRequest.Builder()
+          .setInitialTrigger(GeofencingRequest.INITIAL_TRIGGER_ENTER)
+          .addGeofence(geofence)
+          .build()
+        val locationClient = client(context)
+        // Target immutable OS IDs. A late removal after timeout cannot remove a
+        // newer UUID registration even when it shares this PendingIntent.
+        val removal = if (obsoleteIdentifiers.isEmpty()) Tasks.forResult<Void>(null)
+          else locationClient.removeGeofences(obsoleteIdentifiers)
+        removal
+          .addOnSuccessListener {
+            obsoleteIdentifiers.forEach { knownIdentifiers.remove(it) }
+            if (settled || generation != operationGeneration.get()) {
+              fail(IllegalStateException("Geofence registration was superseded"))
+            } else {
+              try {
+                withCurrentGeneration(generation) { GeofenceStore.markMonitoringUnavailable(context) }
+              } catch (error: Exception) {
+                fail(error)
+                return@addOnSuccessListener
+              }
+              locationClient.addGeofences(request, geofencePendingIntent(context))
+                .addOnSuccessListener {
+                  if (settled || generation != operationGeneration.get()) {
+                    // Target only this obsolete OS ID, including after a timeout.
+                    locationClient.removeGeofences(listOf(nativeIdentifier))
+                      .addOnCompleteListener {
+                        knownIdentifiers.remove(nativeIdentifier)
+                        fail(IllegalStateException("Geofence registration was superseded"))
+                      }
+                  } else {
+                    try {
+                      withCurrentGeneration(generation) { GeofenceStore.saveGeofence(context, registration) }
+                      settled = true
+                      handler.removeCallbacks(timeout)
+                      Log.i(TAG, "Geofence registered")
+                      onSuccess()
+                      finish()
+                    } catch (error: Exception) {
+                      locationClient.removeGeofences(listOf(nativeIdentifier))
+                        .addOnCompleteListener {
+                          knownIdentifiers.remove(nativeIdentifier)
+                          fail(error)
+                        }
+                    }
+                  }
+                }
+                .addOnFailureListener { fail(it) }
+            }
+          }
+          .addOnFailureListener { fail(it) }
+      } catch (error: Exception) {
+        fail(error)
+      }
+    }
   }
 
-  /** Removes every geofence registered through [geofencePendingIntent]. */
+  /** Removes known registrations without targeting a later registration's OS ID. */
+  @Synchronized
   fun stopMonitoring(
     context: Context,
     onSuccess: () -> Unit,
     onFailure: (Exception) -> Unit,
   ) {
-    client(context).removeGeofences(geofencePendingIntent(context))
-      .addOnSuccessListener {
-        GeofenceStore.clearGeofence(context)
-        Log.i(TAG, "Geofence removed")
-        Log.i(TAG, "Monitoring stopped")
-        onSuccess()
+    val generation = operationGeneration.incrementAndGet()
+    val identifiers: List<String>
+    try {
+      identifiers = identifiersToRemove(context, generation)
+      GeofenceStore.clearGeofence(context)
+    } catch (error: Exception) {
+      onFailure(error)
+      return
+    }
+    enqueueOperation { finish ->
+      var settled = false
+      lateinit var timeout: Runnable
+      fun settle(error: Exception? = null) {
+        if (settled) return
+        settled = true
+        handler.removeCallbacks(timeout)
+        if (error == null) onSuccess() else onFailure(error)
+        finish()
       }
-      .addOnFailureListener { error ->
-        Log.e(TAG, "Failed to remove geofence: ${error.message}", error)
-        onFailure(error)
+      timeout = Runnable { settle(IllegalStateException("Geofence removal timed out")) }
+      handler.postDelayed(timeout, 20000L)
+      try {
+        val removal = if (identifiers.isEmpty()) Tasks.forResult<Void>(null)
+          else client(context).removeGeofences(identifiers)
+        removal
+          .addOnSuccessListener {
+            identifiers.forEach { knownIdentifiers.remove(it) }
+            Log.i(TAG, "Monitoring stopped")
+            settle()
+          }
+          .addOnFailureListener { settle(it) }
+      } catch (error: Exception) {
+        settle(error)
       }
+    }
   }
 
   /**
@@ -154,18 +310,22 @@ object GeofenceManager {
    * (and historically on app update), so [GeofenceBootReceiver] calls this to keep
    * monitoring alive without user interaction.
    */
-  fun restoreFromStore(context: Context) {
-    if (!GeofenceStore.isMonitoring(context)) {
+  @Synchronized
+  fun restoreFromStore(context: Context, onComplete: () -> Unit = {}) {
+    if (!GeofenceStore.shouldRestoreGeofence(context)) {
       Log.i(TAG, "No persisted geofence to restore")
+      onComplete()
       return
     }
     if (!hasForegroundLocationPermission(context) || !hasBackgroundLocationPermission(context)) {
       Log.w(TAG, "Cannot restore geofence: location permission missing")
+      onComplete()
       return
     }
-    val stored = GeofenceStore.getGeofence(context)
+    val stored = GeofenceStore.getPendingGeofence(context) ?: GeofenceStore.getGeofence(context)
     if (stored == null) {
       Log.w(TAG, "Monitoring flag set but no stored geofence found")
+      onComplete()
       return
     }
     startMonitoring(
@@ -174,8 +334,20 @@ object GeofenceManager {
       latitude = stored.optDouble("latitude"),
       longitude = stored.optDouble("longitude"),
       radius = stored.optDouble("radius", 100.0).toFloat(),
-      onSuccess = { Log.i(TAG, "Geofence restored after reboot/update") },
-      onFailure = { error -> Log.e(TAG, "Failed to restore geofence", error) },
+      tenantKey = stored.optString("tenantKey").takeIf { it.isNotBlank() && it != "null" },
+      employeeId = stored.optString("employeeId").takeIf { it.isNotBlank() && it != "null" },
+      registrationId = stored.optString("registrationId").takeIf { it.isNotBlank() && it != "null" },
+      geotagging = if (stored.has("geotagging") && !stored.isNull("geotagging")) {
+        stored.optInt("geotagging")
+      } else null,
+      onSuccess = {
+        Log.i(TAG, "Geofence restored after reboot/update")
+        onComplete()
+      },
+      onFailure = { error ->
+        Log.e(TAG, "Failed to restore geofence", error)
+        onComplete()
+      },
     )
   }
 }

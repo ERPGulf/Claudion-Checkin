@@ -3,7 +3,7 @@ jest.mock("expo-sqlite", () => require("../test-utils/expoSqliteMock"));
 jest.mock("../redux/Store", () => ({ store: { dispatch: jest.fn() } }));
 let mockState;
 let mockDark = false;
-jest.mock("react-redux", () => ({ useSelector: selector => selector(mockState) }));
+jest.mock("react-redux", () => ({ useSelector: selector => selector(mockState), useDispatch: () => jest.fn() }));
 jest.mock("../hooks/useAppTheme", () => ({ __esModule: true, default: () => ({ colors: require("../constants")[mockDark ? "DARK_COLORS" : "COLORS"], isDark: mockDark }) }));
 jest.mock("../hooks/useOfflineSyncAlerts", () => ({ __esModule: true, default: () => ({ enabled: false }) }));
 jest.mock("@expo/vector-icons", () => ({ Ionicons: () => null, MaterialCommunityIcons: () => null }));
@@ -38,6 +38,7 @@ import { uploadQueuedPhoto } from "../services/offline/attendancePhotoUpload";
 import { fetchShouldAttemptRequest } from "../services/offline/NetworkListener";
 import * as session from "../utils/attendanceSessionState";
 import { loginQueueEmployee, TEST_TENANT } from "../test-utils/attendanceScope";
+import { ingestNativeEvent } from "../services/offline/AutoAttendanceEventRepository";
 
 const EMPLOYEE = "EMP-001";
 const OTHER_TENANT = "https://another.example.com";
@@ -185,6 +186,16 @@ it.each([200, 417])("treats supported duplicate response %s as success and does 
   expect((await repository.listAll())[0]).toMatchObject({ status: "synced", duplicate: true });
   await recovery();
   expect(http.history.post).toHaveLength(1);
+});
+
+it.each([false, true])("shows retained unattributed automatic events in both themes (dark=%s)", async dark => {
+  mockDark = dark;
+  await ingestNativeEvent({ eventId: "legacy-native", identifier: "office-main", transition: "EXIT", timestamp: Date.now() - 1000 });
+  const ui = render(<AttendanceRecoverySetting />);
+  await waitFor(() => expect(ui.getByText("Automatic events: 0 waiting · 1 need review")).toBeTruthy());
+  fireEvent.press(ui.getByLabelText("View attendance records"));
+  await waitFor(() => expect(ui.getByText("Automatic exit · Needs review")).toBeTruthy());
+  expect(http.history.post).toHaveLength(0);
 });
 
 it.each(["synced", "failed", "resolved", "cancelled", "invalid", "duplicate", "needs_review"])(

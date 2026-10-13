@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AppState } from "react-native";
-import { useSelector } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
+import { requestAutoAttendanceSync } from "../redux/Slices/AutoAttendanceSlice";
+import { listPendingEvents, listReviewEvents } from "../services/offline/AutoAttendanceEventRepository";
+import { verifyAutoAttendanceEvent } from "../services/offline/AutoAttendanceEventProcessor";
 import { selectIsLoggedIn } from "../redux/Slices/AuthSlice";
 import { selectBaseUrl, selectEmployeeCode } from "../redux/Slices/UserSlice";
 import { countRecoveryByScope, listRecoveryRows } from "../services/offline/AttendanceQueueRepository";
@@ -13,6 +16,7 @@ import { reconcileAttendanceRow } from "../services/offline/AttendanceVerificati
 const READ_ERROR = "Could not read saved attendance. Please try again.";
 
 export default function useAttendanceRecovery() {
+  const dispatch = useDispatch();
   const isLoggedIn = useSelector(selectIsLoggedIn);
   const employeeId = useSelector(selectEmployeeCode);
   const baseUrl = useSelector(selectBaseUrl);
@@ -35,8 +39,9 @@ export default function useAttendanceRecovery() {
   const read = useCallback(async () => {
     const scope = await captureAttendanceQueueScope(employeeId);
     if (!isLoggedIn || scope.tenantKey !== normalizeAttendanceTenantKey(baseUrl)) throw new Error("Account changed");
-    const [counts, savedRows] = await Promise.all([
+    const [counts, savedRows, automaticPending, automaticReview] = await Promise.all([
       countRecoveryByScope(scope), listRecoveryRows({ ...scope, since: since.current }),
+      listPendingEvents(scope), listReviewEvents(scope),
     ]);
     await assertAttendanceQueueScope(scope);
     const rowsById = new Map(savedRows.map(row => [row.id, row]));
@@ -46,7 +51,8 @@ export default function useAttendanceRecovery() {
       const saved = rowsById.get(report.id);
       if (saved || report.status === "synced") rowsById.set(report.id, { ...report, ...saved, photoStatus: report.photoStatus, outcome: report.outcome });
     });
-    return { scope, counts, rows: [...rowsById.values()].sort((a, b) => a.timestamp.localeCompare(b.timestamp) || a.id - b.id) };
+    return { scope, counts, automaticEvents: [...automaticPending, ...automaticReview],
+      rows: [...rowsById.values()].sort((a, b) => a.timestamp.localeCompare(b.timestamp) || a.id - b.id) };
   }, [isLoggedIn, employeeId, baseUrl]);
 
   const refresh = useCallback(async () => {
@@ -132,6 +138,26 @@ export default function useAttendanceRecovery() {
   }, [identity, isLoggedIn, employeeId, refresh]);
 
   const safeState = state.identity === identity ? state : { loading: true, counts: null, rows: [], error: null };
+  const verifyAutomatic = async (eventId) => {
+    if (pressed.current || !isLoggedIn) return;
+    pressed.current = true;
+    setCheckingId(`event:${eventId}`);
+    try {
+      const result = await verifyAutoAttendanceEvent({ eventId, employeeId });
+      if (current()) {
+        setNotice(result.verified ? "The server record was verified. The saved event can now reconcile your attendance session."
+          : "No exact server record was verified. The original event remains saved; nothing was resent.");
+        if (result.verified) dispatch(requestAutoAttendanceSync());
+      }
+    } catch {
+      if (current()) setNotice("Could not verify this event. Its original data remains saved; nothing was resent.");
+    } finally {
+      if (current()) { await refresh(); setCheckingId(null); }
+      pressed.current = false;
+    }
+  };
   return { ...safeState, isLoggedIn, busy: busy || backgroundBusy, visible: visible && state.identity === identity && isLoggedIn,
-    notice, checkingId, verify, sync, refresh, open: () => { setVisible(true); refresh(); }, close: () => setVisible(false) };
+    notice, checkingId, verify, verifyAutomatic, sync, refresh,
+    retryAutomatic: () => { dispatch(requestAutoAttendanceSync()); setVisible(true); refresh(); },
+    open: () => { setVisible(true); refresh(); }, close: () => setVisible(false) };
 }

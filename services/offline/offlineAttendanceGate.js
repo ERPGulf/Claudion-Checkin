@@ -166,6 +166,7 @@ export const resolveNearestOffice = async (employeeCode) => {
 export const evaluateOfflineAttendance = async ({
   type,
   enforceRadius = true,
+  skipPosition = false,
 }) => {
   const config = await readAttendanceConfig();
 
@@ -209,7 +210,11 @@ export const evaluateOfflineAttendance = async ({
     restrictLocation !== 1 ||
     (type === "OUT" && unrestrictedCheckout === 1);
 
-  const coords = await getPositionForOfflineCheck();
+  // For a persisted native transition, a fix is optional upload metadata. Do
+  // not spend a short OS wake waiting for GPS. Radius-enforced callers still
+  // obtain and validate a position regardless of this option.
+  const coords = skipPosition && !enforceRadius
+    ? null : await getPositionForOfflineCheck();
   const nearest = coords
     ? findNearestLocation(coords, config.locations)
     : null;

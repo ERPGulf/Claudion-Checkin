@@ -48,12 +48,23 @@ function nativeModule() {
  * @param {{latitude: number, longitude: number, radius: number, identifier: string}} options
  * @returns {Promise<void>}
  */
-export function startGeofence({ latitude, longitude, radius, identifier }) {
+export function supportsDurableEvents() {
+  return typeof ExpoAutoAttendance?.getPendingEvents === "function" &&
+    typeof ExpoAutoAttendance?.acknowledgeEvent === "function";
+}
+
+export function startGeofence({ latitude, longitude, radius, identifier, ...scope }) {
   return nativeModule().startGeofence({
     latitude,
     longitude,
     radius,
     identifier,
+    ...(supportsDurableEvents() ? {
+      tenantKey: scope.tenantKey,
+      employeeId: scope.employeeId,
+      registrationId: scope.registrationId,
+      geotagging: scope.geotagging,
+    } : {}),
   });
 }
 
@@ -130,6 +141,16 @@ export function getLastEvent() {
 
 export function clearLastEvent() {
   return nativeModule().clearLastEvent();
+}
+
+/** Null distinguishes an older binary from an empty durable journal. */
+export function getPendingEvents() {
+  return supportsDurableEvents() ? nativeModule().getPendingEvents() : null;
+}
+
+/** Call only after the event has committed to the SQLite ingress ledger. */
+export function acknowledgeEvent(eventId) {
+  return supportsDurableEvents() ? nativeModule().acknowledgeEvent(eventId) : false;
 }
 
 /**

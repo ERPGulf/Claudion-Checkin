@@ -17,6 +17,7 @@ export * from "./AttendanceDatabase";
 export * from "./AttendanceQueueRepository";
 export * from "./AttendanceQueueService";
 export * from "./AttendanceSyncService";
+export * from "./AutoAttendanceEventRepository";
 export * from "./BackgroundSyncManager";
 export * from "./NetworkListener";
 export * from "./attendanceConfigCache";
