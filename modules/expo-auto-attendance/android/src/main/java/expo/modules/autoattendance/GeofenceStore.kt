@@ -33,6 +33,34 @@ object GeofenceStore {
   private fun storedJson(context: Context, key: String): JSONObject? =
     prefs(context).getString(key, null)?.let { JSONObject(it) }
 
+  private fun storedRegistration(context: Context, key: String): JSONObject? {
+    val registration = storedJson(context, key) ?: return null
+    if (registration.has("requestedRadius")) return registration
+    // Prior scoped Android registrations persisted only the rounded OS Float.
+    // Recover the original Double from their own immutable fingerprint, never
+    // from a current login/configuration, and leave ambiguous geometry alone.
+    val requestedRadius = runCatching {
+      val fingerprint = JSONArray(registration.getString("registrationId"))
+      check(fingerprint.length() == 7)
+      val tenant = registration.getString("tenantKey")
+      val employee = registration.getString("employeeId")
+      val identifier = registration.getString("identifier")
+      check(tenant.isNotBlank() && employee.isNotBlank() && identifier.isNotBlank())
+      check(fingerprint.get(0) == tenant && fingerprint.get(1) == employee && fingerprint.get(2) == identifier)
+      check((fingerprint.get(3) as Number).toDouble() == registration.getDouble("latitude"))
+      check((fingerprint.get(4) as Number).toDouble() == registration.getDouble("longitude"))
+      check((fingerprint.get(6) as Number).toDouble() == registration.getDouble("geotagging"))
+      val requested = (fingerprint.get(5) as Number).toDouble()
+      val actual = registration.getDouble("radius")
+      check(requested.isFinite() && requested > 0 && actual.isFinite() && actual > 0)
+      check(requested.toFloat().toDouble() == actual)
+      requested
+    }.getOrNull() ?: return registration
+    registration.put("requestedRadius", requestedRadius)
+    commit(prefs(context).edit().putString(key, registration.toString()))
+    return registration
+  }
+
   @Synchronized
   fun savePendingGeofence(context: Context, registration: Map<String, Any?>) {
     commit(prefs(context).edit()
@@ -74,9 +102,11 @@ object GeofenceStore {
   fun shouldRestoreGeofence(context: Context): Boolean =
     prefs(context).getBoolean(KEY_MONITORING_REQUESTED, isMonitoring(context))
 
-  fun getGeofence(context: Context): JSONObject? = storedJson(context, KEY_GEOFENCE)
+  @Synchronized
+  fun getGeofence(context: Context): JSONObject? = storedRegistration(context, KEY_GEOFENCE)
 
-  fun getPendingGeofence(context: Context): JSONObject? = storedJson(context, KEY_PENDING_GEOFENCE)
+  @Synchronized
+  fun getPendingGeofence(context: Context): JSONObject? = storedRegistration(context, KEY_PENDING_GEOFENCE)
 
   @Synchronized
   fun markMonitoringUnavailable(context: Context) {

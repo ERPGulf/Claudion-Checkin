@@ -272,6 +272,59 @@ it("invalid registration fingerprints are retained for review without attendance
   expect((await Events.findEvent("bad-config")).reason).toBe("native-configuration-mismatch");
 });
 
+it.each([
+  ["string initial marker", { initialPresence: "true" }],
+  ["numeric initial marker", { initialPresence: 1 }],
+  ["null initial marker", { initialPresence: null }],
+  ["missing registration start", { initialPresence: true }],
+  ["string registration start", { initialPresence: true, registrationStartedAt: String(started) }],
+  ["zero registration start", { initialPresence: true, registrationStartedAt: 0 }],
+  ["negative registration start", { initialPresence: true, registrationStartedAt: -1 }],
+  ["nonfinite registration start", { initialPresence: true, registrationStartedAt: Infinity }],
+  ["registration after observation", { initialPresence: true, registrationStartedAt: started + 1001 }],
+])("retains malformed %s for review and permits the next genuine ENTER", async (_description, metadata) => {
+  journal = [event("malformed-initial", 1, "ENTER", metadata), event("genuine-enter", 2)];
+  await drain();
+  expect(await Events.findEvent("malformed-initial")).toMatchObject({
+    status: "needs_review", reason: "invalid-native-event",
+  });
+  expect(autoCheckInOut).toHaveBeenCalledTimes(1);
+  expect(autoCheckInOut.mock.calls[0][0]).toMatchObject({ type: "IN", occurredAt: started + 2000 });
+  expect((await Events.findEvent("genuine-enter")).status).toBe("handled");
+  expect(journal).toEqual([]);
+});
+
+it.each([
+  ["initial observation", { initialPresence: true, registrationStartedAt: started + 1000 }],
+  ["explicit genuine marker", { initialPresence: false }],
+  ["older receipt without metadata", {}],
+])("accepts valid %s without changing attendance contracts", async (_description, metadata) => {
+  journal = [event("valid-enter", 1, "ENTER", metadata)];
+  await drain();
+  expect(autoCheckInOut).toHaveBeenCalledTimes(1);
+  expect((await Events.findEvent("valid-enter")).status).toBe("handled");
+  expect((await readSession()).status).toBe("CHECKED_IN");
+});
+
+it("late initial ENTER cannot reopen manual checkout and a subsequent genuine ENTER remains eligible", async () => {
+  await performSessionTransition({ type: "IN", origin: SESSION_ORIGIN.MANUAL, at: started,
+    execute: async () => ({ allowed: true }) });
+  await performSessionTransition({ type: "OUT", origin: SESSION_ORIGIN.MANUAL, at: started + 1000,
+    execute: async () => ({ allowed: true }) });
+  journal = [event("late-initial", 2, "ENTER", { initialPresence: true, registrationStartedAt: started - 1000 })];
+  await drain();
+  expect(autoCheckInOut).not.toHaveBeenCalled();
+  expect(await Events.findEvent("late-initial")).toMatchObject({ status: "handled",
+    reason: "initial-presence-after-manual-checkout", outcome: { status: "skipped" } });
+  expect(await readSession()).toMatchObject({ status: "CHECKED_OUT", closedBy: "MANUAL", endedAt: started + 1000 });
+  journal = [event("next-genuine-enter", 3)];
+  await drain();
+  expect(autoCheckInOut).toHaveBeenCalledTimes(1);
+  expect(autoCheckInOut.mock.calls[0][0]).toMatchObject({ type: "IN", occurredAt: started + 3000 });
+  expect(await readSession()).toMatchObject({ status: "CHECKED_IN", origin: "AUTO", sourceEventId: "next-genuine-enter" });
+  expect(await listAll()).toEqual([]);
+});
+
 it("a callback from a removed office after configuration refresh cannot create attendance", async () => {
   config.lastUpdated = started;
   config.locations = [{ latitude: 26, longitude: 52, reporting_radius: 100 }];

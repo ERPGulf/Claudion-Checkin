@@ -13,6 +13,7 @@ const EVENT_FIELDS = [
   "eventId", "sequence", "identifier", "nativeIdentifier", "transition",
   "timestamp", "tenantKey", "employeeId", "registrationId", "geotagging",
   "latitude", "longitude", "radius", "requestedRadius", "captureIssue",
+  "initialPresence", "registrationStartedAt",
 ];
 
 const nonblank = (value) => typeof value === "string" && !!value.trim();
@@ -91,20 +92,34 @@ export const listPendingEvents = async ({ tenantKey, employeeId }) => {
   return rows.map(hydrate);
 };
 
+/** A dispatched input needs positive evidence before a conflicting manual punch. */
+export const listUncertainEvents = async ({ tenantKey, employeeId }) => {
+  if (!tenantKey || !employeeId) return [];
+  const database = await getDatabase();
+  return (await database.getAllAsync(
+    `SELECT * FROM ${AUTO_EVENT_TABLE} WHERE tenantKey = ? AND employeeId = ?
+      AND onlineAttemptAt IS NOT NULL AND status IN (?, ?, ?)
+      ORDER BY COALESCE(sequence, -1), receivedAt, eventId;`,
+    [tenantKey, employeeId, AUTO_EVENT_STATUS.PENDING, AUTO_EVENT_STATUS.PROCESSING, AUTO_EVENT_STATUS.NEEDS_REVIEW],
+  )).map(hydrate);
+};
+
 /** A native receipt can be processed by only one claimant in this database. */
 export const claimEvent = async (eventId, {
   ownerId = `auto-claim-${Date.now()}-${Math.random().toString(36).slice(2)}`,
   now = Date.now(),
   leaseMs = 120000,
+  allowReview = false,
 } = {}) => {
   if (!nonblank(ownerId) || !Number.isFinite(leaseMs) || leaseMs <= 0) throw new Error("Invalid automatic event claim.");
   const database = await getDatabase();
   return hydrate(await database.getFirstAsync(
     `UPDATE ${AUTO_EVENT_TABLE} SET status = ?, updatedAt = ?, claimOwner = ?, claimExpiresAt = ?
-      WHERE eventId = ? AND (status = ? OR (status = ? AND COALESCE(claimExpiresAt, 0) <= ?))
+      WHERE eventId = ? AND (status = ? OR (status = ? AND COALESCE(claimExpiresAt, 0) <= ?)
+        OR (? = 1 AND status = ? AND onlineAttemptAt IS NOT NULL))
       RETURNING *;`,
     [AUTO_EVENT_STATUS.PROCESSING, now, ownerId, now + leaseMs, eventId,
-      AUTO_EVENT_STATUS.PENDING, AUTO_EVENT_STATUS.PROCESSING, now],
+      AUTO_EVENT_STATUS.PENDING, AUTO_EVENT_STATUS.PROCESSING, now, allowReview ? 1 : 0, AUTO_EVENT_STATUS.NEEDS_REVIEW],
   ));
 };
 

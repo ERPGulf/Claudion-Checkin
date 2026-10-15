@@ -1,5 +1,6 @@
 import CoreLocation
 import Foundation
+import UIKit
 
 /**
  Wraps Core Location region monitoring (`CLLocationManager` + `CLCircularRegion`)
@@ -35,7 +36,7 @@ final class GeofenceManager: NSObject, CLLocationManagerDelegate {
     let resolve: () -> Void
     let reject: (_ code: String, _ message: String) -> Void
 
-    var nativeIdentifier: String { configuration["nativeIdentifier"] as! String }
+    var nativeIdentifier: String { region.identifier }
   }
 
   private var pendingStart: PendingStart?
@@ -101,6 +102,26 @@ final class GeofenceManager: NSObject, CLLocationManagerDelegate {
       name: .NSProcessInfoPowerStateDidChange,
       object: nil
     )
+    NotificationCenter.default.addObserver(self,
+      selector: #selector(applicationDidBecomeActive),
+      name: UIApplication.didBecomeActiveNotification, object: nil)
+  }
+
+  @objc private func applicationDidBecomeActive() {
+    restoreMonitoringIfNeeded()
+  }
+
+  private func beginMonitoring(_ pending: PendingStart) {
+    pendingStart = pending
+    let identifier = pending.nativeIdentifier
+    DispatchQueue.main.asyncAfter(deadline: .now() + 30) { [weak self] in
+      guard let self, self.pendingStart?.nativeIdentifier == identifier else { return }
+      self.pendingStart = nil
+      // Keep scoped ownership durably: a late confirmation/crossing still belongs
+      // to this request. JS may cancel it; a future native launch may restore it.
+      pending.reject("ERR_GEOFENCE_REGISTRATION", "Geofence registration timed out")
+    }
+    locationManager.startMonitoring(for: pending.region)
   }
 
   @objc private func powerStateDidChange() {
@@ -129,25 +150,83 @@ final class GeofenceManager: NSObject, CLLocationManagerDelegate {
   /// Core Location normally retains regions. Repair missing registrations from
   /// their saved scope/geometry without obtaining GPS or inventing a transition.
   private func restoreMonitoringIfNeeded() {
-    guard GeofenceStore.shared.isMonitoring, pendingStart == nil,
+    guard pendingStart == nil else { return }
+    do {
+      let saved = try GeofenceStore.shared.getRegistrationState()
+      guard let registration = saved,
+        ["pending", "monitoring"].contains(registration["status"] as? String ?? "") else {
+        // A durable stop may have preceded process death and the OS removal.
+        stopMonitoredRegions(configuration: saved?["configuration"] as? [String: Any])
+        return
+      }
+      guard hasAlwaysAuthorization, hasFullAccuracy else { return }
+      guard var configuration = registration["configuration"] as? [String: Any],
+        let identifier = configuration["nativeIdentifier"] as? String ?? configuration["identifier"] as? String,
+        let latitude = configuration["latitude"] as? Double,
+        let longitude = configuration["longitude"] as? Double,
+        let radius = configuration["radius"] as? Double,
+        CLLocationCoordinate2DIsValid(CLLocationCoordinate2D(latitude: latitude, longitude: longitude)),
+        radius.isFinite, radius > 0 else { return }
+      if locationManager.monitoredRegions.contains(where: { $0.identifier == identifier }) {
+        if registration["status"] as? String == "pending" {
+          try GeofenceStore.shared.confirmRegistration(identifier)
+        }
+        _ = try retryInitialPresence()
+        return
+      }
+      // Restore the exact source identity. Creating a new ID here would orphan
+      // callbacks delivered for the registration interrupted by process death.
+      configuration["nativeIdentifier"] = identifier
+      try GeofenceStore.shared.savePendingRegistration(configuration)
+      let region = CLCircularRegion(center: CLLocationCoordinate2D(latitude: latitude, longitude: longitude),
+        radius: radius, identifier: identifier)
+      region.notifyOnEntry = true
+      region.notifyOnExit = true
+      clearInitialStateRequest()
+      stopMonitoredRegions()
+      beginMonitoring(PendingStart(configuration: configuration, region: region,
+        resolve: {}, reject: { _, _ in
+          GeofenceEventBus.shared.emit(GeofenceEvents.error, [
+            "code": -5, "message": "Geofence restoration failed"
+          ])
+        }))
+    } catch {
+      reportStorageFailure()
+    }
+  }
+
+  /// Retry only an unfinished native observation, at most one bounded cycle per
+  /// persisted cooldown. Reuse/resume of completed presence cannot create IN.
+  @discardableResult
+  func retryInitialPresence(for confirmedRegion: CLRegion? = nil) throws -> Bool {
+    guard awaitingInitialStateFor == nil, pendingStart == nil,
       hasAlwaysAuthorization, hasFullAccuracy,
-      let configuration = GeofenceStore.shared.getGeofence(),
-      let identifier = configuration["identifier"] as? String,
-      let latitude = configuration["latitude"] as? Double,
-      let longitude = configuration["longitude"] as? Double,
-      let radius = configuration["requestedRadius"] as? Double ?? configuration["radius"] as? Double else { return }
-    let nativeIdentifier = configuration["nativeIdentifier"] as? String ?? identifier
-    guard !locationManager.monitoredRegions.contains(where: { $0.identifier == nativeIdentifier }) else { return }
-    start(identifier: identifier, latitude: latitude, longitude: longitude, radius: radius,
-      tenantKey: configuration["tenantKey"] as? String,
-      employeeId: configuration["employeeId"] as? String,
-      registrationId: configuration["registrationId"] as? String,
-      geotagging: (configuration["geotagging"] as? NSNumber)?.intValue,
-      resolve: {}, reject: { _, _ in
-        GeofenceEventBus.shared.emit(GeofenceEvents.error, [
-          "code": -5, "message": "Geofence restoration failed"
-        ])
-      })
+      let registration = try GeofenceStore.shared.getRegistrationState(),
+      registration["status"] as? String == "monitoring",
+      let configuration = registration["configuration"] as? [String: Any],
+      let identifier = configuration["nativeIdentifier"] as? String ?? configuration["identifier"] as? String,
+      let region = confirmedRegion ?? locationManager.monitoredRegions.first(where: { $0.identifier == identifier }),
+      region.identifier == identifier,
+      try GeofenceStore.shared.beginInitialPresenceRequest(identifier, at: Int64(Date().timeIntervalSince1970 * 1000)) else { return false }
+    awaitingInitialStateFor = identifier
+    initialStateAttempts = 0
+    let generation = initialStateGeneration
+    // A missing callback cannot keep recovery permanently in-flight. The OS
+    // still controls execution; a suspended timer resumes or launch retries later.
+    DispatchQueue.main.asyncAfter(deadline: .now() + 30) { [weak self] in
+      guard let self, self.initialStateGeneration == generation,
+        self.awaitingInitialStateFor == identifier else { return }
+      self.clearInitialStateRequest()
+    }
+    locationManager.requestState(for: region)
+    return true
+  }
+
+  private func reportStorageFailure() {
+    NSLog("%@ Native geofence storage failed", Self.logTag)
+    GeofenceEventBus.shared.emit(GeofenceEvents.error, [
+      "code": -4, "message": "Native geofence state could not be persisted"
+    ])
   }
 
   var hasAnyLocationAuthorization: Bool {
@@ -205,50 +284,58 @@ final class GeofenceManager: NSObject, CLLocationManagerDelegate {
     region.notifyOnEntry = true
     region.notifyOnExit = true
 
-    // Any initial-state request for the fence being replaced is now moot.
-    clearInitialStateRequest()
-
-    // Replace instead of accumulating regions (iOS allows max 20 per app).
-    stopMonitoredRegions()
-
     var configuration: [String: Any] = [
       "identifier": identifier, "nativeIdentifier": nativeIdentifier,
       "latitude": latitude, "longitude": longitude,
-      "radius": clampedRadius, "requestedRadius": radius
+      "radius": clampedRadius, "requestedRadius": radius,
+      "registrationStartedAt": Int64(Date().timeIntervalSince1970 * 1000)
     ]
     configuration["tenantKey"] = tenantKey
     configuration["employeeId"] = employeeId
     configuration["registrationId"] = registrationId
     configuration["geotagging"] = geotagging
 
-    pendingStart = PendingStart(
+    let previousConfiguration: [String: Any]?
+    do {
+      previousConfiguration = try GeofenceStore.shared.getRegistrationState()?["configuration"] as? [String: Any]
+      // Ownership must reach stable storage before the OS can deliver a callback.
+      try GeofenceStore.shared.savePendingRegistration(configuration)
+    } catch {
+      reject("ERR_NATIVE_STORAGE", "Geofence registration could not be persisted")
+      return
+    }
+    clearInitialStateRequest()
+    // Replace instead of accumulating regions (iOS allows max 20 per app).
+    stopMonitoredRegions(configuration: previousConfiguration)
+
+    beginMonitoring(PendingStart(
       configuration: configuration,
       region: region,
       resolve: resolve,
       reject: reject
-    )
-    locationManager.startMonitoring(for: region)
+    ))
   }
 
   /** Removes the registered geofence and clears the persisted state. */
-  func stop(resolve: @escaping () -> Void) {
+  func stop() throws {
+    let previousConfiguration = try GeofenceStore.shared.getRegistrationState()?["configuration"] as? [String: Any]
+    // Durable cancellation wins against a process death or late OS confirmation.
+    try GeofenceStore.shared.cancelRegistration()
     // Cancel any outstanding initial-state retry: monitoring is going away, so a
     // late `.inside` must not produce a check-in after the user opted out.
     clearInitialStateRequest()
     let pending = pendingStart
     pendingStart = nil
     if let pending { locationManager.stopMonitoring(for: pending.region) }
-    stopMonitoredRegions()
-    GeofenceStore.shared.clearGeofence()
+    stopMonitoredRegions(configuration: previousConfiguration)
     pending?.reject("ERR_GEOFENCE_CANCELLED", "Geofence registration was cancelled")
     NSLog("%@ Geofence removed", Self.logTag)
     NSLog("%@ Monitoring stopped", Self.logTag)
-    resolve()
   }
 
   /// Remove this module's current/obsolete registrations, including legacy IDs.
-  private func stopMonitoredRegions() {
-    let stored = GeofenceStore.shared.getGeofence()
+  private func stopMonitoredRegions(configuration: [String: Any]? = nil) {
+    let stored = configuration ?? GeofenceStore.shared.getGeofence()
     let logicalIdentifier = stored?["identifier"] as? String
     let nativeIdentifier = stored?["nativeIdentifier"] as? String
     for region in locationManager.monitoredRegions {
@@ -264,95 +351,90 @@ final class GeofenceManager: NSObject, CLLocationManagerDelegate {
 
   /// Capture first. Authentication, attendance decisions and retries stay in the
   /// existing JS session authority and SQLite attendance infrastructure.
-  private func handleTransition(_ label: String, eventName: String, region: CLRegion) {
+  private func handleTransition(_ label: String, eventName: String, region: CLRegion, initialPresence: Bool = false) {
     let timestamp = Int64(Date().timeIntervalSince1970 * 1000)
     NSLog("%@ %@ detected: geofence=%@ at=%lld", Self.logTag, label, region.identifier, timestamp)
 
-    var configuration: [String: Any]?
-    if let pending = pendingStart, pending.nativeIdentifier == region.identifier {
-      configuration = pending.configuration
-    } else if GeofenceStore.shared.isMonitoring, let stored = GeofenceStore.shared.getGeofence(),
-      (stored["nativeIdentifier"] as? String ?? stored["identifier"] as? String) == region.identifier {
-      configuration = stored
-    }
-
-    var event: [String: Any] = configuration ?? [:]
-    var logicalIdentifier = configuration?["identifier"] as? String ?? region.identifier
-    if configuration == nil, region.identifier.hasPrefix(Self.regionPrefix) {
-      logicalIdentifier = String(region.identifier.dropFirst(Self.regionPrefix.count))
-        .split(separator: ":").dropLast().joined(separator: ":")
-    }
-    event["identifier"] = logicalIdentifier
-    event["nativeIdentifier"] = region.identifier
-    event["identifiers"] = [logicalIdentifier]
-    event["transition"] = label
-    event["timestamp"] = timestamp
-    if configuration == nil {
-      // Preserve obsolete callbacks for review; assigning the current employee
-      // would cross an identity boundary. No attendance is authorized by this.
-      event["captureIssue"] = region.identifier.hasPrefix(Self.regionPrefix)
-        ? "stale-registration" : "unknown-registration"
-      if let circular = region as? CLCircularRegion {
-        event["latitude"] = circular.center.latitude
-        event["longitude"] = circular.center.longitude
-        event["radius"] = circular.radius
-      }
-    }
     do {
-      let saved = try GeofenceStore.shared.appendEvent(event)
+      var configuration: [String: Any]?
+      if let registration = try GeofenceStore.shared.getRegistrationState(),
+        ["pending", "monitoring"].contains(registration["status"] as? String ?? ""),
+        let stored = registration["configuration"] as? [String: Any],
+        (stored["nativeIdentifier"] as? String ?? stored["identifier"] as? String) == region.identifier {
+        configuration = stored
+      }
+      var event: [String: Any] = configuration ?? [:]
+      var logicalIdentifier = configuration?["identifier"] as? String ?? region.identifier
+      if configuration == nil, region.identifier.hasPrefix(Self.regionPrefix) {
+        logicalIdentifier = String(region.identifier.dropFirst(Self.regionPrefix.count))
+          .split(separator: ":").dropLast().joined(separator: ":")
+      }
+      event["identifier"] = logicalIdentifier
+      event["nativeIdentifier"] = region.identifier
+      event["identifiers"] = [logicalIdentifier]
+      event["transition"] = label
+      event["timestamp"] = timestamp
+      if initialPresence { event["initialPresence"] = true }
+      if configuration == nil {
+        // Preserve obsolete callbacks for review; assigning the current employee
+        // would cross an identity boundary. No attendance is authorized by this.
+        event["captureIssue"] = region.identifier.hasPrefix(Self.regionPrefix)
+          ? "stale-registration" : "unknown-registration"
+        if let circular = region as? CLCircularRegion {
+          event["latitude"] = circular.center.latitude
+          event["longitude"] = circular.center.longitude
+          event["radius"] = circular.radius
+        }
+      }
+      // A genuine transition proves that the registration already observed
+      // presence. Finish in the append transaction, preventing a later initial
+      // ENTER from reopening a manual checkout after this event is replayed.
+      let saved = try GeofenceStore.shared.appendEvent(event,
+        completingInitialPresenceFor: configuration == nil ? nil : region.identifier)
+      if configuration != nil, awaitingInitialStateFor == region.identifier { clearInitialStateRequest() }
       GeofenceEventBus.shared.emit(eventName, saved.mapValues { Optional($0) })
     } catch {
-      NSLog("%@ Native event persistence failed", Self.logTag)
-      GeofenceEventBus.shared.emit(GeofenceEvents.error, [
-        "code": -4, "message": "Native geofence event could not be persisted"
-      ])
+      reportStorageFailure()
     }
   }
 
   // MARK: - CLLocationManagerDelegate
 
   func locationManager(_ manager: CLLocationManager, didStartMonitoringFor region: CLRegion) {
-    guard let pending = pendingStart, pending.nativeIdentifier == region.identifier else {
-      // Registration can finish after stop/replacement. Do not resurrect the
-      // saved flag, and remove the late OS registration as well.
-      let current = GeofenceStore.shared.getGeofence()?["nativeIdentifier"] as? String
-      if region.identifier.hasPrefix(Self.regionPrefix), current != region.identifier {
-        manager.stopMonitoring(for: region)
+    let pending = pendingStart?.nativeIdentifier == region.identifier ? pendingStart : nil
+    do {
+      guard try GeofenceStore.shared.confirmRegistration(region.identifier) else {
+        // Durable cancellation/replacement wins even after a process restart.
+        if region.identifier.hasPrefix(Self.regionPrefix) || region.identifier == "office-main" || region.identifier == "office" {
+          manager.stopMonitoring(for: region)
+        }
+        return
       }
-      return
+      if pending != nil { pendingStart = nil }
+      NSLog("%@ Geofence registered", Self.logTag)
+      NSLog("%@ Monitoring started", Self.logTag)
+      _ = try retryInitialPresence(for: region)
+      pending?.resolve()
+    } catch {
+      if pending != nil { pendingStart = nil }
+      pending?.reject("ERR_NATIVE_STORAGE", "Geofence registration could not be persisted")
+      reportStorageFailure()
     }
-    pendingStart = nil
-
-    GeofenceStore.shared.saveGeofence(pending.configuration)
-    NSLog("%@ Geofence registered", Self.logTag)
-    NSLog("%@ Monitoring started", Self.logTag)
-
-    // Parity with Android's INITIAL_TRIGGER_ENTER: report ENTER immediately
-    // when the device is already inside the region at registration time.
-    awaitingInitialStateFor = region.identifier
-    initialStateAttempts = 0
-    manager.requestState(for: region)
-
-    pending.resolve()
   }
 
   func locationManager(_ manager: CLLocationManager, monitoringDidFailFor region: CLRegion?, withError error: Error) {
     let message = error.localizedDescription
     NSLog("%@ Monitoring failed for %@: %@", Self.logTag, region?.identifier ?? "<unknown>", message)
 
-    if let pending = pendingStart, region == nil || region?.identifier == pending.nativeIdentifier {
-      pendingStart = nil
-      clearInitialStateRequest()
-      GeofenceStore.shared.invalidateMonitoring()
-      pending.reject("ERR_GEOFENCE_REGISTRATION", message)
-      return
-    }
-
-    let stored = GeofenceStore.shared.getGeofence()
-    let currentIdentifier = stored?["nativeIdentifier"] as? String ?? stored?["identifier"] as? String
-    if region == nil || region?.identifier == currentIdentifier {
-      clearInitialStateRequest()
-      GeofenceStore.shared.invalidateMonitoring()
+    do {
+      if try GeofenceStore.shared.invalidateRegistration(region?.identifier) { clearInitialStateRequest() }
+      if let pending = pendingStart, region == nil || region?.identifier == pending.nativeIdentifier {
+        pendingStart = nil
+        pending.reject("ERR_GEOFENCE_REGISTRATION", message)
+        return
+      }
+    } catch {
+      reportStorageFailure()
     }
 
     GeofenceEventBus.shared.emit(GeofenceEvents.error, [
@@ -384,10 +466,16 @@ final class GeofenceManager: NSObject, CLLocationManagerDelegate {
     case .inside:
       clearInitialStateRequest()
       NSLog("%@ Device already inside region at registration", Self.logTag)
-      handleTransition("ENTER", eventName: GeofenceEvents.enter, region: region)
+      handleTransition("ENTER", eventName: GeofenceEvents.enter, region: region, initialPresence: true)
 
     case .settled:
       let gaveUp = state == .unknown
+      if state == .outside {
+        do { try GeofenceStore.shared.completeInitialPresence(region.identifier) }
+        catch { reportStorageFailure() }
+      }
+      // Unknown exhaustion stays unfinished durably; resume/reconciliation may
+      // begin another bounded authoritative cycle after its cooldown.
       clearInitialStateRequest()
       NSLog(
         "%@ Initial state for %@ settled as %@",
@@ -412,7 +500,13 @@ final class GeofenceManager: NSObject, CLLocationManagerDelegate {
   func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
     let status = manager.authorizationStatus
     NSLog("%@ Authorization changed: %d", Self.logTag, status.rawValue)
-    guard GeofenceStore.shared.isMonitoring else { return }
+    do {
+      guard let registration = try GeofenceStore.shared.getRegistrationState(),
+        ["pending", "monitoring"].contains(registration["status"] as? String ?? "") else { return }
+    } catch {
+      reportStorageFailure()
+      return
+    }
     if status != .authorizedAlways {
       GeofenceEventBus.shared.emit(GeofenceEvents.error, [
         "code": -1,

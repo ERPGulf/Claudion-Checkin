@@ -120,7 +120,8 @@ class ExpoAutoAttendanceModule : Module() {
         )
         return@AsyncFunction
       }
-      if (!options.radius.isFinite() || options.radius <= 0) {
+      if (!options.radius.isFinite() || options.radius <= 0 ||
+        !options.radius.toFloat().isFinite() || options.radius.toFloat() <= 0) {
         promise.reject("ERR_INVALID_OPTIONS", "Radius must be a positive number of meters", null)
         return@AsyncFunction
       }
@@ -149,7 +150,7 @@ class ExpoAutoAttendanceModule : Module() {
         identifier = options.identifier,
         latitude = options.latitude,
         longitude = options.longitude,
-        radius = options.radius.toFloat(),
+        radius = options.radius,
         tenantKey = options.tenantKey,
         employeeId = options.employeeId,
         registrationId = options.registrationId,

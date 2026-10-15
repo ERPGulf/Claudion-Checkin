@@ -87,6 +87,54 @@ describe("buildConfig", () => {
 });
 
 describe("refreshAttendanceConfig", () => {
+  it("passes the captured employee and tenant scope to policy download", async () => {
+    fetchEmployeeData.mockResolvedValue(employeeResponse());
+    await refreshAttendanceConfig("TDI0167");
+    expect(fetchEmployeeData).toHaveBeenCalledWith("TDI0167", {
+      syncScope: expect.objectContaining({ employeeId: "TDI0167", tenantKey: "https://attendance.example.com" }),
+    });
+  });
+  it("honors explicit policy revocation and explicit empty geometry over a populated cache", async () => {
+    fetchEmployeeData.mockResolvedValue(employeeResponse());
+    await refreshAttendanceConfig("TDI0167");
+    fetchEmployeeData.mockResolvedValue(employeeResponse({ geotagging: 0, restrict_location: 0, employee_locations: [] }));
+    const result = await refreshAttendanceConfig("TDI0167");
+    expect(result.refreshed).toBe(true);
+    expect(result.config).toMatchObject({ rules: { geotagging: 0, restrictLocation: 0 }, locations: [] });
+    expect(await AsyncStorage.getItem("geotagging")).toBe("0");
+  });
+
+  it("retains same-scope omitted geometry while updating explicit policy fields", async () => {
+    fetchEmployeeData.mockResolvedValue(employeeResponse());
+    await refreshAttendanceConfig("TDI0167");
+    const partial = employeeResponse({ geotagging: 0 });
+    delete partial.employee_locations;
+    fetchEmployeeData.mockResolvedValue(partial);
+    const result = await refreshAttendanceConfig("TDI0167");
+    expect(result.config.rules.geotagging).toBe(0);
+    expect(result.config.locations).toHaveLength(1);
+  });
+
+  it("mobile background revocation disables auto actions without weakening incomplete attendance rules", async () => {
+    await AsyncStorage.setItem("auth_method", "mobile");
+    fetchEmployeeData.mockResolvedValue(employeeResponse());
+    await refreshAttendanceConfig("TDI0167");
+    fetchEmployeeData.mockResolvedValue({ geotagging: 0, employee_locations: [], restrict_location: 0 });
+    const result = await refreshAttendanceConfig("TDI0167");
+    expect(result.refreshed).toBe(true);
+    expect(result.config).toMatchObject({ rules: { geotagging: 0, restrictLocation: 1 }, locations: [] });
+  });
+
+  it("mobile hand-off still refuses incomplete policy even when automatic actions are explicitly revoked", async () => {
+    fetchEmployeeData.mockResolvedValue(employeeResponse());
+    await refreshAttendanceConfig("TDI0167");
+    const result = await refreshAttendanceConfig("TDI0167", {
+      requireCompletePolicy: true, employeeData: { geotagging: 0, employee_locations: [] },
+    });
+    expect(result.refreshed).toBe(false);
+    expect(result.config.rules.geotagging).toBe(2);
+  });
+
   it("caches a successful download", async () => {
     fetchEmployeeData.mockResolvedValue(employeeResponse());
 
@@ -128,18 +176,15 @@ describe("refreshAttendanceConfig", () => {
     await expect(refreshAttendanceConfig("TDI0167")).resolves.toBeDefined();
   });
 
-  // A successful request returning no locations is ambiguous — it can be a
-  // partial record — and overwriting with it would silently disable offline
-  // attendance.
-  it("does not let an empty location list overwrite a good cache", async () => {
+  it("treats an explicit empty location list as removal of previously cached locations", async () => {
     fetchEmployeeData.mockResolvedValue(employeeResponse());
     await refreshAttendanceConfig("TDI0167");
 
     fetchEmployeeData.mockResolvedValue(employeeResponse({ employee_locations: [] }));
     const result = await refreshAttendanceConfig("TDI0167");
 
-    expect(result.refreshed).toBe(false);
-    expect((await readAttendanceConfig()).locations).toHaveLength(1);
+    expect(result.refreshed).toBe(true);
+    expect((await readAttendanceConfig()).locations).toHaveLength(0);
   });
 
   // An employee with `restrict_location = 0` has no reporting locations by

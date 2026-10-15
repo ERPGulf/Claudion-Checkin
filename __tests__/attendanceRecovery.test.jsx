@@ -267,7 +267,7 @@ it.each([
   expect(http.history.post).toHaveLength(1); // later OUT cannot overtake uncertain IN
 });
 
-it("preserves a timeout after server commit, then verifies the deduplicated retry", async () => {
+it("preserves a timeout after server commit, then verifies history without resubmitting", async () => {
   const { row } = await seed();
   const savedServerRows = new Map();
   const requests = [];
@@ -285,10 +285,11 @@ it("preserves a timeout after server commit, then verifies the deduplicated retr
   resetDatabaseHandle(); resetSyncService();
   await recovery();
   expect(savedServerRows.size).toBe(1);
-  expect(requests[1]).toEqual(requests[0]);
-  expect(await repository.findById(row.id)).toMatchObject({ status: "synced", duplicate: true, attemptCount: 2 });
+  expect(requests).toHaveLength(1);
+  expect(requests[0]).toMatchObject({ employee: row.employeeDocname, timestamp: row.timestamp, log_type: "IN" });
+  expect(await repository.findById(row.id)).toMatchObject({ status: "synced", duplicate: false, attemptCount: 2, acceptanceConfirmed: 1 });
   await recovery();
-  expect(http.history.post).toHaveLength(2);
+  expect(http.history.post).toHaveLength(1);
 });
 
 it.each(["checkin", "checkout"])("verifies an old %s with no pair/server ID using GET only and preserves originals", async action => {
@@ -305,7 +306,8 @@ it.each(["checkin", "checkout"])("verifies an old %s with no pair/server ID usin
   expect(http.history.get).toHaveLength(1);
   const saved = await repository.findById(row.id);
   expect(saved).toMatchObject({ payload: original.payload, timestamp: original.timestamp,
-    serverResponse: original.serverResponse, updatedAt: original.updatedAt, pairedAttendanceId: null, serverCheckinId: null });
+    serverResponse: original.serverResponse, updatedAt: original.updatedAt, pairedAttendanceId: null,
+    serverCheckinId: "EXISTING-1", acceptanceConfirmed: 1 });
   expect(saved.verificationEvidence).toMatchObject({ name: "EXISTING-1", originalStatus: "synced" });
 });
 
@@ -411,8 +413,9 @@ it("keeps a transient failure saved, halts before checkout, exits loading and ca
   expect(http.history.post).toHaveLength(1);
   expect((await repository.listAll()).every(row => row.status === "pending")).toBe(true);
   http.onPost(URL).reply(200, accepted("RECOVERED"));
+  http.onGet(HISTORY_URL).reply(200, { message: [serverPunch()] });
   await pressSync(ui);
-  expect(http.history.post).toHaveLength(3);
+  expect(http.history.post).toHaveLength(2); // initial IN attempt and later OUT; IN was verified by GET
   expect((await repository.listAll()).every(row => row.status === "synced")).toBe(true);
 });
 
@@ -436,7 +439,9 @@ it("renders success, duplicate, rejection and retry distinctly without exposing 
   expect((await repository.listAll()).sort((a, b) => a.timestamp.localeCompare(b.timestamp)).map(row => row.status)).toEqual(["synced", "synced", "rejected", "pending"]);
   http.resetHistory();
   await recovery();
-  expect(http.history.post).toHaveLength(1); // rejected row was not retried
+  expect(http.history.post).toHaveLength(0); // uncertain 5xx uses history, and rejected row is not retried
+  expect(http.history.get).toHaveLength(1);
+  expect((await repository.listAll()).find(row => row.timestamp === "2026-07-04 09:04:00").status).toBe("needs_review");
 });
 
 it("does not duplicate uploads on rapid taps or background overlap", async () => {
@@ -546,14 +551,17 @@ it("never hands another session the active run's report and stops before the nex
   expect((await repository.findById(checkout.row.id)).status).toBe("pending");
 });
 
-it("releases a stranded claim only within the current employee and tenant", async () => {
+it("verifies a migrated stranded claim only within the current employee and tenant", async () => {
   const mine = await seed();
   const theirs = await seed({ tenantKey: OTHER_TENANT });
   const db = await getDatabase();
   await db.runAsync("UPDATE attendance_queue SET status = 'syncing'");
   const before = await repository.findById(theirs.row.id);
+  http.onGet(HISTORY_URL).reply(200, { message: [serverPunch()] });
   await recovery();
   expect((await repository.findById(mine.row.id)).status).toBe("synced");
+  expect((await repository.findById(mine.row.id)).acceptanceConfirmed).toBe(1);
+  expect(http.history.post).toHaveLength(0);
   expect(await repository.findById(theirs.row.id)).toEqual(before);
 });
 

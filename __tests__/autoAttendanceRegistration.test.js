@@ -5,12 +5,13 @@ jest.mock("expo-location", () => ({
 jest.mock("../modules/expo-auto-attendance", () => ({
   OFFICE_GEOFENCE_IDENTIFIER: "office-main", startGeofence: jest.fn(), stopGeofence: jest.fn(),
   getRegisteredGeofences: jest.fn(), isMonitoring: jest.fn(), hasFullAccuracy: jest.fn(),
+  retryInitialPresence: jest.fn(),
 }));
 jest.mock("../services/offline/attendanceQueueProvenance", () => ({ assertAttendanceQueueScope: jest.fn() }));
 
 import * as Location from "expo-location";
 import * as Native from "../modules/expo-auto-attendance";
-import { createRegistrationId, reconcileAutoAttendanceRegistration } from "../utils/autoAttendanceRegistration";
+import { createRegistrationId, nativeRadiusMatchesRequested, reconcileAutoAttendanceRegistration } from "../utils/autoAttendanceRegistration";
 
 const scope = { tenantKey: "https://attendance.example.com", employeeId: "EMP-001" };
 const office = { latitude: 25.28, longitude: 51.52, reporting_radius: 100, location: "Office" };
@@ -32,6 +33,7 @@ beforeEach(() => {
   Native.hasFullAccuracy.mockReturnValue(true);
   Native.stopGeofence.mockResolvedValue(undefined);
   Native.startGeofence.mockResolvedValue(undefined);
+  Native.retryInitialPresence.mockResolvedValue(false);
 });
 
 it("registers a single configured office without GPS or an inside snapshot", async () => {
@@ -65,6 +67,76 @@ it("does not churn an iOS radius clamped by Core Location", async () => {
   Native.getRegisteredGeofences.mockReturnValue([{ ...desired, radius: 1000, requestedRadius: 2000 }]);
   await reconcileAutoAttendanceRegistration(scope, { ...config, locations: [{ ...office, reporting_radius: 2000 }] });
   expect(Native.startGeofence).not.toHaveBeenCalled();
+});
+
+it.each([100, 100.1, 100.3])("retains a scoped older Android registration rounded from %s meters", async radius => {
+  const desired = registered({ radius });
+  Native.isMonitoring.mockReturnValue(true);
+  Native.getRegisteredGeofences.mockReturnValue([{ ...desired, radius: Math.fround(radius) }]);
+  await reconcileAutoAttendanceRegistration(scope, { ...config, locations: [{ ...office, reporting_radius: radius }] });
+  expect(Native.stopGeofence).not.toHaveBeenCalled();
+  expect(Native.startGeofence).not.toHaveBeenCalled();
+});
+
+it("retains the requested fractional radius alongside the actual Android radius", async () => {
+  const desired = registered({ radius: 100.3 });
+  Native.isMonitoring.mockReturnValue(true);
+  Native.getRegisteredGeofences.mockReturnValue([{ ...desired, radius: Math.fround(100.3), requestedRadius: 100.3 }]);
+  await reconcileAutoAttendanceRegistration(scope, { ...config, locations: [{ ...office, reporting_radius: 100.3 }] });
+  expect(Native.startGeofence).not.toHaveBeenCalled();
+});
+
+it("replaces an actual native radius inconsistent with its requested fingerprint", async () => {
+  const desired = registered({ radius: 100.3 });
+  Native.isMonitoring.mockReturnValue(true);
+  Native.getRegisteredGeofences.mockReturnValue([{ ...desired, radius: 100.4, requestedRadius: 100.3 }]);
+  await reconcileAutoAttendanceRegistration(scope, { ...config, locations: [{ ...office, reporting_radius: 100.3 }] });
+  expect(Native.startGeofence).toHaveBeenCalledTimes(1);
+});
+
+it("does not infer an old fractional requested radius from a different configuration fingerprint", async () => {
+  Native.isMonitoring.mockReturnValue(true);
+  Native.getRegisteredGeofences.mockReturnValue([registered({ radius: Math.fround(100.3) })]);
+  await reconcileAutoAttendanceRegistration(scope, { ...config, locations: [{ ...office, reporting_radius: 100.3 }] });
+  expect(Native.startGeofence).toHaveBeenCalledTimes(1);
+});
+
+it("retains a fingerprint-proven fractional office when multi-office GPS is unavailable", async () => {
+  const desired = registered({ radius: 100.3 });
+  Native.isMonitoring.mockReturnValue(true);
+  Native.getRegisteredGeofences.mockReturnValue([{ ...desired, radius: Math.fround(100.3) }]);
+  Location.getCurrentPositionAsync.mockRejectedValue(new Error("GPS off"));
+  await reconcileAutoAttendanceRegistration(scope, { ...config, locations: [
+    { ...office, reporting_radius: 100.3 }, { ...office, latitude: 26 },
+  ] });
+  expect(Native.stopGeofence).not.toHaveBeenCalled();
+  expect(Native.startGeofence).not.toHaveBeenCalled();
+});
+
+it.each([
+  [{ radius: Math.fround(100.3), requestedRadius: 100.3 }, 100.3, true],
+  [{ radius: Math.fround(100.1) }, 100.1, true],
+  [{ radius: Math.fround(100.3) }, 100.3, true],
+  [{ radius: 1000, requestedRadius: 2000 }, 2000, true],
+  [{ radius: 100.4, requestedRadius: 100.3 }, 100.3, false],
+  [{ radius: 100, requestedRadius: 200 }, 100, false],
+  [{ radius: 0 }, 100, false],
+  [{ radius: Infinity }, 100, false],
+  [{ radius: 100 }, NaN, false],
+])("validates native radius representation %p against %s", (native, requested, matches) => {
+  expect(nativeRadiusMatchesRequested(native, requested)).toBe(matches);
+});
+
+it("requests a bounded pending initial-state retry only for the current matching registration", async () => {
+  Native.isMonitoring.mockReturnValue(true);
+  Native.getRegisteredGeofences.mockReturnValue([registered()]);
+  await reconcileAutoAttendanceRegistration(scope, config);
+  expect(Native.retryInitialPresence).toHaveBeenCalledTimes(1);
+  expect(Native.startGeofence).not.toHaveBeenCalled();
+  Native.retryInitialPresence.mockClear();
+  Native.getRegisteredGeofences.mockReturnValue([registered({ radius: 200 })]);
+  await reconcileAutoAttendanceRegistration(scope, config);
+  expect(Native.retryInitialPresence).not.toHaveBeenCalled();
 });
 
 it("permission denial stops monitoring without requesting permission", async () => {

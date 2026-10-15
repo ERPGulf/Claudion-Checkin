@@ -121,7 +121,7 @@ export const AWAITING_SERVER_STATUSES = [
  * Schema version. Bump it and add a `case` in `migrate` — never edit an
  * existing statement, since installs in the field are already at that version.
  */
-const SCHEMA_VERSION = 5;
+const SCHEMA_VERSION = 6;
 
 const CREATE_QUEUE_TABLE = `
   CREATE TABLE IF NOT EXISTS ${QUEUE_TABLE} (
@@ -280,6 +280,13 @@ const MIGRATE_V5 = `
     ON ${AUTO_EVENT_TABLE} (tenantKey, employeeId, status, sequence, receivedAt, eventId);
 `;
 
+// No ownership or absence of a request is invented for historical syncing rows.
+const MIGRATE_V6 = `
+  ALTER TABLE ${QUEUE_TABLE} ADD COLUMN claimOwner TEXT;
+  ALTER TABLE ${QUEUE_TABLE} ADD COLUMN claimExpiresAt INTEGER;
+  ALTER TABLE ${QUEUE_TABLE} ADD COLUMN uploadAttemptAt INTEGER;
+`;
+
 const migrate = async (database) => {
   const row = await database.getFirstAsync("PRAGMA user_version;");
   const current = Number(row?.user_version) || 0;
@@ -301,6 +308,7 @@ const migrate = async (database) => {
       ${CREATE_TENANT_DRAIN_INDEX}
       ${MIGRATE_V4}
       ${MIGRATE_V5}
+      ${MIGRATE_V6}
       PRAGMA user_version = ${SCHEMA_VERSION};
       COMMIT;
     `);
@@ -341,6 +349,14 @@ const migrate = async (database) => {
       BEGIN;
       ${MIGRATE_V5}
       PRAGMA user_version = 5;
+      COMMIT;
+    `);
+  }
+  if (current < 6) {
+    await database.execAsync(`
+      BEGIN;
+      ${MIGRATE_V6}
+      PRAGMA user_version = 6;
       COMMIT;
     `);
   }

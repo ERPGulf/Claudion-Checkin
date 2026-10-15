@@ -76,6 +76,12 @@ export function stopGeofence() {
   return nativeModule().stopGeofence();
 }
 
+/** Additive iOS repair; an older binary has no unfinished-state retry method. */
+export function retryInitialPresence() {
+  if (typeof ExpoAutoAttendance?.retryInitialPresence !== "function") return Promise.resolve(false);
+  return ExpoAutoAttendance.retryInitialPresence();
+}
+
 /** @returns {boolean} whether a geofence is currently registered. */
 export function isMonitoring() {
   return nativeModule().isMonitoring();

@@ -135,12 +135,13 @@ it("upgrades an existing v4 database additively without attributing or losing hi
   await enqueue({ employeeId: "EMP-OLD", attendanceType: "manual", action: "checkin", timestamp: "2026-10-01 08:00:00", payload: { photoUri: "file:///old.jpg" } });
   await db.execAsync(`DROP INDEX idx_${QUEUE_TABLE}_source_event;
     ALTER TABLE ${QUEUE_TABLE} DROP COLUMN sourceEventId;
-    DROP TABLE ${AUTO_EVENT_TABLE}; PRAGMA user_version = 4;`);
+    DROP TABLE ${AUTO_EVENT_TABLE}; ALTER TABLE ${QUEUE_TABLE} DROP COLUMN claimOwner; ALTER TABLE ${QUEUE_TABLE} DROP COLUMN claimExpiresAt; ALTER TABLE ${QUEUE_TABLE} DROP COLUMN uploadAttemptAt; PRAGMA user_version = 4;`);
   const before = await db.getAllAsync(`SELECT * FROM ${QUEUE_TABLE};`);
   resetDatabaseHandle();
   const upgraded = await getDatabase();
-  expect((await upgraded.getFirstAsync("PRAGMA user_version;")).user_version).toBe(5);
-  expect(await upgraded.getAllAsync(`SELECT * FROM ${QUEUE_TABLE};`)).toEqual(before.map(row => ({ ...row, sourceEventId: null })));
+  expect((await upgraded.getFirstAsync("PRAGMA user_version;")).user_version).toBe(6);
+  expect(await upgraded.getAllAsync(`SELECT * FROM ${QUEUE_TABLE};`)).toEqual(before.map(row => ({ ...row, sourceEventId: null,
+    claimOwner: null, claimExpiresAt: null, uploadAttemptAt: null })));
   expect(await upgraded.getAllAsync(`SELECT * FROM ${AUTO_EVENT_TABLE};`)).toEqual([]);
 });
 
@@ -149,7 +150,7 @@ it("rolls back a failed v5 upgrade so the next open can retry with historical da
   await enqueue({ employeeId: "EMP-OLD", attendanceType: "auto", action: "checkout", timestamp: "2026-10-01 18:00:00" });
   await db.execAsync(`DROP INDEX idx_${QUEUE_TABLE}_source_event;
     ALTER TABLE ${QUEUE_TABLE} DROP COLUMN sourceEventId;
-    DROP TABLE ${AUTO_EVENT_TABLE}; PRAGMA user_version = 4;`);
+    DROP TABLE ${AUTO_EVENT_TABLE}; ALTER TABLE ${QUEUE_TABLE} DROP COLUMN claimOwner; ALTER TABLE ${QUEUE_TABLE} DROP COLUMN claimExpiresAt; ALTER TABLE ${QUEUE_TABLE} DROP COLUMN uploadAttemptAt; PRAGMA user_version = 4;`);
   const exec = db.execAsync;
   let failed = false;
   db.execAsync = async sql => {
@@ -163,7 +164,7 @@ it("rolls back a failed v5 upgrade so the next open can retry with historical da
   await expect(getDatabase()).rejects.toThrow();
   expect((await db.getFirstAsync("PRAGMA user_version;")).user_version).toBe(4);
   const recovered = await getDatabase();
-  expect((await recovered.getFirstAsync("PRAGMA user_version;")).user_version).toBe(5);
+  expect((await recovered.getFirstAsync("PRAGMA user_version;")).user_version).toBe(6);
   expect(await listAll()).toHaveLength(1);
   db.execAsync = exec;
   expect(await SQLite.openDatabaseAsync(DATABASE_NAME)).toBe(recovered);

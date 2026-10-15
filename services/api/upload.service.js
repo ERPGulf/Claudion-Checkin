@@ -82,8 +82,9 @@ export const putUserFile = async (employeeCode, _docname, { syncScope = null } =
 /**
  * userStatusPut(employeeCode, custom_in)
  */
-export const userStatusPut = async (employeeCode, custom_in) => {
+export const userStatusPut = async (employeeCode, custom_in, { syncScope = null } = {}) => {
   try {
+    if (syncScope) await assertAttendanceQueueScope(syncScope);
     const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
     const baseUrl = cleanBaseUrl(rawBaseUrl);
     if (!baseUrl) throw new Error("Base URL missing");
@@ -99,14 +100,17 @@ export const userStatusPut = async (employeeCode, custom_in) => {
     formData.append("custom_in", String(custom_in));
 
     const { data } = await apiClient.put(url, formData.toString(), {
+      ...(syncScope ? { attendanceSyncScope: syncScope } : {}),
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/x-www-form-urlencoded",
       },
     });
+    if (syncScope) await assertAttendanceQueueScope(syncScope);
 
     return data;
   } catch (error) {
+    if (error?.code === "ATTENDANCE_SYNC_SCOPE_CHANGED") throw error;
     throw new Error("Something went wrong while updating employee status");
   }
 };

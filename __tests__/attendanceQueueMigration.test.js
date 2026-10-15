@@ -100,7 +100,7 @@ describe("v1 → v2", () => {
     const db = await getDatabase();
     const row = await db.getFirstAsync("PRAGMA user_version;");
 
-    expect(Number(row.user_version)).toBe(5);
+    expect(Number(row.user_version)).toBe(6);
   });
 
   it("adds the v2 columns", async () => {
@@ -202,7 +202,7 @@ describe("a fresh install", () => {
     const db = await getDatabase();
 
     const version = await db.getFirstAsync("PRAGMA user_version;");
-    expect(Number(version.user_version)).toBe(5);
+    expect(Number(version.user_version)).toBe(6);
 
     const columns = await db.getAllAsync(`PRAGMA table_info(${QUEUE_TABLE});`);
     expect(columns.map((c) => c.name)).toEqual(
@@ -234,7 +234,7 @@ describe("tenant provenance migration", () => {
     expect((await db.getAllAsync(`SELECT * FROM ${QUEUE_TABLE}`))).toHaveLength(4);
     expect((await db.getAllAsync(`PRAGMA table_info(${QUEUE_TABLE})`)).map(column => column.name)).not.toContain("acceptanceConfirmed");
     await getDatabase();
-    expect((await db.getFirstAsync("PRAGMA user_version")).user_version).toBe(5);
+    expect((await db.getFirstAsync("PRAGMA user_version")).user_version).toBe(6);
     expect(await listAll()).toHaveLength(4);
     db.execAsync = exec;
   });
@@ -278,7 +278,7 @@ describe("tenant provenance migration", () => {
       acceptanceConfirmed: 0, verifiedAt: null, verificationEvidence: null,
       verificationCheckedAt: null, verificationIssue: null,
       lastAttemptAt: null, attemptCount: 0,
-      sourceEventId: null,
+      sourceEventId: null, claimOwner: null, claimExpiresAt: null, uploadAttemptAt: null,
     })));
     resetDatabaseHandle();
     await getDatabase();

@@ -5,6 +5,7 @@ import java.nio.file.Files
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import org.json.JSONObject
+import org.json.JSONArray
 
 private fun context(): Context = Context(Files.createTempDirectory("attendance-journal-").toFile())
 
@@ -75,6 +76,52 @@ fun main() {
     check(enter["registrationId"] == "configuration-one")
     check(enter["geotagging"] == 2)
     check(enter["captureIssue"] == null)
+  }
+
+  checkCase("legacy scoped fractional radius retains exact requested geometry across restart and capture") {
+    val context = context()
+    val requestedRadius = 100.3
+    val legacy = registration() + mapOf(
+      "radius" to requestedRadius.toFloat().toDouble(),
+      "registrationId" to JSONArray(listOf("https://tenant.example.test", "employee-a", "office-main",
+        10.0, 20.0, requestedRadius, 2)).toString(),
+    )
+    GeofenceStore.savePendingGeofence(context, legacy)
+    val pending = GeofenceStore.getPendingGeofence(Context(context.directory))!!
+    check(pending.getDouble("requestedRadius") == requestedRadius)
+    check(pending.getDouble("radius") == requestedRadius.toFloat().toDouble())
+    val enter = capture(context, "ENTER")
+    check((enter["requestedRadius"] as Number).toDouble() == requestedRadius)
+    check((enter["radius"] as Number).toDouble() == requestedRadius.toFloat().toDouble())
+    val stored = JSONObject(context.getSharedPreferences("expo_auto_attendance", Context.MODE_PRIVATE)
+      .getString("pending_geofence", null)!!)
+    check(stored.getDouble("requestedRadius") == requestedRadius)
+  }
+
+  checkCase("legacy integer requested radius migration preserves original native identity") {
+    val context = context()
+    val legacy = registration() + mapOf("registrationId" to JSONArray(listOf(
+      "https://tenant.example.test", "employee-a", "office-main", 10.0, 20.0, 100.0, 2,
+    )).toString())
+    GeofenceStore.saveGeofence(context, legacy)
+    val restored = GeofenceStore.getGeofence(context)!!
+    check(restored.getDouble("requestedRadius") == 100.0)
+    check(restored.getString("nativeIdentifier") == "physical-one")
+  }
+
+  checkCase("radius migration refuses geometry or scope inconsistent with its own fingerprint") {
+    val context = context()
+    val fingerprint = JSONArray(listOf("https://tenant.example.test", "employee-a", "office-main",
+      10.0, 20.0, 100.3, 2)).toString()
+    listOf(
+      mapOf("radius" to 100.4), mapOf("employeeId" to "employee-b"), mapOf("latitude" to 11.0),
+      mapOf("tenantKey" to null), mapOf("geotagging" to 1),
+    ).forEach { changes ->
+      GeofenceStore.saveGeofence(context, registration() + mapOf(
+        "radius" to 100.3.toFloat().toDouble(), "registrationId" to fingerprint,
+      ) + changes)
+      check(!GeofenceStore.getGeofence(context)!!.has("requestedRadius"))
+    }
   }
 
   checkCase("stale native identifier is retained without current employee attribution") {

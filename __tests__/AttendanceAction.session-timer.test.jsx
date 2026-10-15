@@ -1,3 +1,4 @@
+/** @jest-environment jsdom */
 import React from "react";
 import { Text } from "react-native";
 import { Provider } from "react-redux";
@@ -7,6 +8,12 @@ import { render, fireEvent, waitFor, act } from "@testing-library/react-native";
 import AttendanceAction from "../screens/AttendanceAction";
 import attendanceReducer from "../redux/Slices/AttendanceSlice";
 import * as attendanceService from "../services/api/attendance.service";
+import { resetDatabaseHandle } from "../services/offline/AttendanceDatabase";
+import { applySessionOwner, SESSION_STATE_KEY } from "../utils/attendanceSessionState";
+import { loginQueueEmployee, TEST_TENANT } from "../test-utils/attendanceScope";
+
+jest.mock("expo-sqlite", () => require("../test-utils/expoSqliteMock"));
+const { __resetAll } = require("../test-utils/expoSqliteMock");
 
 jest.mock("react-native-toast-message", () => ({
   show: jest.fn(),
@@ -138,6 +145,10 @@ describe("AttendanceAction session timer behavior", () => {
     focusListener = null;
 
     await AsyncStorage.clear();
+    __resetAll(); resetDatabaseHandle();
+    await loginQueueEmployee("EMP-001");
+    await applySessionOwner("EMP-001", { tenantKey: TEST_TENANT });
+    await AsyncStorage.removeItem(SESSION_STATE_KEY);
     await AsyncStorage.setItem("restrict_location", "0");
     await AsyncStorage.setItem("photo", "0");
 

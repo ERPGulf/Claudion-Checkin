@@ -104,13 +104,24 @@ public class ExpoAutoAttendanceModule: Module {
     }.runOnQueue(.main)
 
     AsyncFunction("stopGeofence") { (promise: Promise) in
-      GeofenceManager.shared.stop {
+      do {
+        try GeofenceManager.shared.stop()
         promise.resolve(nil)
+      } catch {
+        promise.reject("ERR_NATIVE_STORAGE", "Geofence cancellation could not be persisted")
       }
     }.runOnQueue(.main)
 
-    Function("isMonitoring") {
-      return GeofenceStore.shared.isMonitoring
+    AsyncFunction("retryInitialPresence") { (promise: Promise) in
+      do {
+        promise.resolve(try GeofenceManager.shared.retryInitialPresence())
+      } catch {
+        promise.reject("ERR_NATIVE_STORAGE", "Initial presence recovery could not be persisted")
+      }
+    }.runOnQueue(.main)
+
+    Function("isMonitoring") { () throws -> Bool in
+      return try GeofenceStore.shared.getRegistrationState()?["status"] as? String == "monitoring"
     }
 
     // Status queries the JS screen can poll (e.g. on focus, before Start) to
@@ -123,8 +134,10 @@ public class ExpoAutoAttendanceModule: Module {
       return ProcessInfo.processInfo.isLowPowerModeEnabled
     }
 
-    Function("getRegisteredGeofences") { () -> [[String: Any]] in
-      guard GeofenceStore.shared.isMonitoring, let stored = GeofenceStore.shared.getGeofence() else {
+    Function("getRegisteredGeofences") { () throws -> [[String: Any]] in
+      guard let registration = try GeofenceStore.shared.getRegistrationState(),
+        registration["status"] as? String == "monitoring",
+        let stored = registration["configuration"] as? [String: Any] else {
         return []
       }
       return [stored]

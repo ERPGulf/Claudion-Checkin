@@ -3,7 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 export const CHECKIN_START_TIME_KEY = "checkinStartTime";
 export const LAST_CHECKOUT_TIME_KEY = "lastCheckoutTime";
 
-const STATUS_CHECKIN_FIELDS = [
+export const STATUS_CHECKIN_FIELDS = [
   "checkin_time",
   "checkinTime",
   "latest_checkin_time",

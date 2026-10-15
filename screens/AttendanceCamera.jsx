@@ -11,7 +11,7 @@ import { Image } from "expo-image";
 import React, { useRef, useState } from "react";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { Ionicons } from "@expo/vector-icons";
-import { useDispatch, useSelector } from "react-redux";
+import { useDispatch, useSelector, useStore } from "react-redux";
 import { Toast } from "react-native-toast-message/lib/src/Toast";
 import { useNavigation } from "@react-navigation/native";
 import { format } from "date-fns";
@@ -33,17 +33,18 @@ import {
   userStatusPut,
 } from "../services/api";
 import {
-  performSessionTransition,
-  SESSION_ORIGIN,
   SESSION_STATUS,
+  SESSION_ORIGIN,
+  publishCurrentSession,
   TRANSITION_RESULT,
 } from "../utils/attendanceSessionState";
-import { submitManualAttendance } from "../services/offline/AttendanceQueueService";
+import { createManualAttendanceContext, performManualAttendanceTransition, assertManualAttendanceCurrent } from "../services/offline/ManualAttendanceService";
 import { resolveNearestOffice } from "../services/offline/offlineAttendanceGate";
 
 function AttendanceCamera() {
   const navigation = useNavigation();
   const dispatch = useDispatch();
+  const store = useStore();
   const { colors } = useAppTheme();
   // The themed stack header — the one back button on this screen.
   useModernScreenHeader("Attendance Camera");
@@ -85,6 +86,8 @@ function AttendanceCamera() {
 
     try {
       setIsLoading(true);
+      const context = await createManualAttendanceContext(employeeCode);
+      let statusError = null;
 
       // 📍 GET OFFICE LOCATION FIRST
       // Read restrict_location
@@ -105,7 +108,8 @@ function AttendanceCamera() {
       // as "Check-in failed" before the offline queue was ever reached.
       let locationData = null;
       if (!shouldSkipLocationRestriction && restrictLocation === "1") {
-        locationData = await resolveNearestOffice(employeeCode);
+        locationData = await resolveNearestOffice(employeeCode, { syncScope: context.scope });
+        await assertManualAttendanceCurrent(context);
 
         // If not within radius, block
         if (locationData && !locationData.withinRadius) {
@@ -136,32 +140,32 @@ function AttendanceCamera() {
       // Online only — a manual punch is never queued, so either the server
       // records it and names the document this photo attaches to, or nothing
       // happened and the catch below says so.
-      const outcome = await performSessionTransition({
-        type,
-        origin: SESSION_ORIGIN.MANUAL,
-        execute: () =>
-          submitManualAttendance({
-            type,
-            employeeCode,
-            online: () => userCheckIn(dataField),
-          }),
+      const outcome = await performManualAttendanceTransition({
+        type, employeeCode, context,
+        online: async ({ scope, occurredAt }) => {
+          const result = await userCheckIn({ ...dataField, syncScope: scope, occurredAt });
+          if (result?.allowed) {
+            try { await userStatusPut(employeeCode, custom_in, { syncScope: scope }); }
+            catch (error) { statusError = error; }
+            await assertManualAttendanceCurrent(context);
+          }
+          return result;
+        },
       });
+      await assertManualAttendanceCurrent(outcome);
 
       if (outcome.status === TRANSITION_RESULT.SKIPPED) {
         // Already in the target state (e.g. an automatic check-out landed while
         // the camera was open). Nothing was sent; re-sync and go back.
-        const { session } = outcome;
-        if (session.status === SESSION_STATUS.CHECKED_IN) {
-          dispatch(
-            setCheckin({
-              checkinTime: session.startedAt,
-              location: null,
-              sessionOrigin: session.origin,
-            }),
-          );
-        } else {
-          dispatch(setCheckout({ checkoutTime: session.endedAt }));
-        }
+        const session = await publishCurrentSession({
+          assertCurrent: () => assertManualAttendanceCurrent(outcome),
+          publish: current => {
+            if (current.status === SESSION_STATUS.CHECKED_IN) dispatch(setCheckin({
+              checkinTime: current.startedAt, location: store.getState().attendance.location, sessionOrigin: current.origin,
+            }));
+            else dispatch(setCheckout({ checkoutTime: current.endedAt }));
+          },
+        });
 
         Toast.show({
           type: "info",
@@ -202,29 +206,30 @@ function AttendanceCamera() {
       // Redux update. The attendance log now exists on the server, so the
       // session is committed before the photo work: if the upload fails the
       // user is still checked in/out, both here and for the geofence.
-      if (custom_in === 1) {
-        dispatch(
-          setCheckin({
-            checkinTime: session.startedAt,
-            location: {
+      await publishCurrentSession({
+        assertCurrent: () => assertManualAttendanceCurrent(outcome),
+        publish: current => {
+          if (current.status === SESSION_STATUS.CHECKED_IN) dispatch(setCheckin({
+            checkinTime: current.startedAt,
+            location: current.startedAt === session.startedAt && current.committedAt === session.committedAt ? {
               locationName: locationData?.locationName || "Office",
               latitude: locationData?.latitude,
               longitude: locationData?.longitude,
               radius: locationData?.radius,
-            },
-            sessionOrigin: session.origin,
-          }),
-        );
-      } else {
-        dispatch(setCheckout({ checkoutTime: session.endedAt }));
-      }
+            } : store.getState().attendance.location,
+            sessionOrigin: current.origin,
+          }));
+          else dispatch(setCheckout({ checkoutTime: current.endedAt }));
+        },
+      });
 
       try {
-        // Update employee status
-        await userStatusPut(employeeCode, custom_in);
+        if (statusError) throw statusError;
         // Upload photo
-        await uploadPicture(docname);
+        await uploadPicture(docname, outcome);
+        await assertManualAttendanceCurrent(outcome);
       } catch (uploadError) {
+        await assertManualAttendanceCurrent(outcome);
         console.log("AttendanceCamera photo upload failed:", uploadError?.message);
         hapticsMessage("warning");
         Toast.show({
@@ -262,7 +267,7 @@ function AttendanceCamera() {
 
   // ✅ UPLOAD PHOTO FUNCTION
   // Throws on failure; the caller owns the one toast for the outcome.
-  const uploadPicture = async (docname) => {
+  const uploadPicture = async (docname, { scope }) => {
     if (!photo?.uri) throw new Error("No photo available for upload");
 
     const file = {
@@ -272,7 +277,8 @@ function AttendanceCamera() {
     };
 
     // 1️⃣ Upload photo to ERP
-    const uploadResponse = await userFileUpload(file, docname);
+    const uploadResponse = await userFileUpload(file, docname, { syncScope: scope });
+    await assertManualAttendanceCurrent({ scope });
 
     // The API returns: { message: ["/files/yourfile.png"] }
     const uploadedFileUrl = uploadResponse?.message?.[0];
@@ -281,7 +287,7 @@ function AttendanceCamera() {
     // 2️⃣ Update custom_image field in Employee Checkin doctype
     const updateFormData = new FormData();
     updateFormData.append("custom_image", uploadedFileUrl);
-    await putUserFile(updateFormData, docname);
+    await putUserFile(updateFormData, docname, { syncScope: scope });
   };
 
   const page = { flex: 1, backgroundColor: colors.surfaceSecondary };

@@ -4,6 +4,9 @@ import { FAILURE_CLASS } from "./AttendanceDatabase";
 import {
   MAX_RETRIES,
   claimNextPending,
+  beginAttendanceUpload,
+  renewAttendanceClaim,
+  QUEUE_CLAIM_CHANGED,
   countRecoveryByScope,
   findById,
   hasWorkDue,
@@ -16,6 +19,9 @@ import {
   purgeSynced,
   releaseStuckSyncing,
   releaseClaim,
+  listUncertainUploadClaims,
+  recordServerVerification,
+  recordVerificationIssue,
   wakeBlocked,
   wakePending,
 } from "./AttendanceQueueRepository";
@@ -38,16 +44,13 @@ import { verifyQueuedAttendance } from "./AttendanceVerification";
  * check-in produces a session the backend cannot reconcile, so order is part of
  * correctness rather than tidiness.
  *
- * Three things guarantee a punch is never uploaded twice:
+ * Three safeguards protect submission without assuming backend exactly-once:
  *  1. the single-flight promise below, which stops two drains in this JS context,
- *  2. `claimNextPending`'s atomic claim, which stops two drains in *any* context
- *     racing for the same row (a background relaunch alongside the foreground app),
- *  3. the server's own duplicate detection, which catches the case neither can —
- *     a request that committed and then timed out, so the row still looks pending.
+ *  2. the atomic owned claim and lease, which retain live work across runtimes,
+ *  3. durable dispatch evidence, which requires positive history verification
+ *     before a request with an uncertain previous outcome can be sent again.
  *
- * (3) is why a duplicate is recorded as success rather than as an error: it is
- * the expected outcome of a retry that was always going to be redundant, not a
- * fault.
+ * Duplicate responses are also verified before they become confirmed success.
  */
 
 const LOG_PREFIX = "[AttendanceSyncService]";
@@ -63,9 +66,6 @@ let activeRun = null;
 let activeScope = null;
 let runGeneration = 0;
 export const cancelActiveSync = () => { runGeneration += 1; };
-
-/** Set once per app session, so stuck rows are released exactly once. */
-const releasedScopes = new Set();
 
 /** Lifecycle phases a listener is told about. */
 export const SYNC_PHASE = {
@@ -111,29 +111,40 @@ const ROW_OUTCOME = {
   OFFLINE: "offline",
   SCOPE_CHANGED: "scope-changed",
   NEEDS_REVIEW: "needs_review",
+  CLAIM_CHANGED: "claim-changed",
 };
 
 /** Outcomes that mean the rest of this run is pointless. */
-const HALTS_RUN = new Set([ROW_OUTCOME.OFFLINE, ROW_OUTCOME.BLOCKED, ROW_OUTCOME.SCOPE_CHANGED, ROW_OUTCOME.NEEDS_REVIEW]);
+const HALTS_RUN = new Set([ROW_OUTCOME.OFFLINE, ROW_OUTCOME.BLOCKED, ROW_OUTCOME.SCOPE_CHANGED, ROW_OUTCOME.NEEDS_REVIEW, ROW_OUTCOME.CLAIM_CHANGED]);
 
-const settleDuplicate = async (row, syncScope, message, response) => {
+const attachConfirmedPhoto = async (row, serverCheckinId, syncScope, report = {}) => {
+  if (!row.payload?.photoUri) return;
+  const photo = await uploadQueuedPhoto({ photoUri: row.payload.photoUri, docname: serverCheckinId, syncScope });
+  report.photoStatus = photo?.uploaded ? "uploaded" : "not-uploaded";
+};
+
+const settleDuplicate = async (row, syncScope, message, response, report) => {
   try {
     const verification = await verifyQueuedAttendance(row, { syncScope });
+    await renewAttendanceClaim({ id: row.id, claimOwner: row.claimOwner });
     await assertAttendanceQueueScope(syncScope);
     if (verification.verified) {
-      await markSynced({ id: row.id, serverCheckinId: verification.evidence.name,
+      await markSynced({ id: row.id, claimOwner: row.claimOwner, serverCheckinId: verification.evidence.name,
         serverResponse: response, duplicate: true, duplicateMessage: message,
         acceptanceConfirmed: true, verificationEvidence: verification.evidence });
+      await attachConfirmedPhoto(row, verification.evidence.name, syncScope, report);
       return ROW_OUTCOME.DUPLICATE;
     }
-    await markNeedsReview({ id: row.id, error: message, serverResponse: response, duplicate: true });
+    await markNeedsReview({ id: row.id, claimOwner: row.claimOwner, error: message, serverResponse: response, duplicate: true });
     return ROW_OUTCOME.NEEDS_REVIEW;
   } catch (error) {
+    if (error?.code === QUEUE_CLAIM_CHANGED) return ROW_OUTCOME.CLAIM_CHANGED;
     if (error?.code === ATTENDANCE_SCOPE_CHANGED) {
-      await releaseClaim({ id: row.id });
+      await markNeedsReview({ id: row.id, claimOwner: row.claimOwner,
+        error: "The account changed while duplicate verification was pending." });
       return ROW_OUTCOME.SCOPE_CHANGED;
     }
-    await markNeedsReview({ id: row.id, error: message, serverResponse: response, duplicate: true });
+    await markNeedsReview({ id: row.id, claimOwner: row.claimOwner, error: message, serverResponse: response, duplicate: true });
     return ROW_OUTCOME.NEEDS_REVIEW;
   }
 };
@@ -147,17 +158,48 @@ const settleDuplicate = async (row, syncScope, message, response) => {
  * should never be reached by ordinary control flow.
  */
 const syncRow = async (row, syncScope, report) => {
+  let dispatched = !!row.uploadAttemptAt;
+  const heartbeat = setInterval(() => {
+    renewAttendanceClaim({ id: row.id, claimOwner: row.claimOwner }).catch(() => {});
+  }, 30000);
   try {
     await assertAttendanceQueueScope(syncScope);
+    if (row.uploadAttemptAt) {
+      const verification = await verifyQueuedAttendance(row, { syncScope });
+      await assertAttendanceQueueScope(syncScope);
+      await renewAttendanceClaim({ id: row.id, claimOwner: row.claimOwner });
+      if (verification.verified) {
+        await markSynced({ id: row.id, claimOwner: row.claimOwner,
+          serverCheckinId: verification.evidence.name, acceptanceConfirmed: true,
+          verificationEvidence: verification.evidence });
+        await attachConfirmedPhoto(row, verification.evidence.name, syncScope, report);
+        return ROW_OUTCOME.SYNCED;
+      }
+      if (verification.reason === "server-unavailable") {
+        if (row.retryCount >= MAX_RETRIES) {
+          await markBlocked({ id: row.id, claimOwner: row.claimOwner, failureClass: FAILURE_CLASS.UNKNOWN,
+            error: "Previous attendance upload is awaiting server verification." });
+          return ROW_OUTCOME.BLOCKED;
+        }
+        await markRetry({ id: row.id, claimOwner: row.claimOwner, error: "Server verification is temporarily unavailable." });
+        return ROW_OUTCOME.OFFLINE;
+      }
+      await markNeedsReview({ id: row.id, claimOwner: row.claimOwner,
+        error: "Previous attendance upload could not be confirmed by exact server history." });
+      return ROW_OUTCOME.NEEDS_REVIEW;
+    }
+    await beginAttendanceUpload({ id: row.id, claimOwner: row.claimOwner });
+    dispatched = true;
     const outcome = await pushCheckin(row, { syncScope });
+    await renewAttendanceClaim({ id: row.id, claimOwner: row.claimOwner });
 
     if (outcome.result === PUSH_RESULT.INSERTED) {
       if (typeof outcome.serverCheckinId !== "string" || !outcome.serverCheckinId.trim()) {
-        await markNeedsReview({ id: row.id, error: "The server did not return an attendance reference.", serverResponse: outcome.response });
+        await markNeedsReview({ id: row.id, claimOwner: row.claimOwner, error: "The server did not return an attendance reference.", serverResponse: outcome.response });
         return ROW_OUTCOME.NEEDS_REVIEW;
       }
       await markSynced({
-        id: row.id,
+        id: row.id, claimOwner: row.claimOwner,
         serverCheckinId: outcome.serverCheckinId,
         serverResponse: outcome.response,
         acceptanceConfirmed: true,
@@ -170,30 +212,23 @@ const syncRow = async (row, syncScope, report) => {
       // The row is already committed as synced before this runs, and
       // `uploadQueuedPhoto` never throws — a missing attachment must not undo an
       // attendance record that the server has accepted.
-      if (row.payload?.photoUri) {
-        const photo = await uploadQueuedPhoto({
-          photoUri: row.payload.photoUri,
-          docname: outcome.serverCheckinId,
-          syncScope,
-        });
-        report.photoStatus = photo?.uploaded ? "uploaded" : "not-uploaded";
-      }
+      await attachConfirmedPhoto(row, outcome.serverCheckinId, syncScope, report);
 
       return ROW_OUTCOME.SYNCED;
     }
 
     if (outcome.result === PUSH_RESULT.DUPLICATE) {
-      return settleDuplicate(row, syncScope, outcome.message, outcome.response);
+      return await settleDuplicate(row, syncScope, outcome.message, outcome.response, report);
     }
 
     if (outcome.result === "needs_review") {
-      await markNeedsReview({ id: row.id, error: outcome.message, serverResponse: outcome.response });
+      await markNeedsReview({ id: row.id, claimOwner: row.claimOwner, error: outcome.message, serverResponse: outcome.response });
       return ROW_OUTCOME.NEEDS_REVIEW;
     }
 
     if (outcome.result === PUSH_RESULT.REJECTED) {
       const { cascaded } = await markRejected({
-        id: row.id,
+        id: row.id, claimOwner: row.claimOwner,
         failureClass: outcome.failureClass,
         error: outcome.message,
         serverResponse: outcome.response,
@@ -214,7 +249,7 @@ const syncRow = async (row, syncScope, report) => {
     }
 
     const { nextAttemptAt } = await markBlocked({
-      id: row.id,
+      id: row.id, claimOwner: row.claimOwner,
       failureClass: outcome.failureClass,
       error: outcome.message,
       serverResponse: outcome.response,
@@ -225,9 +260,13 @@ const syncRow = async (row, syncScope, report) => {
     );
     return ROW_OUTCOME.BLOCKED;
   } catch (error) {
+    if (error?.code === QUEUE_CLAIM_CHANGED) return ROW_OUTCOME.CLAIM_CHANGED;
     const scopeValid = await assertAttendanceQueueScope(syncScope).then(() => true, () => false);
     if (error?.code === ATTENDANCE_SCOPE_CHANGED || !scopeValid) {
-      await releaseClaim({ id: row.id });
+      if (dispatched) {
+        await markNeedsReview({ id: row.id, claimOwner: row.claimOwner,
+          error: "The account changed while the upload outcome was unknown." });
+      } else await releaseClaim({ id: row.id, claimOwner: row.claimOwner });
       return ROW_OUTCOME.SCOPE_CHANGED;
     }
     const { kind, failureClass, message, status } =
@@ -236,12 +275,12 @@ const syncRow = async (row, syncScope, report) => {
     // A duplicate can also arrive as a thrown 417 rather than a structured
     // per-record failure, depending on how the backend surfaces it.
     if (kind === FAILURE_KIND.DUPLICATE) {
-      return settleDuplicate(row, syncScope, message, error?.response?.data ?? null);
+      return await settleDuplicate(row, syncScope, message, error?.response?.data ?? null, report);
     }
 
     if (kind === FAILURE_KIND.REJECTED) {
       const { cascaded } = await markRejected({
-        id: row.id,
+        id: row.id, claimOwner: row.claimOwner,
         failureClass,
         error: message,
         serverResponse: error?.response?.data ?? null,
@@ -260,7 +299,7 @@ const syncRow = async (row, syncScope, report) => {
       }
 
       await markBlocked({
-        id: row.id,
+        id: row.id, claimOwner: row.claimOwner,
         failureClass,
         error: message,
         serverResponse: error?.response?.data ?? null,
@@ -277,7 +316,7 @@ const syncRow = async (row, syncScope, report) => {
     // blocked and joins the slow schedule instead of being abandoned.
     if (row.retryCount >= MAX_RETRIES) {
       await markBlocked({
-        id: row.id,
+        id: row.id, claimOwner: row.claimOwner,
         failureClass: FAILURE_CLASS.UNKNOWN,
         error: `Still unreachable after ${MAX_RETRIES} attempts: ${message}`,
       });
@@ -288,7 +327,7 @@ const syncRow = async (row, syncScope, report) => {
     }
 
     const { retryCount, nextAttemptAt } = await markRetry({
-      id: row.id,
+      id: row.id, claimOwner: row.claimOwner,
       error: message,
     });
     console.log(
@@ -300,6 +339,30 @@ const syncRow = async (row, syncScope, report) => {
     // this row will fare better, so the caller stops rather than burning the
     // rest of the queue's retry budget on the same outage.
     return ROW_OUTCOME.OFFLINE;
+  } finally {
+    clearInterval(heartbeat);
+  }
+};
+
+const verifyInterruptedUploads = async (scope, syncScope, summary) => {
+  const rows = await listUncertainUploadClaims(scope);
+  if (!rows.length || !await fetchShouldAttemptRequest()) return;
+  for (const row of rows) {
+    await assertAttendanceQueueScope(syncScope);
+    const verification = await verifyQueuedAttendance(row, { syncScope });
+    await assertAttendanceQueueScope(syncScope);
+    if (verification.verified) {
+      const changed = await recordServerVerification({ row, evidence: verification.evidence });
+      if (changed) {
+        notifyQueueChanged();
+        summary.synced += 1;
+        summary.records.push({ id: row.id, action: row.action, timestamp: row.timestamp,
+          status: "synced", outcome: "verified-interrupted-upload" });
+        await attachConfirmedPhoto(row, verification.evidence.name, syncScope, summary.records[summary.records.length - 1]);
+      }
+    } else {
+      await recordVerificationIssue({ row, reason: verification.reason || "upload-outcome-unverified" });
+    }
   }
 };
 
@@ -429,7 +492,6 @@ export const syncPendingAttendance = async ({
   syncScope = { ...syncScope, isCancelled: () => generation !== runGeneration || !!callerCancelled?.() };
   activeScope = syncScope;
   const scope = { employeeId, tenantKey: syncScope.tenantKey };
-  const scopeKey = JSON.stringify([scope.tenantKey, employeeId]);
 
   activeRun = (async () => {
     const summary = {
@@ -449,17 +511,11 @@ export const syncPendingAttendance = async ({
     let announcedStart = false;
 
     try {
-      // Rows left `syncing` by a killed process would otherwise never be
-      // claimed again. Once per session is enough — within a session the
-      // single-flight lock means nothing else can have stranded one.
+      // Live claims remain owned across runtimes. Interrupted uploads require
+      // positive history evidence instead of resetting a possibly sent request.
       await assertAttendanceQueueScope(syncScope);
-      if (!releasedScopes.has(scopeKey)) {
-        const released = await releaseStuckSyncing(Date.now(), scope);
-        releasedScopes.add(scopeKey);
-        if (released) {
-          console.log(`${LOG_PREFIX} Released ${released} stuck row(s)`);
-        }
-      }
+      await releaseStuckSyncing(Date.now(), scope);
+      await verifyInterruptedUploads(scope, syncScope, summary);
 
       // Blocked rows rejoin the queue here. `wakeAllBlocked` ignores the backoff
       // for the events that genuinely change the odds — a launch (the server may
@@ -558,7 +614,8 @@ export const syncPendingAttendance = async ({
         // continuing would spend one pointless request per queued punch.
         if (HALTS_RUN.has(outcome)) {
           summary.reason =
-            outcome === ROW_OUTCOME.SCOPE_CHANGED ? "scope-changed" :
+            outcome === ROW_OUTCOME.CLAIM_CHANGED ? "claim-changed" :
+              outcome === ROW_OUTCOME.SCOPE_CHANGED ? "scope-changed" :
               outcome === ROW_OUTCOME.OFFLINE ? "connection-lost" :
                 outcome === ROW_OUTCOME.NEEDS_REVIEW ? "needs-review" : "blocked";
           break;
@@ -614,7 +671,6 @@ export const resetSyncService = () => {
   activeRun = null;
   activeScope = null;
   runGeneration += 1;
-  releasedScopes.clear();
   syncListeners.clear();
 };
 

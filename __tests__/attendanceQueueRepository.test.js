@@ -509,7 +509,7 @@ describe("releaseStuckSyncing", () => {
     await claimNextPending();
 
     expect(await claimNextPending()).toBeNull();
-    expect(await releaseStuckSyncing()).toBe(1);
+    expect(await releaseStuckSyncing(Date.now() + 120001)).toBe(1);
     expect(await claimNextPending()).not.toBeNull();
   });
 });

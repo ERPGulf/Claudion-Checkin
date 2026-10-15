@@ -151,7 +151,7 @@ object GeofenceManager {
     identifier: String,
     latitude: Double,
     longitude: Double,
-    radius: Float,
+    radius: Double,
     tenantKey: String? = null,
     employeeId: String? = null,
     registrationId: String? = null,
@@ -164,12 +164,14 @@ object GeofenceManager {
     // Delayed callbacks for a removed registration must never gain new scope.
     val nativeIdentifier = "attendance:${UUID.randomUUID()}"
     knownIdentifiers[nativeIdentifier] = generation
+    val actualRadius = radius.toFloat()
     val registration = mapOf(
       "identifier" to identifier,
       "nativeIdentifier" to nativeIdentifier,
       "latitude" to latitude,
       "longitude" to longitude,
-      "radius" to radius.toDouble(),
+      "radius" to actualRadius.toDouble(),
+      "requestedRadius" to radius,
       "tenantKey" to tenantKey,
       "employeeId" to employeeId,
       "registrationId" to registrationId,
@@ -200,7 +202,7 @@ object GeofenceManager {
         withCurrentGeneration(generation) { GeofenceStore.savePendingGeofence(context, registration) }
         val geofence = Geofence.Builder()
           .setRequestId(nativeIdentifier)
-          .setCircularRegion(latitude, longitude, radius)
+          .setCircularRegion(latitude, longitude, actualRadius)
           .setExpirationDuration(Geofence.NEVER_EXPIRE)
           .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER or Geofence.GEOFENCE_TRANSITION_EXIT)
           .build()
@@ -333,7 +335,7 @@ object GeofenceManager {
       identifier = stored.optString("identifier", "office"),
       latitude = stored.optDouble("latitude"),
       longitude = stored.optDouble("longitude"),
-      radius = stored.optDouble("radius", 100.0).toFloat(),
+      radius = stored.optDouble("requestedRadius", stored.optDouble("radius", 100.0)),
       tenantKey = stored.optString("tenantKey").takeIf { it.isNotBlank() && it != "null" },
       employeeId = stored.optString("employeeId").takeIf { it.isNotBlank() && it != "null" },
       registrationId = stored.optString("registrationId").takeIf { it.isNotBlank() && it != "null" },

@@ -38,7 +38,7 @@ struct GeofenceStoreTests {
       "identifier": "office-main", "nativeIdentifier": "native-synthetic",
       "transition": transition, "timestamp": timestamp,
       "tenantKey": "https://synthetic.invalid", "employeeId": "EMP-SYNTHETIC",
-      "registrationId": "config-synthetic", "geotagging": 2,
+      "registrationId": "config-synthetic", "geotagging": 2, "registrationStartedAt": 100,
       "latitude": 1.0, "longitude": 2.0, "radius": 100.0, "requestedRadius": 500.0
     ]
   }
@@ -133,6 +133,126 @@ struct GeofenceStoreTests {
     try check(concurrentEvents.map { ($0["sequence"] as! NSNumber).intValue } == Array(1...80),
       "Concurrent persistence order is monotonic")
 
+    // Ownership must survive death between OS registration and confirmation.
+    let registrationURL = directory.appendingPathComponent("registration.json")
+    let registration = GeofenceStore(defaults: MemoryDefaults(), journalURL: registrationURL)
+    let configuration = event("ENTER").filter { !["transition", "timestamp"].contains($0.key) }
+    try registration.savePendingRegistration(configuration)
+    let pendingRestart = GeofenceStore(defaults: MemoryDefaults(), journalURL: registrationURL)
+    let pendingRegistration = try pendingRestart.getRegistrationState()
+    try check(pendingRegistration?["status"] as? String == "pending", "Pending registration survives restart before OS confirmation")
+    let pendingConfiguration = pendingRegistration?["configuration"] as? [String: Any]
+    try check(pendingConfiguration?["employeeId"] as? String == "EMP-SYNTHETIC", "Pending employee scope survives without UserDefaults")
+    try check(pendingConfiguration?["nativeIdentifier"] as? String == "native-synthetic", "Restore retains the exact physical region identity")
+    try check((pendingConfiguration?["registrationStartedAt"] as? NSNumber)?.intValue == 100,
+      "Restart retains registration time rather than stamping relaunch time")
+    let confirmed = try pendingRestart.confirmRegistration("native-synthetic")
+    try check(confirmed, "Matching OS confirmation promotes the durable registration")
+    let firstRequest = try pendingRestart.beginInitialPresenceRequest("native-synthetic", at: 1_000)
+    try check(firstRequest, "An unfinished initial presence starts one authoritative request cycle")
+    let presenceRestart = GeofenceStore(defaults: MemoryDefaults(), journalURL: registrationURL)
+    let unresolved = try presenceRestart.getRegistrationState()
+    try check(unresolved?["initialPresencePending"] as? Bool == true, "Restart/unknown exhaustion retains unfinished initial presence")
+    let tooSoon = try presenceRestart.beginInitialPresenceRequest("native-synthetic", at: 60_999)
+    let retryLater = try presenceRestart.beginInitialPresenceRequest("native-synthetic", at: 61_000)
+    try check(!tooSoon && retryLater, "Unknown/restarted initial presence retries only after the persisted cooldown")
+    let outsideResolved = try presenceRestart.completeInitialPresence("native-synthetic")
+    try check(outsideResolved, "Authoritative outside settles initial presence without an EXIT")
+    let outsideEvents = try presenceRestart.getPendingEvents()
+    try check(outsideEvents.isEmpty, "Initial outside never manufactures an attendance transition")
+    let completedRestart = GeofenceStore(defaults: MemoryDefaults(), journalURL: registrationURL)
+    let afterManualCheckout = try completedRestart.beginInitialPresenceRequest("native-synthetic", at: 500_000)
+    try check(!afterManualCheckout, "Completed initial presence cannot reopen attendance after manual checkout")
+    try completedRestart.savePendingRegistration(configuration)
+    _ = try completedRestart.confirmRegistration("native-synthetic")
+    let restoredCompleted = try completedRestart.beginInitialPresenceRequest("native-synthetic", at: 550_000)
+    try check(!restoredCompleted, "Restoring a missing OS region with the same identity keeps completed presence")
+
+    var replacement = configuration
+    replacement["nativeIdentifier"] = "native-replacement"
+    replacement["employeeId"] = "EMP-OTHER-SYNTHETIC"
+    try completedRestart.savePendingRegistration(replacement)
+    let staleConfirmation = try completedRestart.confirmRegistration("native-synthetic")
+    let stalePresence = try completedRestart.completeInitialPresence("native-synthetic")
+    try check(!staleConfirmation && !stalePresence, "Late callbacks cannot confirm or settle a replacement registration")
+    _ = try completedRestart.confirmRegistration("native-replacement")
+    var crossing = event("EXIT", 5_000)
+    crossing["nativeIdentifier"] = "native-replacement"
+    crossing["employeeId"] = "EMP-OTHER-SYNTHETIC"
+    let boundary = try completedRestart.appendEvent(crossing, completingInitialPresenceFor: "native-replacement")
+    let boundaryRestart = GeofenceStore(defaults: MemoryDefaults(), journalURL: registrationURL)
+    let boundaryState = try boundaryRestart.getRegistrationState()
+    let boundaryRetry = try boundaryRestart.beginInitialPresenceRequest("native-replacement", at: 600_000)
+    try check(boundaryState?["initialPresencePending"] as? Bool == false && !boundaryRetry,
+      "Real ENTER/EXIT atomically finishes initial presence before replay or retry")
+    let crossingEvents = try boundaryRestart.getPendingEvents()
+    try check(crossingEvents.count == 1 && crossingEvents[0]["eventId"] as? String == boundary["eventId"] as? String,
+      "Finishing presence retains the genuine crossing with its stable identity")
+    try boundaryRestart.cancelRegistration()
+    let stoppedRestart = GeofenceStore(defaults: MemoryDefaults(), journalURL: registrationURL)
+    let stoppedState = try stoppedRestart.getRegistrationState()
+    let lateAfterStop = try stoppedRestart.confirmRegistration("native-replacement")
+    try check(stoppedState == nil && !lateAfterStop, "Durable stop prevents late confirmation from resurrecting registration")
+    let retainedAfterStop = try stoppedRestart.getPendingEvents()
+    try check(retainedAfterStop.count == 1, "Stopping monitoring preserves captured receipts")
+    let staleDefaults = MemoryDefaults()
+    staleDefaults.set(replacement, forKey: "expoAutoAttendance.geofence")
+    staleDefaults.set(true, forKey: "expoAutoAttendance.monitoring")
+    let cancelledWithStaleMirror = GeofenceStore(defaults: staleDefaults, journalURL: registrationURL)
+    let cancelledDespiteMirror = try cancelledWithStaleMirror.getRegistrationState()
+    try check(cancelledDespiteMirror == nil, "Durable stop wins even if the compatibility mirror was not cleared before death")
+
+    let initialURL = directory.appendingPathComponent("initial-presence.json")
+    let initialStore = GeofenceStore(defaults: MemoryDefaults(), journalURL: initialURL)
+    try initialStore.savePendingRegistration(configuration)
+    _ = try initialStore.confirmRegistration("native-synthetic")
+    var initialEvent = event("ENTER", 8_000)
+    initialEvent["initialPresence"] = true
+    let initialCapture = try initialStore.appendEvent(initialEvent, completingInitialPresenceFor: "native-synthetic")
+    let initialRestart = GeofenceStore(defaults: MemoryDefaults(), journalURL: initialURL)
+    let restoredInitial = try initialRestart.getPendingEvents()
+    let initialState = try initialRestart.getRegistrationState()
+    try check(restoredInitial[0]["initialPresence"] as? Bool == true,
+      "Authoritative initial ENTER retains its distinct source marker through replay")
+    try check((restoredInitial[0]["registrationStartedAt"] as? NSNumber)?.intValue == 100,
+      "Initial ENTER retains its original scoped registration start time")
+    try check(initialState?["initialPresencePending"] as? Bool == false,
+      "Initial ENTER and completed detection share one atomic durable write")
+    _ = try initialRestart.acknowledgeEvent(initialCapture["eventId"] as! String)
+    let afterInitialAck = try initialRestart.beginInitialPresenceRequest("native-synthetic", at: 600_000)
+    try check(!afterInitialAck, "Acknowledging initial ENTER cannot reset completed presence")
+    try check(crossingEvents[0]["initialPresence"] == nil, "Genuine crossing retains no initial-presence marker")
+
+    // Old confirmed registrations never acquire a fresh initial ENTER on upgrade.
+    let oldDefaults = MemoryDefaults()
+    oldDefaults.set(configuration, forKey: "expoAutoAttendance.geofence")
+    oldDefaults.set(true, forKey: "expoAutoAttendance.monitoring")
+    let oldStore = GeofenceStore(defaults: oldDefaults, journalURL: directory.appendingPathComponent("old-registration.json"))
+    let oldState = try oldStore.getRegistrationState()
+    try check(oldState?["status"] as? String == "monitoring" && oldState?["initialPresencePending"] as? Bool == false,
+      "Legacy confirmed registration migrates without inventing unfinished presence")
+    let existingURL = directory.appendingPathComponent("existing-v1.json")
+    var existingEvent = event("EXIT")
+    existingEvent["eventId"] = "existing-stable-id"
+    existingEvent["sequence"] = 10
+    try JSONSerialization.data(withJSONObject: ["version": 1, "events": [existingEvent], "nextSequence": 10])
+      .write(to: existingURL, options: .atomic)
+    let existingStore = GeofenceStore(defaults: oldDefaults, journalURL: existingURL)
+    let existingState = try existingStore.getRegistrationState()
+    let existingEvents = try existingStore.getPendingEvents()
+    let afterMigration = try existingStore.appendEvent(event("ENTER"))
+    try check(existingState?["initialPresencePending"] as? Bool == false,
+      "An existing v1 journal gains registration metadata without a new presence request")
+    try check(existingEvents[0]["eventId"] as? String == "existing-stable-id" &&
+      (afterMigration["sequence"] as? NSNumber)?.intValue == 11,
+      "Additive registration migration preserves existing event identity and sequence")
+    let invalidated = try existingStore.invalidateRegistration("native-synthetic")
+    let invalidState = try existingStore.getRegistrationState()
+    let invalidConfig = invalidState?["configuration"] as? [String: Any]
+    try check(invalidated && invalidState?["status"] as? String == "inactive" &&
+      invalidConfig?["employeeId"] as? String == "EMP-SYNTHETIC",
+      "OS monitoring failure retains original scoped desired registration durably")
+
     // IO/corruption cannot be reported as capture/ack success or reset history.
     let blockedParent = directory.appendingPathComponent("file-instead-of-directory")
     try Data("block".utf8).write(to: blockedParent)
@@ -142,6 +262,11 @@ struct GeofenceStoreTests {
       _ = try blocked.appendEvent(event("ENTER"))
       throw TestFailure.assertion("Storage failure must propagate")
     } catch is TestFailure { throw TestFailure.assertion("Storage failure must propagate") }
+    catch { checks += 1 }
+    do {
+      try blocked.savePendingRegistration(configuration)
+      throw TestFailure.assertion("Pending ownership storage failure must propagate before OS registration")
+    } catch is TestFailure { throw TestFailure.assertion("Pending ownership storage failure must propagate before OS registration") }
     catch { checks += 1 }
     try Data("corrupt journal".utf8).write(to: url)
     do {

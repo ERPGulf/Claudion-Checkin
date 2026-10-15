@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { format } from "date-fns";
+import { STATUS_CHECKIN_FIELDS, toTimestampMs } from "./attendanceSession";
 
 /**
  * Stamping an attendance log when the server cannot be asked.
@@ -112,6 +113,22 @@ export const getServerOffset = async ({ tenantKey } = {}) => {
   }
 
   return 0;
+};
+
+/** Map server wall-clock digits to the device epoch used by native receipts. */
+export const normalizeAttendanceStatusClock = async (status, { tenantKey } = {}) => {
+  if (!tenantKey || !status || status.unavailable) return status;
+  for (const field of STATUS_CHECKIN_FIELDS) {
+    const value = status[field];
+    if (!toTimestampMs(value)) continue;
+    // Epochs and explicit timezone timestamps already describe an instant.
+    if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(value)) return status;
+    const wallClock = parseServerWallClock(value);
+    if (!wallClock) return status;
+    const offset = await getServerOffset({ tenantKey });
+    return { ...status, checkin_time: wallClock.getTime() - offset };
+  }
+  return status;
 };
 
 /**

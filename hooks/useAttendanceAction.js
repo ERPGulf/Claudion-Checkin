@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { Alert } from "react-native";
-import { useDispatch, useSelector } from "react-redux";
+import { useDispatch, useSelector, useStore } from "react-redux";
 import Toast from "react-native-toast-message";
 import { useNavigation } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -31,8 +31,7 @@ import {
   resolveActiveSessionStart,
 } from "../utils/attendanceSession";
 import {
-  performSessionTransition,
-  readSession,
+  publishCurrentSession,
   reconcileSessionFromServer,
   SESSION_ORIGIN,
   SESSION_STATUS,
@@ -44,10 +43,11 @@ import {
 } from "../redux/Slices/AutoAttendanceSlice";
 import {
   getQueueCounts,
-  submitManualAttendance,
 } from "../services/offline/AttendanceQueueService";
+import { createManualAttendanceContext, performManualAttendanceTransition, assertManualAttendanceCurrent } from "../services/offline/ManualAttendanceService";
 import { resolveNearestOffice } from "../services/offline/offlineAttendanceGate";
-import { formatOfflineTimestamp } from "../utils/serverClock";
+import { formatOfflineTimestamp, normalizeAttendanceStatusClock } from "../utils/serverClock";
+import { captureAttendanceQueueScope, assertAttendanceQueueScope } from "../services/offline/attendanceQueueProvenance";
 import { selectFeatureSettings } from "../redux/Slices/FeatureSettingsSlice";
 import {
   ATTENDANCE_FEATURES,
@@ -72,6 +72,7 @@ const getTodayString = () =>
 export default function useAttendanceAction() {
   const navigation = useNavigation();
   const dispatch = useDispatch();
+  const store = useStore();
   const checkin = useSelector((state) => state.attendance.checkin);
   const checkinTime = useSelector((state) => state.attendance.checkinTime);
   const checkinLocation = useSelector((state) => state.attendance.location);
@@ -132,12 +133,12 @@ export default function useAttendanceAction() {
 
   /** Mirrors a session record from the state machine into Redux. */
   const syncUiToSession = useCallback(
-    (session) => {
+    (session, location = store.getState().attendance.location) => {
       if (session?.status === SESSION_STATUS.CHECKED_IN) {
         dispatch(
           setCheckin({
             checkinTime: session.startedAt,
-            location: checkinLocation,
+            location,
             sessionOrigin: session.origin,
           }),
         );
@@ -146,7 +147,7 @@ export default function useAttendanceAction() {
 
       dispatch(setCheckout({ checkoutTime: session?.endedAt ?? Date.now() }));
     },
-    [checkinLocation, dispatch],
+    [dispatch, store],
   );
 
   /**
@@ -157,31 +158,27 @@ export default function useAttendanceAction() {
    * this when the server's answer is not admissible evidence, and in that
    * situation the absence of a session is not a fact either.
    */
-  const mirrorLocalSession = useCallback(async () => {
-    const session = await readSession();
-
-    if (session.status === SESSION_STATUS.CHECKED_IN) {
-      dispatch(
-        setCheckin({
-          checkinTime: session.startedAt,
-          location: checkinLocation,
-          sessionOrigin: session.origin,
-        }),
-      );
-    }
-
-    return session;
-  }, [checkinLocation, dispatch]);
+  const mirrorLocalSession = useCallback((scope) => publishCurrentSession({
+    ...(scope ? { assertCurrent: () => assertAttendanceQueueScope(scope) } : {}),
+    publish: session => {
+      if (session.status === SESSION_STATUS.CHECKED_IN) syncUiToSession(session);
+    },
+  }), [syncUiToSession]);
 
   const syncCheckinFromStatus = useCallback(
-    async (status, fetchedAt) => {
+    async (status, fetchedAt, scope) => {
+      if (scope) {
+        await assertAttendanceQueueScope(scope);
+        status = await normalizeAttendanceStatusClock(status, scope);
+        await assertAttendanceQueueScope(scope);
+      }
       // The status request never reached the server, so it says nothing about
       // the session and must not be used to close one. Without this an offline
       // check-in was reverted the moment this screen refocused: the UI went back
       // to "Check in", the durable record went CHECKED_OUT, a second tap queued a
       // duplicate punch, and a later geofence EXIT found no session to close.
       if (status?.unavailable) {
-        await mirrorLocalSession();
+        await mirrorLocalSession(scope);
         return;
       }
 
@@ -226,7 +223,7 @@ export default function useAttendanceAction() {
           });
 
         if (awaitingServer > 0) {
-          const session = await mirrorLocalSession();
+          const session = await mirrorLocalSession(scope);
           if (session.status === SESSION_STATUS.CHECKED_IN) return;
         }
       }
@@ -238,25 +235,20 @@ export default function useAttendanceAction() {
       // `fetchedAt` is when the status request went out: it stops this stale
       // snapshot from closing a session that the geofence opened while the
       // request was still in flight.
-      const session = await reconcileSessionFromServer({
+      await reconcileSessionFromServer({
         activeStartedAt: resolvedStart,
         fetchedAt,
+        ...(scope ? { assertCurrent: () => assertAttendanceQueueScope(scope) } : {}),
       });
-
-      if (session.status === SESSION_STATUS.CHECKED_IN) {
-        dispatch(
-          setCheckin({
-            checkinTime: session.startedAt,
-            location: checkinLocation,
-            sessionOrigin: session.origin,
-          }),
-        );
-        return;
-      }
-
-      dispatch(resetCheckin());
+      await publishCurrentSession({
+        ...(scope ? { assertCurrent: () => assertAttendanceQueueScope(scope) } : {}),
+        publish: session => {
+          if (session.status === SESSION_STATUS.CHECKED_IN) syncUiToSession(session);
+          else dispatch(resetCheckin());
+        },
+      });
     },
-    [checkinLocation, checkinTime, dispatch, employeeCode, mirrorLocalSession],
+    [checkinTime, dispatch, employeeCode, mirrorLocalSession, syncUiToSession],
   );
 
   useEffect(() => {
@@ -265,11 +257,12 @@ export default function useAttendanceAction() {
         // Captured before the request so a session opened while it is in flight
         // is recognised as newer than the response.
         const fetchedAt = Date.now();
-        const res = await getAttendanceStatus();
+        const scope = await captureAttendanceQueueScope(employeeCode);
+        const res = await getAttendanceStatus({ syncScope: scope });
 
         if (!isMountedRef.current) return;
 
-        await syncCheckinFromStatus(res, fetchedAt);
+        await syncCheckinFromStatus(res, fetchedAt, scope);
       } catch (e) {
         console.log("Status sync error:", e);
       }
@@ -359,19 +352,23 @@ export default function useAttendanceAction() {
    * Dispatches today + monthly worked hours and break minutes to Redux.
    * Avoids duplicating three identical Promise.all blocks across handlers.
    */
-  const refreshAttendanceData = useCallback(async () => {
+  const refreshAttendanceData = useCallback(async (scope) => {
+    if (scope) await assertAttendanceQueueScope(scope);
     const todayStr = getTodayString();
     const now = new Date();
+    const options = scope ? [{ syncScope: scope }] : [];
     const [todayWorked, monthlyWorked, breakData] = await Promise.all([
-      getDailyWorkedHours(employeeCode, todayStr),
+      getDailyWorkedHours(employeeCode, todayStr, ...options),
       getMonthlyWorkedHours(
         employeeCode,
         now.getMonth() + 1,
         now.getFullYear(),
+        ...options,
       ),
-      getTodayBreaks(employeeCode, todayStr),
+      getTodayBreaks(employeeCode, todayStr, ...options),
     ]);
 
+    if (scope) await assertAttendanceQueueScope(scope);
     dispatch(setTodayHours(todayWorked ?? "00:00"));
     dispatch(setMonthlyHours(monthlyWorked ?? "00:00"));
     dispatch(setBreakMinutes(breakData?.total_break_minutes ?? 0));
@@ -419,16 +416,17 @@ export default function useAttendanceAction() {
 
         // ✅ 1. FIRST: sync attendance status
         const fetchedAt = Date.now();
-        const res = await getAttendanceStatus();
+        const scope = await captureAttendanceQueueScope(employeeCode);
+        const res = await getAttendanceStatus({ syncScope: scope });
 
         console.log("FOCUS STATUS:", res.custom_in);
 
         if (!isMountedRef.current) return;
 
-        await syncCheckinFromStatus(res, fetchedAt);
+        await syncCheckinFromStatus(res, fetchedAt, scope);
 
         // ✅ 2. THEN: fetch totals
-        const breakData = await refreshAttendanceData();
+        const breakData = await refreshAttendanceData(scope);
 
         if (!isMountedRef.current) return;
         setBreakCompleted(isBreakCompleted(breakData));
@@ -510,7 +508,7 @@ export default function useAttendanceAction() {
   }, [onBreak, breakStartTime, dispatch, employeeCode]);
 
   const handleDirectCheckInOut = useCallback(
-    async (type) => {
+    async (type, context) => {
       try {
         setActionLoading(true);
 
@@ -518,27 +516,21 @@ export default function useAttendanceAction() {
         // whatever it answers. A tapped punch is never queued, so this either
         // opens a real session on the server — which a geofence EXIT can close
         // hours later — or fails, and nothing is recorded anywhere.
-        const outcome = await performSessionTransition({
+        const outcome = await performManualAttendanceTransition({
           type,
-          origin: SESSION_ORIGIN.MANUAL,
-          execute: () =>
-            submitManualAttendance({
-              type,
-              employeeCode,
-              online: () =>
-                userCheckIn({
-                  employeeCode,
-                  type,
-                  locationData: distanceInfo,
-                }),
-            }),
+          employeeCode,
+          context,
+          online: ({ scope, occurredAt }) => userCheckIn({
+            employeeCode, type, locationData: distanceInfo, syncScope: scope, occurredAt,
+          }),
         });
+        await assertManualAttendanceCurrent(outcome);
 
         // The session already moved without this screen knowing — almost
         // always the geofence checked the user out in the background. Nothing
         // was sent; just re-sync the UI to the real state.
         if (outcome.status === TRANSITION_RESULT.SKIPPED) {
-          syncUiToSession(outcome.session);
+          await publishCurrentSession({ assertCurrent: () => assertManualAttendanceCurrent(outcome), publish: syncUiToSession });
 
           Toast.show({
             type: "info",
@@ -566,31 +558,35 @@ export default function useAttendanceAction() {
 
         const { session, response } = outcome;
 
-        if (type === "IN") {
-          dispatch({ type: "attendance/setSelectedLocation", payload: null });
-          dispatch(
-            setCheckin({
-              checkinTime: session.startedAt,
-              location: restrictLocation === 1 ? response.location : null,
-              sessionOrigin: session.origin,
-            }),
-          );
-        } else {
+        if (type === "OUT") {
           if (onBreak) {
             const breakRes = await employeeBreak({
               employeeCode,
               type: "OUT",
+              syncScope: outcome.scope,
             });
             if (!breakRes?.allowed) {
               console.log("Break already ended from backend");
             }
           }
 
-          dispatch(setCheckout({ checkoutTime: session.endedAt }));
-          dispatch({ type: "attendance/setSelectedLocation", payload: null });
+          await assertManualAttendanceCurrent(outcome);
+
         }
 
-        const breakData = await refreshAttendanceData();
+        await publishCurrentSession({
+          assertCurrent: () => assertManualAttendanceCurrent(outcome),
+          publish: current => {
+            const same = current.status === session.status && current.startedAt === session.startedAt &&
+              current.endedAt === session.endedAt && current.committedAt === session.committedAt;
+            if (same) dispatch({ type: "attendance/setSelectedLocation", payload: null });
+            syncUiToSession(current, same && type === "IN"
+              ? (restrictLocation === 1 ? response.location : null) : store.getState().attendance.location);
+          },
+        });
+
+        const breakData = await refreshAttendanceData(outcome.scope);
+        await assertManualAttendanceCurrent(outcome);
         syncBreakState(breakData);
 
         hapticsMessage("success");
@@ -628,6 +624,7 @@ export default function useAttendanceAction() {
       refreshAttendanceData,
       syncBreakState,
       syncUiToSession,
+      store,
     ],
   );
 
@@ -955,7 +952,9 @@ export default function useAttendanceAction() {
    */
   const handlePrimaryAction = useCallback(async () => {
     try {
+      const context = await createManualAttendanceContext(employeeCode);
       const photoValue = await AsyncStorage.getItem("photo");
+      await assertManualAttendanceCurrent(context);
       const actionType = checkin ? "OUT" : "IN";
 
       // Two independent conditions, and both must hold: the employee's HR record
@@ -963,7 +962,7 @@ export default function useAttendanceAction() {
       // Turning the feature off must not strand an employee whose record says
       // "photo" behind a camera step the admin has disabled.
       if (photoValue !== "1" || !photoUploadEnabled) {
-        await handleDirectCheckInOut(actionType);
+        await handleDirectCheckInOut(actionType, context);
       } else {
         navigation.navigate("Attendance camera", {
           type: actionType,

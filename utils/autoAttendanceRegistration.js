@@ -10,13 +10,30 @@ export const validOffice = (office) => Number.isFinite(office?.latitude) &&
   Math.abs(office.latitude) <= 90 && Number.isFinite(office?.longitude) &&
   Math.abs(office.longitude) <= 180 && Number.isFinite(office?.radius) && office.radius > 0;
 
+/** Android stores the exact Float handed to Play Services; iOS may clamp its radius. */
+export const nativeRadiusMatchesRequested = (native, requestedRadius) =>
+  Number.isFinite(requestedRadius) && requestedRadius > 0 &&
+  Number.isFinite(native?.radius) && native.radius > 0 &&
+  (native.requestedRadius === undefined || native.requestedRadius === requestedRadius) &&
+  (native.radius <= requestedRadius || native.radius === Math.fround(requestedRadius));
+
+const registeredRadiusMatches = (registered, requestedRadius) => {
+  if (!nativeRadiusMatchesRequested(registered, requestedRadius)) return false;
+  if (registered.requestedRadius !== undefined || registered.radius === requestedRadius) return true;
+  // Older Android binaries lack requestedRadius. Their existing fingerprint,
+  // rather than a new account/configuration, must prove the original Double.
+  return registered.radius === Math.fround(requestedRadius) && registered.registrationId === createRegistrationId({
+    ...registered, radius: requestedRadius,
+  });
+};
+
 export const registeredOfficeMatches = (registered, desired) =>
   registered?.identifier === desired?.identifier &&
   registered?.tenantKey === desired?.tenantKey &&
   registered?.employeeId === desired?.employeeId &&
   registered?.registrationId === desired?.registrationId &&
   registered?.latitude === desired?.latitude && registered?.longitude === desired?.longitude &&
-  (registered?.requestedRadius ?? registered?.radius) === desired?.radius && registered?.geotagging === desired?.geotagging;
+  registeredRadiusMatches(registered, desired?.radius) && registered?.geotagging === desired?.geotagging;
 
 const boundedPosition = async () => {
   let timer;
@@ -53,7 +70,7 @@ export const selectRegistrationOffice = async (config, registered = []) => {
   }
   // Without a fix retain a still-configured office, never choose a different one.
   return candidates.find(office => registered.some(fence =>
-    fence.latitude === office.latitude && fence.longitude === office.longitude && (fence.requestedRadius ?? fence.radius) === office.radius,
+    fence.latitude === office.latitude && fence.longitude === office.longitude && registeredRadiusMatches(fence, office.radius),
   )) ?? null;
 };
 
@@ -83,7 +100,7 @@ export const reconcileAutoAttendanceRegistration = (scope, config) => {
         const coords = resolveLocationCoordinates(location);
         const radius = Number(location.reporting_radius) > 0 ? Number(location.reporting_radius) : 100;
         return registered.some(fence => fence.latitude === coords?.latitude && fence.longitude === coords?.longitude &&
-          (fence.requestedRadius ?? fence.radius) === radius && fence.tenantKey === scope.tenantKey && fence.employeeId === scope.employeeId &&
+          registeredRadiusMatches(fence, radius) && fence.tenantKey === scope.tenantKey && fence.employeeId === scope.employeeId &&
           fence.geotagging === Number(config.rules?.geotagging));
       });
       if (!configured) await Native.stopGeofence();
@@ -92,7 +109,11 @@ export const reconcileAutoAttendanceRegistration = (scope, config) => {
     const desired = { ...office, identifier: Native.OFFICE_GEOFENCE_IDENTIFIER,
       tenantKey: scope.tenantKey, employeeId: scope.employeeId, geotagging: Number(config.rules.geotagging) };
     desired.registrationId = createRegistrationId(desired);
-    if (Native.isMonitoring() && registered.length === 1 && registeredOfficeMatches(registered[0], desired)) return desired;
+    if (Native.isMonitoring() && registered.length === 1 && registeredOfficeMatches(registered[0], desired)) {
+      if (typeof Native.retryInitialPresence === "function") await Native.retryInitialPresence();
+      await assertAttendanceQueueScope(scope);
+      return desired;
+    }
     await Native.stopGeofence();
     await assertAttendanceQueueScope(scope);
     let timeout;

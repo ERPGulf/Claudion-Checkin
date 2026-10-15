@@ -45,7 +45,8 @@ it("diagnoses FIFO and tenant exclusion with the same conditions as the atomic c
   expect(report.matches.find(row => row.id === unknown.row.id)).toMatchObject({ includedInRecovery: true, drainRetryable: false });
   expect(report.matches.find(row => row.id === other.row.id)).toMatchObject({ includedInRecovery: false, drainRetryable: false });
   expect(await claimNextPending(Date.now(), scope)).toBeNull();
-  await markSynced({ id: unknown.row.id });
+  // Explicit positive evidence settles the dependency; unknown tenant remains NULL.
+  await markSynced({ id: unknown.row.id, acceptanceConfirmed: true });
   report = await inspectAttendanceQueue(input);
   expect(report.matches.filter(row => row.claimableNow).map(row => row.id)).toEqual([old.row.id]);
   const claimed = await claimNextPending(Date.now(), scope);

@@ -8,9 +8,9 @@ import { captureAttendanceQueueScope } from "./attendanceQueueProvenance";
 import { readAttendanceConfig } from "./attendanceConfigCache";
 import { fetchShouldAttemptRequest } from "./NetworkListener";
 import { autoCheckInOut, getAttendanceStatus, resolveServerTimestampAt } from "../api/attendance.service";
-import { formatOfflineTimestamp } from "../../utils/serverClock";
+import { formatOfflineTimestamp, normalizeAttendanceStatusClock } from "../../utils/serverClock";
 import { normalizeCustomIn, toTimestampMs } from "../../utils/attendanceSession";
-import { validOffice } from "../../utils/autoAttendanceRegistration";
+import { validOffice, nativeRadiusMatchesRequested } from "../../utils/autoAttendanceRegistration";
 import { resolveLocationCoordinates } from "../../utils/attendanceLocations";
 import {
   applySessionOwner, clearUnverifiedSessionOwner, performSessionTransition,
@@ -52,6 +52,7 @@ const updateOwned = async (eventId, changes = {}) => {
 
 /** Native remains authoritative until SQLite commits; an ack failure is replay-safe. */
 export const ingestPendingNativeEvents = async () => {
+  if (typeof Native.getPendingEvents !== "function") return 0;
   const pending = Native.getPendingEvents();
   if (!Array.isArray(pending)) return 0;
   for (const event of pending) {
@@ -75,12 +76,14 @@ const validateEvent = (event, scope) => {
     !["ENTER", "EXIT"].includes(event.transition) || !validOffice(event) ||
     !Number.isFinite(event.timestamp) || event.timestamp <= 0 ||
     event.timestamp > Date.now() + 60000 || typeof event.registrationId !== "string" || !event.registrationId) return "invalid-native-event";
+  if ((event.initialPresence !== undefined && typeof event.initialPresence !== "boolean") ||
+    (event.initialPresence === true && (!Number.isFinite(event.registrationStartedAt) ||
+      event.registrationStartedAt <= 0 || event.registrationStartedAt > event.timestamp))) return "invalid-native-event";
   try {
     const [tenant, employee, identifier, latitude, longitude, requestedRadius, policy] = JSON.parse(event.registrationId);
     if (tenant !== scope.tenantKey || employee !== scope.employeeId || identifier !== event.identifier ||
       latitude !== event.latitude || longitude !== event.longitude || policy !== Number(event.geotagging) ||
-      !Number.isFinite(requestedRadius) || requestedRadius < event.radius ||
-      (event.requestedRadius !== undefined && event.requestedRadius !== requestedRadius)) return "native-configuration-mismatch";
+      !nativeRadiusMatchesRequested(event, requestedRadius)) return "native-configuration-mismatch";
   } catch {
     return "native-configuration-mismatch";
   }
@@ -94,13 +97,14 @@ const restoreVerifiedOwner = async (scope) => {
   if (evidence.intendedOwner?.tenantKey !== scope.tenantKey ||
     evidence.intendedOwner?.employeeId !== scope.employeeId) return true;
   const fetchedAt = Date.now();
-  const status = await getAttendanceStatus({ syncScope: scope });
+  const status = await normalizeAttendanceStatusClock(await getAttendanceStatus({ syncScope: scope }), scope);
   await assertAttendanceQueueScope(scope);
   if (status?.unavailable) return false;
   const active = normalizeCustomIn(status?.custom_in) === 1;
   const start = toTimestampMs(status?.checkin_time);
   if (active && !start) return false;
-  const restored = await reconcileSessionFromServer({ activeStartedAt: active ? start : null, fetchedAt });
+  const restored = await reconcileSessionFromServer({ activeStartedAt: active ? start : null, fetchedAt,
+    assertCurrent: () => assertAttendanceQueueScope(scope) });
   if (active ? restored.status !== "CHECKED_IN" || restored.startedAt !== start : restored.status !== "CHECKED_OUT") return false;
   await assertAttendanceQueueScope(scope);
   await clearUnverifiedSessionOwner();
@@ -188,6 +192,11 @@ const processRow = async (input, scope, config) => {
   }
   const type = row.transition === "ENTER" ? "IN" : "OUT";
   const result = await runTransition(row, scope, async (session) => {
+    if (type === "IN" && row.event.initialPresence === true && session.closedBy === SESSION_ORIGIN.MANUAL &&
+      Number.isFinite(row.event.registrationStartedAt) && Number.isFinite(session.endedAt) &&
+      session.endedAt >= row.event.registrationStartedAt) {
+      return { allowed: false, reason: "initial-presence-after-manual-checkout" };
+    }
     let forceQueue = false;
     let sourceParentEventId = null;
     if (type === "OUT" && session.sourceEventId) {
@@ -225,6 +234,10 @@ const processRow = async (input, scope, config) => {
     return submitAutoAttendance({ type, employeeCode: scope.employeeId, occurredAt: row.occurredAt,
       sourceScope: scope, sourceEventId: row.eventId, timestamp, forceQueue, strictOrdering: true, skipPosition: true,
       sourceParentEventId,
+      onKnownNoInsert: async ({ httpStatus, failureClass }) => {
+        row = await updateOwned(row.eventId, { onlineAttemptAt: null,
+          outcome: { requestOutcome: "not-inserted", attemptedAt: row.onlineAttemptAt, httpStatus, failureClass } });
+      },
       online: async () => {
         await assertAttendanceQueueScope(scope);
         row = await updateOwned(row.eventId, { onlineAttemptAt: Date.now() });
@@ -244,11 +257,61 @@ const processRow = async (input, scope, config) => {
     return { result };
   }
   // If a POST may have reached the server, the durable attempt must be verified.
+  if (result.response?.reason === "initial-presence-after-manual-checkout") {
+    await updateOwned(row.eventId, { status: HANDLED, reason: result.response.reason,
+      outcome: { status: TRANSITION_RESULT.SKIPPED, queued: false, serverConfirmed: false } });
+    notifyQueueChanged();
+    return { result };
+  }
   const review = ["source-event-collision", "source-event-needs-review", "source-parent-needs-review"].includes(result.response?.reason);
   await updateOwned(row.eventId, { status: review ? NEEDS_REVIEW : row.onlineAttemptAt ? PROCESSING : PENDING,
     reason: result.response?.reason ?? "attendance-not-accepted" });
   notifyQueueChanged();
   return { result, stop: true };
+};
+
+/** Runs outside the session lock; never dispatches new attendance or steals a live claim. */
+export const reconcileUncertainAutoAttendance = ({ scope }) => {
+  const task = processor.then(async () => {
+    await ingestPendingNativeEvents();
+    await assertAttendanceQueueScope(scope);
+    if (!await restoreVerifiedOwner(scope)) return { ready: false, reason: "session-owner-unverified" };
+    const inputs = await Events.listUncertainEvents(scope);
+    if (!inputs.length) return { ready: true };
+    const config = await readAttendanceConfig();
+    if (config?.tenantKey !== scope.tenantKey || config?.employeeId !== scope.employeeId) {
+      return { ready: false, reason: "configuration-unavailable" };
+    }
+    for (const input of inputs) {
+      if (validateEvent(input.event, scope)) return { ready: false, reason: "original-data-needs-review" };
+      const row = input.status === PROCESSING && input.claimOwner === claimOwner && input.claimExpiresAt > Date.now()
+        ? await updateOwned(input.eventId)
+        : await Events.claimEvent(input.eventId, { ownerId: claimOwner, allowReview: true });
+      if (!row) return { ready: false, reason: "automatic-request-in-progress" };
+      const existing = await findBySourceEventId({ sourceEventId: row.eventId, tenantKey: scope.tenantKey, employeeId: scope.employeeId });
+      await assertAttendanceQueueScope(scope);
+      if (existing && !(existing.status === "synced" && existing.acceptanceConfirmed)) {
+        await updateOwned(row.eventId, { status: NEEDS_REVIEW, reason: "source-event-needs-review", queueRowId: existing.id });
+        notifyQueueChanged();
+        return { ready: false, reason: "automatic-attendance-unconfirmed" };
+      }
+      const verification = existing ? { verified: true, evidence: { name: existing.serverCheckinId } }
+        : await verifyQueuedAttendance({ tenantKey: row.tenantKey, employeeId: row.employeeId,
+          employeeDocname: config.employeeDocname, timestamp: row.punchTimestamp,
+          action: row.transition === "ENTER" ? "checkin" : "checkout" }, { syncScope: scope });
+      await assertAttendanceQueueScope(scope);
+      if (!verification.verified) {
+        await updateOwned(row.eventId, { status: NEEDS_REVIEW, reason: verification.reason });
+        notifyQueueChanged();
+        return { ready: false, reason: verification.reason };
+      }
+      const result = await runTransition(row, scope, async () => ({ allowed: true, name: verification.evidence.name }));
+      await saveOutcome(row, result);
+    }
+    return { ready: true };
+  });
+  processor = task.catch(() => {});
+  return task;
 };
 
 /** One ordered ingress processor; SQLite claims additionally protect receipt ownership. */
@@ -257,7 +320,8 @@ export const drainAutoAttendanceEvents = ({ scope, onTransition } = {}) => {
     await ingestPendingNativeEvents();
     if (!scope) return { processed: 0 };
     await assertAttendanceQueueScope(scope);
-    await applySessionOwner(scope.employeeId, { tenantKey: scope.tenantKey });
+    await applySessionOwner(scope.employeeId, { tenantKey: scope.tenantKey,
+      assertCurrent: () => assertAttendanceQueueScope(scope) });
     if (!await restoreVerifiedOwner(scope)) return { processed: 0, reason: "session-owner-unverified" };
     const config = await readAttendanceConfig();
     if (config?.tenantKey !== scope.tenantKey || config?.employeeId !== scope.employeeId) return { processed: 0, reason: "configuration-unavailable" };

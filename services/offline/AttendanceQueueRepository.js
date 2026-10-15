@@ -121,12 +121,16 @@ const CLAIM_DEPENDENCIES_SQL = `
     SELECT 1 FROM ${QUEUE_TABLE} AS older
      WHERE older.employeeId = candidate.employeeId
        AND (older.tenantKey IS candidate.tenantKey OR older.tenantKey IS NULL)
-       AND (CASE WHEN candidate.sourceEventId IS NOT NULL AND older.sourceEventId IS NOT NULL
-           AND older.tenantKey IS candidate.tenantKey
-         THEN older.id < candidate.id
-         ELSE (older.timestamp < candidate.timestamp
-           OR (older.timestamp = candidate.timestamp AND older.id < candidate.id)) END)
+       AND ((older.tenantKey IS NULL AND candidate.tenantKey IS NOT NULL)
+         OR CASE
+           WHEN candidate.sourceEventId IS NOT NULL AND older.tenantKey IS candidate.tenantKey
+             THEN (older.sourceEventId IS NULL OR older.id < candidate.id)
+           WHEN candidate.sourceEventId IS NULL AND older.sourceEventId IS NOT NULL
+             AND older.tenantKey IS candidate.tenantKey THEN 0
+           ELSE (older.timestamp < candidate.timestamp
+             OR (older.timestamp = candidate.timestamp AND older.id < candidate.id)) END)
        AND (older.status IN ('pending', 'syncing', 'needs_review')
+         OR (older.status = 'synced' AND older.acceptanceConfirmed <> 1)
          OR (older.status = 'blocked' AND IFNULL(older.failureClass, '') <> 'endpoint-missing'))
   ) AND NOT EXISTS (
     SELECT 1 FROM ${QUEUE_TABLE} AS paired
@@ -254,6 +258,45 @@ export const countUnconfirmedNativePunches = async ({ tenantKey, employeeId }) =
   return Number(row?.total) || 0;
 };
 
+/** A tapped action cannot overtake historical work or unknown ownership. */
+export const countUnconfirmedAttendanceDependencies = async ({ tenantKey, employeeId }) => {
+  if (!tenantKey || !employeeId) throw new Error("Attendance ordering scope missing.");
+  const database = await getDatabase();
+  const row = await database.getFirstAsync(
+    `SELECT COUNT(*) AS total FROM ${QUEUE_TABLE}
+      WHERE employeeId = ? AND (tenantKey = ? OR tenantKey IS NULL)
+        AND (status IN ('pending', 'syncing', 'blocked', 'needs_review')
+          OR (status = 'synced' AND acceptanceConfirmed <> 1));`,
+    [employeeId, tenantKey],
+  );
+  return Number(row?.total) || 0;
+};
+
+export const QUEUE_CLAIM_CHANGED = "ATTENDANCE_QUEUE_CLAIM_CHANGED";
+export const QUEUE_CLAIM_LEASE_MS = 120000;
+const claimChanged = () => Object.assign(new Error("Attendance upload claim changed."), { code: QUEUE_CLAIM_CHANGED });
+const claimPredicate = (claimOwner, now) => claimOwner == null
+  ? { sql: "", params: [] }
+  : { sql: " AND status = 'syncing' AND claimOwner = ? AND claimExpiresAt > ?", params: [claimOwner, now] };
+const requireClaimWrite = (result, claimOwner) => {
+  if (claimOwner != null && !result?.changes) throw claimChanged();
+  return result;
+};
+
+export const renewAttendanceClaim = async ({ id, claimOwner, now = Date.now(), leaseMs = QUEUE_CLAIM_LEASE_MS, beginUpload = false }) => {
+  if (!claimOwner) throw claimChanged();
+  const database = await getDatabase();
+  const row = await database.getFirstAsync(
+    `UPDATE ${QUEUE_TABLE} SET claimExpiresAt = ?,
+       uploadAttemptAt = CASE WHEN ? THEN COALESCE(uploadAttemptAt, ?) ELSE uploadAttemptAt END
+      WHERE id = ? AND status = 'syncing' AND claimOwner = ? AND claimExpiresAt > ? RETURNING *;`,
+    [now + leaseMs, beginUpload ? 1 : 0, now, id, claimOwner, now],
+  );
+  if (!row) throw claimChanged();
+  return hydrate(row);
+};
+export const beginAttendanceUpload = options => renewAttendanceClaim({ ...options, beginUpload: true });
+
 export const countOutstandingByScope = async ({ tenantKey, employeeId }) => {
   if (!tenantKey || !employeeId) throw new Error("Attendance ordering scope missing.");
   const database = await getDatabase();
@@ -261,6 +304,7 @@ export const countOutstandingByScope = async ({ tenantKey, employeeId }) => {
     `SELECT COUNT(*) AS total FROM ${QUEUE_TABLE}
       WHERE employeeId = ? AND (tenantKey = ? OR tenantKey IS NULL)
         AND (status IN (?, ?, ?)
+          OR (status = 'synced' AND acceptanceConfirmed <> 1)
           OR (status = ? AND IFNULL(failureClass, '') <> ?));`,
     [employeeId, tenantKey, QUEUE_STATUS.PENDING, QUEUE_STATUS.SYNCING,
       QUEUE_STATUS.NEEDS_REVIEW, QUEUE_STATUS.BLOCKED, FAILURE_CLASS.ENDPOINT_MISSING],
@@ -362,9 +406,11 @@ export const pairWithOpenCheckin = async ({
  * precisely the duplicate-session failure this queue exists to prevent.
  *
  * So the NOT EXISTS below makes each employee's queue strictly head-of-line: a
- * row is claimable only when nothing older for that employee is still capable of
- * reaching the server. "Older" is `(timestamp, id)`, the same total order the
- * ORDER BY uses, so the two cannot disagree.
+ * row is claimable only when earlier work is settled: retained NULL tenant work
+ * blocks known scopes; same-scope historical rows precede new native rows and
+ * retain `(timestamp, id)` order; native rows retain insertion order. Mixing
+ * native ID and legacy wall-clock comparisons pairwise would create dependency
+ * cycles after a clock correction, so these precedence tiers are explicit.
  *
  * Which statuses count as a dependency is the same judgement
  * `mayAffectServerCount` makes, and for the same reason:
@@ -382,7 +428,7 @@ export const pairWithOpenCheckin = async ({
  */
 export const claimNextPending = async (
   now = Date.now(),
-  { employeeId = null, tenantKey = null } = {},
+  { employeeId = null, tenantKey = null, ownerId = `upload:${Date.now()}:${Math.random()}`, leaseMs = QUEUE_CLAIM_LEASE_MS } = {},
 ) => {
   const database = await getDatabase();
 
@@ -400,7 +446,8 @@ export const claimNextPending = async (
 
   const row = await database.getFirstAsync(
     `UPDATE ${QUEUE_TABLE}
-        SET status = ?, updatedAt = ?, lastAttemptAt = ?, attemptCount = attemptCount + 1
+        SET status = ?, updatedAt = ?, lastAttemptAt = ?, attemptCount = attemptCount + 1,
+            claimOwner = ?, claimExpiresAt = ?
       WHERE id = (
         SELECT candidate.id FROM ${QUEUE_TABLE} AS candidate
          WHERE candidate.status = ? AND candidate.nextAttemptAt <= ?${scopeSql}
@@ -413,6 +460,8 @@ export const claimNextPending = async (
       QUEUE_STATUS.SYNCING,
       now,
       now,
+      ownerId,
+      now + leaseMs,
       QUEUE_STATUS.PENDING,
       now,
       ...scopeParams,
@@ -431,6 +480,7 @@ export const claimNextPending = async (
  */
 export const markSynced = async ({
   id,
+  claimOwner = null,
   serverCheckinId = null,
   serverResponse = null,
   duplicate = false,
@@ -440,14 +490,16 @@ export const markSynced = async ({
   now = Date.now(),
 }) => {
   const database = await getDatabase();
+  const claim = claimPredicate(claimOwner, now);
 
-  await database.runAsync(
+  const result = await database.runAsync(
     `UPDATE ${QUEUE_TABLE}
         SET status = ?, serverCheckinId = ?, serverResponse = ?,
             duplicate = ?, duplicateMessage = ?, error = NULL,
             failureClass = NULL, blockedSince = NULL, updatedAt = ?,
-            acceptanceConfirmed = ?, verifiedAt = ?, verificationEvidence = ?
-      WHERE id = ?;`,
+            acceptanceConfirmed = ?, verifiedAt = ?, verificationEvidence = ?,
+            claimOwner = NULL, claimExpiresAt = NULL
+      WHERE id = ?${claim.sql};`,
     [
       QUEUE_STATUS.SYNCED,
       serverCheckinId,
@@ -459,20 +511,25 @@ export const markSynced = async ({
       verificationEvidence ? now : null,
       verificationEvidence ? JSON.stringify(verificationEvidence) : null,
       id,
+      ...claim.params,
     ],
   );
+  requireClaimWrite(result, claimOwner);
 };
 
 /** A server answer that cannot prove acceptance must not silently complete. */
-export const markNeedsReview = async ({ id, error, serverResponse = null, duplicate = false, now = Date.now() }) => {
+export const markNeedsReview = async ({ id, claimOwner = null, error, serverResponse = null, duplicate = false, now = Date.now() }) => {
   const database = await getDatabase();
-  await database.runAsync(
+  const claim = claimPredicate(claimOwner, now);
+  const result = await database.runAsync(
     `UPDATE ${QUEUE_TABLE} SET status = ?, failureClass = 'verification-required',
        error = ?, serverResponse = ?, duplicate = ?, duplicateMessage = ?,
-       nextAttemptAt = 0, updatedAt = ? WHERE id = ? AND status = ?;`,
+       nextAttemptAt = 0, updatedAt = ?, claimOwner = NULL, claimExpiresAt = NULL
+       WHERE id = ? AND status = ?${claim.sql};`,
     [QUEUE_STATUS.NEEDS_REVIEW, error, serverResponse ? JSON.stringify(serverResponse) : null,
-      duplicate ? 1 : 0, duplicate ? error : null, now, id, QUEUE_STATUS.SYNCING],
+      duplicate ? 1 : 0, duplicate ? error : null, now, id, QUEUE_STATUS.SYNCING, ...claim.params],
   );
+  requireClaimWrite(result, claimOwner);
 };
 
 /** Positive server evidence only; preserve the original outcome in the evidence. */
@@ -480,10 +537,11 @@ export const recordServerVerification = async ({ row, evidence, now = Date.now()
   const database = await getDatabase();
   const result = await database.runAsync(
     `UPDATE ${QUEUE_TABLE} SET verifiedAt = ?, verificationEvidence = ?, status = ?,
+       acceptanceConfirmed = 1, serverCheckinId = ?, claimOwner = NULL, claimExpiresAt = NULL,
        verificationCheckedAt = ?, verificationIssue = NULL
      WHERE id = ? AND tenantKey = ? AND employeeId = ? AND timestamp = ?
        AND action = ? AND status = ? AND updatedAt = ? AND verificationCheckedAt IS ?;`,
-    [now, JSON.stringify({ ...evidence, originalStatus: row.verificationEvidence?.originalStatus ?? row.status }), QUEUE_STATUS.SYNCED, now,
+    [now, JSON.stringify({ ...evidence, originalStatus: row.verificationEvidence?.originalStatus ?? row.status }), QUEUE_STATUS.SYNCED, evidence.name, now,
       row.id, row.tenantKey, row.employeeId, row.timestamp, row.action, row.status, row.updatedAt, row.verificationCheckedAt],
   );
   return result?.changes ?? 0;
@@ -508,11 +566,13 @@ export const recordVerificationIssue = async ({ row, reason, now = Date.now() })
  */
 export const markRetry = async ({
   id,
+  claimOwner = null,
   error = null,
   serverResponse = null,
   now = Date.now(),
 }) => {
   const database = await getDatabase();
+  const claim = claimPredicate(claimOwner, now);
 
   const current = await database.getFirstAsync(
     `SELECT retryCount FROM ${QUEUE_TABLE} WHERE id = ?;`,
@@ -522,11 +582,11 @@ export const markRetry = async ({
   const retryCount = (Number(current?.retryCount) || 0) + 1;
   const nextAttemptAt = now + retryDelayFor(retryCount - 1);
 
-  await database.runAsync(
+  const result = await database.runAsync(
     `UPDATE ${QUEUE_TABLE}
         SET status = ?, retryCount = ?, nextAttemptAt = ?,
-            error = ?, serverResponse = ?, updatedAt = ?
-      WHERE id = ?;`,
+            error = ?, serverResponse = ?, updatedAt = ?, claimOwner = NULL, claimExpiresAt = NULL
+      WHERE id = ?${claim.sql};`,
     [
       QUEUE_STATUS.PENDING,
       retryCount,
@@ -535,21 +595,25 @@ export const markRetry = async ({
       serverResponse ? JSON.stringify(serverResponse) : null,
       now,
       id,
+      ...claim.params,
     ],
   );
+  requireClaimWrite(result, claimOwner);
 
   return { retryCount, nextAttemptAt };
 };
 
 /** Returns a claimed row to pending when identity changed before submission. */
-export const releaseClaim = async ({ id, now = Date.now() }) => {
+export const releaseClaim = async ({ id, claimOwner = null, now = Date.now() }) => {
   const database = await getDatabase();
+  const claim = claimPredicate(claimOwner, now);
   const result = await database.runAsync(
     `UPDATE ${QUEUE_TABLE}
-        SET status = ?, nextAttemptAt = 0, updatedAt = ?
-      WHERE id = ? AND status = ?;`,
-    [QUEUE_STATUS.PENDING, now, id, QUEUE_STATUS.SYNCING],
+        SET status = ?, nextAttemptAt = 0, updatedAt = ?, claimOwner = NULL, claimExpiresAt = NULL
+      WHERE id = ? AND status = ?${claim.sql};`,
+    [QUEUE_STATUS.PENDING, now, id, QUEUE_STATUS.SYNCING, ...claim.params],
   );
+  requireClaimWrite(result, claimOwner);
   return result?.changes ?? 0;
 };
 
@@ -565,12 +629,14 @@ export const releaseClaim = async ({ id, now = Date.now() }) => {
  */
 export const markBlocked = async ({
   id,
+  claimOwner = null,
   failureClass = FAILURE_CLASS.UNKNOWN,
   error = null,
   serverResponse = null,
   now = Date.now(),
 }) => {
   const database = await getDatabase();
+  const claim = claimPredicate(claimOwner, now);
 
   const current = await database.getFirstAsync(
     `SELECT blockedSince FROM ${QUEUE_TABLE} WHERE id = ?;`,
@@ -586,11 +652,13 @@ export const markBlocked = async ({
   const nextAttemptAt =
     now + blockedDelayFor(step === -1 ? BLOCKED_DELAYS_MS.length - 1 : step);
 
-  await database.runAsync(
+  const result = await database.runAsync(
     `UPDATE ${QUEUE_TABLE}
         SET status = ?, failureClass = ?, blockedSince = ?, nextAttemptAt = ?,
-            error = ?, serverResponse = ?, updatedAt = ?
-      WHERE id = ?;`,
+            error = ?, serverResponse = ?, updatedAt = ?, claimOwner = NULL, claimExpiresAt = NULL,
+            uploadAttemptAt = CASE WHEN ? IN ('auth', 'configuration', 'endpoint-missing')
+              THEN NULL ELSE uploadAttemptAt END
+      WHERE id = ?${claim.sql};`,
     [
       QUEUE_STATUS.BLOCKED,
       failureClass,
@@ -599,9 +667,12 @@ export const markBlocked = async ({
       error,
       serverResponse ? JSON.stringify(serverResponse) : null,
       now,
+      failureClass,
       id,
+      ...claim.params,
     ],
   );
+  requireClaimWrite(result, claimOwner);
 
   return { nextAttemptAt, blockedSince };
 };
@@ -620,18 +691,20 @@ export const markBlocked = async ({
  */
 export const markRejected = async ({
   id,
+  claimOwner = null,
   failureClass = FAILURE_CLASS.VALIDATION,
   error = null,
   serverResponse = null,
   now = Date.now(),
 }) => {
   const database = await getDatabase();
+  const claim = claimPredicate(claimOwner, now);
 
-  await database.runAsync(
+  const result = await database.runAsync(
     `UPDATE ${QUEUE_TABLE}
         SET status = ?, failureClass = ?, error = ?, serverResponse = ?,
-            nextAttemptAt = 0, updatedAt = ?
-      WHERE id = ?;`,
+            nextAttemptAt = 0, updatedAt = ?, claimOwner = NULL, claimExpiresAt = NULL
+      WHERE id = ?${claim.sql};`,
     [
       QUEUE_STATUS.REJECTED,
       failureClass,
@@ -639,8 +712,10 @@ export const markRejected = async ({
       serverResponse ? JSON.stringify(serverResponse) : null,
       now,
       id,
+      ...claim.params,
     ],
   );
+  requireClaimWrite(result, claimOwner);
 
   const row = await database.getFirstAsync(
     `SELECT pairedAttendanceId, employeeId, tenantKey FROM ${QUEUE_TABLE} WHERE id = ?;`,
@@ -833,12 +908,13 @@ export const wakePending = async ({
 };
 
 /**
- * Releases rows stuck in `syncing`.
+ * Recovers expired claims without releasing live uploads in another runtime.
  *
  * A row is left in that state whenever the process dies mid-request — an OS
  * kill during a background sync, a crash, a force-quit. Nothing would ever claim
- * it again, so the punch would sit invisible and unsent forever. Called at
- * startup, before the first drain.
+ * it again. Owned claims with no durable dispatch can return to pending after
+ * expiry. Dispatched or historical no-owner claims become review evidence and
+ * require positive history verification. Called before each drain.
  *
  * `failureClass` and `blockedSince` are preserved: a row that was blocked, woken
  * and then stranded mid-attempt must not lose its history and restart the
@@ -853,6 +929,8 @@ export const releaseStuckSyncing = async (
   const database = await getDatabase();
   const conditions = ["status = ?"];
   const params = [QUEUE_STATUS.SYNCING];
+  conditions.push("(claimOwner IS NULL OR claimExpiresAt IS NULL OR claimExpiresAt <= ?)");
+  params.push(now);
   if (employeeId) {
     conditions.push("employeeId = ?");
     params.push(employeeId);
@@ -864,12 +942,31 @@ export const releaseStuckSyncing = async (
 
   const result = await database.runAsync(
     `UPDATE ${QUEUE_TABLE}
-        SET status = ?, nextAttemptAt = 0, updatedAt = ?
+        SET status = CASE WHEN claimOwner IS NOT NULL AND uploadAttemptAt IS NULL
+              THEN 'pending' ELSE 'needs_review' END,
+            failureClass = CASE WHEN claimOwner IS NOT NULL AND uploadAttemptAt IS NULL
+              THEN failureClass ELSE 'verification-required' END,
+            verificationIssue = CASE WHEN claimOwner IS NOT NULL AND uploadAttemptAt IS NULL
+              THEN verificationIssue ELSE 'upload-outcome-unverified' END,
+            nextAttemptAt = 0, updatedAt = ?, claimOwner = NULL, claimExpiresAt = NULL
       WHERE ${conditions.join(" AND ")};`,
-    [QUEUE_STATUS.PENDING, now, ...params],
+    [now, ...params],
   );
 
   return result?.changes ?? 0;
+};
+
+/** Expired or legacy dispatched claims need positive evidence before any resend. */
+export const listUncertainUploadClaims = async ({ tenantKey, employeeId }, now = Date.now()) => {
+  const database = await getDatabase();
+  return hydrateAll(await database.getAllAsync(
+    `SELECT * FROM ${QUEUE_TABLE} WHERE tenantKey = ? AND employeeId = ?
+      AND status = 'needs_review' AND failureClass = 'verification-required'
+      AND verificationIssue IN ('upload-outcome-unverified', 'server-unavailable')
+      AND (verificationCheckedAt IS NULL OR verificationCheckedAt <= ?)
+      ORDER BY timestamp, id LIMIT 50;`,
+    [tenantKey, employeeId, now - 60000],
+  ));
 };
 
 /**
@@ -1303,6 +1400,8 @@ export default {
   claimNextPending,
   countByStatus,
   countOutstandingByScope,
+  countUnconfirmedAttendanceDependencies,
+  countUnconfirmedNativePunches,
   countRecoveryByScope,
   listRecoveryRows,
   enqueue,
@@ -1326,6 +1425,9 @@ export default {
   purgeSynced,
   releaseStuckSyncing,
   releaseClaim,
+  renewAttendanceClaim,
+  beginAttendanceUpload,
+  listUncertainUploadClaims,
   retryDelayFor,
   wakeBlocked,
   wakePending,

@@ -1,5 +1,7 @@
 # Agent handoff
 
+> Start with [12-HYBRID-RELIABILITY-FIXES.md](12-HYBRID-RELIABILITY-FIXES.md) for the follow-up hybrid fixes against committed baseline `14828da`, schema v6, acceptance-time/session guards, scoped manual requests, native registration changes and current validation limits.
+
 > Historical baseline at `de722c9`. Read [11-RELIABILITY-FIXES.md](11-RELIABILITY-FIXES.md) for the current fixes, regression results, native-build limits and physical-device validation plan. Source line anchors below refer to the baseline.
 
 This is the current implementation at `de722c954621bd0eeb980917f397677df9bdc69e`, investigated 2026-10-13. Only these context documents were created. No fixes, application tests, builds, device runs, API calls, commit, or push were performed. The two untracked characterization suites and pre-existing `docs/auto-attendance-sdk/` were preserved. Source facts are not claims of working native/live behavior.

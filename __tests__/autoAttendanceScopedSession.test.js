@@ -37,7 +37,7 @@ it("keeps the source parent when server reconciliation describes the same sessio
     sourceEventId: "native-enter", execute: ok });
   expect(await reconcileSessionFromServer({ activeStartedAt: startedAt, fetchedAt: startedAt + 1000 }))
     .toMatchObject({ sourceEventId: "native-enter" });
-  expect((await reconcileSessionFromServer({ activeStartedAt: startedAt + 2000, fetchedAt: startedAt + 3000 })).sourceEventId)
+  expect((await reconcileSessionFromServer({ activeStartedAt: startedAt + 2000, fetchedAt: Date.now() + 3000 })).sourceEventId)
     .toBeUndefined();
 });
 

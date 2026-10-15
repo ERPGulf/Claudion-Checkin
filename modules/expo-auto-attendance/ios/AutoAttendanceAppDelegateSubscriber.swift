@@ -16,7 +16,14 @@ public class AutoAttendanceAppDelegateSubscriber: ExpoAppDelegateSubscriber {
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
   ) -> Bool {
-    if GeofenceStore.shared.isMonitoring {
+    do {
+      let registration = try GeofenceStore.shared.getRegistrationState()
+      if launchOptions?[.location] != nil || ["pending", "monitoring"].contains(registration?["status"] as? String ?? "") {
+        GeofenceManager.shared.primeOnLaunch()
+      }
+    } catch {
+      // Attach the delegate even when protected/corrupt storage is unavailable;
+      // recovery fails explicitly and cannot assign a callback to another owner.
       GeofenceManager.shared.primeOnLaunch()
     }
     return true

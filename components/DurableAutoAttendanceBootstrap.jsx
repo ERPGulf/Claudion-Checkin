@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { AppState } from "react-native";
-import { useDispatch, useSelector } from "react-redux";
+import { useDispatch, useSelector, useStore } from "react-redux";
 import { selectIsLoggedIn } from "../redux/Slices/AuthSlice";
 import { selectBaseUrl, selectEmployeeCode } from "../redux/Slices/UserSlice";
 import {
@@ -9,16 +9,17 @@ import {
 import { setCheckin, setCheckout } from "../redux/Slices/AttendanceSlice";
 import * as Native from "../modules/expo-auto-attendance";
 import { readAttendanceConfig, refreshAttendanceConfig } from "../services/offline/attendanceConfigCache";
-import { addReconnectListener } from "../services/offline/NetworkListener";
+import { addReconnectListener, fetchShouldAttemptRequest } from "../services/offline/NetworkListener";
 import { captureAttendanceQueueScope, assertAttendanceQueueScope } from "../services/offline/attendanceQueueProvenance";
 import { drainAutoAttendanceEvents, ingestPendingNativeEvents } from "../services/offline/AutoAttendanceEventProcessor";
 import { reconcileAutoAttendanceRegistration } from "../utils/autoAttendanceRegistration";
-import { isSessionActive, TRANSITION_RESULT } from "../utils/attendanceSessionState";
+import { isSessionActive, publishCurrentSession, TRANSITION_RESULT } from "../utils/attendanceSessionState";
 import { presentLocalNotification } from "../services/notifications/localNotifications";
 
 /** Journal replay needs neither a fresh GPS fix nor permission to register again. */
 export default function DurableAutoAttendanceBootstrap() {
   const dispatch = useDispatch();
+  const store = useStore();
   const loggedIn = useSelector(selectIsLoggedIn);
   const employeeId = useSelector(selectEmployeeCode);
   const baseUrl = useSelector(selectBaseUrl);
@@ -31,12 +32,17 @@ export default function DurableAutoAttendanceBootstrap() {
     const report = (error) => {
       if (!cancelled) console.log("[AutoAttendance] Work retained", { code: error?.code });
     };
-    const onTransition = async (result) => {
+    const onTransition = async (result, scope) => {
       if (cancelled || !result?.session) return;
-      if (isSessionActive(result.session)) {
-        dispatch(setCheckin({ checkinTime: result.session.startedAt,
-          sessionOrigin: result.session.origin, location: result.response?.location ?? null }));
-      } else dispatch(setCheckout({ checkoutTime: result.session.endedAt }));
+      await publishCurrentSession({
+        assertCurrent: () => assertAttendanceQueueScope(scope),
+        publish: current => {
+          if (isSessionActive(current)) dispatch(setCheckin({ checkinTime: current.startedAt,
+            sessionOrigin: current.origin, location: current.startedAt === result.session.startedAt &&
+              current.committedAt === result.session.committedAt ? result.response?.location ?? null : store.getState().attendance.location }));
+          else dispatch(setCheckout({ checkoutTime: current.endedAt }));
+        },
+      });
       if (result.status === TRANSITION_RESULT.COMPLETED && result.session.closedBy === "AUTO") {
         await presentLocalNotification({ title: result.queued ? "Checked out offline" : "Checked out",
           body: result.queued ? "Your automatic checkout is saved on this device and will synchronize when online."
@@ -56,8 +62,9 @@ export default function DurableAutoAttendanceBootstrap() {
         const scope = { ...await captureAttendanceQueueScope(employeeId), isCancelled: () => cancelled };
         let config = await readAttendanceConfig();
         await assertAttendanceQueueScope(scope);
-        if (enabled) await drainAutoAttendanceEvents({ scope, onTransition });
-        if (refresh) {
+        // Connected launch/foreground/reconnect refreshes authority before any
+        // replay. Offline delivery uses the scoped cache without a network wait.
+        if (refresh && await fetchShouldAttemptRequest()) {
           const result = await refreshAttendanceConfig(employeeId);
           await assertAttendanceQueueScope(scope);
           config = result.config;
@@ -68,7 +75,7 @@ export default function DurableAutoAttendanceBootstrap() {
         }
         dispatch(setAutoAttendanceGeotagging(config.rules?.geotagging));
         // New configuration may unblock receipts retained at initial hydration.
-        if (enabled) await drainAutoAttendanceEvents({ scope, onTransition });
+        if (enabled) await drainAutoAttendanceEvents({ scope, onTransition: result => onTransition(result, scope) });
         await reconcileAutoAttendanceRegistration(enabled ? scope : null, enabled ? config : null);
       }).catch(report);
       return work.current;
@@ -88,6 +95,6 @@ export default function DurableAutoAttendanceBootstrap() {
       reconnect();
       subscriptions.forEach(subscription => subscription.remove());
     };
-  }, [loggedIn, employeeId, baseUrl, enabled, syncRequestId, dispatch]);
+  }, [loggedIn, employeeId, baseUrl, enabled, syncRequestId, dispatch, store]);
   return null;
 }

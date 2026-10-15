@@ -13,7 +13,7 @@ import {
 } from "../services/offline/BackgroundSyncManager";
 import { setOfflineQueueingAllowed } from "../services/offline/offlineCapability";
 import { applySessionOwner } from "../utils/attendanceSessionState";
-import { normalizeAttendanceTenantKey } from "../services/offline/attendanceQueueProvenance";
+import { captureAttendanceQueueScope, assertAttendanceQueueScope } from "../services/offline/attendanceQueueProvenance";
 
 /**
  * Runs the offline attendance machinery for the length of a session.
@@ -73,7 +73,11 @@ export default function OfflineAttendanceBootstrap() {
   useEffect(() => {
     if (!isLoggedIn || !employeeCode) return;
 
-    applySessionOwner(employeeCode, { tenantKey: normalizeAttendanceTenantKey(baseUrl) })
+    let cancelled = false;
+    captureAttendanceQueueScope(employeeCode).then(scope => applySessionOwner(employeeCode, {
+      tenantKey: scope.tenantKey,
+      assertCurrent: () => assertAttendanceQueueScope({ ...scope, isCancelled: () => cancelled }),
+    }))
       .then((cleared) => {
         if (cleared) {
           console.log(
@@ -87,6 +91,7 @@ export default function OfflineAttendanceBootstrap() {
           error?.message,
         );
       });
+    return () => { cancelled = true; };
   }, [isLoggedIn, employeeCode, baseUrl]);
 
   // Mirrored eagerly, and separately from the manager below, so the punch path

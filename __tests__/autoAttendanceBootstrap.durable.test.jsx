@@ -24,6 +24,13 @@ jest.mock("../services/offline/NetworkListener", () => ({
 jest.mock("../services/offline/attendanceConfigCache", () => ({
   ...jest.requireActual("../services/offline/attendanceConfigCache"), refreshAttendanceConfig: jest.fn(),
 }));
+jest.mock("../services/api/attendance.service", () => ({
+  ...jest.requireActual("../services/api/attendance.service"),
+  getAttendanceStatus: jest.fn(async () => ({ custom_in: 0 })),
+  getServerTime: jest.fn(async () => "2026-10-14 09:00:00"),
+  resolveServerTimestampAt: jest.fn(async () => "2026-10-14 09:00:00"),
+  autoCheckInOut: jest.fn(async () => ({ allowed: true, name: "SYNTHETIC-CHECKIN" })),
+}));
 jest.mock("../services/notifications/localNotifications", () => ({ presentLocalNotification: jest.fn(async () => {}) }));
 
 import React from "react";
@@ -37,6 +44,7 @@ import AutoAttendanceBootstrap from "../components/AutoAttendanceBootstrap";
 import RootReducer from "../redux/RootReducer";
 import { setSignOut } from "../redux/Slices/AuthSlice";
 import { CONFIG_KEY, refreshAttendanceConfig } from "../services/offline/attendanceConfigCache";
+import { fetchShouldAttemptRequest } from "../services/offline/NetworkListener";
 import { listAll } from "../services/offline/AttendanceQueueRepository";
 import { findEvent } from "../services/offline/AutoAttendanceEventRepository";
 import { resetDatabaseHandle } from "../services/offline/AttendanceDatabase";
@@ -58,6 +66,7 @@ beforeEach(async () => {
   await AsyncStorage.clear(); await loginQueueEmployee("EMP-001");
   mockJournal = []; Object.values(mockListeners).forEach(listeners => listeners.clear());
   jest.clearAllMocks();
+  fetchShouldAttemptRequest.mockResolvedValue(false);
   Location.getBackgroundPermissionsAsync.mockResolvedValue({ status: "granted" });
   config = { employeeId: "EMP-001", tenantKey: TEST_TENANT, employeeDocname: "HR-EMP-001",
     rules: { geotagging: 2, photo: 0, restrictLocation: 1, unrestrictedCheckoutLocation: 0 },
@@ -68,6 +77,30 @@ beforeEach(async () => {
     userAuth: { isLoggedIn: true }, user: { baseUrl: TEST_TENANT, userDetails: { employeeCode: "EMP-001" } },
     autoAttendance: { geotagging: 2, userEnabled: true, syncRequestId: 0 },
   } });
+});
+
+it("refreshes connected policy before replay so authoritative revocation creates no punch", async () => {
+  fetchShouldAttemptRequest.mockResolvedValue(true);
+  mockJournal = [event("revoked-enter", "ENTER", 1)];
+  const revoked = { ...config, locations: [], rules: { ...config.rules, geotagging: 0, restrictLocation: 0 } };
+  refreshAttendanceConfig.mockImplementation(async () => {
+    expect(await listAll()).toEqual([]);
+    await AsyncStorage.setItem(CONFIG_KEY, JSON.stringify(revoked));
+    return { refreshed: true, config: revoked };
+  });
+  mount();
+  await waitFor(() => expect(store.getState().autoAttendance.geotagging).toBe(0));
+  expect(await listAll()).toEqual([]);
+  expect((await findEvent("revoked-enter")).status).toBe("pending");
+  expect(Native.startGeofence).not.toHaveBeenCalled();
+});
+
+it("replays cached offline events without waiting for a network policy request", async () => {
+  refreshAttendanceConfig.mockImplementation(() => new Promise(() => {}));
+  mockJournal = [event("offline-enter", "ENTER", 1)];
+  mount();
+  await waitFor(async () => expect(await listAll()).toHaveLength(1));
+  expect(refreshAttendanceConfig).not.toHaveBeenCalled();
 });
 
 it("replays both offline callbacks before registration without requesting a GPS fix", async () => {

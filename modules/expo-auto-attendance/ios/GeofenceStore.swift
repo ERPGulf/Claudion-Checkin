@@ -1,8 +1,8 @@
 import Foundation
 
-/// Registration/display compatibility stays in UserDefaults. The pending native
-/// ingress journal is an atomic file: it contains transitions, not attendance
-/// decisions, and JS acknowledges an ID only after transferring it to SQLite.
+/// UserDefaults preserves the old registration/display API. The atomic journal
+/// owns new registration recovery metadata and native ingress, never attendance
+/// decisions. JS acknowledges an ID only after transferring it to SQLite.
 final class GeofenceStore {
   static let shared = GeofenceStore()
 
@@ -55,15 +55,146 @@ final class GeofenceStore {
     return locked { defaults.dictionary(forKey: geofenceKey) }
   }
 
+  func getRegistrationState() throws -> [String: Any]? {
+    return try locked { try readJournal()["registration"] as? [String: Any] }
+  }
+
+  /// Commit ownership before asking the OS to register. A same-ID restoration
+  /// keeps completed presence/cooldown; only a new registration starts it anew.
+  func savePendingRegistration(_ configuration: [String: Any]) throws {
+    try locked {
+      var journal = try readJournal()
+      let previous = journal["registration"] as? [String: Any]
+      let previousConfiguration = previous?["configuration"] as? [String: Any]
+      let previousIdentifier = previousConfiguration.flatMap { registrationIdentifier($0) }
+      let sameIdentifier = previousIdentifier != nil && previousIdentifier == registrationIdentifier(configuration)
+      journal["registration"] = [
+        "configuration": configuration, "status": "pending",
+        "initialPresencePending": sameIdentifier ? previous?["initialPresencePending"] as? Bool ?? false : true,
+        "initialPresenceRetryAfter": sameIdentifier ? previous?["initialPresenceRetryAfter"] as? NSNumber ?? 0 : 0
+      ] as [String: Any]
+      try writeJournal(journal)
+      defaults.set(configuration, forKey: geofenceKey)
+      defaults.set(false, forKey: monitoringKey)
+    }
+  }
+
+  @discardableResult
+  func confirmRegistration(_ nativeIdentifier: String) throws -> Bool {
+    return try locked {
+      var journal = try readJournal()
+      guard var registration = journal["registration"] as? [String: Any],
+        ["pending", "monitoring"].contains(registration["status"] as? String ?? ""),
+        let configuration = registration["configuration"] as? [String: Any],
+        registrationIdentifier(configuration) == nativeIdentifier else { return false }
+      registration["status"] = "monitoring"
+      journal["registration"] = registration
+      try writeJournal(journal)
+      defaults.set(configuration, forKey: geofenceKey)
+      defaults.set(true, forKey: monitoringKey)
+      return true
+    }
+  }
+
+  func cancelRegistration() throws {
+    try locked {
+      var journal = try readJournal()
+      journal["registration"] = NSNull()
+      try writeJournal(journal)
+      clearGeofence()
+    }
+  }
+
+  @discardableResult
+  func invalidateRegistration(_ nativeIdentifier: String?) throws -> Bool {
+    return try locked {
+      var journal = try readJournal()
+      guard var registration = journal["registration"] as? [String: Any],
+        let configuration = registration["configuration"] as? [String: Any],
+        nativeIdentifier == nil || registrationIdentifier(configuration) == nativeIdentifier else { return false }
+      registration["status"] = "inactive"
+      journal["registration"] = registration
+      try writeJournal(journal)
+      defaults.set(false, forKey: monitoringKey)
+      return true
+    }
+  }
+
+  func beginInitialPresenceRequest(_ nativeIdentifier: String, at: Int64, cooldownMs: Int64 = 60_000) throws -> Bool {
+    return try locked {
+      var journal = try readJournal()
+      guard var registration = journal["registration"] as? [String: Any],
+        registration["status"] as? String == "monitoring",
+        registration["initialPresencePending"] as? Bool == true,
+        let configuration = registration["configuration"] as? [String: Any],
+        registrationIdentifier(configuration) == nativeIdentifier,
+        ((registration["initialPresenceRetryAfter"] as? NSNumber)?.int64Value ?? 0) <= at else { return false }
+      registration["initialPresenceRetryAfter"] = at + cooldownMs
+      journal["registration"] = registration
+      try writeJournal(journal)
+      return true
+    }
+  }
+
+  @discardableResult
+  func completeInitialPresence(_ nativeIdentifier: String) throws -> Bool {
+    return try locked {
+      var journal = try readJournal()
+      guard finishInitialPresence(in: &journal, nativeIdentifier: nativeIdentifier) else { return false }
+      try writeJournal(journal)
+      return true
+    }
+  }
+
+  private func registrationIdentifier(_ configuration: [String: Any]) -> String? {
+    return configuration["nativeIdentifier"] as? String ?? configuration["identifier"] as? String
+  }
+
+  private func finishInitialPresence(in journal: inout [String: Any], nativeIdentifier: String) -> Bool {
+    guard var registration = journal["registration"] as? [String: Any],
+      ["pending", "monitoring"].contains(registration["status"] as? String ?? ""),
+      registration["initialPresencePending"] as? Bool == true,
+      let configuration = registration["configuration"] as? [String: Any],
+      registrationIdentifier(configuration) == nativeIdentifier else { return false }
+    registration["initialPresencePending"] = false
+    journal["registration"] = registration
+    return true
+  }
+
+  private func legacyRegistration() -> Any {
+    guard let configuration = defaults.dictionary(forKey: geofenceKey) else { return NSNull() }
+    // Existing confirmed monitoring must not create a fresh initial ENTER after
+    // upgrade or manual checkout. Its earlier detection cannot be reconstructed.
+    return ["configuration": configuration,
+      "status": defaults.bool(forKey: monitoringKey) ? "monitoring" : "inactive",
+      "initialPresencePending": false, "initialPresenceRetryAfter": 0] as [String: Any]
+  }
+
   private func readJournal() throws -> [String: Any] {
     if FileManager.default.fileExists(atPath: journalURL.path) {
       let data = try Data(contentsOf: journalURL)
-      guard let journal = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+      guard var journal = try JSONSerialization.jsonObject(with: data) as? [String: Any],
         (journal["version"] as? NSNumber)?.intValue == 1,
         journal["events"] is [[String: Any]],
         journal["nextSequence"] is NSNumber else {
         throw NSError(domain: "ExpoAutoAttendance", code: 1,
           userInfo: [NSLocalizedDescriptionKey: "Native event journal is invalid"])
+      }
+      if journal["registration"] == nil {
+        // Additive migration: retain every existing event, ID and sequence.
+        journal["registration"] = legacyRegistration()
+        try writeJournal(journal)
+      } else if let registration = journal["registration"] as? [String: Any] {
+        guard registration["configuration"] is [String: Any],
+          ["pending", "monitoring", "inactive"].contains(registration["status"] as? String ?? ""),
+          registration["initialPresencePending"] is Bool,
+          registration["initialPresenceRetryAfter"] is NSNumber else {
+          throw NSError(domain: "ExpoAutoAttendance", code: 2,
+            userInfo: [NSLocalizedDescriptionKey: "Native registration journal is invalid"])
+        }
+      } else if !(journal["registration"] is NSNull) {
+        throw NSError(domain: "ExpoAutoAttendance", code: 2,
+          userInfo: [NSLocalizedDescriptionKey: "Native registration journal is invalid"])
       }
       return journal
     }
@@ -77,7 +208,8 @@ final class GeofenceStore {
       legacy["captureIssue"] = "legacy-unattributed"
       events.append(legacy)
     }
-    let journal: [String: Any] = ["version": 1, "nextSequence": events.count, "events": events]
+    let journal: [String: Any] = ["version": 1, "nextSequence": events.count, "events": events,
+      "registration": legacyRegistration()]
     try writeJournal(journal)
     return journal
   }
@@ -100,7 +232,7 @@ final class GeofenceStore {
 
   /// No capacity/age eviction: every callback survives until its exact ID is
   /// acknowledged after the existing SQLite database owns the ingress record.
-  func appendEvent(_ payload: [String: Any]) throws -> [String: Any] {
+  func appendEvent(_ payload: [String: Any], completingInitialPresenceFor nativeIdentifier: String? = nil) throws -> [String: Any] {
     return try locked {
       var journal = try readJournal()
       var events = journal["events"] as! [[String: Any]]
@@ -111,6 +243,7 @@ final class GeofenceStore {
       events.append(event)
       journal["events"] = events
       journal["nextSequence"] = sequence
+      if let nativeIdentifier { _ = finishInitialPresence(in: &journal, nativeIdentifier: nativeIdentifier) }
       try writeJournal(journal)
       // Legacy getLastEvent is display/old-JS compatibility, never the journal.
       defaults.set(event, forKey: lastEventKey)

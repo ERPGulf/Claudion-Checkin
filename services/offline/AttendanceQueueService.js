@@ -3,6 +3,7 @@ import { formatOfflineTimestamp } from "../../utils/serverClock";
 import { DEVICE_ID } from "./AttendanceApi";
 import {
   ATTENDANCE_TYPE,
+  FAILURE_CLASS,
   QUEUE_ACTION,
   QUEUE_STATUS,
   clearAttendanceQueue,
@@ -12,6 +13,7 @@ import {
   countByStatus,
   countOutstandingByScope,
   countUnconfirmedNativePunches,
+  countUnconfirmedAttendanceDependencies,
   enqueue,
   findBySourceEventId,
   listForHistory,
@@ -32,6 +34,7 @@ import {
   isOfflineSyncUnsupported,
 } from "./offlineCapability";
 import { assertAttendanceQueueScope, captureAttendanceQueueScope } from "./attendanceQueueProvenance";
+import { listUncertainEvents } from "./AutoAttendanceEventRepository";
 
 /**
  * The write side of the offline queue, and the single seam every attendance
@@ -357,24 +360,25 @@ const describeManualFailure = (failure) => {
  * refuse a punch on a working connection and buy nothing — the same trap
  * `fetchShouldAttemptRequest` exists to keep the queueing path out of.
  */
-const submitOnlineOnly = async ({ type, employeeCode, online }) => {
+const submitOnlineOnly = async ({ type, employeeCode, online, sourceScope }) => {
   if (typeof online !== "function") {
     throw new Error("submitAttendance: manual attendance requires `online`");
   }
 
   try {
-    // Manual punches remain online-only. A new automatic punch accepted on this
-    // device must reach the server before a manual action can overtake it.
-    // Historical NULL-source rows do not acquire a new blocking rule.
-    const scope = await captureAttendanceQueueScope(employeeCode).catch(() => null);
-    if (scope && await countUnconfirmedNativePunches(scope) > 0) {
+    // Manual punches remain online-only and cannot overtake retained native or
+    // historical work. Unknown tenant ownership is not assigned to this scope.
+    const scope = sourceScope ?? await captureAttendanceQueueScope(employeeCode).catch(() => null);
+    if (scope && (await countUnconfirmedNativePunches(scope) > 0 ||
+      await countUnconfirmedAttendanceDependencies(scope) > 0 || (await listUncertainEvents(scope)).length > 0)) {
       await assertAttendanceQueueScope(scope);
       requestQueueDrain({ employeeId: employeeCode, reason: "manual-ordering" });
       return { allowed: false, reason: "automatic-attendance-unconfirmed", location: null,
-        message: "Earlier automatic attendance needs server confirmation. Synchronize or verify the saved record before this action." };
+        message: "Earlier saved attendance needs server confirmation. Synchronize or verify the saved record before this action." };
     }
     if (scope) await assertAttendanceQueueScope(scope);
     const result = await online();
+    if (scope) await assertAttendanceQueueScope(scope);
 
     if (result?.allowed) {
       // A punch just landed, so the server is up and this token works — the
@@ -450,6 +454,7 @@ export const submitAttendance = async ({
   timestamp = null,
   strictOrdering = false,
   skipPosition = false,
+  onKnownNoInsert,
 }) => {
   if (type !== "IN" && type !== "OUT") {
     throw new Error(`submitAttendance: invalid type ${type}`);
@@ -462,7 +467,7 @@ export const submitAttendance = async ({
   // concepts and are ignored here — the camera uploads its photo against the
   // docname the server issues, as it did before the queue existed.
   if (attendanceType === ATTENDANCE_TYPE.MANUAL) {
-    return submitOnlineOnly({ type, employeeCode, online });
+    return submitOnlineOnly({ type, employeeCode, online, sourceScope });
   }
 
   // Capture before network/gate awaits. Historical native replays must bring
@@ -526,6 +531,21 @@ export const submitAttendance = async ({
   const connected = await fetchShouldAttemptRequest();
   const canGoOnline = connected && typeof online === "function";
 
+  const retainUncertainOnlineAttempt = async (failure) => {
+    if (!strictOrdering) return null;
+    const { kind, failureClass, status } = classifyAttendanceError(failure?.error);
+    const knownRefusal = kind === FAILURE_KIND.BLOCKED && status >= 400 && status < 500 &&
+      [FAILURE_CLASS.AUTH, FAILURE_CLASS.CONFIGURATION, FAILURE_CLASS.ENDPOINT_MISSING].includes(failureClass);
+    if (knownRefusal) {
+      if (typeof onKnownNoInsert === "function") await onKnownNoInsert({ httpStatus: status, failureClass });
+      return null;
+    }
+    // The native receipt already records the dispatch. A queue row with no
+    // dispatch evidence would let its first offline upload resend that request.
+    return { ...failure, allowed: false, queued: false, reason: "online-outcome-unconfirmed",
+      message: "Automatic attendance is retained for server verification before retry." };
+  };
+
   /**
    * One online attempt.
    *
@@ -553,6 +573,8 @@ export const submitAttendance = async ({
         // payload. Surfacing it is the correct behaviour, online or not.
         return { done: true, result };
       }
+      const uncertain = await retainUncertainOnlineAttempt(result);
+      if (uncertain) return { done: true, result: uncertain };
 
       console.log(
         `${LOG_PREFIX} Online attempt failed transiently, queueing:`,
@@ -566,6 +588,8 @@ export const submitAttendance = async ({
       if (!shouldQueueFailure({ error })) {
         return { done: true, result: { allowed: false, message, error, location: null } };
       }
+      const uncertain = await retainUncertainOnlineAttempt({ error });
+      if (uncertain) return { done: true, result: uncertain };
 
       console.log(`${LOG_PREFIX} Online attempt threw, queueing:`, message);
       return { done: false };
@@ -680,12 +704,13 @@ export const submitAttendance = async ({
  * no row to carry one: the camera screen uploads its picture itself, against the
  * docname the server returns.
  */
-export const submitManualAttendance = ({ type, employeeCode, online }) =>
+export const submitManualAttendance = ({ type, employeeCode, online, sourceScope }) =>
   submitAttendance({
     type,
     employeeCode,
     attendanceType: ATTENDANCE_TYPE.MANUAL,
     online,
+    sourceScope,
   });
 
 /** `submitAttendance` pre-bound for the geofence path. */
@@ -701,6 +726,7 @@ export const submitAutoAttendance = ({
   timestamp = null,
   strictOrdering = false,
   skipPosition = false,
+  onKnownNoInsert,
 }) =>
   submitAttendance({
     type,
@@ -715,6 +741,7 @@ export const submitAutoAttendance = ({
     timestamp,
     strictOrdering,
     skipPosition,
+    onKnownNoInsert,
   });
 
 // ----------------------

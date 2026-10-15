@@ -29,6 +29,7 @@ import {
   QUEUE_ACTION,
   QUEUE_STATUS,
   resetDatabaseHandle,
+  getDatabase,
 } from "../services/offline/AttendanceDatabase";
 import {
   claimNextPending,
@@ -598,7 +599,7 @@ describe("M0 current behaviour: queue ordering and duplicate protection (G)", ()
     ).toBeNull();
   });
 
-  it("characterizes current behaviour: recreated JS database/sync handles release a stranded scoped claim and deliver it [M0-G5]", async () => {
+  it("recovers an expired scoped claim with no dispatched upload after handle recreation [M0-G5]", async () => {
     const sourceScope = await captureAttendanceQueueScope(EMPLOYEE_A);
     const queued = await submit({ sourceScope });
     const claimed = await claimNextPending(NOW, {
@@ -607,6 +608,9 @@ describe("M0 current behaviour: queue ordering and duplicate protection (G)", ()
     });
     expect(claimed.id).toBe(queued.row.id);
     expect(claimed.status).toBe(QUEUE_STATUS.SYNCING);
+    // A newly recreated runtime cannot revoke a live owner's claim. Simulate
+    // an expired pre-dispatch owner, where replay has durable proof of no POST.
+    await (await getDatabase()).runAsync("UPDATE attendance_queue SET claimExpiresAt = ? WHERE id = ?;", [NOW - 1, claimed.id]);
     // Existing sql.js connection survives handle recreation. This proves JS
     // recovery logic, not persistence through actual OS process termination.
     resetDatabaseHandle();

@@ -1,5 +1,7 @@
 # Auto Attendance reliability fixes — 2026-10-13
 
+> Historical implementation report. The journal implementation described here was subsequently committed by the repository owner as `14828da`. Read [12-HYBRID-RELIABILITY-FIXES.md](12-HYBRID-RELIABILITY-FIXES.md) for the 2026-10-14 follow-up. In particular, its queue-claim, manual timestamp, iOS pending-registration and initial-presence fixes supersede the remaining-risk statements below; it also clarifies iOS force-quit behavior.
+
 This report supersedes implementation statements in the baseline context documents, which describe commit `de722c954621bd0eeb980917f397677df9bdc69e`. The baseline remains available for comparison. Changes are local and uncommitted. No production attendance request, EAS build, publication, commit, push, or physical-device experiment was performed.
 
 ## Findings and reproducible failures

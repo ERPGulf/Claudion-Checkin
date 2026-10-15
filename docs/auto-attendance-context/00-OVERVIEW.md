@@ -1,5 +1,7 @@
 # Auto Attendance: current implementation
 
+> Latest implementation report: [12-HYBRID-RELIABILITY-FIXES.md](12-HYBRID-RELIABILITY-FIXES.md), 2026-10-14. The baseline below remains historical.
+
 > Historical baseline at `de722c9`. Read [11-RELIABILITY-FIXES.md](11-RELIABILITY-FIXES.md) for the current fixes, regression results, native-build limits and physical-device validation plan. Source line anchors below refer to the baseline.
 
 Investigation date: 2026-10-13. Source baseline: `de722c954621bd0eeb980917f397677df9bdc69e`, plus the pre-existing untracked material identified in [01-FILE-INVENTORY.md](01-FILE-INVENTORY.md). This investigation changed only this documentation directory. Application tests, native builds, device experiments, and backend calls were not run.
