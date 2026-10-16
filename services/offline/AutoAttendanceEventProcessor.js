@@ -12,6 +12,8 @@ import { formatOfflineTimestamp, normalizeAttendanceStatusClock } from "../../ut
 import { normalizeCustomIn, toTimestampMs } from "../../utils/attendanceSession";
 import { validOffice, nativeRadiusMatchesRequested } from "../../utils/autoAttendanceRegistration";
 import { resolveLocationCoordinates } from "../../utils/attendanceLocations";
+import { assertCapability } from "../capabilityPolicy";
+import { ATTENDANCE_FEATURES } from "../../utils/featureSettings";
 import {
   applySessionOwner, clearUnverifiedSessionOwner, performSessionTransition,
   readUnverifiedSessionOwner, reconcileSessionFromServer, SESSION_ORIGIN, TRANSITION_RESULT,
@@ -20,6 +22,17 @@ import {
 const { PENDING, PROCESSING, HANDLED, NEEDS_REVIEW } = Events.AUTO_EVENT_STATUS;
 let processor = Promise.resolve();
 const claimOwner = `auto-attendance:${Date.now()}:${Math.random()}`;
+
+const automaticCapabilityRefusal = async (scope) => {
+  try {
+    await assertCapability(ATTENDANCE_FEATURES.AUTO_ATTENDANCE,
+      { baseUrl: scope.tenantKey, employeeCode: scope.employeeId, generation: scope.generation });
+    return null;
+  } catch (error) {
+    if (error?.code !== "FEATURE_DISABLED") throw error;
+    return { allowed: false, reason: "capability-disabled", message: error.message, error };
+  }
+};
 
 /** Review checks only positive history evidence; it never resends an uncertain POST. */
 export const verifyAutoAttendanceEvent = async ({ eventId, employeeId }) => {
@@ -161,6 +174,10 @@ const processRow = async (input, scope, config) => {
     await updateOwned(row.eventId, { status: PENDING, reason: "policy-not-all-actions" });
     return { stop: true };
   }
+  if (await automaticCapabilityRefusal(scope)) {
+    await updateOwned(row.eventId, { status: PENDING, reason: "capability-disabled" });
+    return { stop: true };
+  }
   const existing = await findBySourceEventId({ sourceEventId: row.eventId, tenantKey: scope.tenantKey, employeeId: scope.employeeId });
   await assertAttendanceQueueScope(scope);
   if (existing) {
@@ -192,6 +209,8 @@ const processRow = async (input, scope, config) => {
   }
   const type = row.transition === "ENTER" ? "IN" : "OUT";
   const result = await runTransition(row, scope, async (session) => {
+    const refusal = await automaticCapabilityRefusal(scope);
+    if (refusal) return refusal;
     if (type === "IN" && row.event.initialPresence === true && session.closedBy === SESSION_ORIGIN.MANUAL &&
       Number.isFinite(row.event.registrationStartedAt) && Number.isFinite(session.endedAt) &&
       session.endedAt >= row.event.registrationStartedAt) {
@@ -240,6 +259,8 @@ const processRow = async (input, scope, config) => {
       },
       online: async () => {
         await assertAttendanceQueueScope(scope);
+        const refusal = await automaticCapabilityRefusal(scope);
+        if (refusal) return refusal;
         row = await updateOwned(row.eventId, { onlineAttemptAt: Date.now() });
         await assertAttendanceQueueScope(scope);
         const reportingLocation = config.locations.find(location => {

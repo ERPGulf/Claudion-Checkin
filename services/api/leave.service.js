@@ -6,6 +6,7 @@ import {
   MISSING_EMPLOYEE_MESSAGE,
 } from "./authHelper";
 import { parseError } from "./errorHelper";
+import { assertCapability } from "../capabilityPolicy";
 
 export const createLeaveApplication = async (leaveData) => {
   try {
@@ -14,6 +15,8 @@ export const createLeaveApplication = async (leaveData) => {
     if (!employeeCode) {
       return { error: MISSING_EMPLOYEE_MESSAGE };
     }
+
+    const capabilityScope = await assertCapability("leave_request", { baseUrl, employeeCode });
 
     const url = `${baseUrl}/api/method/employee_app.attendance_api.create_leave_application`;
 
@@ -31,6 +34,7 @@ export const createLeaveApplication = async (leaveData) => {
     }
 
     const response = await apiClient.post(url, params.toString(), {
+      capabilityScope,
       headers: buildHeaders(token, "application/x-www-form-urlencoded"),
     });
 
@@ -60,11 +64,14 @@ export const getLeaveTypes = async () => {
       return { error: "Missing credentials." };
     }
 
+    const capabilityScope = await assertCapability("leave_request", { baseUrl, employeeCode });
+
     const url = `${baseUrl}/api/method/employee_app.attendance_api.get_leave_type`;
 
     const body = new URLSearchParams({ employee: employeeCode });
 
     const response = await apiClient.post(url, body.toString(), {
+      capabilityScope,
       headers: buildHeaders(token, "application/x-www-form-urlencoded"),
     });
 
@@ -85,6 +92,7 @@ export const uploadLeaveAttachment = async (file, docname) => {
     if (!docname) throw new Error("Missing docname");
 
     const { baseUrl, token } = await getAuthContext();
+    const capabilityScope = await assertCapability("leave_request", { baseUrl });
 
     const formData = new FormData();
 
@@ -113,6 +121,7 @@ export const uploadLeaveAttachment = async (file, docname) => {
     formData.append("doctype", "Leave Application");
     formData.append("docname", String(docname));
 
+    await assertCapability("leave_request", capabilityScope);
     const response = await fetch(
       `${baseUrl}/api/method/employee_app.attendance_api.upload_file`,
       {
@@ -154,9 +163,12 @@ export const getLeaveApplications = async () => {
       return { error: MISSING_EMPLOYEE_MESSAGE };
     }
 
+    const capabilityScope = await assertCapability("leave_request", { baseUrl, employeeCode });
+
     const url = `${baseUrl}/api/method/employee_app.employee_list.list_leave_application`;
 
     const response = await apiClient.get(url, {
+      capabilityScope,
       headers: buildHeaders(token),
     });
 

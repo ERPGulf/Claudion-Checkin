@@ -15,6 +15,8 @@ import { drainAutoAttendanceEvents, ingestPendingNativeEvents } from "../service
 import { reconcileAutoAttendanceRegistration } from "../utils/autoAttendanceRegistration";
 import { isSessionActive, publishCurrentSession, TRANSITION_RESULT } from "../utils/attendanceSessionState";
 import { presentLocalNotification } from "../services/notifications/localNotifications";
+import { useFeatureEnabled } from "../hooks/useFeatureSettings";
+import { ATTENDANCE_FEATURES } from "../utils/featureSettings";
 
 /** Journal replay needs neither a fresh GPS fix nor permission to register again. */
 export default function DurableAutoAttendanceBootstrap() {
@@ -24,8 +26,15 @@ export default function DurableAutoAttendanceBootstrap() {
   const employeeId = useSelector(selectEmployeeCode);
   const baseUrl = useSelector(selectBaseUrl);
   const enabled = useSelector(selectAutoAttendanceUserEnabled);
+  const capabilityAllowed = useFeatureEnabled(ATTENDANCE_FEATURES.AUTO_ATTENDANCE);
   const syncRequestId = useSelector(selectAutoAttendanceSyncRequestId);
   const work = useRef(Promise.resolve());
+
+  // Do not wait behind an in-flight employee refresh to stop monitoring after
+  // settings revocation. Captured receipts remain durable and attributable.
+  useEffect(() => {
+    if (!capabilityAllowed) Native.stopGeofence().catch(() => {});
+  }, [capabilityAllowed]);
 
   useEffect(() => {
     let cancelled = false;
@@ -55,7 +64,7 @@ export default function DurableAutoAttendanceBootstrap() {
         // Capture first, including after logout. Receipts keep their original owner.
         await ingestPendingNativeEvents();
         if (cancelled) return;
-        if (!loggedIn || !employeeId) {
+        if (!loggedIn || !employeeId || !capabilityAllowed) {
           await reconcileAutoAttendanceRegistration(null, null);
           return;
         }
@@ -95,6 +104,6 @@ export default function DurableAutoAttendanceBootstrap() {
       reconnect();
       subscriptions.forEach(subscription => subscription.remove());
     };
-  }, [loggedIn, employeeId, baseUrl, enabled, syncRequestId, dispatch, store]);
+  }, [loggedIn, employeeId, baseUrl, enabled, capabilityAllowed, syncRequestId, dispatch, store]);
   return null;
 }

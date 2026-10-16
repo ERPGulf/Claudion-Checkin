@@ -1,4 +1,6 @@
 import { requireOptionalNativeModule } from "expo";
+import { assertCapability } from "../../services/capabilityPolicy";
+import { ATTENDANCE_FEATURES } from "../../utils/featureSettings";
 
 /**
  * JS API for the `expo-auto-attendance` local Expo module (Android + iOS).
@@ -53,8 +55,10 @@ export function supportsDurableEvents() {
     typeof ExpoAutoAttendance?.acknowledgeEvent === "function";
 }
 
-export function startGeofence({ latitude, longitude, radius, identifier, ...scope }) {
-  return nativeModule().startGeofence({
+export async function startGeofence({ latitude, longitude, radius, identifier, ...scope }) {
+  await assertCapability(ATTENDANCE_FEATURES.AUTO_ATTENDANCE,
+    { baseUrl: scope.tenantKey, employeeCode: scope.employeeId, generation: scope.generation });
+  const result = await nativeModule().startGeofence({
     latitude,
     longitude,
     radius,
@@ -66,6 +70,14 @@ export function startGeofence({ latitude, longitude, radius, identifier, ...scop
       geotagging: scope.geotagging,
     } : {}),
   });
+  try {
+    await assertCapability(ATTENDANCE_FEATURES.AUTO_ATTENDANCE,
+      { baseUrl: scope.tenantKey, employeeCode: scope.employeeId, generation: scope.generation });
+  } catch (error) {
+    await nativeModule().stopGeofence();
+    throw error;
+  }
+  return result;
 }
 
 /**

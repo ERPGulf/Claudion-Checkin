@@ -28,6 +28,9 @@ import { captureAttendanceQueueScope } from "../services/offline/attendanceQueue
 import { loginQueueEmployee, TEST_TENANT } from "../test-utils/attendanceScope";
 import { applySessionOwner, performSessionTransition, readSession, SESSION_ORIGIN } from "../utils/attendanceSessionState";
 import { createRegistrationId } from "../utils/autoAttendanceRegistration";
+import { store } from "../redux/Store";
+import { settingsReceived, settingsInvalidated } from "../redux/Slices/FeatureSettingsSlice";
+import { buildSettingsScope, normalizeFeatureSettings } from "../utils/featureSettings";
 
 const { __resetAll } = require("../test-utils/expoSqliteMock");
 const employeeId = "EMP-001";
@@ -46,6 +49,7 @@ const event = (eventId, sequence, transition = "ENTER", overrides = {}) => {
 const drain = () => drainAutoAttendanceEvents({ scope });
 
 beforeEach(async () => {
+  store.dispatch(settingsInvalidated());
   __resetAll(); resetDatabaseHandle(); resetOfflineCapability();
   await AsyncStorage.clear();
   await loginQueueEmployee(employeeId);
@@ -63,6 +67,47 @@ beforeEach(async () => {
   getAttendanceStatus.mockResolvedValue({ custom_in: 0 });
   evaluateOfflineAttendance.mockResolvedValue({ allowed: true, coords: null, location: null, config });
   verifyQueuedAttendance.mockResolvedValue({ verified: false, reason: "no-exact-match-in-visible-history" });
+});
+
+const receiveAutomaticAvailability = value => store.dispatch(settingsReceived({
+  scope: buildSettingsScope(TEST_TENANT, employeeId),
+  settings: normalizeFeatureSettings({ attendance_action: { auto_attendance: value } }),
+}));
+
+it("retains native receipts without creating punches when automatic attendance is disabled", async () => {
+  receiveAutomaticAvailability(false);
+  journal = [event("disabled", 1)];
+  await drain();
+  expect(autoCheckInOut).not.toHaveBeenCalled();
+  expect(await listAll()).toEqual([]);
+  expect(await Events.findEvent("disabled")).toMatchObject({ status: "pending", reason: "capability-disabled" });
+  receiveAutomaticAvailability(true);
+  await drain();
+  expect(autoCheckInOut).toHaveBeenCalledTimes(1);
+});
+
+it("rechecks a received automatic denial during timestamp resolution", async () => {
+  resolveServerTimestampAt.mockImplementation(async at => {
+    receiveAutomaticAvailability(false);
+    return wallClock(at);
+  });
+  journal = [event("revoked-during-action", 1)];
+  await drain();
+  expect(autoCheckInOut).not.toHaveBeenCalled();
+  expect(await listAll()).toEqual([]);
+  expect((await Events.findEvent("revoked-during-action")).status).toBe("pending");
+});
+
+it("retains a local service denial without requiring evidence for a request never dispatched", async () => {
+  const refusal = Object.assign(new Error("Feature disabled"), { code: "FEATURE_DISABLED" });
+  autoCheckInOut.mockResolvedValueOnce({ allowed: false, error: refusal });
+  journal = [event("refused-before-transport", 1)];
+  await drain();
+  expect(await Events.findEvent("refused-before-transport"))
+    .toMatchObject({ status: "pending", onlineAttemptAt: null, reason: "capability-disabled" });
+  expect(await listAll()).toEqual([]);
+  await drain();
+  expect((await Events.findEvent("refused-before-transport")).status).toBe("handled");
 });
 
 it("valid ENTER and repeated ENTER create exactly one IN", async () => {

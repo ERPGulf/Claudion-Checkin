@@ -510,14 +510,15 @@ it("stamps future automatic records from the originating scope and keeps unattri
   expect((await repository.listAll()).find(row => row.action === "checkout").tenantKey).toBeNull();
 });
 
-it("does not relabel a delayed automatic event with the current tenant", async () => {
+it("refuses a scoped delayed automatic event after the active tenant changes", async () => {
   const sourceScope = await captureAttendanceQueueScope(EMPLOYEE);
   await loginQueueEmployee(EMPLOYEE, OTHER_TENANT);
   setOfflineQueueingAllowed(true);
   fetchShouldAttemptRequest.mockResolvedValue(false);
   await AsyncStorage.setItem("attendanceConfigCache", JSON.stringify({ employeeId: EMPLOYEE, locations: [], rules: { restrictLocation: 0 } }));
-  await submitAutoAttendance({ type: "IN", employeeCode: EMPLOYEE, sourceScope });
-  expect((await repository.listAll())[0].tenantKey).toBeNull();
+  const result = await submitAutoAttendance({ type: "IN", employeeCode: EMPLOYEE, sourceScope });
+  expect(result).toMatchObject({ allowed: false, reason: "scope-changed" });
+  expect(await repository.listAll()).toEqual([]);
 });
 
 it("keeps known rejected rows out of the pending count and offers their attention details", async () => {

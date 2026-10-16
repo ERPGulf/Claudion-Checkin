@@ -17,6 +17,7 @@ import {
 import { scoreLocations, pickNearest } from "../../utils/attendanceLocations";
 import { assertCompleteAttendancePolicy } from "../offline/attendanceConfigCache";
 import { getAuthSessionGeneration } from "../../utils/authSessionGuard";
+import { assertCapability } from "../capabilityPolicy";
 import { assertAttendanceQueueScope, createAttendanceScopeChangedError, normalizeAttendanceTenantKey } from "../offline/attendanceQueueProvenance";
 import {
   parseServerWallClock,
@@ -487,6 +488,8 @@ export const autoCheckInOut = async ({
     const token = await AsyncStorage.getItem("access_token");
     if (!token) throw new Error("Token missing");
 
+    const capabilityScope = await assertCapability("attendance_action.auto_attendance", { baseUrl, employeeCode });
+
     const timestamp = preparedTimestamp ?? await resolveServerTimestampAt(occurredAt);
     if (syncScope) await assertAttendanceQueueScope(syncScope);
 
@@ -513,10 +516,12 @@ export const autoCheckInOut = async ({
 
     console.log(`${logPrefix} Auto ${type}`);
 
+    await assertCapability("attendance_action.auto_attendance", capabilityScope);
     const response = await apiClient.post(
       `${baseUrl}/api/method/employee_app.attendance_api.add_log_based_on_employee_field`,
       payload,
       {
+        capabilityScope,
         headers: { Authorization: `Bearer ${token}` },
         ...(syncScope ? { attendanceSyncScope: syncScope } : {}),
       },
@@ -557,11 +562,11 @@ export const autoCheckInOut = async ({
 /**
  * getUserAttendance(employee_id, limit_start, limit_page_length)
  */
-export const getUserAttendance = async (
+const readAttendanceEntries = async (
   employee_id,
   limit_start = 0,
   limit_page_length = 20,
-  { syncScope } = {},
+  { syncScope, attendanceStatusRead = false } = {},
 ) => {
   try {
     if (syncScope) await assertAttendanceQueueScope(syncScope);
@@ -575,9 +580,14 @@ export const getUserAttendance = async (
       };
     }
     const baseUrl = cleanBaseUrl(rawBaseUrl);
+    const capabilityScope = !attendanceStatusRead
+      ? await assertCapability("attendance_action.attendance_history", { baseUrl, employeeCode: employee_id })
+      : undefined;
     const url = `${baseUrl}/api/method/employee_app.attendance_api.get_attendance_details`;
     const response = await apiClient.get(url, {
       ...(syncScope ? { attendanceSyncScope: syncScope } : {}),
+      ...(capabilityScope ? { capabilityScope } : {}),
+      ...(attendanceStatusRead ? { attendanceStatusRead: true } : {}),
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/x-www-form-urlencoded",
@@ -600,6 +610,10 @@ export const getUserAttendance = async (
     };
   }
 };
+
+/** History is optional; the private session-status read remains essential. */
+export const getUserAttendance = (employeeId, start = 0, length = 20, { syncScope } = {}) =>
+  readAttendanceEntries(employeeId, start, length, { syncScope });
 /**
  * getAttendanceStatus() — returns { custom_in: 0 | 1 }
  */
@@ -632,7 +646,7 @@ export const getAttendanceStatus = async ({ syncScope } = {}) => {
       (await AsyncStorage.getItem("employee_code"));
     if (!employee_id) return { custom_in: 0 };
 
-    const list = await getUserAttendance(employee_id, 0, 10, { syncScope });
+    const list = await readAttendanceEntries(employee_id, 0, 10, { syncScope, attendanceStatusRead: true });
 
     // `getUserAttendance` swallows every failure into `{ error }`, which used to
     // arrive here indistinguishable from "no records" and become custom_in: 0 —
@@ -768,10 +782,12 @@ export const getTodayBreaks = async (employeeCode, date, { syncScope } = {}) => 
   if (syncScope) await assertAttendanceQueueScope(syncScope);
 
   try {
+    const capabilityScope = await assertCapability("attendance_action.employee_checkin_break", { baseUrl, employeeCode });
     const response = await apiClient.get(
       `${baseUrl}/api/method/employee_app.attendance_api.get_today_breaks`,
       {
         ...(syncScope ? { attendanceSyncScope: syncScope } : {}),
+        capabilityScope,
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -813,6 +829,8 @@ export const employeeBreak = async ({ employeeCode, type, reason, syncScope }) =
     if (syncScope) await assertAttendanceQueueScope(syncScope);
     if (!token) throw new Error("Token missing");
 
+    const capabilityScope = await assertCapability("attendance_action.employee_checkin_break", { baseUrl, employeeCode });
+
     // const rawTimestamp = await getServerTime();
     // const timestamp = rawTimestamp.split(".")[0];
 
@@ -834,6 +852,7 @@ export const employeeBreak = async ({ employeeCode, type, reason, syncScope }) =
       formData.toString(),
       {
         ...(syncScope ? { attendanceSyncScope: syncScope } : {}),
+        capabilityScope,
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/x-www-form-urlencoded",
@@ -901,6 +920,8 @@ export const createAttendanceRequest = async ({
     if (!baseUrl) throw new Error("Base URL missing");
     if (!token) throw new Error("Token missing");
 
+    const capabilityScope = await assertCapability("attendance_action.attendance_request", { baseUrl, employeeCode: employee });
+
     const url = `${baseUrl}/api/method/employee_app.gauth.create_attendence_request`;
 
     const formData = new URLSearchParams();
@@ -913,6 +934,7 @@ export const createAttendanceRequest = async ({
     formData.append("to_time", to_time || "");
 
     const response = await apiClient.post(url, formData.toString(), {
+      capabilityScope,
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/x-www-form-urlencoded",
@@ -954,6 +976,7 @@ export const uploadAttendanceAttachment = async (file, docname) => {
     const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
     const baseUrl = cleanBaseUrl(rawBaseUrl);
     const token = await AsyncStorage.getItem("access_token");
+    const capabilityScope = await assertCapability("attendance_action.attendance_request", { baseUrl });
 
     const formData = new FormData();
 
@@ -982,6 +1005,7 @@ export const uploadAttendanceAttachment = async (file, docname) => {
     formData.append("doctype", "Attendance Request");
     formData.append("docname", String(docname));
 
+    await assertCapability("attendance_action.attendance_request", capabilityScope);
     const response = await fetch(
       `${baseUrl}/api/method/employee_app.attendance_api.upload_file`,
       {
@@ -1023,9 +1047,12 @@ export const getAttendanceRequests = async () => {
       return { error: MISSING_EMPLOYEE_MESSAGE };
     }
 
+    const capabilityScope = await assertCapability("attendance_action.attendance_request", { baseUrl, employeeCode });
+
     const url = `${baseUrl}/api/method/employee_app.employee_list.list_attendance_request`;
 
     const response = await apiClient.get(url, {
+      capabilityScope,
       headers: buildHeaders(token),
     });
 

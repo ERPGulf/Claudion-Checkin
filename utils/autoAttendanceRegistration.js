@@ -2,6 +2,8 @@ import * as Location from "expo-location";
 import * as Native from "../modules/expo-auto-attendance";
 import { resolveLocationCoordinates, pickNearest, scoreLocations } from "./attendanceLocations";
 import { assertAttendanceQueueScope } from "../services/offline/attendanceQueueProvenance";
+import { assertCapability } from "../services/capabilityPolicy";
+import { ATTENDANCE_FEATURES } from "./featureSettings";
 
 export const createRegistrationId = ({ tenantKey, employeeId, latitude, longitude, radius, geotagging }) =>
   JSON.stringify([tenantKey, employeeId, Native.OFFICE_GEOFENCE_IDENTIFIER, latitude, longitude, radius, geotagging]);
@@ -82,6 +84,12 @@ export const reconcileAutoAttendanceRegistration = (scope, config) => {
       return null;
     }
     await assertAttendanceQueueScope(scope);
+    const assertAllowed = () => assertCapability(ATTENDANCE_FEATURES.AUTO_ATTENDANCE,
+      { baseUrl: scope.tenantKey, employeeCode: scope.employeeId, generation: scope.generation });
+    try { await assertAllowed(); } catch {
+      await Native.stopGeofence();
+      return null;
+    }
     if (config.tenantKey !== scope.tenantKey || config.employeeId !== scope.employeeId) return null;
     const [foreground, background] = await Promise.all([
       Location.getForegroundPermissionsAsync(), Location.getBackgroundPermissionsAsync(),
@@ -94,6 +102,10 @@ export const reconcileAutoAttendanceRegistration = (scope, config) => {
     const registered = Native.getRegisteredGeofences() ?? [];
     const office = await selectRegistrationOffice(config, registered);
     await assertAttendanceQueueScope(scope);
+    try { await assertAllowed(); } catch {
+      await Native.stopGeofence();
+      return null;
+    }
     if (!office) {
       // A removed office must not remain active while selecting a replacement.
       const configured = config.locations.some(location => {
@@ -116,6 +128,7 @@ export const reconcileAutoAttendanceRegistration = (scope, config) => {
     }
     await Native.stopGeofence();
     await assertAttendanceQueueScope(scope);
+    await assertAllowed();
     let timeout;
     try {
       await Promise.race([
@@ -130,6 +143,10 @@ export const reconcileAutoAttendanceRegistration = (scope, config) => {
       clearTimeout(timeout);
     }
     await assertAttendanceQueueScope(scope);
+    try { await assertAllowed(); } catch {
+      await Native.stopGeofence();
+      return null;
+    }
     return desired;
   });
   registrations = task.catch(() => {});

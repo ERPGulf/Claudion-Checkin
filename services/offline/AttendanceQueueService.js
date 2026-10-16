@@ -35,6 +35,27 @@ import {
 } from "./offlineCapability";
 import { assertAttendanceQueueScope, captureAttendanceQueueScope } from "./attendanceQueueProvenance";
 import { listUncertainEvents } from "./AutoAttendanceEventRepository";
+import { assertCapability } from "../capabilityPolicy";
+import { ATTENDANCE_FEATURES } from "../../utils/featureSettings";
+
+const checkAutomaticCapability = async (employeeCode, sourceScope, { queueing = false } = {}) => {
+  const context = sourceScope?.tenantKey
+    ? { baseUrl: sourceScope.tenantKey, employeeCode, generation: sourceScope.generation } : undefined;
+  try {
+    await assertCapability(ATTENDANCE_FEATURES.AUTO_ATTENDANCE, context);
+    if (queueing) await assertCapability(ATTENDANCE_FEATURES.OFFLINE_ATTENDANCE, context);
+    // Kept for callers of the pre-existing mirror API. The scoped capability
+    // assertion above is authoritative even before the bootstrap effect runs.
+    if (queueing && isOfflineQueueingDisallowed()) {
+      return { allowed: false, reason: "admin-disabled", message: OFFLINE_DISABLED_MESSAGE, location: null };
+    }
+    return null;
+  } catch (error) {
+    return { allowed: false, reason: error?.code === "CAPABILITY_SCOPE_CHANGED"
+      ? "scope-changed" : queueing ? "admin-disabled" : "capability-disabled",
+      message: queueing ? OFFLINE_DISABLED_MESSAGE : error.message, error, location: null };
+  }
+};
 
 /**
  * The write side of the offline queue, and the single seam every attendance
@@ -230,6 +251,11 @@ const queueAttendance = async ({
   if (strictOrdering && (!tenantKey || config?.tenantKey !== tenantKey || config?.employeeId !== employeeCode)) {
     return { allowed: false, reason: "config-scope-mismatch", message: "Attendance rules must be refreshed for this account.", location: null };
   }
+
+  // GPS, timestamp resolution and provenance checks can all await. A newly
+  // received denial must govern the insert, not merely the original attempt.
+  const capabilityRefusal = await checkAutomaticCapability(employeeCode, sourceScope, { queueing: true });
+  if (capabilityRefusal) return capabilityRefusal;
 
   const { row, inserted } = await enqueue({
     employeeId: employeeCode,
@@ -470,6 +496,9 @@ export const submitAttendance = async ({
     return submitOnlineOnly({ type, employeeCode, online, sourceScope });
   }
 
+  const capabilityRefusal = await checkAutomaticCapability(employeeCode, sourceScope);
+  if (capabilityRefusal) return capabilityRefusal;
+
   // Capture before network/gate awaits. Historical native replays must bring
   // their originating scope; the current account cannot prove past ownership.
   if (sourceScope === undefined) {
@@ -554,8 +583,19 @@ export const submitAttendance = async ({
    * the punch should be queued.
    */
   const attemptOnline = async () => {
+    const localCapabilityRefusal = async (failure) => {
+      if (failure?.error?.code !== "FEATURE_DISABLED") return null;
+      // The service/request guard refused before transport. Do not leave a
+      // dispatch-intent marker that would demand impossible server evidence.
+      if (strictOrdering && typeof onKnownNoInsert === "function") {
+        await onKnownNoInsert({ httpStatus: null, failureClass: FAILURE_CLASS.CONFIGURATION });
+      }
+      return { ...failure, allowed: false, reason: "capability-disabled" };
+    };
     try {
       if (strictOrdering) await assertAttendanceQueueScope(sourceScope);
+      const refusal = await checkAutomaticCapability(employeeCode, sourceScope);
+      if (refusal) return { done: true, result: refusal };
       const result = await online();
 
       if (result?.allowed) {
@@ -567,6 +607,9 @@ export const submitAttendance = async ({
         requestQueueDrain({ employeeId: employeeCode, reason: "online-punch" });
         return { done: true, result };
       }
+
+      const localRefusal = await localCapabilityRefusal(result);
+      if (localRefusal) return { done: true, result: localRefusal };
 
       if (!shouldQueueFailure(result)) {
         // A real refusal — out of radius, missing configuration, a rejected
@@ -583,6 +626,8 @@ export const submitAttendance = async ({
       return { done: false };
     } catch (error) {
       const { message } = classifyAttendanceError(error);
+      const localRefusal = await localCapabilityRefusal({ allowed: false, message, error, location: null });
+      if (localRefusal) return { done: true, result: localRefusal };
 
       // Same rule as a returned failure — see shouldQueueFailure.
       if (!shouldQueueFailure({ error })) {
@@ -636,14 +681,10 @@ export const submitAttendance = async ({
   // for a different reason: nothing will drain what is queued here, because the
   // switch puts the sync manager in drain-only mode for rows that already exist
   // and stops new ones being justified at all.
-  if (isOfflineQueueingDisallowed()) {
+  const queueingRefusal = await checkAutomaticCapability(employeeCode, sourceScope, { queueing: true });
+  if (queueingRefusal) {
     console.log(`${LOG_PREFIX} Offline ${type} refused: switched off for this tenant`);
-    return refuseOrFallBack({
-      allowed: false,
-      reason: "admin-disabled",
-      message: OFFLINE_DISABLED_MESSAGE,
-      location: null,
-    });
+    return refuseOrFallBack(queueingRefusal);
   }
 
   if (isOfflineSyncUnsupported()) {

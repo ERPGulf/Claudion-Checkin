@@ -357,16 +357,13 @@ describe('getFeatureSettings', () => {
     expect(res.error).toBeTruthy();
   });
 
-  it('turns a malformed body into all-unknown, never all-disabled', async () => {
+  it('reports malformed success so known restrictions survive the refresh', async () => {
     mockGet.mockResolvedValue({ data: 'not json' });
 
     const res = await getFeatureSettings();
 
-    expect(res.error).toBeUndefined();
-    expect(res.message.loan_application).toBeNull();
-    expect(isFeatureEnabled(res.message, FEATURES.LOAN_APPLICATION)).toBe(
-      DEFAULT_WHEN_UNKNOWN,
-    );
+    expect(res.error).toBeTruthy();
+    expect(res.message).toBeUndefined();
   });
 });
 

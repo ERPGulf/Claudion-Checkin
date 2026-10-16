@@ -1,16 +1,13 @@
 import { useEffect, useRef } from "react";
 import { AppState } from "react-native";
-import { useDispatch, useSelector } from "react-redux";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useSelector } from "react-redux";
 import { selectIsLoggedIn } from "../redux/Slices/AuthSlice";
 import { selectEmployeeCode } from "../redux/Slices/UserSlice";
 import {
-  selectFeatureSettingsScope,
   selectFeatureSettingsFetchedAt,
-  settingsInvalidated,
 } from "../redux/Slices/FeatureSettingsSlice";
 import useFeatureSettings from "../hooks/useFeatureSettings";
-import { buildSettingsScope } from "../utils/featureSettings";
+import { SETTINGS_STALE_AFTER_MS } from "../utils/featureSettings";
 
 /**
  * How long a cached answer is good for before a foreground is worth a request.
@@ -21,7 +18,7 @@ import { buildSettingsScope } from "../utils/featureSettings";
  * means an administrator's change reaches an employee within one app switch,
  * without turning app-switching into a request generator.
  */
-export const SETTINGS_STALE_AFTER_MS = 30 * 60 * 1000;
+export { SETTINGS_STALE_AFTER_MS } from "../utils/featureSettings";
 
 /**
  * Fetches feature settings once per session and refreshes them at sensible
@@ -55,10 +52,8 @@ export const SETTINGS_STALE_AFTER_MS = 30 * 60 * 1000;
  * battery and change nothing.
  */
 export default function FeatureSettingsBootstrap() {
-  const dispatch = useDispatch();
   const isLoggedIn = useSelector(selectIsLoggedIn);
   const employeeCode = useSelector(selectEmployeeCode);
-  const storedScope = useSelector(selectFeatureSettingsScope);
   const lastFetchedAt = useSelector(selectFeatureSettingsFetchedAt);
 
   const { refresh } = useFeatureSettings();
@@ -77,26 +72,8 @@ export default function FeatureSettingsBootstrap() {
    * intervening logout — where the persisted blob would otherwise be applied to
    * a backend it says nothing about.
    * ------------------------------------------------------------------- */
-  useEffect(() => {
-    if (!isLoggedIn) return;
-
-    let cancelled = false;
-
-    (async () => {
-      const baseUrl = await AsyncStorage.getItem("baseUrl");
-      const scope = buildSettingsScope(baseUrl, employeeCode);
-
-      if (cancelled || !scope) return;
-
-      if (storedScope && storedScope !== scope) {
-        dispatch(settingsInvalidated());
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [dispatch, isLoggedIn, employeeCode, storedScope]);
+  // Scope is checked synchronously by selectors and at service execution time.
+  // Do not invalidate in a separate async effect: it can erase a new request.
 
   /* ---------------------------------------------------------------------
    * Session start.

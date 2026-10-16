@@ -46,6 +46,9 @@ export const verifyQueuedAttendance = async (row, { syncScope, maxPages = 25 } =
         params: { employee_id: row.employeeId, limit_start: page * pageSize, limit_page_length: pageSize },
         headers: { Authorization: `Bearer ${current.accessToken}`, "Content-Type": "application/x-www-form-urlencoded" },
         attendanceSyncScope: syncScope,
+        // Essential outbox verification is distinct from opening history UI.
+        // Positive server evidence prevents duplicate attendance resubmission.
+        attendanceStatusRead: true,
         timeout: 10000,
       }));
     } catch {

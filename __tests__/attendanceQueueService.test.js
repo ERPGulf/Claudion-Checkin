@@ -54,6 +54,12 @@ import {
   resetOfflineCapability,
   setOfflineQueueingAllowed,
 } from "../services/offline/offlineCapability";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { store } from "../redux/Store";
+import { settingsReceived, settingsInvalidated } from "../redux/Slices/FeatureSettingsSlice";
+import { buildSettingsScope, normalizeFeatureSettings } from "../utils/featureSettings";
+import { loginQueueEmployee, TEST_TENANT } from "../test-utils/attendanceScope";
+import { captureAttendanceQueueScope } from "../services/offline/attendanceQueueProvenance";
 
 const { __resetAll } = require("../test-utils/expoSqliteMock");
 
@@ -99,6 +105,63 @@ beforeEach(() => {
   fetchShouldAttemptRequest.mockImplementation(() => fetchIsOnline());
   evaluateOfflineAttendance.mockResolvedValue(acceptedGate);
   resetOfflineCapability();
+});
+
+describe("authoritative capability enforcement at automatic admission", () => {
+  let sourceScope;
+  const receive = attendance => store.dispatch(settingsReceived({
+    scope: buildSettingsScope(TEST_TENANT, "TDI0167"),
+    settings: normalizeFeatureSettings({ attendance_action: attendance }),
+  }));
+  beforeEach(async () => {
+    store.dispatch(settingsInvalidated());
+    await loginQueueEmployee("TDI0167");
+    sourceScope = await captureAttendanceQueueScope("TDI0167");
+  });
+  afterEach(async () => {
+    store.dispatch(settingsInvalidated());
+    await AsyncStorage.clear();
+  });
+
+  it("refuses direct offline creation before the React mirror effect has run", async () => {
+    receive({ offline_attendance: false });
+    fetchIsOnline.mockResolvedValue(false);
+    const result = await submitAutoAttendance({ type: "IN", employeeCode: "TDI0167", sourceScope, online: jest.fn() });
+    expect(result).toMatchObject({ allowed: false, reason: "admin-disabled" });
+    expect(evaluateOfflineAttendance).not.toHaveBeenCalled();
+    expect(await listAll()).toEqual([]);
+  });
+
+  it("refuses a new automatic online action when the tenant disables automatic attendance", async () => {
+    receive({ auto_attendance: false });
+    const online = jest.fn(async () => ({ allowed: true }));
+    expect(await submitAutoAttendance({ type: "IN", employeeCode: "TDI0167", sourceScope, online }))
+      .toMatchObject({ allowed: false, reason: "capability-disabled" });
+    expect(online).not.toHaveBeenCalled();
+    expect(await listAll()).toEqual([]);
+  });
+
+  it("rechecks offline capability after an asynchronous location gate", async () => {
+    receive({ offline_attendance: true });
+    fetchIsOnline.mockResolvedValue(false);
+    evaluateOfflineAttendance.mockImplementation(async () => {
+      receive({ offline_attendance: false });
+      return acceptedGate;
+    });
+    expect(await submitAutoAttendance({ type: "IN", employeeCode: "TDI0167", sourceScope, online: jest.fn() }))
+      .toMatchObject({ allowed: false, reason: "admin-disabled" });
+    expect(await listAll()).toEqual([]);
+  });
+
+  it("preserves an accepted outbox record after both capabilities are disabled", async () => {
+    fetchIsOnline.mockResolvedValue(false);
+    await submitAutoAttendance({ type: "IN", employeeCode: "TDI0167", sourceScope, online: jest.fn() });
+    const before = await listAll();
+    expect(before).toHaveLength(1);
+    receive({ offline_attendance: false, auto_attendance: false });
+    await submitAutoAttendance({ type: "OUT", employeeCode: "TDI0167", sourceScope, online: jest.fn() });
+    expect(await listAll()).toEqual(before);
+  });
 });
 
 /**

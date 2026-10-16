@@ -5,6 +5,7 @@ import { configureStore } from "@reduxjs/toolkit";
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { format } from "date-fns";
+import { Button } from "react-native";
 import { Toast as CameraToast } from "react-native-toast-message/lib/src/Toast";
 import useAttendanceAction from "../hooks/useAttendanceAction";
 import AttendanceCamera from "../screens/AttendanceCamera";
@@ -13,6 +14,9 @@ import apiClient from "../services/api/apiClient";
 import { employeeBreak, getAttendanceStatus, userCheckIn } from "../services/api/attendance.service";
 import { performManualAttendanceTransition } from "../services/offline/ManualAttendanceService";
 import { setCheckin } from "../redux/Slices/AttendanceSlice";
+import { settingsReceived } from "../redux/Slices/FeatureSettingsSlice";
+import { buildSettingsScope, normalizeFeatureSettings } from "../utils/featureSettings";
+import { invalidateAuthSession } from "../utils/authSessionGuard";
 import { CONFIG_KEY } from "../services/offline/attendanceConfigCache";
 import { resetDatabaseHandle } from "../services/offline/AttendanceDatabase";
 import { listAll } from "../services/offline/AttendanceQueueRepository";
@@ -33,10 +37,11 @@ jest.mock("react-native-toast-message/lib/src/Toast", () => ({ Toast: { show: je
 jest.mock("../hooks/useModernScreenHeader", () => jest.fn());
 jest.mock("expo-image", () => ({ Image: require("react-native").View }));
 jest.mock("@expo/vector-icons", () => ({ Ionicons: require("react-native").Text }));
+let mockTakePicture;
 jest.mock("expo-camera", () => {
   const React = require("react");
   return { useCameraPermissions: () => [{ granted: true }], CameraView: React.forwardRef((_props, ref) => {
-    React.useImperativeHandle(ref, () => ({ takePictureAsync: async () => ({ uri: "file:///synthetic.jpg" }) }));
+    React.useImperativeHandle(ref, () => ({ takePictureAsync: (...args) => mockTakePicture(...args) }));
     return null;
   }) };
 });
@@ -105,6 +110,7 @@ beforeEach(async () => {
     locations: [{ latitude: 25.28, longitude: 51.52, reporting_radius: 100, location: "Office" }],
   }));
   mockJournal = []; jest.clearAllMocks();
+  mockTakePicture = jest.fn(async () => ({ uri: "file:///synthetic.jpg" }));
   fetchShouldAttemptRequest.mockResolvedValue(true);
   getAttendanceStatus.mockResolvedValue({ custom_in: 0, unavailable: true });
   employeeBreak.mockResolvedValue({ allowed: true });
@@ -206,6 +212,58 @@ it("camera attendance cannot commit an old HTTP response after the tenant change
   expect((await readSession()).status).toBe("CHECKED_OUT");
   expect(store.getState().attendance.checkin).toBe(false);
   expect(apiClient.put).not.toHaveBeenCalled();
+});
+
+it("camera discards a pending native capture when photo attendance is disabled", async () => {
+  let completeCapture;
+  mockTakePicture.mockImplementationOnce(() => new Promise(resolve => { completeCapture = resolve; }));
+  const screen = render(<Provider store={store}><AttendanceCamera /></Provider>);
+  fireEvent.press(screen.getByLabelText("Take photo"));
+  await waitFor(() => expect(completeCapture).toBeDefined());
+  act(() => { store.dispatch(settingsReceived({
+    scope: buildSettingsScope(TEST_TENANT, employeeId),
+    settings: normalizeFeatureSettings({ attendance_action: { photo_upload: false } }),
+  })); });
+  await act(async () => { completeCapture({ uri: "file:///synthetic-disabled.jpg" }); });
+  expect(screen.queryByText("Check in")).toBeNull();
+  expect(CameraToast.show).toHaveBeenCalledWith(expect.objectContaining({ text1: "Photo capture failed" }));
+  expect(apiClient.post).not.toHaveBeenCalled();
+});
+
+it("a retained camera confirmation cannot submit after photo attendance is disabled", async () => {
+  const screen = render(<Provider store={store}><AttendanceCamera /></Provider>);
+  fireEvent.press(screen.getByLabelText("Take photo"));
+  await waitFor(() => expect(screen.getByText("Check in")).toBeTruthy());
+  const confirm = screen.UNSAFE_getAllByType(Button).find(button => button.props.title === "Check in").props.onPress;
+  act(() => { store.dispatch(settingsReceived({
+    scope: buildSettingsScope(TEST_TENANT, employeeId),
+    settings: normalizeFeatureSettings({ attendance_action: { photo_upload: false } }),
+  })); });
+  screen.unmount();
+  await act(async () => { await confirm(); });
+  expect(apiClient.post).not.toHaveBeenCalled();
+  expect(apiClient.put).not.toHaveBeenCalled();
+  expect(CameraToast.show).toHaveBeenCalledWith(expect.objectContaining({ text1: "Check-in failed" }));
+});
+
+it("a retained camera confirmation cannot adopt a reauthenticated session", async () => {
+  const screen = render(<Provider store={store}><AttendanceCamera /></Provider>);
+  fireEvent.press(screen.getByLabelText("Take photo"));
+  await waitFor(() => expect(screen.getByText("Check in")).toBeTruthy());
+  const confirm = screen.UNSAFE_getAllByType(Button).find(button => button.props.title === "Check in").props.onPress;
+  await loginQueueEmployee(employeeId);
+  screen.unmount();
+  await act(async () => { await confirm(); });
+  expect(apiClient.post).not.toHaveBeenCalled();
+  expect(apiClient.put).not.toHaveBeenCalled();
+});
+
+it("does not start native photo capture while logout suspends the session", async () => {
+  const screen = render(<Provider store={store}><AttendanceCamera /></Provider>);
+  invalidateAuthSession();
+  fireEvent.press(screen.getByLabelText("Take photo"));
+  expect(mockTakePicture).not.toHaveBeenCalled();
+  expect(apiClient.post).not.toHaveBeenCalled();
 });
 
 it("camera status update remains inside the manual transition before automatic OUT", async () => {

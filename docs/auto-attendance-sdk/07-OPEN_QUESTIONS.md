@@ -17,7 +17,7 @@ Nothing here has an answer in the repository. Each item states the current behav
 | P-7 | Minimum dwell time / debounce at the boundary? | None **[V]** | Flapping creates multiple sessions (RK-09) | M8 (new item) |
 | P-8 | Should automatic attendance respect shifts or time windows (e.g., no automatic IN at 03:00)? | No shift logic **[V]** | Spurious check-ins after reboot/upgrade inside the fence | M8 (new item) |
 | P-9 | Should the opt-in survive a forced logout (token expiry) for the same employee? | No — `REVERT_ALL` resets it **[V]** | Silent disablement (RK-08) | M8.10 |
-| P-10 | Should `attendance_action.auto_attendance = false` stop monitoring, or only hide the screen? | Hides the screen only **[V]** | Admin intent vs behaviour | M8.11 |
+| P-10 | Should `attendance_action.auto_attendance = false` stop monitoring, or only hide the screen? | Resolved by the capability-enforcement task: false stops JS registration/monitoring and new automatic actions; accepted attendance remains deliverable. See `../capability-enforcement/04_OFFLINE_AND_BACKGROUND_ENFORCEMENT.md`. | Native while-JS-absent behavior still needs device validation | M8.11 |
 | P-11 | Which policy source is authoritative: per-employee `geotagging` (`get_employee_data`) or feature-settings `geo_tagging`? | Per-employee `geotagging`; `geo_tagging_level` parsed but unused **[V]** | SDK `setPolicy` input | M4 |
 | P-12 | Which policy governs a crossing: the one at crossing time or at processing time? | Processing time for killed-app crossings **[V]** | RK-14 | M8.9 |
 | P-13 | On Android, is "submitted at next app open" acceptable, or is background submission (WorkManager/HeadlessJS) required? | Deferred to next open; last event only **[V]** | RK-02, battery and policy work | M9 |

@@ -11,6 +11,11 @@ jest.mock("../services/api/apiClient", () => ({
   __esModule: true,
   default: { get: jest.fn(), post: jest.fn() },
 }));
+// Payload and timestamp behavior are isolated here; capability boundaries are
+// exercised with enabled/disabled policies in capabilityServices and runtime tests.
+jest.mock("../services/capabilityPolicy", () => ({
+  assertCapability: jest.fn(() => Promise.resolve()),
+}));
 
 import apiClient from "../services/api/apiClient";
 import {

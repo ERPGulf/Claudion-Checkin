@@ -57,6 +57,7 @@ function AppNavigator() {
    */
   const gated = useMemo(
     () => ({
+      attendanceCamera: withFeatureGate("Attendance camera", AttendanceCamera),
       attendanceHistory: withFeatureGate(
         "Attendance history",
         newHomeEnabled ? AttendanceHistory : AttendanceHistoryLegacy,
@@ -108,7 +109,7 @@ function AppNavigator() {
         name="Attendance action"
         component={newHomeEnabled ? AttendanceAction : AttendanceActionLegacy}
       />
-      <Stack.Screen name="Attendance camera" component={AttendanceCamera} />
+      <Stack.Screen name="Attendance camera" component={gated.attendanceCamera} />
       <Stack.Screen
         name="Attendance history"
         component={gated.attendanceHistory}

@@ -7,6 +7,7 @@ import {
   MISSING_EMPLOYEE_MESSAGE,
 } from "./authHelper";
 import { parseError } from "./errorHelper";
+import { assertCapability } from "../capabilityPolicy";
 /**
  * Get Expense Claims
  */
@@ -18,9 +19,12 @@ export const getExpenseClaims = async () => {
       return { error: MISSING_EMPLOYEE_MESSAGE };
     }
 
+    const capabilityScope = await assertCapability("expense_claim", { baseUrl, employeeCode });
+
     const url = `${baseUrl}/api/method/employee_app.attendance_api.get_expense_claims`;
 
     const response = await apiClient.get(url, {
+      capabilityScope,
       headers: buildHeaders(token),
     });
 
@@ -41,10 +45,12 @@ export const getExpenseClaims = async () => {
 export const getExpenseTypes = async () => {
   try {
     const { baseUrl, token } = await getAuthContext();
+    const capabilityScope = await assertCapability("expense_claim", { baseUrl });
 
     const url = `${baseUrl}/api/method/employee_app.attendance_api.get_expense_claim_type`;
 
     const response = await apiClient.get(url, {
+      capabilityScope,
       headers: buildHeaders(token),
     });
 
@@ -71,6 +77,8 @@ export const createExpenseClaim = async (claimData) => {
       return { error: MISSING_EMPLOYEE_MESSAGE };
     }
 
+    const capabilityScope = await assertCapability("expense_claim", { baseUrl, employeeCode });
+
     const url = `${baseUrl}/api/method/employee_app.attendance_api.create_expense_claim`;
 
     const payload = {
@@ -82,6 +90,7 @@ export const createExpenseClaim = async (claimData) => {
     };
 
     const response = await apiClient.post(url, payload, {
+      capabilityScope,
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json", 
@@ -112,6 +121,7 @@ export const uploadExpenseAttachment = async (file, docname) => {
     if (!docname) throw new Error("Missing docname");
 
     const { baseUrl, token } = await getAuthContext();
+    const capabilityScope = await assertCapability("expense_claim", { baseUrl });
 
     const formData = new FormData();
 
@@ -140,6 +150,7 @@ export const uploadExpenseAttachment = async (file, docname) => {
     formData.append("doctype", "Expense Claim");
     formData.append("docname", docname);
 
+    await assertCapability("expense_claim", capabilityScope);
     const response = await fetch(
       `${baseUrl}/api/method/employee_app.attendance_api.upload_file`,
       {

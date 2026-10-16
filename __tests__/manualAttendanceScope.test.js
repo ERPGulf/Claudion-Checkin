@@ -64,3 +64,19 @@ it("does not report an old manual HTTP response as a current-account success", a
   expect(await punch).toMatchObject({ allowed: false, error: { code: "ATTENDANCE_SYNC_SCOPE_CHANGED" } });
   expect(http.history.post).toHaveLength(1);
 });
+
+it.each([0, 1, 2])("keeps restricted check-in and unrestricted checkout independent of employee geo mode %s", async geotagging => {
+  await AsyncStorage.multiSet([["restrict_location", "1"], ["unrestricted_checkout_location", "1"], ["geotagging", String(geotagging)]]);
+  http.onGet(`${TEST_TENANT}/api/method/employee_app.attendance_api.get_employee_data`).reply(200, {
+    message: { restrict_location: 1, unrestricted_checkout_location: 1, photo: 0, geotagging,
+      employee_locations: [{ location: "Synthetic office", latitude: 25.28, longitude: 51.52, reporting_radius: 100 }] },
+  });
+  Location.requestForegroundPermissionsAsync.mockResolvedValue({ status: "granted" });
+  Location.getCurrentPositionAsync.mockResolvedValue({ coords: { latitude: 25.35, longitude: 51.6 } });
+
+  expect(await userCheckIn({ employeeCode: employeeId, type: "IN", syncScope: scope })).toMatchObject({ allowed: false });
+  expect(http.history.post).toHaveLength(0);
+  expect(await userCheckIn({ employeeCode: employeeId, type: "OUT", syncScope: scope })).toMatchObject({ allowed: true });
+  expect(http.history.post).toHaveLength(1);
+  expect(JSON.parse(http.history.post[0].data)).toMatchObject({ log_type: "OUT", auto: false });
+});

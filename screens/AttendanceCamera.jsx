@@ -40,6 +40,9 @@ import {
 } from "../utils/attendanceSessionState";
 import { createManualAttendanceContext, performManualAttendanceTransition, assertManualAttendanceCurrent } from "../services/offline/ManualAttendanceService";
 import { resolveNearestOffice } from "../services/offline/offlineAttendanceGate";
+import { selectFeatureSettings } from "../redux/Slices/FeatureSettingsSlice";
+import { ATTENDANCE_FEATURES, isFeatureEnabled } from "../utils/featureSettings";
+import { getAuthSessionGeneration, isAuthSessionSuspended } from "../utils/authSessionGuard";
 
 function AttendanceCamera() {
   const navigation = useNavigation();
@@ -57,6 +60,15 @@ function AttendanceCamera() {
   const isWFH = useSelector(selectIsWfh);
   const currentDate = new Date().toISOString();
   const cameraRef = useRef();
+  const screenGeneration = useRef(getAuthSessionGeneration()).current;
+  const assertPhotoAvailable = () => {
+    if (screenGeneration !== getAuthSessionGeneration() || isAuthSessionSuspended()) {
+      throw new Error("The account changed. Please try again.");
+    }
+    if (!isFeatureEnabled(selectFeatureSettings(store.getState()), ATTENDANCE_FEATURES.PHOTO_UPLOAD)) {
+      throw new Error("Your administrator has turned photo attendance off for your account.");
+    }
+  };
 
   const toggleCameraFacing = () => {
     setFacing((current) => (current === "back" ? "front" : "back"));
@@ -64,6 +76,7 @@ function AttendanceCamera() {
 
   const takePicture = async () => {
     try {
+      assertPhotoAvailable();
       if (!cameraRef.current) {
         return;
       }
@@ -74,6 +87,7 @@ function AttendanceCamera() {
         base64: false,
       });
 
+      assertPhotoAvailable();
       setPhoto(newPhoto);
     } catch (error) {
       Toast.show({ type: "error", text1: "Photo capture failed" });
@@ -85,6 +99,7 @@ function AttendanceCamera() {
     const failedTitle = type === "IN" ? "Check-in failed" : "Check-out failed";
 
     try {
+      assertPhotoAvailable();
       setIsLoading(true);
       const context = await createManualAttendanceContext(employeeCode);
       let statusError = null;
@@ -143,6 +158,7 @@ function AttendanceCamera() {
       const outcome = await performManualAttendanceTransition({
         type, employeeCode, context,
         online: async ({ scope, occurredAt }) => {
+          assertPhotoAvailable();
           const result = await userCheckIn({ ...dataField, syncScope: scope, occurredAt });
           if (result?.allowed) {
             try { await userStatusPut(employeeCode, custom_in, { syncScope: scope }); }

@@ -5,6 +5,8 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useNavigation } from '@react-navigation/native';
 import { COLORS, SIZES } from '../constants';
 import ButtonItem from '../components/SelectQuickAccess/ButtonItem';
+import { selectFeatureSettings } from '../redux/Slices/FeatureSettingsSlice';
+import { isRouteEnabled } from '../utils/featureSettings';
 import {
   activeButtonsSelector,
   setAdd,
@@ -36,6 +38,7 @@ function SelectQuickAccessLegacy() {
     });
   }, []);
   const activeButtons = useSelector(activeButtonsSelector);
+  const featureSettings = useSelector(selectFeatureSettings);
   const dispatch = useDispatch();
   const quickAccessItems = [
     {
@@ -110,7 +113,7 @@ function SelectQuickAccessLegacy() {
           width: '100%',
         }}
       >
-        {quickAccessItems.map(item => (
+        {quickAccessItems.filter(item => isRouteEnabled(featureSettings, item.url)).map(item => (
           <TouchableOpacity
             key={item.iconName}
             onPress={() => handleClick(item)}

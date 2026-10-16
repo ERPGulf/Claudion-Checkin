@@ -11,6 +11,7 @@ import {
   createAttendanceScopeChangedError,
 } from "../offline/attendanceQueueProvenance";
 import { activateAuthSession, getAuthSessionGeneration, invalidateAuthSession } from "../../utils/authSessionGuard";
+import { assertCapabilityRequest, getCapabilitySnapshot } from "../capabilityPolicy";
 
 // ----------------------
 // MEMORY TOKEN CACHE
@@ -479,6 +480,7 @@ apiClient.interceptors.request.use(async (config) => {
     config.headers.Authorization = `Bearer ${current.accessToken}`;
     // Keep scope on the config for retries after token refresh.
     if (!config.url?.startsWith(`${current.tenantKey}/api/`)) throw createAttendanceScopeChangedError();
+    await assertCapabilityRequest(config);
     return config;
   }
 
@@ -486,6 +488,9 @@ apiClient.interceptors.request.use(async (config) => {
 
   // skip auth header logic (generateToken)
   if (config.headers?.["x-skip-auth"] === "true") {
+    // Authentication's transport option is not a feature-policy exemption.
+    // The actual login endpoint has no feature mapping and still skips auth.
+    await assertCapabilityRequest(config);
     return config;
   }
 
@@ -499,6 +504,9 @@ apiClient.interceptors.request.use(async (config) => {
     config.headers.Authorization = `Bearer ${access}`;
   }
 
+  // Also runs on 401 retries, immediately before transport. Existing attendance
+  // outbox delivery has no admission flag; its tenant scope is checked above.
+  await assertCapabilityRequest(config);
   return config;
 });
 
@@ -506,10 +514,16 @@ apiClient.interceptors.request.use(async (config) => {
 // RESPONSE INTERCEPTOR
 // ----------------------
 apiClient.interceptors.response.use(
-  (response) => response,
+  async (response) => {
+    // A delayed create result must not start follow-up uploads under a new
+    // account. Same-owner policy changes do not undo an already sent success.
+    if (response.config?.capabilityScope) await getCapabilitySnapshot(response.config.capabilityScope);
+    return response;
+  },
   async (error) => {
     const original = error.config;
     if (!original) return Promise.reject(error);
+    if (original.capabilityScope) await getCapabilitySnapshot(original.capabilityScope);
     if (original.attendanceSyncScope) await assertAttendanceQueueScope(original.attendanceSyncScope);
 
     // Skip refresh logic for generateToken()

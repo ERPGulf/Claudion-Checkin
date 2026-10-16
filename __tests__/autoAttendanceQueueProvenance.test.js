@@ -429,20 +429,25 @@ describe("M0 current behaviour: logout cleanup and queue scope changes (E)", () 
     });
   });
 
-  it("characterizes current behaviour: a stale captured auth generation becomes unattributed even after the same account logs back in [M0-E4]", async () => {
+  it("refuses stale captured auth scope after same-account reauthentication while preserving accepted rows [M0-E4]", async () => {
     const oldScope = await captureAttendanceQueueScope(EMPLOYEE_A);
+    const acceptedBeforeReauthentication = (await submit({ sourceScope: oldScope, occurredAt: at(7) })).row;
     invalidateAuthSession();
     await clearOfflineAttendance();
     await login();
     const result = await submit({ sourceScope: oldScope });
-    expect(result).toMatchObject({ allowed: true, queued: true });
-    expect(result.row).toMatchObject({
-      employeeId: EMPLOYEE_A,
-      tenantKey: null,
-    });
+    expect(result).toMatchObject({ allowed: false, reason: "scope-changed" });
+    expect(await listAll()).toEqual([acceptedBeforeReauthentication]);
     await expect(assertAttendanceQueueScope(oldScope)).rejects.toMatchObject({
       code: ATTENDANCE_SCOPE_CHANGED,
     });
+
+    const currentScope = await captureAttendanceQueueScope(EMPLOYEE_A);
+    const current = await submit({ sourceScope: currentScope });
+    expect(current).toMatchObject({ allowed: true, queued: true, row: {
+      employeeId: EMPLOYEE_A, tenantKey: TENANT_A,
+    } });
+    expect(await listAll()).toHaveLength(2);
   });
 });
 

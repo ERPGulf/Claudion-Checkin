@@ -51,6 +51,8 @@ import { resetDatabaseHandle } from "../services/offline/AttendanceDatabase";
 import { resetOfflineCapability } from "../services/offline/offlineCapability";
 import { loginQueueEmployee, TEST_TENANT } from "../test-utils/attendanceScope";
 import { createRegistrationId } from "../utils/autoAttendanceRegistration";
+import { settingsReceived } from "../redux/Slices/FeatureSettingsSlice";
+import { buildSettingsScope, normalizeFeatureSettings } from "../utils/featureSettings";
 const { __resetAll } = require("../test-utils/expoSqliteMock");
 let config;
 let store;
@@ -60,6 +62,10 @@ const event = (id, transition, sequence, policy = 2) => {
     identifier: "office-main", nativeIdentifier: "physical-1", registrationId: createRegistrationId(snapshot) };
 };
 const mount = () => render(<Provider store={store}><AutoAttendanceBootstrap /></Provider>);
+const receiveAutomaticAvailability = value => store.dispatch(settingsReceived({
+  scope: buildSettingsScope(TEST_TENANT, "EMP-001"),
+  settings: normalizeFeatureSettings({ attendance_action: { auto_attendance: value } }),
+}));
 
 beforeEach(async () => {
   __resetAll(); resetDatabaseHandle(); resetOfflineCapability();
@@ -77,6 +83,44 @@ beforeEach(async () => {
     userAuth: { isLoggedIn: true }, user: { baseUrl: TEST_TENANT, userDetails: { employeeCode: "EMP-001" } },
     autoAttendance: { geotagging: 2, userEnabled: true, syncRequestId: 0 },
   } });
+});
+
+it("restores a denied automatic capability without registering or submitting a captured event", async () => {
+  receiveAutomaticAvailability(false);
+  mockJournal = [event("denied-cold-start", "ENTER", 1)];
+  mount();
+  await waitFor(async () => expect(await findEvent("denied-cold-start")).toMatchObject({ status: "pending" }));
+  expect(await listAll()).toEqual([]);
+  expect(Native.startGeofence).not.toHaveBeenCalled();
+  expect(Native.stopGeofence).toHaveBeenCalled();
+});
+
+it("stops live monitoring on a received denial and retains later native callbacks", async () => {
+  mount();
+  await waitFor(() => expect(Native.startGeofence).toHaveBeenCalledTimes(1));
+  Native.stopGeofence.mockClear();
+  await act(async () => { receiveAutomaticAvailability(false); });
+  await waitFor(() => expect(Native.stopGeofence).toHaveBeenCalled());
+  await act(async () => {
+    mockJournal = [event("after-denial", "ENTER", 1)];
+    mockListeners.enter.forEach(listener => listener(mockJournal[0]));
+  });
+  await waitFor(async () => expect((await findEvent("after-denial"))?.status).toBe("pending"));
+  expect(await listAll()).toEqual([]);
+  expect(Native.startGeofence).toHaveBeenCalledTimes(1);
+});
+
+it("stops immediately when a settings denial arrives during a pending employee refresh", async () => {
+  fetchShouldAttemptRequest.mockResolvedValue(true);
+  let releaseRefresh;
+  refreshAttendanceConfig.mockImplementation(() => new Promise(resolve => { releaseRefresh = resolve; }));
+  mount();
+  await waitFor(() => expect(refreshAttendanceConfig).toHaveBeenCalled());
+  await act(async () => { receiveAutomaticAvailability(false); });
+  await waitFor(() => expect(Native.stopGeofence).toHaveBeenCalled());
+  await act(async () => { releaseRefresh({ refreshed: false, config }); });
+  expect(Native.startGeofence).not.toHaveBeenCalled();
+  expect(await listAll()).toEqual([]);
 });
 
 it("refreshes connected policy before replay so authoritative revocation creates no punch", async () => {

@@ -5,6 +5,7 @@ import {
   MISSING_EMPLOYEE_MESSAGE,
 } from "./authHelper";
 import { getServerTime } from "./attendance.service";
+import { assertCapability } from "../capabilityPolicy";
 
 /**
  * CREATE COMPLAINT
@@ -16,6 +17,8 @@ export const createComplaint = async ({ message }) => {
     if (!employeeCode) {
       return { error: MISSING_EMPLOYEE_MESSAGE };
     }
+
+    const capabilityScope = await assertCapability("complaints", { baseUrl, employeeCode });
 
     // 🔥 Get accurate server time
     const serverTime = await getServerTime();
@@ -33,6 +36,7 @@ export const createComplaint = async ({ message }) => {
     };
 
     const response = await apiClient.post(url, body, {
+      capabilityScope,
       headers: buildHeaders(token),
       timeout: 15000,
     });
@@ -57,6 +61,7 @@ export const uploadComplaintAttachment = async (file, docname) => {
     if (!docname) throw new Error("Missing docname");
 
     const { baseUrl, token } = await getAuthContext();
+    const capabilityScope = await assertCapability("complaints", { baseUrl });
 
     const formData = new FormData();
 
@@ -85,6 +90,7 @@ export const uploadComplaintAttachment = async (file, docname) => {
     formData.append("doctype", "Employee Complaint");
     formData.append("docname", String(docname));
 
+    await assertCapability("complaints", capabilityScope);
     const response = await fetch(
       `${baseUrl}/api/method/employee_app.attendance_api.upload_file`,
       {

@@ -4,6 +4,9 @@ import {
   isFeatureEnabled,
   isRouteEnabled,
   getFeatureValue,
+  buildSettingsScope,
+  mergeFeatureSettings,
+  featureSettingsHealth,
 } from '../../utils/featureSettings';
 
 /**
@@ -44,6 +47,7 @@ const initialState = {
   lastFetchedAt: null,
   /** Scope of an in-flight request, so a late response can be identified. */
   pendingScope: null,
+  pendingRequestId: null,
 };
 
 const FeatureSettingsSlice = createSlice({
@@ -55,24 +59,30 @@ const FeatureSettingsSlice = createSlice({
       state.status = 'loading';
       // The scope being fetched for. Recorded now so a response that arrives
       // after the user has switched tenants can be told apart from a current one.
-      if (action.payload?.scope) state.pendingScope = action.payload.scope;
+      state.pendingScope = action.payload?.scope ?? null;
+      state.pendingRequestId = action.payload?.requestId ?? null;
     },
 
     settingsReceived: (state, action) => {
       const { settings, scope, now } = action.payload;
+      if (action.payload.requestId &&
+          (state.pendingRequestId !== action.payload.requestId || state.pendingScope !== scope)) return;
 
-      state.settings = settings;
+      state.settings = mergeFeatureSettings(state.scope === scope ? state.settings : null, settings);
       state.scope = scope ?? null;
       state.status = 'success';
       state.error = null;
       state.lastFetchedAt = now ?? Date.now();
       state.pendingScope = null;
+      state.pendingRequestId = null;
     },
 
     settingsFailed: (state, action) => {
+      if (action.payload?.requestId && state.pendingRequestId !== action.payload.requestId) return;
       state.status = 'error';
       state.error = action.payload?.error || 'Unable to load feature settings.';
       state.pendingScope = null;
+      state.pendingRequestId = null;
       // `settings`, `scope` and `lastFetchedAt` are deliberately untouched: a
       // failed refresh must keep the last known answer, so a feature the admin
       // explicitly disabled stays disabled through an outage rather than
@@ -95,7 +105,7 @@ export const {
  * Selectors
  *
  * These are the only sanctioned way to read feature settings. Nothing outside
- * this file and utils/featureSettings.js should touch `state.featureSettings`.
+ * this file and the capability snapshot boundary should read this slice.
  * ---------------------------------------------------------------------- */
 
 const selectSlice = state => state.featureSettings || initialState;
@@ -113,7 +123,20 @@ export const selectFeatureSettingsScope = state => selectSlice(state).scope;
  * documented optimistic default — when nothing has been fetched. It does NOT
  * return null merely because the last refresh failed; see `settingsFailed`.
  */
-export const selectFeatureSettings = state => selectSlice(state).settings;
+export const selectFeatureSettings = state => {
+  const slice = selectSlice(state);
+  // Real root state always includes user/auth. Isolated reducer consumers can
+  // still inspect a slice without constructing the entire application store.
+  if (state.userAuth && !state.userAuth.isLoggedIn) return null;
+  if (state.user) {
+    const scope = buildSettingsScope(state.user.baseUrl, state.user.userDetails?.employeeCode);
+    if (!scope || scope !== slice.scope) return null;
+  }
+  return slice.settings;
+};
+
+export const selectFeatureSettingsHealth = state =>
+  featureSettingsHealth({ ...selectSlice(state), settings: selectFeatureSettings(state) });
 
 /**
  * Settings, but only if they belong to `scope`. Anything else is treated as

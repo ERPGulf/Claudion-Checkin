@@ -55,6 +55,8 @@ import {
 } from "../services/offline/AttendanceQueueService";
 import { syncNow } from "../services/offline/BackgroundSyncManager";
 import { captureAttendanceQueueScope } from "../services/offline/attendanceQueueProvenance";
+import { useFeatureEnabled } from "../hooks/useFeatureSettings";
+import { ATTENDANCE_FEATURES } from "../utils/featureSettings";
 
 const LOG_PREFIX = "[AutoAttendanceBootstrap]";
 
@@ -96,7 +98,9 @@ export default function AutoAttendanceBootstrap() {
 function LegacyAutoAttendanceBootstrap() {
   const dispatch = useDispatch();
   const isLoggedIn = useSelector(selectIsLoggedIn);
-  const active = useSelector(selectAutoAttendanceActive);
+  const employeeActive = useSelector(selectAutoAttendanceActive);
+  const capabilityAllowed = useFeatureEnabled(ATTENDANCE_FEATURES.AUTO_ATTENDANCE);
+  const active = employeeActive && capabilityAllowed;
   const fullActions = useSelector(selectAutoAttendanceFullActions);
   const syncRequestId = useSelector(selectAutoAttendanceSyncRequestId);
   const employeeCode = useSelector(
@@ -106,6 +110,8 @@ function LegacyAutoAttendanceBootstrap() {
   // Read inside the listener closures without re-subscribing on every change.
   const fullActionsRef = useRef(fullActions);
   fullActionsRef.current = fullActions;
+  const capabilityAllowedRef = useRef(capabilityAllowed);
+  capabilityAllowedRef.current = capabilityAllowed;
   const employeeCodeRef = useRef(employeeCode);
   employeeCodeRef.current = employeeCode;
   // The office geofence's reporting location, captured when monitoring is
@@ -226,6 +232,10 @@ function LegacyAutoAttendanceBootstrap() {
       const recordHandled = async (at) => {
         if (markProcessed) await markEventProcessed(at);
       };
+
+      // Keep legacy replay evidence when tenant settings suspend actions. A
+      // native crossing is location evidence, not authority to submit a punch.
+      if (cancelled || !capabilityAllowedRef.current) return;
 
       // geotagging === 1 ("warnings only"): the crossing is detected and shown
       // on the AutoAttendance screen, but must never become an attendance log.

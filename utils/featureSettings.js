@@ -4,7 +4,7 @@
  * `employee_app.gauth.employee_checkin_setting` lets an administrator decide
  * which features an employee sees. This module is the single place that knows
  * the shape of that response: everything else in the app reads a normalised
- * object through `hooks/useFeatureSettings`, never the raw body.
+ * object through scoped selectors/hooks and `services/capabilityPolicy`.
  *
  * ---------------------------------------------------------------------------
  * The response is NOT uniformly boolean
@@ -44,18 +44,18 @@
  * Records out of the app for every tenant still running a backend that does not
  * send this payload, and a first-launch outage would do it to everyone else.
  *
- * This is a UX gate, not a security boundary. The server still authorises every
- * request behind these screens, so a feature briefly visible to someone who may
- * not use it costs a rejected API call, while a feature wrongly hidden costs the
- * employee their job function with no way to get it back.
+ * These are client availability/execution gates, not a security boundary. The
+ * backend must independently authorize every operation; that behavior requires
+ * staging verification. Unknown availability retains legacy compatibility, and
+ * is explicitly different from an administrator's received false.
  *
  * An explicit `false` is always honoured, and it is honoured *through an
  * outage*: the last successful settings for a scope are persisted with it, so a
  * failed refresh keeps the previous answer rather than reverting to the
  * optimistic default. Only a scope that has never been fetched is optimistic.
  *
- * Flip `DEFAULT_WHEN_UNKNOWN` to false to make the whole system fail-closed;
- * everything reads that one constant.
+ * Changing unknown-field compatibility requires a product/backend migration
+ * decision. Mandatory employee attendance/location rules remain independent.
  */
 
 /** See the note above before changing this. */
@@ -86,7 +86,7 @@ export const ATTENDANCE_FEATURES = {
 };
 
 /** Every boolean the payload may carry, by its path. */
-const BOOLEAN_PATHS = [
+export const BOOLEAN_PATHS = [
   ...Object.values(FEATURES),
   ...Object.values(ATTENDANCE_FEATURES),
 ];
@@ -261,6 +261,45 @@ export function normalizeFeatureSettings(raw) {
   return settings;
 }
 
+/** Reject an empty/malformed success rather than replacing known denials. */
+export function hasRecognizedFeatureSettings(raw) {
+  const normalized = normalizeFeatureSettings(raw);
+  return BOOLEAN_PATHS.some(path => {
+    const value = path.startsWith('attendance_action.')
+      ? normalized.attendance_action[path.slice('attendance_action.'.length)]
+      : normalized[path];
+    return value !== null;
+  }) || normalized.attendance_action.geo_tagging_level !== null ||
+    normalized.attendance_action.offline_attendance_version !== null;
+}
+
+/** Missing fields in a refresh cannot retract a previously explicit answer. */
+export function mergeFeatureSettings(previous, next) {
+  if (!previous) return next;
+  const merged = { ...previous, attendance_action: { ...previous.attendance_action } };
+  for (const [key, value] of Object.entries(next || {})) {
+    if (key === 'attendance_action') {
+      for (const [name, setting] of Object.entries(value || {})) {
+        if (setting !== null && setting !== undefined) merged.attendance_action[name] = setting;
+      }
+    } else if (value !== null && value !== undefined) {
+      merged[key] = value;
+    }
+  }
+  return merged;
+}
+
+export const SETTINGS_STALE_AFTER_MS = 30 * 60 * 1000;
+
+/** Pure snapshot health; stale answers retain their explicit restrictions. */
+export function featureSettingsHealth(slice, now = Date.now()) {
+  if (slice?.status === 'loading') return 'loading';
+  if (!slice?.settings) return 'unavailable';
+  if (slice.status === 'error' || !slice.lastFetchedAt ||
+      now - slice.lastFetchedAt >= SETTINGS_STALE_AFTER_MS) return 'stale';
+  return 'loaded';
+}
+
 /**
  * Reads a dotted path out of a normalised settings object.
  *
@@ -319,11 +358,19 @@ export function getFeatureValue(settings, path) {
  */
 export function buildSettingsScope(baseUrl, employeeCode) {
   if (!baseUrl) return null;
-  return `${String(baseUrl).replace(/\/+$/, '')}::${employeeCode || 'unknown'}`;
+  let tenant = String(baseUrl).trim().replace(/[\u0000-\u001F\u200B]+/g, '').replace(/\/+$/, '');
+  try {
+    const url = new URL(tenant);
+    tenant = `${url.protocol}//${url.host.toLowerCase()}${url.pathname}`.replace(/\/+$/, '');
+  } catch {
+    // Keep compatibility with existing provisioned URLs; auth validates these.
+  }
+  return `${tenant}::${employeeCode || 'unknown'}`;
 }
 
 /** Route name → the feature path that governs it. */
 export const ROUTE_FEATURES = {
+  'Attendance camera': ATTENDANCE_FEATURES.PHOTO_UPLOAD,
   'Loan application': FEATURES.LOAN_APPLICATION,
   'Leave request': FEATURES.LEAVE_REQUEST,
   Complaints: FEATURES.COMPLAINTS,
