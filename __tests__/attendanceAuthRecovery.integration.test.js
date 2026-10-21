@@ -77,6 +77,7 @@ const { __resetAll } = require("../test-utils/expoSqliteMock");
 
 import { loginQueueEmployee } from "../test-utils/attendanceScope";
 import { captureAttendanceQueueScope } from "../services/offline/attendanceQueueProvenance";
+import { beginEmployeeAutoAttendancePolicyReception, receiveEmployeeAutoAttendancePolicy } from "../services/employeeAutoAttendancePolicy";
 const TENANT = "https://aysha.erpgulf.com";
 const EMPLOYEE = "HR-EMP-00011";
 const OTHER_EMPLOYEE = "HR-EMP-00099";
@@ -93,6 +94,8 @@ const login = async (token) => {
   await loginQueueEmployee(EMPLOYEE, TENANT, token);
   await AsyncStorage.setItem("baseUrl", "https://aysha.erpgulf.com");
   await AsyncStorage.setItem("access_token", token);
+  const owner = await captureAttendanceQueueScope(EMPLOYEE);
+  await receiveEmployeeAutoAttendancePolicy({ geotagging: 2 }, beginEmployeeAutoAttendancePolicyReception(owner));
 };
 
 /** What apiClient's expireSession() does to storage, plus its cleanup hook. */
@@ -136,7 +139,7 @@ const cacheConfig = () =>
       employeeDocname: EMPLOYEE,
       tenantKey: TENANT,
       locations: [],
-      rules: { restrictLocation: 0, unrestrictedCheckoutLocation: 0 },
+      rules: { restrictLocation: 0, unrestrictedCheckoutLocation: 0, geotagging: 2 },
     }),
   );
 

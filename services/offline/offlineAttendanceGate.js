@@ -8,6 +8,7 @@ import {
 } from "./attendanceConfigCache";
 import { isOfflineFailure } from "./attendanceErrors";
 import { fetchShouldAttemptRequest } from "./NetworkListener";
+import { assertAttendanceQueueScope } from "./attendanceQueueProvenance";
 
 /**
  * The offline half of the location gate.
@@ -119,14 +120,16 @@ export const getPositionForOfflineCheck = async ({
  * @returns {Promise<object|null>} the nearest office in `getOfficeLocation`'s
  *          shape, plus `fromCache`, or null when it cannot be determined
  */
-export const resolveNearestOffice = async (employeeCode) => {
+export const resolveNearestOffice = async (employeeCode, { syncScope } = {}) => {
+  if (syncScope) await assertAttendanceQueueScope(syncScope);
   // Attempt whenever there is a transport, rather than trusting reachability:
   // a network whose captive-portal probe fails reports no internet for as long
   // as the device is on it, and answering from the cache there would hand the
   // check-in screen a stale office list on a perfectly working connection.
   if (await fetchShouldAttemptRequest()) {
     try {
-      const nearest = await getOfficeLocation(employeeCode);
+      const nearest = await getOfficeLocation(employeeCode, { syncScope });
+      if (syncScope) await assertAttendanceQueueScope(syncScope);
       return nearest ? { ...nearest, fromCache: false } : null;
     } catch (error) {
       if (!isOfflineFailure(error)) throw error;
@@ -134,9 +137,14 @@ export const resolveNearestOffice = async (employeeCode) => {
   }
 
   const config = await readAttendanceConfig();
+  if (syncScope) {
+    await assertAttendanceQueueScope(syncScope);
+    if (config?.tenantKey !== syncScope.tenantKey || config?.employeeId !== employeeCode) return null;
+  }
   if (!config?.locations?.length) return null;
 
   const coords = await getPositionForOfflineCheck();
+  if (syncScope) await assertAttendanceQueueScope(syncScope);
   if (!coords) return null;
 
   const nearest = findNearestLocation(coords, config.locations);
@@ -166,6 +174,7 @@ export const resolveNearestOffice = async (employeeCode) => {
 export const evaluateOfflineAttendance = async ({
   type,
   enforceRadius = true,
+  skipPosition = false,
 }) => {
   const config = await readAttendanceConfig();
 
@@ -209,7 +218,11 @@ export const evaluateOfflineAttendance = async ({
     restrictLocation !== 1 ||
     (type === "OUT" && unrestrictedCheckout === 1);
 
-  const coords = await getPositionForOfflineCheck();
+  // For a persisted native transition, a fix is optional upload metadata. Do
+  // not spend a short OS wake waiting for GPS. Radius-enforced callers still
+  // obtain and validate a position regardless of this option.
+  const coords = skipPosition && !enforceRadius
+    ? null : await getPositionForOfflineCheck();
   const nearest = coords
     ? findNearestLocation(coords, config.locations)
     : null;

@@ -56,6 +56,7 @@ import {
   QUEUE_ACTION,
   QUEUE_STATUS,
   resetDatabaseHandle,
+  getDatabase,
 } from "../services/offline/AttendanceDatabase";
 import {
   MAX_RETRIES,
@@ -72,6 +73,7 @@ import {
 import { PUSH_RESULT, pushCheckin } from "../services/offline/AttendanceApi";
 import { fetchIsOnline } from "../services/offline/NetworkListener";
 import { uploadQueuedPhoto } from "../services/offline/attendancePhotoUpload";
+import { verifyQueuedAttendance } from "../services/offline/AttendanceVerification";
 
 const { __resetAll } = require("../test-utils/expoSqliteMock");
 
@@ -197,6 +199,38 @@ describe("duplicate handling", () => {
 });
 
 describe("retry rules", () => {
+  it("verifies a timed-out upload before a later drain can resend it", async () => {
+    await enqueue(punch());
+    pushCheckin.mockRejectedValueOnce(networkError());
+    await syncPendingAttendance();
+    const summary = await syncPendingAttendance({ wakeAllPending: true });
+    expect(pushCheckin).toHaveBeenCalledTimes(1);
+    expect(summary.synced).toBe(1);
+    expect((await listAll())[0]).toMatchObject({ acceptanceConfirmed: 1, serverCheckinId: "VERIFIED-CHECKIN" });
+  });
+
+  it("history transport failure retries verification without another attendance POST", async () => {
+    await enqueue(punch());
+    pushCheckin.mockRejectedValueOnce(networkError());
+    await syncPendingAttendance();
+    verifyQueuedAttendance.mockResolvedValueOnce({ verified: false, reason: "server-unavailable" });
+    const summary = await syncPendingAttendance({ wakeAllPending: true });
+    expect(pushCheckin).toHaveBeenCalledTimes(1);
+    expect(summary.reason).toBe("connection-lost");
+    expect((await listAll())[0]).toMatchObject({ status: "pending", retryCount: 2 });
+  });
+
+  it("inconclusive history cannot authorize retry of a timed-out upload or its OUT", async () => {
+    await enqueue(punch());
+    await enqueue(punch({ action: "checkout", timestamp: "2026-07-28 18:00:00" }));
+    pushCheckin.mockRejectedValueOnce(networkError());
+    await syncPendingAttendance();
+    verifyQueuedAttendance.mockResolvedValueOnce({ verified: false, reason: "no-exact-match-in-visible-history" });
+    await syncPendingAttendance({ wakeAllPending: true });
+    expect(pushCheckin).toHaveBeenCalledTimes(1);
+    expect((await listAll()).map(row => row.status).sort()).toEqual(["needs_review", "pending"]);
+  });
+
   it("retries a transport failure and arms the backoff", async () => {
     await enqueue(punch());
     pushCheckin.mockRejectedValue(networkError());
@@ -261,6 +295,9 @@ describe("retry rules", () => {
   it("moves a row to the slow schedule once the retry window is spent", async () => {
     await enqueue(punch());
     pushCheckin.mockRejectedValue(networkError());
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt += 1) {
+      verifyQueuedAttendance.mockResolvedValueOnce({ verified: false, reason: "server-unavailable" });
+    }
 
     const realNow = Date.now;
     let clock = realNow();
@@ -278,9 +315,8 @@ describe("retry rules", () => {
 
     const [row] = await listAll();
     expect(row.status).toBe(QUEUE_STATUS.BLOCKED);
-    expect(row.error).toMatch(
-      new RegExp(`Still unreachable after ${MAX_RETRIES} attempts`),
-    );
+    expect(row.error).toBe("Previous attendance upload is awaiting server verification.");
+    expect(pushCheckin).toHaveBeenCalledTimes(1);
   });
 
   // Nothing after the current row will fare better during the same outage.
@@ -425,6 +461,31 @@ describe("the session cascade, end to end", () => {
 });
 
 describe("concurrency", () => {
+  it("retains claim heartbeat while slow duplicate verification is still pending", async () => {
+    await enqueue(punch());
+    pushCheckin.mockResolvedValue({ result: PUSH_RESULT.DUPLICATE, message: "Duplicate timestamp", response: {} });
+    let finishVerification, started;
+    const awaitingVerification = new Promise(resolve => { started = resolve; });
+    verifyQueuedAttendance.mockImplementationOnce(row => {
+      started();
+      return new Promise(resolve => { finishVerification = () => resolve({ verified: true, evidence: {
+        name: "VERIFIED-CHECKIN", employee: row.employeeId, time: row.timestamp, log_type: "IN", tenantKey: row.tenantKey,
+      } }); });
+    });
+    jest.useFakeTimers();
+    try {
+      const task = syncPendingAttendance();
+      await awaitingVerification;
+      await jest.advanceTimersByTimeAsync(121000);
+      expect((await listAll())[0].claimExpiresAt).toBeGreaterThan(Date.now());
+      finishVerification();
+      expect((await task).duplicates).toBe(1);
+    } finally {
+      finishVerification?.();
+      jest.useRealTimers();
+    }
+  });
+
   // Launch, foreground and reconnect all fire within a second of each other
   // when a phone is picked up outside the office.
   it("collapses overlapping runs into one", async () => {
@@ -454,6 +515,7 @@ describe("concurrency", () => {
     // Simulate the kill: claim the row, then start a fresh session.
     const { claimNextPending } = require("../services/offline/AttendanceQueueRepository");
     await claimNextPending();
+    await (await getDatabase()).runAsync("UPDATE attendance_queue SET claimExpiresAt = ? WHERE status = 'syncing';", [Date.now() - 1]);
     resetSyncService();
 
     pushCheckin.mockResolvedValue(inserted());
@@ -461,9 +523,57 @@ describe("concurrency", () => {
 
     expect(summary.synced).toBe(1);
   });
+
+  it("retains another runtime's live upload without reclaiming or submitting it", async () => {
+    const { row } = await enqueue(punch());
+    const { claimNextPending, beginAttendanceUpload } = require("../services/offline/AttendanceQueueRepository");
+    await claimNextPending(Date.now(), { employeeId: "TDI0167", tenantKey: TEST_TENANT, ownerId: "other-runtime" });
+    await beginAttendanceUpload({ id: row.id, claimOwner: "other-runtime" });
+    resetSyncService();
+    await syncPendingAttendance();
+    expect(pushCheckin).not.toHaveBeenCalled();
+    expect(await findById(row.id)).toMatchObject({ status: "syncing", claimOwner: "other-runtime" });
+  });
+
+  it("verifies an expired dispatched upload and does not POST it again", async () => {
+    const { row } = await enqueue(punch());
+    const { claimNextPending, beginAttendanceUpload } = require("../services/offline/AttendanceQueueRepository");
+    await claimNextPending(Date.now(), { employeeId: "TDI0167", tenantKey: TEST_TENANT, ownerId: "old-runtime" });
+    await beginAttendanceUpload({ id: row.id, claimOwner: "old-runtime" });
+    await (await getDatabase()).runAsync("UPDATE attendance_queue SET claimExpiresAt = ? WHERE id = ?;", [Date.now() - 1, row.id]);
+    resetSyncService();
+    const summary = await syncPendingAttendance();
+    expect(pushCheckin).not.toHaveBeenCalled();
+    expect(summary.synced).toBe(1);
+    expect(await findById(row.id)).toMatchObject({ status: "synced", acceptanceConfirmed: 1, serverCheckinId: "VERIFIED-CHECKIN" });
+  });
+
+  it("an inconclusive migrated upload remains review evidence and blocks a later OUT", async () => {
+    const { row } = await enqueue(punch());
+    await enqueue(punch({ action: "checkout", timestamp: "2026-07-28 18:00:00" }));
+    await (await getDatabase()).runAsync("UPDATE attendance_queue SET status = 'syncing' WHERE id = ?;", [row.id]);
+    verifyQueuedAttendance.mockResolvedValueOnce({ verified: false, reason: "no-exact-match-in-visible-history" });
+    const summary = await syncPendingAttendance();
+    expect(pushCheckin).not.toHaveBeenCalled();
+    expect(summary.synced).toBe(0);
+    expect(await findById(row.id)).toMatchObject({ status: "needs_review", verificationIssue: "no-exact-match-in-visible-history" });
+  });
 });
 
 describe("photo attachments", () => {
+  it("attaches a retained legacy photo after uncertain upload is positively verified without resubmission", async () => {
+    await enqueue(punch({ payload: { photoUri: "file:///cache/retained.jpg" } }));
+    pushCheckin.mockRejectedValueOnce(networkError());
+    await syncPendingAttendance();
+    expect(uploadQueuedPhoto).not.toHaveBeenCalled();
+    await syncPendingAttendance({ wakeAllPending: true });
+    expect(pushCheckin).toHaveBeenCalledTimes(1);
+    expect(uploadQueuedPhoto).toHaveBeenCalledWith(expect.objectContaining({
+      photoUri: "file:///cache/retained.jpg", docname: "VERIFIED-CHECKIN",
+    }));
+    expect((await listAll())[0]).toMatchObject({ status: "synced", payload: { photoUri: "file:///cache/retained.jpg" } });
+  });
+
   it("uploads the queued photo once the server names the record", async () => {
     await enqueue(punch({ payload: { photoUri: "file:///cache/shot.jpg" } }));
     pushCheckin.mockResolvedValue(inserted("EMP-CKIN-1"));

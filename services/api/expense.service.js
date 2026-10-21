@@ -7,6 +7,7 @@ import {
   MISSING_EMPLOYEE_MESSAGE,
 } from "./authHelper";
 import { parseError } from "./errorHelper";
+import { assertCapability } from "../capabilityPolicy";
 /**
  * Get Expense Claims
  */
@@ -18,9 +19,12 @@ export const getExpenseClaims = async () => {
       return { error: MISSING_EMPLOYEE_MESSAGE };
     }
 
+    const capabilityScope = await assertCapability("expense_claim", { baseUrl, employeeCode });
+
     const url = `${baseUrl}/api/method/employee_app.attendance_api.get_expense_claims`;
 
     const response = await apiClient.get(url, {
+      capabilityScope,
       headers: buildHeaders(token),
     });
 
@@ -41,10 +45,12 @@ export const getExpenseClaims = async () => {
 export const getExpenseTypes = async () => {
   try {
     const { baseUrl, token } = await getAuthContext();
+    const capabilityScope = await assertCapability("expense_claim", { baseUrl });
 
     const url = `${baseUrl}/api/method/employee_app.attendance_api.get_expense_claim_type`;
 
     const response = await apiClient.get(url, {
+      capabilityScope,
       headers: buildHeaders(token),
     });
 
@@ -63,13 +69,16 @@ export const getExpenseTypes = async () => {
 /**
  * Create Expense Claim
  */
-export const createExpenseClaim = async (claimData) => {
+export const createExpenseClaim = async (claimData, { capabilityScope: expected } = {}) => {
   try {
+    const owner = expected ? await assertCapability("expense_claim", expected) : null;
     const { baseUrl, token, employeeCode } = await getAuthContext();
 
     if (!employeeCode) {
       return { error: MISSING_EMPLOYEE_MESSAGE };
     }
+
+    const capabilityScope = await assertCapability("expense_claim", { ...owner, baseUrl, employeeCode });
 
     const url = `${baseUrl}/api/method/employee_app.attendance_api.create_expense_claim`;
 
@@ -82,6 +91,7 @@ export const createExpenseClaim = async (claimData) => {
     };
 
     const response = await apiClient.post(url, payload, {
+      capabilityScope,
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json", 
@@ -89,12 +99,9 @@ export const createExpenseClaim = async (claimData) => {
       timeout: 60000,
     });
 
-    console.log("CREATE RESPONSE:", response.data);
-
     return response.data;
   } catch (error) {
-    console.log("CREATE ERROR FULL:", error);
-    console.log("CREATE ERROR RESPONSE:", error?.response?.data);
+    console.log("CREATE ERROR:", { code: error?.code, httpStatus: error?.response?.status });
 
     return {
       error: parseError(error, "Unable to create expense claim."),
@@ -105,13 +112,16 @@ export const createExpenseClaim = async (claimData) => {
 /**
  * Upload Expense File
  */
-export const uploadExpenseAttachment = async (file, docname) => {
+export const uploadExpenseAttachment = async (file, docname, { capabilityScope: expected } = {}) => {
   try {
+
+    const owner = expected ? await assertCapability("expense_claim", expected) : null;
 
     if (!file?.uri) throw new Error("Invalid file data");
     if (!docname) throw new Error("Missing docname");
 
     const { baseUrl, token } = await getAuthContext();
+    const capabilityScope = await assertCapability("expense_claim", { ...owner, baseUrl });
 
     const formData = new FormData();
 
@@ -140,6 +150,7 @@ export const uploadExpenseAttachment = async (file, docname) => {
     formData.append("doctype", "Expense Claim");
     formData.append("docname", docname);
 
+    await assertCapability("expense_claim", capabilityScope);
     const response = await fetch(
       `${baseUrl}/api/method/employee_app.attendance_api.upload_file`,
       {
@@ -160,15 +171,13 @@ export const uploadExpenseAttachment = async (file, docname) => {
     }
 
     if (!response.ok) {
-      console.log("❌ UPLOAD FAILED:", result);
+      console.log("❌ UPLOAD FAILED:", { httpStatus: response.status });
       throw new Error(result?.message || "Upload failed");
     }
 
-    console.log("✅ UPLOAD RESPONSE:", result);
-
     return { message: result };
   } catch (error) {
-    console.log("❌ UPLOAD ERROR:", error);
+    console.log("❌ UPLOAD ERROR:", { code: error?.code, httpStatus: error?.response?.status });
 
     return {
       error: parseError(error, "Failed to upload expense attachment."),

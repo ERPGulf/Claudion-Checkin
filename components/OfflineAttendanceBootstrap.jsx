@@ -13,6 +13,7 @@ import {
 } from "../services/offline/BackgroundSyncManager";
 import { setOfflineQueueingAllowed } from "../services/offline/offlineCapability";
 import { applySessionOwner } from "../utils/attendanceSessionState";
+import { captureAttendanceQueueScope, assertAttendanceQueueScope } from "../services/offline/attendanceQueueProvenance";
 
 /**
  * Runs the offline attendance machinery for the length of a session.
@@ -52,8 +53,8 @@ export default function OfflineAttendanceBootstrap() {
   // So now: the switch is mirrored into `offlineCapability` so `submitAttendance`
   // refuses to queue, and the manager keeps running in drain-only mode so
   // anything already in the queue still gets delivered. Nothing is ever queued
-  // that cannot be drained, and nothing queued is ever abandoned. Clearing the
-  // queue happens on logout, not here.
+  // that cannot be drained, and nothing queued is ever abandoned. Logout also
+  // retains the queue for its original employee and tenant.
   const offlineEnabled = useSelector(state =>
     isFeatureEnabled(
       selectFeatureSettings(state),
@@ -72,7 +73,11 @@ export default function OfflineAttendanceBootstrap() {
   useEffect(() => {
     if (!isLoggedIn || !employeeCode) return;
 
-    applySessionOwner(employeeCode)
+    let cancelled = false;
+    captureAttendanceQueueScope(employeeCode).then(scope => applySessionOwner(employeeCode, {
+      tenantKey: scope.tenantKey,
+      assertCurrent: () => assertAttendanceQueueScope({ ...scope, isCancelled: () => cancelled }),
+    }))
       .then((cleared) => {
         if (cleared) {
           console.log(
@@ -86,7 +91,8 @@ export default function OfflineAttendanceBootstrap() {
           error?.message,
         );
       });
-  }, [isLoggedIn, employeeCode]);
+    return () => { cancelled = true; };
+  }, [isLoggedIn, employeeCode, baseUrl]);
 
   // Mirrored eagerly, and separately from the manager below, so the punch path
   // has the answer before any effect ordering or connectivity comes into it.

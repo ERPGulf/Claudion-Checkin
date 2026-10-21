@@ -11,6 +11,8 @@ import {
 } from '../services/api';
 import { claimMatchesQuery } from '../utils/expenseClaims';
 import { hapticsMessage } from '../utils/HapticsMessage';
+import { assertCapability, getCapabilitySnapshot } from '../services/capabilityPolicy';
+import { getAuthSessionGeneration } from '../utils/authSessionGuard';
 
 /** Claims revealed per "Load more" press. Unchanged from the classic screen. */
 export const PAGE_SIZE = 5;
@@ -32,6 +34,7 @@ export const PAGE_SIZE = 5;
  * inlines it, and neither arrangement should force the other to re-render.
  */
 export default function useExpenseClaims() {
+  const actionGeneration = useRef(getAuthSessionGeneration()).current;
   const employeeCode = useSelector(selectEmployeeCode);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [resetFormFlag, setResetFormFlag] = useState(false);
@@ -76,18 +79,25 @@ export default function useExpenseClaims() {
   });
 
   const { mutate: addClaim, isPending: isCreating } = useMutation({
-    mutationFn: createExpenseClaim,
-    onSuccess: async (res, variables) => {
+    mutationFn: async variables => {
+      const capabilityScope = await assertCapability('expense_claim', { generation: actionGeneration });
+      const response = await createExpenseClaim(variables, { capabilityScope });
+      if (response?.error) throw new Error(response.error);
+      return { response, capabilityScope };
+    },
+    onSuccess: async ({ response: res, capabilityScope }, variables) => {
       const docname = res?.id;
 
       try {
         if (variables.file_url && docname) {
-          await uploadExpenseAttachment(variables.file_url, docname);
+          const upload = await uploadExpenseAttachment(variables.file_url, docname, { capabilityScope });
+          if (upload?.error) throw new Error(upload.error);
         }
       } catch (e) {
         Alert.alert('Warning', 'Expense created, but file upload failed.');
       }
 
+      await getCapabilitySnapshot(capabilityScope);
       await refetch();
 
       hapticsMessage('success');

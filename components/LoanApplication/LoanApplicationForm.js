@@ -33,7 +33,7 @@ function LoanApplicationForm({ onSubmit, isLoading, resetSignal }) {
   const [reason, setReason] = useState("");
 
   const { pickFromCamera, pickFromGallery, pickDocument } =
-    useAttachmentPicker();
+    useAttachmentPicker("loan_application");
   const [loanProducts, setLoanProducts] = useState([]);
   const [loadingProducts, setLoadingProducts] = useState(false);
   useEffect(() => {

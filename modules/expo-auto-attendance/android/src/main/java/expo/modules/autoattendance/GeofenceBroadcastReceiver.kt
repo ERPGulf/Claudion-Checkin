@@ -3,21 +3,21 @@ package expo.modules.autoattendance
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import com.google.android.gms.location.Geofence
 import com.google.android.gms.location.GeofenceStatusCodes
 import com.google.android.gms.location.GeofencingEvent
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Receives geofence transition broadcasts from the Play Services geofencing engine.
  *
- * Every ENTER / EXIT is logged to Logcat, persisted as the "last event" via
- * [GeofenceStore], and forwarded to JS through [GeofenceEventBus] when the React
- * context is alive.
- *
- * Future integration point: replace the marked blocks below with the automatic
- * check-in (ENTER) / check-out (EXIT) attendance API calls — e.g. by enqueueing a
- * WorkManager job — without touching the rest of the geofencing implementation.
+ * Every capture is durably appended before delivery. This receiver never submits
+ * authenticated attendance or starts another React runtime; the host consumes
+ * the journal through its existing SQLite ingress and attendance processor.
  */
 class GeofenceBroadcastReceiver : BroadcastReceiver() {
   override fun onReceive(context: Context, intent: Intent) {
@@ -29,6 +29,9 @@ class GeofenceBroadcastReceiver : BroadcastReceiver() {
 
     if (geofencingEvent.hasError()) {
       val message = GeofenceStatusCodes.getStatusCodeString(geofencingEvent.errorCode)
+      if (geofencingEvent.errorCode == GeofenceStatusCodes.GEOFENCE_NOT_AVAILABLE) {
+        runCatching { GeofenceStore.markMonitoringUnavailable(context) }
+      }
       Log.e(GeofenceManager.TAG, "Geofencing error: $message (code=${geofencingEvent.errorCode})")
       GeofenceEventBus.emit(
         ExpoAutoAttendanceModule.EVENT_ERROR,
@@ -53,27 +56,51 @@ class GeofenceBroadcastReceiver : BroadcastReceiver() {
     val transitionLabel =
       if (transition == Geofence.GEOFENCE_TRANSITION_ENTER) "ENTER" else "EXIT"
     val identifiers = geofencingEvent.triggeringGeofences?.map { it.requestId }.orEmpty()
-    val identifier = identifiers.firstOrNull() ?: ""
     val timestamp = System.currentTimeMillis()
-
-    Log.i(GeofenceManager.TAG, "$transitionLabel detected: geofence(s)=$identifiers at=$timestamp")
-
-    GeofenceStore.saveLastEvent(context, transitionLabel, identifier, timestamp)
-
-    if (transition == Geofence.GEOFENCE_TRANSITION_ENTER) {
-      // Future integration: trigger automatic check-in (attendance API) here.
-    } else {
-      // Future integration: trigger automatic check-out (attendance API) here.
+    // Snapshot identity on callback receipt, before async persistence can race a
+    // logout, opt-out, or replacement registration on the main queue.
+    val captures = identifiers.ifEmpty { listOf("") }.map { nativeIdentifier ->
+      runCatching { GeofenceStore.captureMetadata(context, nativeIdentifier) }.getOrElse {
+        mapOf(
+          "identifier" to nativeIdentifier,
+          "nativeIdentifier" to nativeIdentifier,
+          "captureIssue" to "registration-storage-failed",
+        )
+      }
     }
+    val pendingResult = goAsync()
+    val finished = AtomicBoolean(false)
+    val timeout = Runnable {
+      if (finished.compareAndSet(false, true)) {
+        Log.w(GeofenceManager.TAG, "Native transition capture exceeded broadcast budget")
+        pendingResult.finish()
+      }
+    }
+    handler.postDelayed(timeout, BROADCAST_BUDGET_MS)
+    executor.execute {
+      try {
+        // Keep even unexpected/stale callback evidence. Missing registration
+        // identity is explicit and is never filled from current credentials.
+        captures.forEach { metadata ->
+          val event = GeofenceStore.appendEvent(context, transitionLabel, timestamp, metadata)
+          GeofenceEventBus.emit(eventName, event + mapOf("identifiers" to listOf(event["identifier"])))
+        }
+      } catch (error: Exception) {
+        Log.e(GeofenceManager.TAG, "Native transition capture could not be persisted")
+        GeofenceEventBus.emit(
+          ExpoAutoAttendanceModule.EVENT_ERROR,
+          mapOf("code" to -4, "message" to "Native geofence storage failed"),
+        )
+      } finally {
+        handler.removeCallbacks(timeout)
+        if (finished.compareAndSet(false, true)) pendingResult.finish()
+      }
+    }
+  }
 
-    GeofenceEventBus.emit(
-      eventName,
-      mapOf(
-        "identifier" to identifier,
-        "identifiers" to identifiers,
-        "transition" to transitionLabel,
-        "timestamp" to timestamp,
-      ),
-    )
+  companion object {
+    private const val BROADCAST_BUDGET_MS = 8000L
+    private val handler = Handler(Looper.getMainLooper())
+    private val executor = Executors.newSingleThreadExecutor()
   }
 }

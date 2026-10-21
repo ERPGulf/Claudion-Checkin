@@ -1,9 +1,8 @@
 /** @jest-environment jsdom */
 jest.mock("expo-sqlite", () => require("../test-utils/expoSqliteMock"));
-jest.mock("../redux/Store", () => ({ store: { dispatch: jest.fn() } }));
 let mockState;
 let mockDark = false;
-jest.mock("react-redux", () => ({ useSelector: selector => selector(mockState) }));
+jest.mock("react-redux", () => ({ useSelector: selector => selector(mockState), useDispatch: () => jest.fn() }));
 jest.mock("../hooks/useAppTheme", () => ({ __esModule: true, default: () => ({ colors: require("../constants")[mockDark ? "DARK_COLORS" : "COLORS"], isDark: mockDark }) }));
 jest.mock("../hooks/useOfflineSyncAlerts", () => ({ __esModule: true, default: () => ({ enabled: false }) }));
 jest.mock("@expo/vector-icons", () => ({ Ionicons: () => null, MaterialCommunityIcons: () => null }));
@@ -38,6 +37,8 @@ import { uploadQueuedPhoto } from "../services/offline/attendancePhotoUpload";
 import { fetchShouldAttemptRequest } from "../services/offline/NetworkListener";
 import * as session from "../utils/attendanceSessionState";
 import { loginQueueEmployee, TEST_TENANT } from "../test-utils/attendanceScope";
+import { ingestNativeEvent } from "../services/offline/AutoAttendanceEventRepository";
+import { beginEmployeeAutoAttendancePolicyReception, receiveEmployeeAutoAttendancePolicy } from "../services/employeeAutoAttendancePolicy";
 
 const EMPLOYEE = "EMP-001";
 const OTHER_TENANT = "https://another.example.com";
@@ -187,6 +188,16 @@ it.each([200, 417])("treats supported duplicate response %s as success and does 
   expect(http.history.post).toHaveLength(1);
 });
 
+it.each([false, true])("shows retained unattributed automatic events in both themes (dark=%s)", async dark => {
+  mockDark = dark;
+  await ingestNativeEvent({ eventId: "legacy-native", identifier: "office-main", transition: "EXIT", timestamp: Date.now() - 1000 });
+  const ui = render(<AttendanceRecoverySetting />);
+  await waitFor(() => expect(ui.getByText("Automatic events: 0 waiting · 1 need review")).toBeTruthy());
+  fireEvent.press(ui.getByLabelText("View attendance records"));
+  await waitFor(() => expect(ui.getByText("Automatic exit · Needs review")).toBeTruthy());
+  expect(http.history.post).toHaveLength(0);
+});
+
 it.each(["synced", "failed", "resolved", "cancelled", "invalid", "duplicate", "needs_review"])(
   "makes retained historical %s rows discoverable with zero pending work, including after remount", async status => {
     const { row } = await seed({ now: 1000 });
@@ -256,7 +267,7 @@ it.each([
   expect(http.history.post).toHaveLength(1); // later OUT cannot overtake uncertain IN
 });
 
-it("preserves a timeout after server commit, then verifies the deduplicated retry", async () => {
+it("preserves a timeout after server commit, then verifies history without resubmitting", async () => {
   const { row } = await seed();
   const savedServerRows = new Map();
   const requests = [];
@@ -274,10 +285,11 @@ it("preserves a timeout after server commit, then verifies the deduplicated retr
   resetDatabaseHandle(); resetSyncService();
   await recovery();
   expect(savedServerRows.size).toBe(1);
-  expect(requests[1]).toEqual(requests[0]);
-  expect(await repository.findById(row.id)).toMatchObject({ status: "synced", duplicate: true, attemptCount: 2 });
+  expect(requests).toHaveLength(1);
+  expect(requests[0]).toMatchObject({ employee: row.employeeDocname, timestamp: row.timestamp, log_type: "IN" });
+  expect(await repository.findById(row.id)).toMatchObject({ status: "synced", duplicate: false, attemptCount: 2, acceptanceConfirmed: 1 });
   await recovery();
-  expect(http.history.post).toHaveLength(2);
+  expect(http.history.post).toHaveLength(1);
 });
 
 it.each(["checkin", "checkout"])("verifies an old %s with no pair/server ID using GET only and preserves originals", async action => {
@@ -294,7 +306,8 @@ it.each(["checkin", "checkout"])("verifies an old %s with no pair/server ID usin
   expect(http.history.get).toHaveLength(1);
   const saved = await repository.findById(row.id);
   expect(saved).toMatchObject({ payload: original.payload, timestamp: original.timestamp,
-    serverResponse: original.serverResponse, updatedAt: original.updatedAt, pairedAttendanceId: null, serverCheckinId: null });
+    serverResponse: original.serverResponse, updatedAt: original.updatedAt, pairedAttendanceId: null,
+    serverCheckinId: "EXISTING-1", acceptanceConfirmed: 1 });
   expect(saved.verificationEvidence).toMatchObject({ name: "EXISTING-1", originalStatus: "synced" });
 });
 
@@ -400,8 +413,9 @@ it("keeps a transient failure saved, halts before checkout, exits loading and ca
   expect(http.history.post).toHaveLength(1);
   expect((await repository.listAll()).every(row => row.status === "pending")).toBe(true);
   http.onPost(URL).reply(200, accepted("RECOVERED"));
+  http.onGet(HISTORY_URL).reply(200, { message: [serverPunch()] });
   await pressSync(ui);
-  expect(http.history.post).toHaveLength(3);
+  expect(http.history.post).toHaveLength(2); // initial IN attempt and later OUT; IN was verified by GET
   expect((await repository.listAll()).every(row => row.status === "synced")).toBe(true);
 });
 
@@ -425,7 +439,9 @@ it("renders success, duplicate, rejection and retry distinctly without exposing 
   expect((await repository.listAll()).sort((a, b) => a.timestamp.localeCompare(b.timestamp)).map(row => row.status)).toEqual(["synced", "synced", "rejected", "pending"]);
   http.resetHistory();
   await recovery();
-  expect(http.history.post).toHaveLength(1); // rejected row was not retried
+  expect(http.history.post).toHaveLength(0); // uncertain 5xx uses history, and rejected row is not retried
+  expect(http.history.get).toHaveLength(1);
+  expect((await repository.listAll()).find(row => row.timestamp === "2026-07-04 09:04:00").status).toBe("needs_review");
 });
 
 it("does not duplicate uploads on rapid taps or background overlap", async () => {
@@ -484,24 +500,32 @@ it("reports optional photo failure while attendance remains successful", async (
   expect((await repository.listAll())[0].status).toBe("synced");
 });
 
-it("stamps future automatic records from the originating scope and keeps unattributed replay unknown", async () => {
+it("stamps new current-owner automatic records, refuses unowned new replay and preserves accepted legacy evidence", async () => {
   setOfflineQueueingAllowed(true);
   fetchShouldAttemptRequest.mockResolvedValue(false);
-  await AsyncStorage.setItem("attendanceConfigCache", JSON.stringify({ employeeId: EMPLOYEE, locations: [], rules: { restrictLocation: 0 } }));
+  const owner = await captureAttendanceQueueScope(EMPLOYEE);
+  await receiveEmployeeAutoAttendancePolicy({ geotagging: 2 }, beginEmployeeAutoAttendancePolicyReception(owner));
+  await AsyncStorage.setItem("attendanceConfigCache", JSON.stringify({ employeeId: EMPLOYEE, tenantKey: TEST_TENANT,
+    locations: [], rules: { restrictLocation: 0, geotagging: 2 } }));
   await submitAutoAttendance({ type: "IN", employeeCode: EMPLOYEE });
   expect((await repository.listAll())[0].tenantKey).toBe(TEST_TENANT);
-  await submitAutoAttendance({ type: "OUT", employeeCode: EMPLOYEE, occurredAt: new Date(2026, 6, 1, 18).getTime() });
-  expect((await repository.listAll()).find(row => row.action === "checkout").tenantKey).toBeNull();
+  expect(await submitAutoAttendance({ type: "OUT", employeeCode: EMPLOYEE, occurredAt: new Date(2026, 6, 1, 18).getTime() }))
+    .toMatchObject({ allowed: false, reason: "scope-changed" });
+  expect(await repository.listAll()).toHaveLength(1);
+  const legacy = await seed({ tenantKey: null, attendanceType: "auto", action: "checkout", timestamp: "2026-07-01 18:00:00" });
+  await recovery();
+  expect(await repository.findById(legacy.row.id)).toEqual(legacy.row);
 });
 
-it("does not relabel a delayed automatic event with the current tenant", async () => {
+it("refuses a scoped delayed automatic event after the active tenant changes", async () => {
   const sourceScope = await captureAttendanceQueueScope(EMPLOYEE);
   await loginQueueEmployee(EMPLOYEE, OTHER_TENANT);
   setOfflineQueueingAllowed(true);
   fetchShouldAttemptRequest.mockResolvedValue(false);
   await AsyncStorage.setItem("attendanceConfigCache", JSON.stringify({ employeeId: EMPLOYEE, locations: [], rules: { restrictLocation: 0 } }));
-  await submitAutoAttendance({ type: "IN", employeeCode: EMPLOYEE, sourceScope });
-  expect((await repository.listAll())[0].tenantKey).toBeNull();
+  const result = await submitAutoAttendance({ type: "IN", employeeCode: EMPLOYEE, sourceScope });
+  expect(result).toMatchObject({ allowed: false, reason: "scope-changed" });
+  expect(await repository.listAll()).toEqual([]);
 });
 
 it("keeps known rejected rows out of the pending count and offers their attention details", async () => {
@@ -535,14 +559,17 @@ it("never hands another session the active run's report and stops before the nex
   expect((await repository.findById(checkout.row.id)).status).toBe("pending");
 });
 
-it("releases a stranded claim only within the current employee and tenant", async () => {
+it("verifies a migrated stranded claim only within the current employee and tenant", async () => {
   const mine = await seed();
   const theirs = await seed({ tenantKey: OTHER_TENANT });
   const db = await getDatabase();
   await db.runAsync("UPDATE attendance_queue SET status = 'syncing'");
   const before = await repository.findById(theirs.row.id);
+  http.onGet(HISTORY_URL).reply(200, { message: [serverPunch()] });
   await recovery();
   expect((await repository.findById(mine.row.id)).status).toBe("synced");
+  expect((await repository.findById(mine.row.id)).acceptanceConfirmed).toBe(1);
+  expect(http.history.post).toHaveLength(0);
   expect(await repository.findById(theirs.row.id)).toEqual(before);
 });
 

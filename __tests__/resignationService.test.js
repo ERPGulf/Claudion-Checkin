@@ -2,6 +2,11 @@ jest.mock('../services/api/apiClient', () => ({
   __esModule: true,
   default: { post: jest.fn() },
 }));
+// This suite isolates multipart/error contracts; capabilityServices covers the
+// direct disabled-operation boundary independently.
+jest.mock('../services/capabilityPolicy', () => ({
+  assertCapability: jest.fn(() => Promise.resolve()),
+}));
 
 jest.mock('../services/api/authHelper', () => ({
   getAuthContext: jest.fn(),

@@ -3,6 +3,7 @@ import { formatOfflineTimestamp } from "../../utils/serverClock";
 import { DEVICE_ID } from "./AttendanceApi";
 import {
   ATTENDANCE_TYPE,
+  FAILURE_CLASS,
   QUEUE_ACTION,
   QUEUE_STATUS,
   clearAttendanceQueue,
@@ -10,7 +11,11 @@ import {
 } from "./AttendanceDatabase";
 import {
   countByStatus,
+  countOutstandingByScope,
+  countUnconfirmedNativePunches,
+  countUnconfirmedAttendanceDependencies,
   enqueue,
+  findBySourceEventId,
   listForHistory,
   listUnresolved,
   markResolved,
@@ -29,6 +34,38 @@ import {
   isOfflineSyncUnsupported,
 } from "./offlineCapability";
 import { assertAttendanceQueueScope, captureAttendanceQueueScope } from "./attendanceQueueProvenance";
+import { listUncertainEvents } from "./AutoAttendanceEventRepository";
+import { assertCapability, assertCapabilityCurrent } from "../capabilityPolicy";
+import { assertEmployeeAutoAttendancePolicy, assertEmployeeAutoAttendancePolicyCurrent } from "../employeeAutoAttendancePolicy";
+import { ATTENDANCE_FEATURES } from "../../utils/featureSettings";
+
+const assertAutomaticCapabilityCurrent = (sourceScope, { queueing = false } = {}) => {
+  assertCapabilityCurrent(ATTENDANCE_FEATURES.AUTO_ATTENDANCE, sourceScope);
+  if (queueing) assertCapabilityCurrent(ATTENDANCE_FEATURES.OFFLINE_ATTENDANCE, sourceScope);
+  return assertEmployeeAutoAttendancePolicyCurrent(sourceScope, { action: "punch" });
+};
+
+const checkAutomaticCapability = async (employeeCode, sourceScope, { queueing = false } = {}) => {
+  const context = sourceScope?.tenantKey
+    ? { baseUrl: sourceScope.tenantKey, employeeCode, generation: sourceScope.generation } : undefined;
+  try {
+    await assertCapability(ATTENDANCE_FEATURES.AUTO_ATTENDANCE, context);
+    if (queueing) await assertCapability(ATTENDANCE_FEATURES.OFFLINE_ATTENDANCE, context);
+    await assertEmployeeAutoAttendancePolicy(sourceScope, { action: "punch" });
+    assertAutomaticCapabilityCurrent(sourceScope, { queueing });
+    // Kept for callers of the pre-existing mirror API. The scoped capability
+    // assertion above is authoritative even before the bootstrap effect runs.
+    if (queueing && isOfflineQueueingDisallowed()) {
+      return { allowed: false, reason: "admin-disabled", message: OFFLINE_DISABLED_MESSAGE, location: null };
+    }
+    return null;
+  } catch (error) {
+    return { allowed: false, reason: error?.code?.startsWith("EMPLOYEE_AUTO_ATTENDANCE")
+      ? "employee-policy-disabled" : ["CAPABILITY_SCOPE_CHANGED", "ATTENDANCE_SYNC_SCOPE_CHANGED"].includes(error?.code)
+      ? "scope-changed" : queueing ? "admin-disabled" : "capability-disabled",
+      message: queueing ? OFFLINE_DISABLED_MESSAGE : error.message, error, location: null };
+  }
+};
 
 /**
  * The write side of the offline queue, and the single seam every attendance
@@ -204,49 +241,90 @@ const queueAttendance = async ({
   photoUri = null,
   gate,
   sourceScope,
+  sourceEventId = null,
+  sourceParentEventId = null,
+  timestamp: suppliedTimestamp = null,
+  strictOrdering = false,
 }) => {
   const config = gate?.config ?? (await readAttendanceConfig());
-  const timestamp = await formatOfflineTimestamp(occurredAt ?? Date.now());
+  const timestamp = suppliedTimestamp ?? await formatOfflineTimestamp(occurredAt ?? Date.now());
   let tenantKey = null;
   try {
     await assertAttendanceQueueScope(sourceScope);
     if (sourceScope.employeeId === employeeCode) tenantKey = sourceScope.tenantKey;
-  } catch {
+  } catch (error) {
+    if (strictOrdering) {
+      return { allowed: false, reason: "scope-changed", error, location: null };
+    }
     // Preserve the event, but do not stamp a new account's backend onto it.
   }
+  if (strictOrdering && (!tenantKey || config?.tenantKey !== tenantKey || config?.employeeId !== employeeCode)) {
+    return { allowed: false, reason: "config-scope-mismatch", message: "Attendance rules must be refreshed for this account.", location: null };
+  }
 
-  const { row, inserted } = await enqueue({
-    employeeId: employeeCode,
-    // Old caches have no tenant provenance either. Their docname cannot be
-    // carried onto an attributable row for a different company's employee.
-    employeeDocname: !tenantKey || (config?.tenantKey === tenantKey && config?.employeeId === employeeCode)
-      ? config?.employeeDocname ?? null : null,
-    tenantKey,
-    attendanceType,
-    action: logTypeToAction(type),
-    timestamp,
-    latitude: gate?.coords?.latitude ?? null,
-    longitude: gate?.coords?.longitude ?? null,
-    accuracy: gate?.coords?.accuracy ?? null,
-    address: gate?.location?.locationName ?? null,
-    deviceId: DEVICE_ID,
-    payload: {
-      location: gate?.location?.locationName,
-      distance: gate?.location?.distance,
-      radius: gate?.location?.radius,
-      // Vestigial. The endpoint still accepts the field, but nothing on either
-      // side computes or consumes it and the app has no overtime concept, so it
-      // is always 0. Kept rather than dropped because removing a key the bulk
-      // insert expects could reject the whole call — and that rejection is
-      // indistinguishable from a real validation failure. Do not wire this up
-      // without a server-side change that says what is supposed to set it.
-      over_time: 0,
-      // Photo-mode tenants only. The upload needs a docname the server has not
-      // issued yet, so the URI is carried here and the sync service attaches it
-      // after the row lands. Never sent to the bulk endpoint.
-      photoUri: photoUri ?? undefined,
-    },
-  });
+  // GPS, timestamp resolution and provenance checks can all await. A newly
+  // received denial must govern the insert, not merely the original attempt.
+  const capabilityRefusal = await checkAutomaticCapability(employeeCode, sourceScope, { queueing: true });
+  if (capabilityRefusal) return capabilityRefusal;
+  try {
+    assertAutomaticCapabilityCurrent(sourceScope, { queueing: true });
+  } catch (error) {
+    return { allowed: false, reason: error?.code === "FEATURE_DISABLED" ? "admin-disabled" :
+      error?.code === "CAPABILITY_SCOPE_CHANGED" ? "scope-changed" : "employee-policy-disabled",
+    message: error.message, error, location: null };
+  }
+
+  let acceptance;
+  try {
+    acceptance = await enqueue({
+      employeeId: employeeCode,
+      // Old caches have no tenant provenance either. Their docname cannot be
+      // carried onto an attributable row for a different company's employee.
+      employeeDocname: !tenantKey || (config?.tenantKey === tenantKey && config?.employeeId === employeeCode)
+        ? config?.employeeDocname ?? null : null,
+      tenantKey,
+      sourceEventId,
+      attendanceType,
+      assertCurrent: () => assertAutomaticCapabilityCurrent(sourceScope, { queueing: true }),
+      action: logTypeToAction(type),
+      timestamp,
+      latitude: gate?.coords?.latitude ?? null,
+      longitude: gate?.coords?.longitude ?? null,
+      accuracy: gate?.coords?.accuracy ?? null,
+      address: gate?.location?.locationName ?? null,
+      deviceId: DEVICE_ID,
+      payload: {
+        ...(sourceParentEventId ? { sourceParentEventId } : {}),
+        location: gate?.location?.locationName,
+        distance: gate?.location?.distance,
+        radius: gate?.location?.radius,
+        // Vestigial. The endpoint still accepts the field, but nothing on either
+        // side computes or consumes it and the app has no overtime concept, so it
+        // is always 0. Kept rather than dropped because removing a key the bulk
+        // insert expects could reject the whole call — and that rejection is
+        // indistinguishable from a real validation failure. Do not wire this up
+        // without a server-side change that says what is supposed to set it.
+        over_time: 0,
+        // Photo-mode tenants only. The upload needs a docname the server has not
+        // issued yet, so the URI is carried here and the sync service attaches it
+        // after the row lands. Never sent to the bulk endpoint.
+        photoUri: photoUri ?? undefined,
+      },
+    });
+  } catch (error) {
+    if (!error?.code?.startsWith("EMPLOYEE_AUTO_ATTENDANCE") &&
+      !["FEATURE_DISABLED", "CAPABILITY_SCOPE_CHANGED", "ATTENDANCE_SYNC_SCOPE_CHANGED"].includes(error?.code)) throw error;
+    return { allowed: false, reason: ["ATTENDANCE_SYNC_SCOPE_CHANGED", "CAPABILITY_SCOPE_CHANGED"].includes(error.code)
+      ? "scope-changed" : error.code === "FEATURE_DISABLED" ? "admin-disabled" : "employee-policy-disabled",
+    message: error.message, error, location: null };
+  }
+  const { row, inserted } = acceptance;
+
+  // The older timestamp/action constraint remains intact for server contract
+  // compatibility. It cannot prove a different native input was accepted.
+  if (strictOrdering && sourceEventId && row?.sourceEventId !== sourceEventId) {
+    return { allowed: false, reason: "source-event-collision", row, location: null };
+  }
 
   // Link a check-out to the check-in it closes, so a rejection can invalidate
   // the whole attendance session rather than leaving the server holding an OUT
@@ -259,6 +337,7 @@ const queueAttendance = async ({
   if (inserted && row && logTypeToAction(type) === QUEUE_ACTION.CHECKOUT) {
     try {
       const checkin = await pairWithOpenCheckin({
+        sourceParentEventId,
         checkoutId: row.id,
         employeeId: employeeCode,
         tenantKey,
@@ -295,6 +374,7 @@ const queueAttendance = async ({
     queued: true,
     alreadyQueued: !inserted,
     row,
+    sourceEventId,
     name: null,
     location: gate?.location ?? null,
     message:
@@ -334,13 +414,25 @@ const describeManualFailure = (failure) => {
  * refuse a punch on a working connection and buy nothing — the same trap
  * `fetchShouldAttemptRequest` exists to keep the queueing path out of.
  */
-const submitOnlineOnly = async ({ type, employeeCode, online }) => {
+const submitOnlineOnly = async ({ type, employeeCode, online, sourceScope }) => {
   if (typeof online !== "function") {
     throw new Error("submitAttendance: manual attendance requires `online`");
   }
 
   try {
+    // Manual punches remain online-only and cannot overtake retained native or
+    // historical work. Unknown tenant ownership is not assigned to this scope.
+    const scope = sourceScope ?? await captureAttendanceQueueScope(employeeCode).catch(() => null);
+    if (scope && (await countUnconfirmedNativePunches(scope) > 0 ||
+      await countUnconfirmedAttendanceDependencies(scope) > 0 || (await listUncertainEvents(scope)).length > 0)) {
+      await assertAttendanceQueueScope(scope);
+      requestQueueDrain({ employeeId: employeeCode, reason: "manual-ordering" });
+      return { allowed: false, reason: "automatic-attendance-unconfirmed", location: null,
+        message: "Earlier saved attendance needs server confirmation. Synchronize or verify the saved record before this action." };
+    }
+    if (scope) await assertAttendanceQueueScope(scope);
     const result = await online();
+    if (scope) await assertAttendanceQueueScope(scope);
 
     if (result?.allowed) {
       // A punch just landed, so the server is up and this token works — the
@@ -411,6 +503,12 @@ export const submitAttendance = async ({
   photoUri = null,
   forceQueue = false,
   sourceScope = undefined,
+  sourceEventId = null,
+  sourceParentEventId = null,
+  timestamp = null,
+  strictOrdering = false,
+  skipPosition = false,
+  onKnownNoInsert,
 }) => {
   if (type !== "IN" && type !== "OUT") {
     throw new Error(`submitAttendance: invalid type ${type}`);
@@ -423,7 +521,7 @@ export const submitAttendance = async ({
   // concepts and are ignored here — the camera uploads its photo against the
   // docname the server issues, as it did before the queue existed.
   if (attendanceType === ATTENDANCE_TYPE.MANUAL) {
-    return submitOnlineOnly({ type, employeeCode, online });
+    return submitOnlineOnly({ type, employeeCode, online, sourceScope });
   }
 
   // Capture before network/gate awaits. Historical native replays must bring
@@ -432,6 +530,41 @@ export const submitAttendance = async ({
     sourceScope = occurredAt == null
       ? await captureAttendanceQueueScope(employeeCode).catch(() => null)
       : null;
+  }
+
+  if (strictOrdering) {
+    try {
+      await assertAttendanceQueueScope(sourceScope);
+      if (sourceScope.employeeId !== employeeCode) throw new Error("Attendance employee scope changed.");
+    } catch (error) {
+      return { allowed: false, reason: "scope-changed", error, location: null };
+    }
+  }
+
+  if (sourceEventId && sourceScope?.tenantKey) {
+    const existing = await findBySourceEventId({
+      sourceEventId, tenantKey: sourceScope.tenantKey, employeeId: employeeCode,
+    });
+    if (existing) {
+      if ([QUEUE_STATUS.PENDING, QUEUE_STATUS.SYNCING, QUEUE_STATUS.BLOCKED].includes(existing.status)) {
+        return { allowed: true, queued: true, alreadyQueued: true, row: existing, sourceEventId, name: null, location: null };
+      }
+      if (existing.status === QUEUE_STATUS.SYNCED && existing.acceptanceConfirmed) {
+        return { allowed: true, queued: false, alreadyQueued: true, row: existing, sourceEventId, name: existing.serverCheckinId, location: null };
+      }
+      return { allowed: false, reason: "source-event-needs-review", row: existing, sourceEventId, location: null };
+    }
+  }
+
+  // Accepted source rows above are recovery evidence, rather than a request to
+  // authorize another punch. Every new automatic action needs current policy.
+  const capabilityRefusal = await checkAutomaticCapability(employeeCode, sourceScope);
+  if (capabilityRefusal) return capabilityRefusal;
+
+  // Enforce both IN and OUT order at the submission seam, so an online EXIT
+  // cannot bypass an earlier queued ENTER. Unknown legacy rows remain blockers.
+  if (strictOrdering && await countOutstandingByScope(sourceScope) > 0) {
+    forceQueue = true;
   }
 
   // "Is there a transport?", NOT "does NetInfo think the internet is reachable?".
@@ -457,6 +590,21 @@ export const submitAttendance = async ({
   const connected = await fetchShouldAttemptRequest();
   const canGoOnline = connected && typeof online === "function";
 
+  const retainUncertainOnlineAttempt = async (failure) => {
+    if (!strictOrdering) return null;
+    const { kind, failureClass, status } = classifyAttendanceError(failure?.error);
+    const knownRefusal = kind === FAILURE_KIND.BLOCKED && status >= 400 && status < 500 &&
+      [FAILURE_CLASS.AUTH, FAILURE_CLASS.CONFIGURATION, FAILURE_CLASS.ENDPOINT_MISSING].includes(failureClass);
+    if (knownRefusal) {
+      if (typeof onKnownNoInsert === "function") await onKnownNoInsert({ httpStatus: status, failureClass });
+      return null;
+    }
+    // The native receipt already records the dispatch. A queue row with no
+    // dispatch evidence would let its first offline upload resend that request.
+    return { ...failure, allowed: false, queued: false, reason: "online-outcome-unconfirmed",
+      message: "Automatic attendance is retained for server verification before retry." };
+  };
+
   /**
    * One online attempt.
    *
@@ -465,7 +613,21 @@ export const submitAttendance = async ({
    * the punch should be queued.
    */
   const attemptOnline = async () => {
+    const localCapabilityRefusal = async (failure) => {
+      const employeeRefusal = failure?.error?.code?.startsWith("EMPLOYEE_AUTO_ATTENDANCE");
+      if (failure?.error?.code !== "FEATURE_DISABLED" && !employeeRefusal) return null;
+      // The service/request guard refused before transport. Do not leave a
+      // dispatch-intent marker that would demand impossible server evidence.
+      if (strictOrdering && typeof onKnownNoInsert === "function") {
+        await onKnownNoInsert({ httpStatus: null, failureClass: FAILURE_CLASS.CONFIGURATION });
+      }
+      return { ...failure, allowed: false, reason: employeeRefusal ? "employee-policy-disabled" : "capability-disabled" };
+    };
     try {
+      if (strictOrdering) await assertAttendanceQueueScope(sourceScope);
+      const refusal = await checkAutomaticCapability(employeeCode, sourceScope);
+      if (refusal) return { done: true, result: refusal };
+      assertAutomaticCapabilityCurrent(sourceScope);
       const result = await online();
 
       if (result?.allowed) {
@@ -478,11 +640,16 @@ export const submitAttendance = async ({
         return { done: true, result };
       }
 
+      const localRefusal = await localCapabilityRefusal(result);
+      if (localRefusal) return { done: true, result: localRefusal };
+
       if (!shouldQueueFailure(result)) {
         // A real refusal — out of radius, missing configuration, a rejected
         // payload. Surfacing it is the correct behaviour, online or not.
         return { done: true, result };
       }
+      const uncertain = await retainUncertainOnlineAttempt(result);
+      if (uncertain) return { done: true, result: uncertain };
 
       console.log(
         `${LOG_PREFIX} Online attempt failed transiently, queueing:`,
@@ -491,11 +658,15 @@ export const submitAttendance = async ({
       return { done: false };
     } catch (error) {
       const { message } = classifyAttendanceError(error);
+      const localRefusal = await localCapabilityRefusal({ allowed: false, message, error, location: null });
+      if (localRefusal) return { done: true, result: localRefusal };
 
       // Same rule as a returned failure — see shouldQueueFailure.
       if (!shouldQueueFailure({ error })) {
         return { done: true, result: { allowed: false, message, error, location: null } };
       }
+      const uncertain = await retainUncertainOnlineAttempt({ error });
+      if (uncertain) return { done: true, result: uncertain };
 
       console.log(`${LOG_PREFIX} Online attempt threw, queueing:`, message);
       return { done: false };
@@ -519,7 +690,9 @@ export const submitAttendance = async ({
    * attempt by this point.
    */
   const refuseOrFallBack = async (refusal) => {
-    if (!forceQueue || !canGoOnline) return refusal;
+    // New native inputs remain durably retained for retry when admission fails.
+    // The legacy forceQueue fallback is preserved for older callers/binaries.
+    if (strictOrdering || !forceQueue || !canGoOnline) return refusal;
 
     console.log(
       `${LOG_PREFIX} Queue refused a forced ${type} (${refusal.reason}); sending it rather than losing it`,
@@ -540,14 +713,10 @@ export const submitAttendance = async ({
   // for a different reason: nothing will drain what is queued here, because the
   // switch puts the sync manager in drain-only mode for rows that already exist
   // and stops new ones being justified at all.
-  if (isOfflineQueueingDisallowed()) {
+  const queueingRefusal = await checkAutomaticCapability(employeeCode, sourceScope, { queueing: true });
+  if (queueingRefusal) {
     console.log(`${LOG_PREFIX} Offline ${type} refused: switched off for this tenant`);
-    return refuseOrFallBack({
-      allowed: false,
-      reason: "admin-disabled",
-      message: OFFLINE_DISABLED_MESSAGE,
-      location: null,
-    });
+    return refuseOrFallBack(queueingRefusal);
   }
 
   if (isOfflineSyncUnsupported()) {
@@ -572,6 +741,7 @@ export const submitAttendance = async ({
   const gate = await evaluateOfflineAttendance({
     type,
     enforceRadius: attendanceType !== ATTENDANCE_TYPE.AUTO,
+    ...(skipPosition ? { skipPosition: true } : {}),
   });
 
   if (!gate.allowed) {
@@ -592,6 +762,10 @@ export const submitAttendance = async ({
     photoUri,
     gate,
     sourceScope,
+    sourceEventId,
+    sourceParentEventId,
+    timestamp,
+    strictOrdering,
   });
 };
 
@@ -603,12 +777,13 @@ export const submitAttendance = async ({
  * no row to carry one: the camera screen uploads its picture itself, against the
  * docname the server returns.
  */
-export const submitManualAttendance = ({ type, employeeCode, online }) =>
+export const submitManualAttendance = ({ type, employeeCode, online, sourceScope }) =>
   submitAttendance({
     type,
     employeeCode,
     attendanceType: ATTENDANCE_TYPE.MANUAL,
     online,
+    sourceScope,
   });
 
 /** `submitAttendance` pre-bound for the geofence path. */
@@ -619,6 +794,12 @@ export const submitAutoAttendance = ({
   occurredAt,
   forceQueue = false,
   sourceScope,
+  sourceEventId = null,
+  sourceParentEventId = null,
+  timestamp = null,
+  strictOrdering = false,
+  skipPosition = false,
+  onKnownNoInsert,
 }) =>
   submitAttendance({
     type,
@@ -628,6 +809,12 @@ export const submitAutoAttendance = ({
     occurredAt,
     forceQueue,
     sourceScope,
+    sourceEventId,
+    sourceParentEventId,
+    timestamp,
+    strictOrdering,
+    skipPosition,
+    onKnownNoInsert,
   });
 
 // ----------------------

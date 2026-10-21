@@ -19,6 +19,17 @@ beforeEach(async () => {
   resetServerClockCache();
 });
 
+it("isolates automatic offline clock offsets by tenant and restores them after restart", async () => {
+  const now = new Date(2026, 9, 13, 9, 0, 0).getTime();
+  await rememberServerOffset("2026-10-13 09:01:30", now, { tenantKey: "https://one.example.com" });
+  await rememberServerOffset("2026-10-13 09:03:00", now, { tenantKey: "https://two.example.com" });
+  resetServerClockCache();
+  expect(await getServerOffset({ tenantKey: "https://one.example.com" })).toBe(90000);
+  expect(await getServerOffset({ tenantKey: "https://two.example.com" })).toBe(180000);
+  expect(await getServerOffset({ tenantKey: "https://unknown.example.com" })).toBe(0);
+  expect(await getServerOffset()).toBe(180000);
+});
+
 describe("parseServerWallClock", () => {
   // The server sends a naive datetime with no offset and engines disagree on how
   // to parse that, so the digits are read explicitly.

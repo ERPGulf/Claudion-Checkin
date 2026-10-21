@@ -12,8 +12,8 @@ enum GeofenceEvents {
  fire while no JS is loaded, e.g. after a background relaunch) and
  `ExpoAutoAttendanceModule`, which forwards events to JS listeners.
 
- Events are persisted via `GeofenceStore` before being emitted, so nothing is
- lost when no listener is attached — mirroring the Android `GeofenceEventBus`.
+ Events are appended to `GeofenceStore` before being emitted. The pending journal
+ remains until JS transfers the exact event ID to the existing SQLite database.
  */
 final class GeofenceEventBus {
   static let shared = GeofenceEventBus()

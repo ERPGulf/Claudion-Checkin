@@ -59,6 +59,22 @@ beforeEach(async () => {
 });
 
 describe("enqueue", () => {
+  it("asserts current authorization after database preparation before inserting a new row", async () => {
+    const denied = new Error("Synthetic policy revocation");
+    const assertCurrent = jest.fn(() => { throw denied; });
+    await expect(enqueue(punch({ assertCurrent }))).rejects.toBe(denied);
+    expect(assertCurrent).toHaveBeenCalledTimes(1);
+    expect((await countByStatus()).total).toBe(0);
+  });
+
+  it("recovers an already accepted row without requiring current new-admission authorization", async () => {
+    const first = await enqueue(punch());
+    const assertCurrent = jest.fn(() => { throw new Error("Synthetic policy revocation"); });
+    expect(await enqueue(punch({ assertCurrent }))).toMatchObject({ inserted: false, row: { id: first.row.id } });
+    expect(assertCurrent).not.toHaveBeenCalled();
+    expect((await countByStatus()).total).toBe(1);
+  });
+
   it("stores a punch as pending and due immediately", async () => {
     const { row, inserted } = await enqueue(punch());
 
@@ -509,7 +525,7 @@ describe("releaseStuckSyncing", () => {
     await claimNextPending();
 
     expect(await claimNextPending()).toBeNull();
-    expect(await releaseStuckSyncing()).toBe(1);
+    expect(await releaseStuckSyncing(Date.now() + 120001)).toBe(1);
     expect(await claimNextPending()).not.toBeNull();
   });
 });

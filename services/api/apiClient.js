@@ -11,6 +11,7 @@ import {
   createAttendanceScopeChangedError,
 } from "../offline/attendanceQueueProvenance";
 import { activateAuthSession, getAuthSessionGeneration, invalidateAuthSession } from "../../utils/authSessionGuard";
+import { assertCapabilityRequest, getCapabilitySnapshot } from "../capabilityPolicy";
 
 // ----------------------
 // MEMORY TOKEN CACHE
@@ -78,27 +79,17 @@ const getRequestDebugInfo = (config) => ({
       ? `${config.baseURL}${config.url.startsWith("/") ? "" : "/"}${config.url}`
       : (config?.url ?? null),
   headers: getDebugHeaders(config?.headers),
-  data:
-    typeof config?.data === "string"
-      ? config.data
-      : config?.data instanceof URLSearchParams
-        ? config.data.toString()
-        : (config?.data ?? null),
+  // Auth and domain requests can contain credentials or employee information.
+  // Diagnostics need the route/status, never an arbitrary request body.
+  data: config?.data == null ? null : "[omitted]",
   timeout: config?.timeout ?? null,
 });
 
 const getErrorDebugInfo = (err) => {
-  const parsedResponseData = parseJsonString(err?.response?.data);
-  const nestedData = parseJsonString(parsedResponseData?.data);
-
   return {
     status: err?.response?.status ?? null,
-    message: err?.message ?? null,
     code: err?.code ?? null,
     request: getRequestDebugInfo(err?.config),
-    responseData: parsedResponseData,
-    nestedResponseData: nestedData,
-    serverMessages: extractServerMessages(nestedData ?? parsedResponseData),
   };
 };
 
@@ -403,7 +394,7 @@ export const refreshAccessToken = async () => {
     refreshToken: maskToken(refresh),
     request: {
       headers: getDebugHeaders(setCommonHeaders()),
-      data: form.toString(),
+      data: "[omitted]",
     },
   });
 
@@ -489,6 +480,7 @@ apiClient.interceptors.request.use(async (config) => {
     config.headers.Authorization = `Bearer ${current.accessToken}`;
     // Keep scope on the config for retries after token refresh.
     if (!config.url?.startsWith(`${current.tenantKey}/api/`)) throw createAttendanceScopeChangedError();
+    await assertCapabilityRequest(config);
     return config;
   }
 
@@ -496,6 +488,9 @@ apiClient.interceptors.request.use(async (config) => {
 
   // skip auth header logic (generateToken)
   if (config.headers?.["x-skip-auth"] === "true") {
+    // Authentication's transport option is not a feature-policy exemption.
+    // The actual login endpoint has no feature mapping and still skips auth.
+    await assertCapabilityRequest(config);
     return config;
   }
 
@@ -509,6 +504,9 @@ apiClient.interceptors.request.use(async (config) => {
     config.headers.Authorization = `Bearer ${access}`;
   }
 
+  // Also runs on 401 retries, immediately before transport. Existing attendance
+  // outbox delivery has no admission flag; its tenant scope is checked above.
+  await assertCapabilityRequest(config);
   return config;
 });
 
@@ -516,10 +514,16 @@ apiClient.interceptors.request.use(async (config) => {
 // RESPONSE INTERCEPTOR
 // ----------------------
 apiClient.interceptors.response.use(
-  (response) => response,
+  async (response) => {
+    // A delayed create result must not start follow-up uploads under a new
+    // account. Same-owner policy changes do not undo an already sent success.
+    if (response.config?.capabilityScope) await getCapabilitySnapshot(response.config.capabilityScope);
+    return response;
+  },
   async (error) => {
     const original = error.config;
     if (!original) return Promise.reject(error);
+    if (original.capabilityScope) await getCapabilitySnapshot(original.capabilityScope);
     if (original.attendanceSyncScope) await assertAttendanceQueueScope(original.attendanceSyncScope);
 
     // Skip refresh logic for generateToken()

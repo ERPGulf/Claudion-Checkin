@@ -1,5 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
+  CHECKIN_START_TIME_KEY,
+  LAST_CHECKOUT_TIME_KEY,
   clearPersistedCheckinStartTime,
   getPersistedSessionTimes,
   persistCheckinStartTime,
@@ -85,9 +87,14 @@ const normalizeSession = (raw) => {
 
   const startedAt = toTimestampMs(raw.startedAt);
   const endedAt = toTimestampMs(raw.endedAt);
+  const source = typeof raw.sourceEventId === "string" && raw.sourceEventId
+    ? { sourceEventId: raw.sourceEventId } : {};
+  const committedAt = toTimestampMs(raw.committedAt);
+  if (Number.isFinite(committedAt)) source.committedAt = committedAt;
 
   if (raw.status === SESSION_STATUS.CHECKED_IN) {
     return {
+      ...source,
       status: SESSION_STATUS.CHECKED_IN,
       origin: normalizeOrigin(raw.origin, SESSION_ORIGIN.UNKNOWN),
       startedAt,
@@ -97,6 +104,7 @@ const normalizeSession = (raw) => {
   }
 
   return {
+    ...source,
     status: SESSION_STATUS.CHECKED_OUT,
     origin: normalizeOrigin(raw.origin),
     startedAt,
@@ -135,31 +143,38 @@ const deriveSessionFromLegacyTimes = async () => {
   };
 };
 
-const writeSession = async (session) => {
+const writeSession = async (session, { assertCurrent, onWrite } = {}) => {
   const normalized = normalizeSession(session);
+  if (assertCurrent) await assertCurrent();
+  if (onWrite) onWrite();
   await AsyncStorage.setItem(SESSION_STATE_KEY, JSON.stringify(normalized));
+  if (assertCurrent) await assertCurrent();
   return normalized;
 };
 
-const readSessionUnlocked = async () => {
+const readSessionUnlocked = async ({ strictRead = false, assertCurrent, onWrite } = {}) => {
   let stored = null;
 
   try {
     stored = await AsyncStorage.getItem(SESSION_STATE_KEY);
-  } catch {
+  } catch (error) {
+    if (strictRead) throw error;
     return { ...CLOSED_SESSION };
   }
 
   if (stored != null) {
     try {
       return normalizeSession(JSON.parse(stored));
-    } catch {
+    } catch (error) {
+      if (strictRead) throw error;
       // Corrupt record — fall through to the legacy derivation below.
     }
   }
 
   const migrated = await deriveSessionFromLegacyTimes();
-  await writeSession(migrated).catch(() => {});
+  if (assertCurrent) await writeSession(migrated, { assertCurrent, onWrite });
+  else if (strictRead) await writeSession(migrated);
+  else await writeSession(migrated).catch(() => {});
   return migrated;
 };
 
@@ -182,6 +197,29 @@ const withSessionLock = (task) => {
   return settled;
 };
 
+const withScopedSessionLock = (task, assertCurrent) => withSessionLock(async () => {
+  let written = false;
+  try {
+    return await task(() => { written = true; });
+  } catch (error) {
+    if (written && assertCurrent && error?.code === "ATTENDANCE_SYNC_SCOPE_CHANGED") {
+      // New session work cannot start until partial old-scope writes are gone.
+      // Durable queue/ingress evidence keeps its original owner.
+      await AsyncStorage.multiRemove([SESSION_STATE_KEY, CHECKIN_START_TIME_KEY, LAST_CHECKOUT_TIME_KEY]);
+    }
+    throw error;
+  }
+});
+
+/** Publish synchronously while transitions are excluded; never await in publish. */
+export const publishCurrentSession = ({ assertCurrent, publish }) => withScopedSessionLock(async (onWrite) => {
+  if (assertCurrent) await assertCurrent();
+  const session = await readSessionUnlocked({ strictRead: true, assertCurrent, onWrite });
+  if (assertCurrent) await assertCurrent();
+  publish(session);
+  return session;
+}, assertCurrent);
+
 /** Current session record; migrates legacy storage on first read. */
 export const readSession = () => withSessionLock(readSessionUnlocked);
 
@@ -200,30 +238,36 @@ export const canTransition = (session, type) =>
     ? !isSessionActive(session)
     : type === "OUT" && isSessionActive(session);
 
-const commitCheckIn = async ({ origin, at }) => {
+const commitCheckIn = async ({ origin, at, sourceEventId, assertCurrent }) => {
   const startedAt = await persistCheckinStartTime(at ?? Date.now());
+  if (assertCurrent) await assertCurrent();
 
   return writeSession({
+    ...(sourceEventId ? { sourceEventId } : {}),
     status: SESSION_STATUS.CHECKED_IN,
     origin: normalizeOrigin(origin, SESSION_ORIGIN.UNKNOWN),
     startedAt,
+    committedAt: Date.now(),
     endedAt: null,
     closedBy: null,
-  });
+  }, { assertCurrent });
 };
 
-const commitCheckOut = async ({ session, origin, at }) => {
+const commitCheckOut = async ({ session, origin, at, assertCurrent }) => {
   const endedAt = await persistCheckoutTime(at ?? Date.now());
+  if (assertCurrent) await assertCurrent();
 
   // The closed record keeps the ended session's origin so callers can tell
   // "your manual check-in was closed automatically" from a fully automatic day.
   return writeSession({
+    ...(session?.sourceEventId ? { sourceEventId: session.sourceEventId } : {}),
     status: SESSION_STATUS.CHECKED_OUT,
     origin: session?.origin ?? null,
     startedAt: session?.startedAt ?? null,
     endedAt,
+    committedAt: Date.now(),
     closedBy: normalizeOrigin(origin, SESSION_ORIGIN.UNKNOWN),
-  });
+  }, { assertCurrent });
 };
 
 /**
@@ -261,25 +305,43 @@ export const performSessionTransition = async ({
   origin,
   execute,
   at,
+  assertCurrent,
+  rejectStale = false,
+  strictRead = false,
+  sourceEventId,
+  withSessionContext = false,
 }) => {
   if (type !== "IN" && type !== "OUT") {
     throw new Error(`Invalid attendance transition: ${type}`);
   }
 
-  return withSessionLock(async () => {
-    const previousSession = await readSessionUnlocked();
+  // Device-clock observation time must precede scope/storage/submission awaits.
+  // HTTP acknowledgement time cannot determine whether a native EXIT is stale.
+  const transitionAt = at ?? Date.now();
 
-    if (!canTransition(previousSession, type)) {
+  return withScopedSessionLock(async (onWrite) => {
+    if (assertCurrent) await assertCurrent();
+    const previousSession = await readSessionUnlocked({ strictRead, assertCurrent, onWrite });
+
+    const eventAt = toTimestampMs(transitionAt);
+    const staleEvent = rejectStale && Number.isFinite(eventAt) && (
+      (Number.isFinite(previousSession.endedAt) && eventAt < previousSession.endedAt) ||
+      (type === "OUT" && Number.isFinite(previousSession.startedAt) && eventAt < previousSession.startedAt)
+    );
+
+    if (staleEvent || !canTransition(previousSession, type)) {
       return {
         status: TRANSITION_RESULT.SKIPPED,
         session: previousSession,
         previousSession,
         queued: false,
         serverConfirmed: false,
+        ...(staleEvent ? { reason: "stale-event" } : {}),
       };
     }
 
-    const response = await execute();
+    if (assertCurrent) await assertCurrent();
+    const response = await (withSessionContext ? execute(previousSession) : execute());
 
     if (!response?.allowed) {
       return {
@@ -292,10 +354,13 @@ export const performSessionTransition = async ({
       };
     }
 
-    const session =
-      type === "IN"
-        ? await commitCheckIn({ origin, at })
-        : await commitCheckOut({ session: previousSession, origin, at });
+    // A request already sent cannot be recalled. Its durable source receipt
+    // records the outcome; it must not mutate a newer account's session.
+    if (assertCurrent) await assertCurrent();
+    onWrite();
+    const session = type === "IN"
+      ? await commitCheckIn({ origin, at: transitionAt, sourceEventId, assertCurrent })
+      : await commitCheckOut({ session: previousSession, origin, at: transitionAt, assertCurrent });
 
     const queued = !!response?.queued;
 
@@ -307,7 +372,7 @@ export const performSessionTransition = async ({
       serverConfirmed: !queued,
       response,
     };
-  });
+  }, assertCurrent);
 };
 
 /**
@@ -336,17 +401,17 @@ export const reconcileSessionFromServer = async ({
   activeStartedAt,
   origin = SESSION_ORIGIN.UNKNOWN,
   fetchedAt = null,
+  assertCurrent,
 }) =>
-  withSessionLock(async () => {
-    const session = await readSessionUnlocked();
+  withScopedSessionLock(async (onWrite) => {
+    if (assertCurrent) await assertCurrent();
+    const session = await readSessionUnlocked({ assertCurrent, onWrite });
     const startedAt = toTimestampMs(activeStartedAt);
 
-    // A session that opened after the status request was issued cannot appear in
-    // that response, so the response says nothing about it. Without this, an
-    // automatic check-in landing while the request is in flight would be undone
-    // a moment later: the "no open session" branch below clears the record and
-    // the screen dispatches resetCheckin(). The check-out direction has its own
-    // guard (`isStale`) further down; this is the same protection for check-in.
+    // A local transition accepted after this GET began cannot be described by
+    // that response. Logical startedAt/endedAt may precede a slow upload, so use
+    // the separate acceptance time for both directions. Legacy records retain
+    // the original startedAt fallback until their next local transition.
     //
     // `>=`, not `>`: a session that started in the same millisecond the request
     // was issued may or may not be in the response, and the two failure modes are
@@ -356,9 +421,8 @@ export const reconcileSessionFromServer = async ({
     const fetchedAtMs = toTimestampMs(fetchedAt);
     if (
       Number.isFinite(fetchedAtMs) &&
-      isSessionActive(session) &&
-      Number.isFinite(session.startedAt) &&
-      session.startedAt >= fetchedAtMs
+      ((Number.isFinite(session.committedAt) && session.committedAt >= fetchedAtMs) ||
+        (isSessionActive(session) && Number.isFinite(session.startedAt) && session.startedAt >= fetchedAtMs))
     ) {
       return session;
     }
@@ -381,18 +445,27 @@ export const reconcileSessionFromServer = async ({
         ? session.origin
         : normalizeOrigin(origin, SESSION_ORIGIN.UNKNOWN);
 
+      if (assertCurrent) await assertCurrent();
+      onWrite();
       await persistCheckinStartTime(startedAt);
+      if (assertCurrent) await assertCurrent();
 
       return writeSession({
+        ...(isSessionActive(session) && session.startedAt === startedAt && session.sourceEventId
+          ? { sourceEventId: session.sourceEventId } : {}),
         status: SESSION_STATUS.CHECKED_IN,
         origin: resolvedOrigin,
         startedAt,
+        ...(Number.isFinite(session.committedAt) ? { committedAt: session.committedAt } : {}),
         endedAt: null,
         closedBy: null,
-      });
+      }, { assertCurrent });
     }
 
+    if (assertCurrent) await assertCurrent();
+    onWrite();
     await clearPersistedCheckinStartTime();
+    if (assertCurrent) await assertCurrent();
 
     if (!isSessionActive(session)) return session;
 
@@ -405,16 +478,42 @@ export const reconcileSessionFromServer = async ({
       startedAt: session.startedAt,
       endedAt: session.endedAt,
       closedBy: SESSION_ORIGIN.UNKNOWN,
-    });
-  });
+      ...(Number.isFinite(session.committedAt) ? { committedAt: session.committedAt } : {}),
+    }, { assertCurrent });
+  }, assertCurrent);
 
 /** Drops the record entirely. See `applySessionOwner` for when that is right. */
-export const clearSessionState = async () => {
-  await AsyncStorage.removeItem(SESSION_STATE_KEY);
-};
+export const clearSessionState = () => withSessionLock(() =>
+  AsyncStorage.removeItem(SESSION_STATE_KEY));
 
 /** Which employee the stored session record belongs to. */
 export const SESSION_OWNER_KEY = "attendanceSessionOwner";
+export const UNVERIFIED_SESSION_OWNER_KEY = "attendanceSessionUnverifiedOwner";
+
+export const readUnverifiedSessionOwner = async () => {
+  const raw = await AsyncStorage.getItem(UNVERIFIED_SESSION_OWNER_KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    // Corrupt evidence still requires reconciliation; it is not proven absent.
+    return { unreadable: true };
+  }
+};
+
+export const clearUnverifiedSessionOwner = () =>
+  AsyncStorage.removeItem(UNVERIFIED_SESSION_OWNER_KEY);
+
+const parseSessionOwner = (raw) => {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object" && parsed.employeeId) return parsed;
+  } catch {
+    // Original owners were plain employee codes.
+  }
+  return { employeeId: raw, tenantKey: null };
+};
 
 /**
  * Keeps the session record tied to the employee who created it.
@@ -431,37 +530,90 @@ export const SESSION_OWNER_KEY = "attendanceSessionOwner";
  * trigger is the employee actually *changing*, which is the only event that
  * makes the record meaningless.
  *
- * First run on a device that already has a session records the current employee
- * as its owner rather than clearing — the session is almost certainly theirs
- * (this ships as an update to a logged-in app), and adopting it keeps automatic
- * check-out working across the upgrade.
+ * Legacy employee-only callers retain their compatibility format. Scoped
+ * callers archive an unproven legacy record/times before clearing them, so the
+ * automatic processor can require server reconciliation for the current owner.
+ * A proven owner switch clears prior session times while retaining punch queues.
  *
  * @param {string|null} employeeCode the authenticated employee
  * @returns {Promise<boolean>} whether a foreign session was cleared
  */
-export const applySessionOwner = async (employeeCode) => {
+export const applySessionOwner = async (employeeCode, { tenantKey = null, assertCurrent } = {}) => {
   if (!employeeCode) return false;
+  return withScopedSessionLock(async (onWrite) => {
+    const assertOwnerCurrent = async () => { if (assertCurrent) await assertCurrent(); };
+    const mutate = async (write) => {
+      await assertOwnerCurrent();
+      onWrite();
+      const result = await write();
+      await assertOwnerCurrent();
+      return result;
+    };
+    await assertOwnerCurrent();
+    const previousRaw = await AsyncStorage.getItem(SESSION_OWNER_KEY);
+    await assertOwnerCurrent();
+    const previousOwner = parseSessionOwner(previousRaw);
+    const nextOwner = { employeeId: employeeCode, tenantKey };
+    const sameEmployee = previousOwner?.employeeId === employeeCode;
+    const sameScope = sameEmployee && previousOwner?.tenantKey === tenantKey;
+    if (tenantKey ? sameScope : sameEmployee) return false;
 
-  let previousOwner = null;
-  try {
-    previousOwner = await AsyncStorage.getItem(SESSION_OWNER_KEY);
-  } catch {
-    // Unreadable owner is not evidence of a switch. Leave the session alone.
-    return false;
-  }
+    const verifiedSwitch = !!previousOwner && (
+      !sameEmployee || (tenantKey && previousOwner.tenantKey && previousOwner.tenantKey !== tenantKey)
+    );
+    const needsScopedMigration = !!tenantKey && !previousOwner?.tenantKey;
+    let cleared = false;
 
-  if (previousOwner === employeeCode) return false;
+    if (needsScopedMigration && !verifiedSwitch) {
+      const session = await readSessionUnlocked({ strictRead: true, assertCurrent, onWrite });
+      const times = await getPersistedSessionTimes();
+      await assertOwnerCurrent();
+      if (isSessionActive(session) || Number.isFinite(times.lastCheckoutTime) ||
+        Number.isFinite(times.checkinStartTime) || Number.isFinite(session.endedAt)) {
+        // An existing session has no proven tenant. Save evidence first, then
+        // require a scoped server reconciliation before it can produce an OUT.
+        // Failure to save the marker must leave the existing session untouched.
+        const previousEvidence = await readUnverifiedSessionOwner();
+        await assertOwnerCurrent();
+        if (!previousEvidence) {
+          await mutate(() => AsyncStorage.setItem(UNVERIFIED_SESSION_OWNER_KEY, JSON.stringify({
+            previousOwner,
+            intendedOwner: nextOwner,
+            session,
+            ...times,
+            recordedAt: Date.now(),
+          })));
+        }
+        await mutate(() => AsyncStorage.multiRemove([
+          SESSION_STATE_KEY, CHECKIN_START_TIME_KEY, LAST_CHECKOUT_TIME_KEY,
+        ]));
+        cleared = true;
+      }
+    }
 
-  const isSwitch = !!previousOwner && previousOwner !== employeeCode;
+    if (verifiedSwitch) {
+      await mutate(() => AsyncStorage.multiRemove([
+        SESSION_STATE_KEY, CHECKIN_START_TIME_KEY, LAST_CHECKOUT_TIME_KEY,
+      ]));
+      cleared = true;
+    }
 
-  if (isSwitch) {
-    await clearSessionState().catch(() => {});
-    await clearPersistedCheckinStartTime().catch(() => {});
-  }
-
-  await AsyncStorage.setItem(SESSION_OWNER_KEY, employeeCode).catch(() => {});
-
-  return isSwitch;
+    // Legacy callers retain their plain employee-code storage format. Scoped
+    // callers never downgrade an already scoped owner to an unscoped one.
+    let ownerWriting = false;
+    try {
+      await mutate(() => {
+        ownerWriting = true;
+        return AsyncStorage.setItem(SESSION_OWNER_KEY, tenantKey ? JSON.stringify(nextOwner) : employeeCode);
+      });
+    } catch (error) {
+      if (ownerWriting && assertCurrent && error?.code === "ATTENDANCE_SYNC_SCOPE_CHANGED") {
+        await AsyncStorage.removeItem(SESSION_OWNER_KEY);
+      }
+      throw error;
+    }
+    return cleared;
+  }, assertCurrent);
 };
 
 export default {
@@ -471,8 +623,11 @@ export default {
   applySessionOwner,
   canTransition,
   clearSessionState,
+  clearUnverifiedSessionOwner,
   isSessionActive,
   performSessionTransition,
+  publishCurrentSession,
   readSession,
+  readUnverifiedSessionOwner,
   reconcileSessionFromServer,
 };

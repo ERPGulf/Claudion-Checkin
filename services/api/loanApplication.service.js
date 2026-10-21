@@ -6,6 +6,7 @@ import {
 } from "./authHelper";
 import { parseError } from "./errorHelper";
 import { sanitizeAttachment } from "../../utils/fileName";
+import { assertCapability } from "../capabilityPolicy";
 
 /* ===========================
    Get Loan Products
@@ -13,6 +14,7 @@ import { sanitizeAttachment } from "../../utils/fileName";
 export const getLoanProducts = async () => {
   try {
     const { baseUrl, token } = await getAuthContext();
+    const capabilityScope = await assertCapability("loan_application", { baseUrl });
 
     const url = `${baseUrl}/api/method/employee_app.attendance_api.get_loan_product`;
 
@@ -20,6 +22,7 @@ export const getLoanProducts = async () => {
       url,
       {},
       {
+        capabilityScope,
         headers: buildHeaders(token),
       },
     );
@@ -48,6 +51,8 @@ export const LoanApplicationRequest = async (loanData) => {
     if (!employeeCode) {
       throw new Error(MISSING_EMPLOYEE_MESSAGE);
     }
+
+    const capabilityScope = await assertCapability("loan_application", { baseUrl, employeeCode });
 
     const url = `${baseUrl}/api/method/employee_app.attendance_api.create_loan_application`;
 
@@ -103,6 +108,7 @@ export const LoanApplicationRequest = async (loanData) => {
     }
 
     const response = await apiClient.post(url, formData, {
+      capabilityScope,
       headers: {
         ...buildHeaders(token),
         "Content-Type": "multipart/form-data",
@@ -126,9 +132,12 @@ export const getLoanApplications = async () => {
       return { error: MISSING_EMPLOYEE_MESSAGE };
     }
 
+    const capabilityScope = await assertCapability("loan_application", { baseUrl, employeeCode });
+
     const url = `${baseUrl}/api/method/employee_app.employee_list.list_loan_application`;
 
     const response = await apiClient.get(url, {
+      capabilityScope,
       headers: buildHeaders(token),
     });
 

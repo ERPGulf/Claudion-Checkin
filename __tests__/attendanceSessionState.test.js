@@ -8,6 +8,7 @@ import {
   applySessionOwner,
   canTransition,
   clearSessionState,
+  publishCurrentSession,
   performSessionTransition,
   readSession,
   reconcileSessionFromServer,
@@ -191,6 +192,15 @@ describe("attendance session state machine", () => {
     await expect(
       performSessionTransition({ type: "BOGUS", execute: ok }),
     ).rejects.toThrow(/Invalid attendance transition/);
+  });
+
+  it("a stale scope rejected before any writes cannot clear the current session", async () => {
+    await checkIn(SESSION_ORIGIN.MANUAL);
+    const before = await readSession();
+    const scopeChanged = () => { throw Object.assign(new Error("changed"), { code: "ATTENDANCE_SYNC_SCOPE_CHANGED" }); };
+    await expect(publishCurrentSession({ assertCurrent: scopeChanged, publish: jest.fn() })).rejects.toThrow("changed");
+    await expect(reconcileSessionFromServer({ activeStartedAt: null, assertCurrent: scopeChanged })).rejects.toThrow("changed");
+    expect(await readSession()).toEqual(before);
   });
 
   describe("migration from pre-state-machine storage", () => {

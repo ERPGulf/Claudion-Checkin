@@ -5,9 +5,8 @@ package expo.modules.autoattendance
  * React Native context, possibly with no JS loaded at all) and
  * [ExpoAutoAttendanceModule] (which forwards events to JS listeners).
  *
- * The receiver persists every event via [GeofenceStore] before emitting, so nothing
- * is lost when the app process was woken up just for the broadcast and no listener
- * is attached.
+ * The receiver journals each capture before emitting. A missing listener only
+ * drops this live hint; the unacknowledged capture remains available for replay.
  */
 object GeofenceEventBus {
   fun interface Listener {

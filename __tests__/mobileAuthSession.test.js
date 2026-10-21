@@ -572,8 +572,7 @@ describe("hand-off diagnostics", () => {
 });
 
 it("refuses mobile manual attendance when the restriction mirror is missing", async () => {
-  await AsyncStorage.setItem("auth_method", "mobile");
-  await AsyncStorage.setItem("access_token", ACCESS);
+  await complete();
   await AsyncStorage.removeItem("restrict_location");
   const result = await userCheckIn({ employeeCode: EMPLOYEE_CODE, type: "IN" });
   expect(result.allowed).toBe(false);

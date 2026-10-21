@@ -6,10 +6,14 @@ import { useNavigation } from '@react-navigation/native';
 import { COLORS, SIZES } from '../../constants';
 import { activeButtonsSelector } from '../../redux/Slices/QuickAccessSlice';
 import ButtonItem from '../SelectQuickAccess/ButtonItem';
+import { selectFeatureSettings } from '../../redux/Slices/FeatureSettingsSlice';
+import { filterOfferedShortcuts } from '../../utils/quickAccess';
 
 function QuickAccess() {
   const navigation = useNavigation();
   const activeButtons = useSelector(activeButtonsSelector);
+  const featureSettings = useSelector(selectFeatureSettings);
+  const shortcuts = filterOfferedShortcuts(activeButtons, featureSettings);
   return (
     <View className="mt-4 w-full">
       <View className="flex-row justify-between items-center ">
@@ -31,8 +35,8 @@ function QuickAccess() {
         }}
         className="border-dashed flex-wrap flex-row justify-evenly border-red-900 border-2 mt-2 p-2 "
       >
-        {activeButtons.length > 0 ? (
-          activeButtons?.map(item => (
+        {shortcuts.length > 0 ? (
+          shortcuts.map(item => (
             <TouchableOpacity
               onPress={() => {
                 item?.url && navigation.navigate(item.url);

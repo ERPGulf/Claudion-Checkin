@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Alert, Platform } from 'react-native';
 import { useRoute } from '@react-navigation/native';
 import { useSelector } from 'react-redux';
@@ -12,6 +12,8 @@ import {
 import { useAttachmentPicker } from './useAttachmentPicker';
 import useRequestHistory from './useRequestHistory';
 import { hapticsMessage } from '../utils/HapticsMessage';
+import { assertCapability, getCapabilitySnapshot } from '../services/capabilityPolicy';
+import { getAuthSessionGeneration } from '../utils/authSessionGuard';
 
 /**
  * Minutes since midnight — used to compare two times that carry their own,
@@ -73,6 +75,7 @@ export function formatTime(date) {
  * Alerts on both screens, so the classic screen's behaviour is unchanged.
  */
 export default function useAttendanceRequest() {
+  const actionGeneration = useRef(getAuthSessionGeneration()).current;
   const employeeCode = useSelector(selectEmployeeCode);
 
   /**
@@ -110,7 +113,7 @@ export default function useAttendanceRequest() {
   const [isBottomSheetVisible, setBottomSheetVisible] = useState(false);
 
   const { pickFromCamera, pickFromGallery, pickDocument } =
-    useAttachmentPicker();
+    useAttachmentPicker('attendance_action.attendance_request');
 
   // Recomputed per render, exactly as the original screen did, so a session
   // left open past midnight still caps the pickers at the real "today".
@@ -277,7 +280,8 @@ export default function useAttendanceRequest() {
 
       setLoading(true);
 
-      const res = await createAttendanceRequest(payload);
+      const capabilityScope = await assertCapability('attendance_action.attendance_request', { generation: actionGeneration });
+      const res = await createAttendanceRequest(payload, { capabilityScope });
 
       if (!res.success) {
         hapticsMessage('error');
@@ -289,7 +293,7 @@ export default function useAttendanceRequest() {
 
       // ✅ OPTIONAL FILE
       if (attachment) {
-        const uploadRes = await uploadAttendanceAttachment(attachment, docname);
+        const uploadRes = await uploadAttendanceAttachment(attachment, docname, { capabilityScope });
 
         if (uploadRes?.error) {
           Alert.alert(
@@ -302,6 +306,7 @@ export default function useAttendanceRequest() {
       // The correction now covers the rejected punch, so the queue rows stop
       // counting as unresolved and the banner clears. They are kept, not
       // deleted — they are the evidence of what was originally punched.
+      await getCapabilitySnapshot(capabilityScope);
       if (prefill?.queueRowId) {
         try {
           await resolveWithCorrection({

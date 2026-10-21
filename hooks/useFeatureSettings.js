@@ -1,6 +1,5 @@
 import { useCallback, useMemo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   selectFeatureSettings,
   selectFeatureSettingsError,
@@ -9,15 +8,21 @@ import {
   settingsRequested,
   settingsReceived,
   settingsFailed,
+  selectFeatureSettingsHealth,
 } from '../redux/Slices/FeatureSettingsSlice';
-import { selectEmployeeCode } from '../redux/Slices/UserSlice';
+import { selectBaseUrl, selectEmployeeCode, setBaseUrl, setEmployeeCode } from '../redux/Slices/UserSlice';
 import { getFeatureSettings } from '../services/api/featureSettings.service';
+import { getAuthContext } from '../services/api/authHelper';
+import { getAuthSessionGeneration, isAuthSessionSuspended } from '../utils/authSessionGuard';
+import { getCapabilitySnapshot } from '../services/capabilityPolicy';
 import {
   buildSettingsScope,
   getFeatureValue,
   isFeatureEnabled,
   isRouteEnabled,
 } from '../utils/featureSettings';
+
+let refreshSequence = 0;
 
 /**
  * How the app asks "is this feature on?".
@@ -100,36 +105,55 @@ export default function useFeatureSettings() {
   const error = useSelector(selectFeatureSettingsError);
   const lastFetchedAt = useSelector(selectFeatureSettingsFetchedAt);
   const employeeCode = useSelector(selectEmployeeCode);
+  const baseUrl = useSelector(selectBaseUrl);
+  const health = useSelector(selectFeatureSettingsHealth);
 
   /**
    * Fetches and stores. Never throws — a failure is recorded on the slice,
    * which keeps the previous settings, so callers can fire this speculatively.
    */
   const refresh = useCallback(async () => {
-    const baseUrl = await AsyncStorage.getItem('baseUrl');
-    const scope = buildSettingsScope(baseUrl, employeeCode);
-
-    // No provisioned backend means nothing to ask and nobody to ask it of.
-    if (!scope) return { ok: false, error: 'No backend configured.' };
-
-    dispatch(settingsRequested({ scope }));
-
-    const res = await getFeatureSettings();
-
-    if (res?.error) {
-      dispatch(settingsFailed({ error: res.error }));
-      return { ok: false, error: res.error };
+    const generation = getAuthSessionGeneration();
+    const requestId = `settings-${++refreshSequence}`;
+    let scope;
+    dispatch(settingsRequested({ scope: buildSettingsScope(baseUrl, employeeCode), requestId }));
+    try {
+      // One auth read supplies both request and ownership. A token refresh may
+      // rotate credentials; a logout or hand-off invalidates this generation.
+      const context = await getAuthContext();
+      if (generation !== getAuthSessionGeneration()) return { ok: false };
+      scope = buildSettingsScope(context.baseUrl, context.employeeCode);
+      if (!scope || !context.employeeCode) throw new Error('Employee context unavailable');
+      const owner = { scope, generation, baseUrl: context.baseUrl, employeeCode: context.employeeCode };
+      dispatch(settingsRequested({ scope, requestId }));
+      const res = await getFeatureSettings({ context, capabilityScope: owner });
+      await getCapabilitySnapshot(owner);
+      if (generation !== getAuthSessionGeneration() || isAuthSessionSuspended()) return { ok: false };
+      // QR password re-login retains provisioning in storage while REVERT_ALL
+      // clears UserSlice. Restore that existing identity before scoped consumers
+      // read the response; never treat another slice's scope as identity.
+      if (baseUrl !== context.baseUrl) dispatch(setBaseUrl(context.baseUrl));
+      if (employeeCode !== context.employeeCode) dispatch(setEmployeeCode(context.employeeCode));
+      if (res?.error) {
+        dispatch(settingsFailed({ error: res.error, scope, requestId }));
+        return { ok: false, error: res.error };
+      }
+      dispatch(settingsReceived({ settings: res.message, scope, requestId }));
+      return { ok: true };
+    } catch (error) {
+      if (generation === getAuthSessionGeneration() && error.code !== 'CAPABILITY_SCOPE_CHANGED') {
+        dispatch(settingsFailed({ error: 'Unable to load feature settings.', scope, requestId }));
+      }
+      return { ok: false, error: 'Unable to load feature settings.' };
     }
-
-    dispatch(settingsReceived({ settings: res.message, scope }));
-    return { ok: true };
-  }, [dispatch, employeeCode]);
+  }, [dispatch, employeeCode, baseUrl]);
 
   return {
     settings,
     status,
     error,
     lastFetchedAt,
+    health,
     isLoading: status === 'loading',
     isError: status === 'error',
     refresh,

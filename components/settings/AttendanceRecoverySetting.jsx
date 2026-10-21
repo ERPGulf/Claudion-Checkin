@@ -40,12 +40,14 @@ export default function AttendanceRecoverySetting() {
   const { colors } = useAppTheme();
   const recovery = useAttendanceRecovery();
   if (!recovery.isLoggedIn) return null;
-  const { counts, loading, error, busy, rows } = recovery;
+  const { counts, loading, error, busy, rows, automaticEvents = [] } = recovery;
+  const automaticReview = automaticEvents.filter(event => event.status === "needs_review").length;
+  const automaticPending = automaticEvents.length - automaticReview;
   const pending = counts?.recoverableCount ?? 0;
   const syncing = counts?.syncingCount ?? 0;
-  const attention = (counts?.rejectedCount ?? 0) + (counts?.unknownTenantCount ?? 0) + (counts?.reviewCount ?? 0);
+  const attention = (counts?.rejectedCount ?? 0) + (counts?.unknownTenantCount ?? 0) + (counts?.reviewCount ?? 0) + automaticReview;
   const status = loading ? "Reading saved attendance…" : error ||
-    (pending ? `Pending attendance: ${pending}` : syncing ? `Syncing attendance: ${syncing}` :
+    (pending ? `Pending attendance: ${pending}` : automaticPending ? `Saved automatic events: ${automaticPending}` : syncing ? `Syncing attendance: ${syncing}` :
       attention ? "Saved attendance needs review" : "No pending attendance");
   return (
     <>
@@ -57,19 +59,30 @@ export default function AttendanceRecoverySetting() {
         {!!counts?.reviewCount && <Text style={{ ...TYPO.subhead, color: colors.warningText }}>Needs review: {counts.reviewCount}</Text>}
         {!!counts?.unknownTenantCount && <Text style={{ ...TYPO.subhead, color: colors.warningText }}>Cannot verify company: {counts.unknownTenantCount}</Text>}
         {!!counts?.unknownTenantCount && <Text style={{ ...TYPO.caption, color: colors.textSecondary }}>These older records are kept on this device. Ask your administrator to verify their company before recovery.</Text>}
+        {!!automaticEvents.length && <Text style={{ ...TYPO.subhead, color: colors.warningText }}>Automatic events: {automaticPending} waiting · {automaticReview} need review</Text>}
+        {!!automaticReview && <Text style={{ ...TYPO.caption, color: colors.textSecondary }}>Original transitions remain saved. Ask your administrator to verify the company and server attendance before recovery.</Text>}
+        {!!automaticPending && <ActionButton label="Retry automatic events" variant="outline" disabled={busy} onPress={recovery.retryAutomatic} style={{ marginTop: SPACING.sm }} />}
         <ActionButton label={busy ? "Syncing attendance…" : "Sync now"} icon="sync-outline" loading={busy}
           disabled={loading || !!error || recovery.checkingId != null || (!pending && !syncing)} onPress={recovery.sync} style={{ marginTop: SPACING.md }} />
         {!!error && <ActionButton label="Retry reading attendance" variant="outline" onPress={recovery.refresh} style={{ marginTop: SPACING.sm }} />}
-        {!error && (pending + syncing + attention > 0 || rows.length > 0) && <ActionButton label="View attendance records" variant="outline" onPress={recovery.open} style={{ marginTop: SPACING.sm }} />}
+        {!error && (pending + syncing + attention + automaticPending > 0 || rows.length > 0) && <ActionButton label="View attendance records" variant="outline" onPress={recovery.open} style={{ marginTop: SPACING.sm }} />}
       </Card>
       <BottomSheet visible={recovery.visible} onClose={recovery.close} title="Attendance recovery"
         subtitle={error ? "Saved attendance could not be read." : summarizeRecoveryRows(rows)}>
         <View style={{ paddingHorizontal: SPACING.lg, flexShrink: 1 }}>
           {!!recovery.notice && <Text style={{ ...TYPO.body, color: colors.warningText }}>{recovery.notice}</Text>}
+          {automaticEvents.map(event => <View key={event.eventId} style={{ paddingVertical: SPACING.md }}>
+            <Text style={{ ...TYPO.headline, color: colors.textPrimary }}>Automatic {event.transition === "EXIT" ? "exit" : event.transition === "ENTER" ? "entry" : "transition"} · {event.status === "needs_review" ? "Needs review" : "Waiting"}</Text>
+            <Text style={{ ...TYPO.subhead, color: colors.textSecondary }}>{event.occurredAt ? `${formatLogDate(new Date(event.occurredAt))} · ${formatLogTime(new Date(event.occurredAt))}` : "Original time unavailable"}</Text>
+            <Text style={{ ...TYPO.caption, color: colors.textSecondary }}>{event.onlineAttemptAt ? "A server request may have completed. An exact server record must be verified before recovery." : "This transition has not been accepted as attendance. Its original data remains saved."}</Text>
+            {event.status === "needs_review" && !!event.onlineAttemptAt && !!event.tenantKey && !!event.employeeId && <ActionButton
+              label="Check automatic server record" variant="outline" disabled={busy || recovery.checkingId != null}
+              onPress={() => recovery.verifyAutomatic(event.eventId)} style={{ marginTop: SPACING.sm }} />}
+          </View>)}
           {error ? <Text style={{ ...TYPO.body, color: colors.errorText }}>{error}</Text> :
             <FlatList data={rows} keyExtractor={row => String(row.id)} renderItem={({ item }) => <RecoveryRecord row={item}
               onVerify={recovery.verify} disabled={busy || recovery.checkingId != null} checking={recovery.checkingId === item.id} />}
-              ListEmptyComponent={<Text style={{ ...TYPO.body, color: colors.textSecondary }}>No saved attendance records for this account. Missing records may require administrator investigation.</Text>} />}
+              ListEmptyComponent={<Text style={{ ...TYPO.body, color: colors.textSecondary }}>{automaticEvents.length ? "Saved automatic transitions appear above." : "No saved attendance records for this account. Missing records may require administrator investigation."}</Text>} />}
         </View>
       </BottomSheet>
     </>

@@ -2,23 +2,30 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import apiClient from "./apiClient";
 import { cleanBaseUrl } from "./utils";
+import { assertAttendanceQueueScope, captureAttendanceQueueScope, createAttendanceScopeChangedError } from "../offline/attendanceQueueProvenance";
+import { beginEmployeeAutoAttendancePolicyReception, receiveEmployeeAutoAttendancePolicy } from "../employeeAutoAttendancePolicy";
 
 /**
  * fetchEmployeeData(employeeCode)
  * returns data.message from API
  */
-export const fetchEmployeeData = async (employeeCode) => {
+export const fetchEmployeeData = async (employeeCode, { syncScope } = {}) => {
   try {
-    const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
+    syncScope = syncScope ?? await captureAttendanceQueueScope(employeeCode);
+    const current = await assertAttendanceQueueScope(syncScope);
+    if (syncScope.employeeId !== employeeCode) throw createAttendanceScopeChangedError();
+    const reception = beginEmployeeAutoAttendancePolicyReception(syncScope);
+    const rawBaseUrl = current?.tenantKey ?? await AsyncStorage.getItem("baseUrl");
     const baseUrl = cleanBaseUrl(rawBaseUrl);
     if (!baseUrl) throw new Error("Base URL missing");
 
-    const token = await AsyncStorage.getItem("access_token");
+    const token = current?.accessToken ?? await AsyncStorage.getItem("access_token");
     if (!token) throw new Error("Access token missing");
 
     const url = `${baseUrl}/api/method/employee_app.attendance_api.get_employee_data`;
 
     const { data } = await apiClient.get(url, {
+      ...(syncScope ? { attendanceSyncScope: syncScope } : {}),
       params: { employee_id: employeeCode },
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
@@ -26,6 +33,7 @@ export const fetchEmployeeData = async (employeeCode) => {
       },
       timeout: 10000,
     });
+    await receiveEmployeeAutoAttendancePolicy(data.message, reception);
 
     return data.message;
   } catch (error) {

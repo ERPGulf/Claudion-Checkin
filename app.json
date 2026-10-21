@@ -10,6 +10,7 @@
     "plugins": [
       "@react-native-firebase/app",
       "@react-native-firebase/messaging",
+      "@react-native-firebase/crashlytics",
       [
         "expo-location",
         {
@@ -32,7 +33,8 @@
             "enableSceneSupport": true,
             "forceStaticLinking": [
               "RNFBApp",
-              "RNFBMessaging"
+              "RNFBMessaging",
+              "RNFBCrashlytics"
             ]
           }
         }
@@ -73,12 +75,13 @@
         "NSLocationWhenInUseUsageDescription": "Allow $(PRODUCT_NAME) to use your location for tracking check-ins, check-outs, and real-time location updates for drivers during trips, enhancing user experiences.",
         "NSBarcodeScannerUsageDescription": "Allow $(PRODUCT_NAME) to access your camera to enable essential functionality, such as scanning QR codes and capturing photos for employee activity tracking and verification.",
         "NSMicrophoneUsageDescription": "Allow $(PRODUCT_NAME) to access your microphone",
+        "NSMotionUsageDescription": "Allow $(PRODUCT_NAME) to use motion activity to support location-based automatic attendance check-ins and check-outs.",
         "ITSAppUsesNonExemptEncryption": false,
         "UIBackgroundModes": [
           "remote-notification"
         ]
       },
-      "buildNumber": "13",
+      "buildNumber": "14",
       "appleTeamId": "VWL956UDWG"
     },
     "android": {
@@ -112,7 +115,7 @@
       }
     },
     "owner": "erpgulf",
-    "runtimeVersion": "1.2.1-sdk57",
+    "runtimeVersion": "1.2.1-sdk57-attendance-hybrid-v2",
     "updates": {
       "url": "https://u.expo.dev/ee37c3a6-1da3-43ae-ad14-6b34a26c92ac",
       "enabled": true,

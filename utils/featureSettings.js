@@ -4,7 +4,7 @@
  * `employee_app.gauth.employee_checkin_setting` lets an administrator decide
  * which features an employee sees. This module is the single place that knows
  * the shape of that response: everything else in the app reads a normalised
- * object through `hooks/useFeatureSettings`, never the raw body.
+ * object through scoped selectors/hooks and `services/capabilityPolicy`.
  *
  * ---------------------------------------------------------------------------
  * The response is NOT uniformly boolean
@@ -19,9 +19,11 @@
  *
  *   strings   offline_attendance_version ("1")
  *
- *   enum      geo_tagging — 0 disabled, 1 warnings only, 2 all attendance
- *             actions. Older builds send the ERPNext select *label* instead
- *             ("Enable geotagging for all attendance actions").
+ *   enum      tenant geo_tagging — 0 disabled, 1 and 2 retain the backend's
+ *             existing levels; false/null mean disabled. Older builds send
+ *             ERPNext select labels. Level 0 vetoes automatic functionality
+ *             regardless of employee mode. Other level meanings remain
+ *             unresolved; this parser does not change employee geotagging.
  *
  * `geo_tagging` is read into `geo_tagging_level`, the 0/1/2 enum the rest of the
  * app already speaks (redux/Slices/AutoAttendanceSlice). Both forms are accepted
@@ -44,18 +46,18 @@
  * Records out of the app for every tenant still running a backend that does not
  * send this payload, and a first-launch outage would do it to everyone else.
  *
- * This is a UX gate, not a security boundary. The server still authorises every
- * request behind these screens, so a feature briefly visible to someone who may
- * not use it costs a rejected API call, while a feature wrongly hidden costs the
- * employee their job function with no way to get it back.
+ * These are client availability/execution gates, not a security boundary. The
+ * backend must independently authorize every operation; that behavior requires
+ * staging verification. Unknown availability retains legacy compatibility, and
+ * is explicitly different from an administrator's received false.
  *
- * An explicit `false` is always honoured, and it is honoured *through an
+ * An explicit `false` or wire `null` is always honoured, and it is honoured *through an
  * outage*: the last successful settings for a scope are persisted with it, so a
  * failed refresh keeps the previous answer rather than reverting to the
  * optimistic default. Only a scope that has never been fetched is optimistic.
  *
- * Flip `DEFAULT_WHEN_UNKNOWN` to false to make the whole system fail-closed;
- * everything reads that one constant.
+ * Changing unknown-field compatibility requires a product/backend migration
+ * decision. Mandatory employee attendance/location rules remain independent.
  */
 
 /** See the note above before changing this. */
@@ -86,23 +88,26 @@ export const ATTENDANCE_FEATURES = {
 };
 
 /** Every boolean the payload may carry, by its path. */
-const BOOLEAN_PATHS = [
+export const BOOLEAN_PATHS = [
   ...Object.values(FEATURES),
   ...Object.values(ATTENDANCE_FEATURES),
 ];
 
 const BOOLEAN_PATH_SET = new Set(BOOLEAN_PATHS);
+const OFFLINE_VERSION_PATH = 'attendance_action.offline_attendance_version';
 
 /**
  * Frappe Check fields arrive as `true`, `1` or `"1"` depending on how the
  * endpoint serialises them, and a tenant on an older build may send `"true"`.
- * Anything not recognisably true-or-false is reported as unknown (`null`) so it
+ * Explicit wire null disables a capability under the confirmed backend
+ * contract. Missing/undefined and anything not recognisably true-or-false is
+ * reported as unknown (normalised `null`) so it
  * falls through to the default rather than being coerced to `false` — a typo in
  * the payload must not silently disable a feature.
  */
 export function normalizeBoolean(value) {
   if (value === true || value === 1) return true;
-  if (value === false || value === 0) return false;
+  if (value === false || value === 0 || value === null) return false;
 
   if (typeof value === 'string') {
     const text = value.trim().toLowerCase();
@@ -130,7 +135,7 @@ function normalizeString(value) {
   return null;
 }
 
-/** The three geotagging policies, matching redux/Slices/AutoAttendanceSlice. */
+/** The tenant enum's existing levels; no tenant/employee merge is implied. */
 export const GEO_TAGGING_LEVELS = { DISABLED: 0, WARNINGS_ONLY: 1, ALL_ACTIONS: 2 };
 
 /**
@@ -150,11 +155,14 @@ export const GEO_TAGGING_LEVELS = { DISABLED: 0, WARNINGS_ONLY: 1, ALL_ACTIONS: 
  * is the opposite of what `0` means. An administrator turning geotagging off
  * would have read as no answer at all.
  *
- * Still returns null for anything unrecognised, so a caller falls back to the
- * per-employee `geotagging` value `attendanceConfigCache` stores rather than
- * inventing a policy.
+ * Tenant false and explicit null mean disabled. Boolean true has no confirmed
+ * enum meaning and must not become level 2. Unrecognised values stay unknown;
+ * `isFeatureEnabled` enforces the confirmed zero-level automatic veto;
+ * parsing does not invent other precedence over employee `geotagging`.
  */
 export function geoTaggingLevel(value) {
+  if (value === false || value === null) return 0;
+
   if (typeof value === 'number') {
     return Number.isInteger(value) && value >= 0 && value <= 2 ? value : null;
   }
@@ -177,9 +185,9 @@ export function geoTaggingLevel(value) {
 }
 
 /**
- * The normalised shape. Every value is either a settled value or `null` for
- * "the server did not tell us", which is what lets `isFeatureEnabled`
- * distinguish an explicit `false` from an absent field.
+ * The normalised shape. Boolean wire null becomes false before entering this
+ * shape. Normalised null means missing/malformed, preserving both partial
+ * refresh semantics and legacy persisted unknown values.
  */
 export function emptyFeatureSettings() {
   return {
@@ -252,13 +260,69 @@ export function normalizeFeatureSettings(raw) {
   target.offline_attendance_version = normalizeString(
     attendance.offline_attendance_version,
   );
-  target.geo_tagging = normalizeString(attendance.geo_tagging);
+  // Versions are metadata, never Boolean permissions. Keep explicit null
+  // separate from a missing version so a partial refresh can clear an old
+  // version without clearing it whenever the server omits the field. This
+  // optional serialized marker leaves older persisted shapes compatible.
+  if (attendance.offline_attendance_version === null) {
+    settings._explicitNullFields = [OFFLINE_VERSION_PATH];
+  }
+  target.geo_tagging = attendance.geo_tagging === false || attendance.geo_tagging === null
+    ? '0'
+    : normalizeString(attendance.geo_tagging);
   // From the raw value, not from the normalised string above: `normalizeString`
   // is lossy for this field (it renders a numeric 0 as "0"), and the level is
   // the form every caller actually uses.
   target.geo_tagging_level = geoTaggingLevel(attendance.geo_tagging);
 
   return settings;
+}
+
+/** Reject an empty/malformed success rather than replacing known denials. */
+export function hasRecognizedFeatureSettings(raw) {
+  const normalized = normalizeFeatureSettings(raw);
+  return BOOLEAN_PATHS.some(path => {
+    const value = path.startsWith('attendance_action.')
+      ? normalized.attendance_action[path.slice('attendance_action.'.length)]
+      : normalized[path];
+    return value !== null;
+  }) || normalized.attendance_action.geo_tagging_level !== null ||
+    normalized.attendance_action.offline_attendance_version !== null ||
+    normalized._explicitNullFields?.includes(OFFLINE_VERSION_PATH) === true;
+}
+
+/** Missing fields in a refresh cannot retract a previously explicit answer. */
+export function mergeFeatureSettings(previous, next) {
+  if (!previous) return next;
+  const merged = { ...previous, attendance_action: { ...previous.attendance_action } };
+  for (const [key, value] of Object.entries(next || {})) {
+    if (key === '_explicitNullFields') continue;
+    if (key === 'attendance_action') {
+      for (const [name, setting] of Object.entries(value || {})) {
+        if (setting !== null && setting !== undefined) merged.attendance_action[name] = setting;
+      }
+    } else if (value !== null && value !== undefined) {
+      merged[key] = value;
+    }
+  }
+  if (next?._explicitNullFields?.includes(OFFLINE_VERSION_PATH)) {
+    merged.attendance_action.offline_attendance_version = null;
+    merged._explicitNullFields = [OFFLINE_VERSION_PATH];
+  } else if (next?.attendance_action?.offline_attendance_version != null) {
+    delete merged._explicitNullFields;
+  }
+  return merged;
+}
+
+export const SETTINGS_STALE_AFTER_MS = 30 * 60 * 1000;
+
+/** Pure snapshot health; stale answers retain their explicit restrictions. */
+export function featureSettingsHealth(slice, now = Date.now()) {
+  if (slice?.status === 'loading') return 'loading';
+  if (!slice?.settings) return 'unavailable';
+  if (slice.status === 'error' || !slice.lastFetchedAt ||
+      now - slice.lastFetchedAt >= SETTINGS_STALE_AFTER_MS) return 'stale';
+  return 'loaded';
 }
 
 /**
@@ -281,6 +345,13 @@ export function isFeatureEnabled(settings, path) {
   }
 
   if (!settings || typeof settings !== 'object') return DEFAULT_WHEN_UNKNOWN;
+
+  // Backend-confirmed tenant veto for automatic geofence functionality. The
+  // normalized level distinguishes explicit false/0/null (0) from an omitted
+  // or malformed field (unknown). Other levels do not invent a tenant mode or
+  // raise the employee's independent geotagging authorization.
+  if (path === ATTENDANCE_FEATURES.AUTO_ATTENDANCE &&
+      settings.attendance_action?.geo_tagging_level === GEO_TAGGING_LEVELS.DISABLED) return false;
 
   const value = path.startsWith('attendance_action.')
     ? settings.attendance_action?.[path.slice('attendance_action.'.length)]
@@ -319,11 +390,19 @@ export function getFeatureValue(settings, path) {
  */
 export function buildSettingsScope(baseUrl, employeeCode) {
   if (!baseUrl) return null;
-  return `${String(baseUrl).replace(/\/+$/, '')}::${employeeCode || 'unknown'}`;
+  let tenant = String(baseUrl).trim().replace(/[\u0000-\u001F\u200B]+/g, '').replace(/\/+$/, '');
+  try {
+    const url = new URL(tenant);
+    tenant = `${url.protocol}//${url.host.toLowerCase()}${url.pathname}`.replace(/\/+$/, '');
+  } catch {
+    // Keep compatibility with existing provisioned URLs; auth validates these.
+  }
+  return `${tenant}::${employeeCode || 'unknown'}`;
 }
 
 /** Route name → the feature path that governs it. */
 export const ROUTE_FEATURES = {
+  'Attendance camera': ATTENDANCE_FEATURES.PHOTO_UPLOAD,
   'Loan application': FEATURES.LOAN_APPLICATION,
   'Leave request': FEATURES.LEAVE_REQUEST,
   Complaints: FEATURES.COMPLAINTS,

@@ -1,5 +1,6 @@
 // src/services/offline/AttendanceDatabase.js
 import * as SQLite from "expo-sqlite";
+import { recordNonFatalError } from "../crashlytics.service";
 
 /**
  * The offline attendance store.
@@ -20,6 +21,7 @@ import * as SQLite from "expo-sqlite";
 
 export const DATABASE_NAME = "claudion-attendance.db";
 export const QUEUE_TABLE = "attendance_queue";
+export const AUTO_EVENT_TABLE = "auto_attendance_events";
 
 /**
  * Row lifecycle.
@@ -119,7 +121,7 @@ export const AWAITING_SERVER_STATUSES = [
  * Schema version. Bump it and add a `case` in `migrate` — never edit an
  * existing statement, since installs in the field are already at that version.
  */
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 6;
 
 const CREATE_QUEUE_TABLE = `
   CREATE TABLE IF NOT EXISTS ${QUEUE_TABLE} (
@@ -245,6 +247,46 @@ const MIGRATE_V4 = `
   ALTER TABLE ${QUEUE_TABLE} ADD COLUMN attemptCount INTEGER NOT NULL DEFAULT 0;
 `;
 
+// Native events are input receipts, not another attendance queue. Their durable
+// handoff and outcome live in the same database as the existing punch rows.
+// Historical attendance rows retain NULL source identity and provenance.
+const MIGRATE_V5 = `
+  ALTER TABLE ${QUEUE_TABLE} ADD COLUMN sourceEventId TEXT;
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_${QUEUE_TABLE}_source_event
+    ON ${QUEUE_TABLE} (tenantKey, employeeId, sourceEventId)
+    WHERE sourceEventId IS NOT NULL;
+  CREATE TABLE IF NOT EXISTS ${AUTO_EVENT_TABLE} (
+    eventId         TEXT PRIMARY KEY NOT NULL,
+    tenantKey       TEXT,
+    employeeId      TEXT,
+    identifier      TEXT,
+    transition      TEXT,
+    occurredAt      INTEGER,
+    sequence        INTEGER,
+    receivedAt      INTEGER NOT NULL,
+    status          TEXT NOT NULL DEFAULT 'pending',
+    punchTimestamp  TEXT,
+    queueRowId      INTEGER,
+    onlineAttemptAt INTEGER,
+    claimOwner      TEXT,
+    claimExpiresAt  INTEGER,
+    outcome         TEXT,
+    reason          TEXT,
+    sessionAt       INTEGER,
+    event           TEXT NOT NULL,
+    updatedAt       INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_${AUTO_EVENT_TABLE}_scope
+    ON ${AUTO_EVENT_TABLE} (tenantKey, employeeId, status, sequence, receivedAt, eventId);
+`;
+
+// No ownership or absence of a request is invented for historical syncing rows.
+const MIGRATE_V6 = `
+  ALTER TABLE ${QUEUE_TABLE} ADD COLUMN claimOwner TEXT;
+  ALTER TABLE ${QUEUE_TABLE} ADD COLUMN claimExpiresAt INTEGER;
+  ALTER TABLE ${QUEUE_TABLE} ADD COLUMN uploadAttemptAt INTEGER;
+`;
+
 const migrate = async (database) => {
   const row = await database.getFirstAsync("PRAGMA user_version;");
   const current = Number(row?.user_version) || 0;
@@ -265,6 +307,8 @@ const migrate = async (database) => {
       ${CREATE_SESSION_INDEX}
       ${CREATE_TENANT_DRAIN_INDEX}
       ${MIGRATE_V4}
+      ${MIGRATE_V5}
+      ${MIGRATE_V6}
       PRAGMA user_version = ${SCHEMA_VERSION};
       COMMIT;
     `);
@@ -296,6 +340,23 @@ const migrate = async (database) => {
       BEGIN;
       ${MIGRATE_V4}
       PRAGMA user_version = 4;
+      COMMIT;
+    `);
+  }
+
+  if (current < 5) {
+    await database.execAsync(`
+      BEGIN;
+      ${MIGRATE_V5}
+      PRAGMA user_version = 5;
+      COMMIT;
+    `);
+  }
+  if (current < 6) {
+    await database.execAsync(`
+      BEGIN;
+      ${MIGRATE_V6}
+      PRAGMA user_version = 6;
       COMMIT;
     `);
   }
@@ -331,6 +392,9 @@ export const getDatabase = () => {
       return database;
     })().catch((error) => {
       databasePromise = null;
+      // Every queue read and write goes through here, so this is the one place
+      // an unopenable or unmigratable attendance database shows up.
+      recordNonFatalError(error, { feature: "offline_queue", action: "open_database" });
       throw error;
     });
   }
@@ -354,6 +418,7 @@ export const clearAttendanceQueue = async () => {
 
 export default {
   ATTENDANCE_TYPE,
+  AUTO_EVENT_TABLE,
   AWAITING_SERVER_STATUSES,
   DATABASE_NAME,
   FAILURE_CLASS,

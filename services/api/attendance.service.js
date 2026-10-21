@@ -17,26 +17,43 @@ import {
 import { scoreLocations, pickNearest } from "../../utils/attendanceLocations";
 import { assertCompleteAttendancePolicy } from "../offline/attendanceConfigCache";
 import { getAuthSessionGeneration } from "../../utils/authSessionGuard";
-import { createAttendanceScopeChangedError } from "../offline/attendanceQueueProvenance";
+import { assertCapability, assertCapabilityCurrent } from "../capabilityPolicy";
+import {
+  readManualAttendanceLocationPolicy, assertManualAttendanceLocationPolicyCurrent,
+} from "../manualAttendanceLocationPolicy";
+import { assertAttendanceQueueScope, captureAttendanceQueueScope, createAttendanceScopeChangedError, normalizeAttendanceTenantKey } from "../offline/attendanceQueueProvenance";
+import {
+  beginEmployeeAutoAttendancePolicyReception, receiveEmployeeAutoAttendancePolicy,
+  assertEmployeeAutoAttendancePolicy, assertEmployeeAutoAttendancePolicyCurrent,
+  getEmployeeAutoAttendancePolicy,
+} from "../employeeAutoAttendancePolicy";
 import {
   parseServerWallClock,
   rememberServerOffset,
+  normalizeAttendanceStatusClock,
   SERVER_TIMESTAMP_FORMAT,
 } from "../../utils/serverClock";
+import {
+  isProgrammingError,
+  recordNonFatalError,
+} from "../crashlytics.service";
 
-export const getServerTime = async () => {
+export const getServerTime = async ({ syncScope } = {}) => {
+  if (syncScope) await assertAttendanceQueueScope(syncScope);
   const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
   const baseUrl = cleanBaseUrl(rawBaseUrl);
   const token = await AsyncStorage.getItem("access_token");
 
   const url = `${baseUrl}/api/method/employee_app.attendance_api.get_server_time`;
 
-  const requestedAt = Date.now();
   const response = await apiClient.get(url, {
+    ...(syncScope ? { attendanceSyncScope: syncScope } : {}),
     headers: {
       Authorization: `Bearer ${token}`,
     },
   });
+  const observedAt = Date.now();
+  if (syncScope) await assertAttendanceQueueScope(syncScope);
 
   // Extract correct field from API response
   const serverTime = response.data?.message?.server_time;
@@ -45,7 +62,9 @@ export const getServerTime = async () => {
   // drifted from the server's. Offline check-ins are stamped with device time
   // plus this offset, so a wrong phone clock cannot shift a queued punch.
   // Fire-and-forget: a storage failure must never fail a check-in.
-  rememberServerOffset(serverTime, requestedAt).catch(() => {});
+  rememberServerOffset(serverTime, observedAt, {
+    tenantKey: syncScope?.tenantKey ?? normalizeAttendanceTenantKey(baseUrl),
+  }).catch(() => {});
 
   return serverTime;
 };
@@ -65,13 +84,16 @@ export const getServerTime = async () => {
  * Falls back to the server's current time whenever the event time is unusable,
  * which is exactly the pre-existing behaviour.
  */
-export const resolveServerTimestampAt = async (occurredAt, nowMs = Date.now()) => {
-  const serverNow = await getServerTime();
+export const resolveServerTimestampAt = async (occurredAt, nowMs = Date.now(), options = {}) => {
+  const lookupStartedAt = Date.now();
+  const serverNow = await getServerTime(options);
   const occurredAtMs = toTimestampMs(occurredAt);
 
   if (!occurredAtMs) return serverNow;
 
-  const ageMs = nowMs - occurredAtMs;
+  // The returned server clock was observed after this lookup, not at dispatch.
+  // Include elapsed lookup time so a slow request cannot move the punch forward.
+  const ageMs = nowMs + (Date.now() - lookupStartedAt) - occurredAtMs;
   if (!Number.isFinite(ageMs) || ageMs <= 0) return serverNow;
 
   const serverWallClock = parseServerWallClock(serverNow);
@@ -85,11 +107,16 @@ export const resolveServerTimestampAt = async (occurredAt, nowMs = Date.now()) =
 
 // getOfficeLocation(employeeCode) — returns nearest location object or null
 
-export const getOfficeLocation = async (employeeCode) => {
+export const getOfficeLocation = async (employeeCode, { syncScope, onAssignedGeometry } = {}) => {
   const logPrefix = "[attendance.service/getOfficeLocation]";
   const generation = getAuthSessionGeneration();
 
   if (!employeeCode) throw new Error("Employee ID is required");
+  syncScope = syncScope ?? await captureAttendanceQueueScope(employeeCode);
+  if (syncScope) {
+    await assertAttendanceQueueScope(syncScope);
+    if (syncScope.employeeId !== employeeCode) throw createAttendanceScopeChangedError();
+  }
 
   console.log(`${logPrefix} Start`, { employeeCode });
 
@@ -101,8 +128,10 @@ export const getOfficeLocation = async (employeeCode) => {
   if (!token) throw new Error("Access token missing");
 
   const url = `${baseUrl}/api/method/employee_app.attendance_api.get_employee_data`;
+  const reception = beginEmployeeAutoAttendancePolicyReception(syncScope);
 
   const { data } = await apiClient.get(url, {
+    ...(syncScope ? { attendanceSyncScope: syncScope } : {}),
     params: { employee_id: employeeCode },
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
@@ -110,6 +139,7 @@ export const getOfficeLocation = async (employeeCode) => {
     },
     timeout: 10000,
   });
+  if (syncScope) await assertAttendanceQueueScope(syncScope);
 
   console.log(
     `${logPrefix} RAW EMPLOYEE RESPONSE`,
@@ -117,6 +147,8 @@ export const getOfficeLocation = async (employeeCode) => {
   );
 
   const employee = data?.message || {};
+  // Receive employee mode before GPS/permissions or other policy work can fail.
+  await receiveEmployeeAutoAttendancePolicy(employee, reception);
   if (await AsyncStorage.getItem("auth_method") === "mobile") {
     if (generation !== getAuthSessionGeneration()) throw createAttendanceScopeChangedError();
     assertCompleteAttendancePolicy(employee);
@@ -140,12 +172,15 @@ export const getOfficeLocation = async (employeeCode) => {
 
   const photo = sanitizeNumber(employee?.photo);
 
-  // Server-controlled automatic-attendance policy (0 disabled / 1 warnings only
-  // / 2 all attendance actions). Cached like the other HR policies so it is
-  // available offline and to code paths that only read AsyncStorage.
-  const geotagging = sanitizeNumber(employee?.geotagging);
+  // The scoped receiver resolves overlapping employee requests. Legacy keys
+  // mirror its answer; an older response must not republish an earlier mode.
+  const employeePolicy = await getEmployeeAutoAttendancePolicy(syncScope);
+  const geotagging = employeePolicy?.mode ?? 0;
 
   const locations = sanitizeArray(employee?.employee_locations);
+  // Bind manual proof to the geometry this call will actually score. A later
+  // refresh during GPS must not label an old inside-radius result as new proof.
+  onAssignedGeometry?.(JSON.stringify(locations));
 
   console.log(`${logPrefix} Employee API response`, employee);
 
@@ -158,6 +193,7 @@ export const getOfficeLocation = async (employeeCode) => {
   });
 
   if (generation !== getAuthSessionGeneration()) throw createAttendanceScopeChangedError();
+  if (syncScope) await assertAttendanceQueueScope(syncScope);
   await AsyncStorage.multiSet([
     ["restrict_location", String(restrictLocation)],
 
@@ -169,6 +205,7 @@ export const getOfficeLocation = async (employeeCode) => {
 
     ["employee_locations", JSON.stringify(locations)],
   ]);
+  if (syncScope) await assertAttendanceQueueScope(syncScope);
 
   console.log(`${logPrefix} Employee locations`, locations);
   console.log(`${logPrefix} Locations fetched`, {
@@ -185,6 +222,7 @@ export const getOfficeLocation = async (employeeCode) => {
 
   // Request location permission
   const { status } = await Location.requestForegroundPermissionsAsync();
+  if (syncScope) await assertAttendanceQueueScope(syncScope);
   console.log(`${logPrefix} Foreground permission`, { status });
   if (status !== "granted") throw new Error("Location permission denied");
 
@@ -192,6 +230,7 @@ export const getOfficeLocation = async (employeeCode) => {
   const gps = await Location.getCurrentPositionAsync({
     accuracy: Location.Accuracy.Highest,
   });
+  if (syncScope) await assertAttendanceQueueScope(syncScope);
 
   const userLat = gps.coords.latitude;
   const userLng = gps.coords.longitude;
@@ -240,95 +279,58 @@ export const getOfficeLocation = async (employeeCode) => {
 };
 
 // userCheckIn({ employeeCode, type }) — performs check-in/check-out
-export const userCheckIn = async ({ employeeCode, type, locationData }) => {
+export const userCheckIn = async ({ employeeCode, type, locationData, syncScope, occurredAt }) => {
   try {
     if (!employeeCode) throw new Error("Employee ID is required");
+    if (type !== "IN" && type !== "OUT") throw new Error(`Invalid attendance type: ${type}`);
+    // Direct service calls retain the same owner across GPS, clock and retries.
+    syncScope = syncScope ?? await captureAttendanceQueueScope(employeeCode);
+    let current = await assertAttendanceQueueScope(syncScope);
+    if (syncScope.employeeId !== employeeCode) throw createAttendanceScopeChangedError();
+    const baseUrl = current.tenantKey;
 
-    const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
-    const baseUrl = cleanBaseUrl(rawBaseUrl);
-    if (!baseUrl) throw new Error("Base URL missing");
-
-    const token = await AsyncStorage.getItem("access_token");
-    if (!token) throw new Error("Token missing");
-
-    const restriction = await AsyncStorage.getItem("restrict_location");
-    if (
-      await AsyncStorage.getItem("auth_method") === "mobile" &&
-      !["0", "1"].includes(restriction)
-    ) {
-      throw new Error("Attendance configuration is unavailable. Please sign in again or contact your administrator.");
-    }
-    const restrictLocation = Number(restriction) || 0;
-
-    const unrestrictedCheckout =
-      Number(await AsyncStorage.getItem("unrestricted_checkout_location")) || 0;
-
+    let policy = await readManualAttendanceLocationPolicy(syncScope, type);
     let nearest = null;
-    let radius = null;
-
-    // 📍 Location restriction is enabled
-    const shouldSkipLocationRestriction =
-      type === "OUT" && unrestrictedCheckout === 1;
-
-    if (
-      !shouldSkipLocationRestriction &&
-      restrictLocation &&
-      // restrictLocation.toString() === "1"
-
-      restrictLocation === 1
-    ) {
-      nearest = await getOfficeLocation(employeeCode); // Returns closest office + distance
-
-      if (!nearest) {
-        return {
-          allowed: false,
-          message: "Reporting locations are not configured",
-          distance: null,
-          radius: null,
-          location: null,
-        };
-      }
-
-      if (!nearest.withinRadius) {
-        return {
-          allowed: false,
-          message: `You are ${nearest.distance}m away from nearest location (${nearest.locationName}). Must be within ${nearest.radius}m.`,
-          distance: nearest.distance,
-          radius: nearest.radius,
-          location: nearest,
-        };
-      }
-    }
-
-    // 🕒 Timestamp for check-in
-    const timestamp = await getServerTime();
-
+    let evidence;
     let currentLocation = null;
+    const resolveAssignedLocation = async () => {
+      let geometryKey;
+      nearest = await getOfficeLocation(employeeCode, { syncScope,
+        onAssignedGeometry: value => { geometryKey = value; } });
+      await assertAttendanceQueueScope(syncScope);
+      evidence = { nearest, withinRadius: nearest?.withinRadius === true,
+        geometryKey, gpsVerified: !!nearest };
+    };
 
-    if (type === "OUT" && unrestrictedCheckout === 1) {
-      nearest = await getOfficeLocation(employeeCode);
-
-      const gps = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Highest,
-      });
-
-      currentLocation = {
-        latitude: gps.coords.latitude,
-        longitude: gps.coords.longitude,
-      };
-
-      console.log("CURRENT GPS:", {
-        latitude: currentLocation.latitude,
-        longitude: currentLocation.longitude,
-      });
-
-      if (nearest?.withinRadius) {
-        currentLocation.locationName = nearest.locationName;
-      } else {
-        currentLocation.locationName = `${currentLocation.latitude.toFixed(6)}, ${currentLocation.longitude.toFixed(6)}`;
-        
-      }
+    if (policy.requiresRadius) {
+      await resolveAssignedLocation();
+      policy = await readManualAttendanceLocationPolicy(syncScope, type);
+      assertManualAttendanceLocationPolicyCurrent(policy, evidence);
     }
+
+    const timestamp = occurredAt == null ? await getServerTime({ syncScope })
+      : await resolveServerTimestampAt(occurredAt, Date.now(), { syncScope });
+    await assertAttendanceQueueScope(syncScope);
+
+    // Settings can tighten while the server clock or GPS request is pending.
+    // Obtain the existing assigned-location proof once if it is now required;
+    // the final guard refuses any further policy/geometry change safely.
+    policy = await readManualAttendanceLocationPolicy(syncScope, type);
+    if (policy.requiresRadius && (!evidence || evidence.geometryKey !== policy.geometryKey)) {
+      await resolveAssignedLocation();
+      policy = await readManualAttendanceLocationPolicy(syncScope, type);
+    }
+    if (policy.needsCheckoutGPS) {
+      if (!nearest) await resolveAssignedLocation();
+      const gps = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Highest });
+      await assertAttendanceQueueScope(syncScope);
+      currentLocation = { latitude: gps.coords.latitude, longitude: gps.coords.longitude };
+      currentLocation.locationName = nearest?.withinRadius ? nearest.locationName
+        : `${currentLocation.latitude.toFixed(6)}, ${currentLocation.longitude.toFixed(6)}`;
+      evidence = { ...evidence, gpsVerified: true };
+      policy = await readManualAttendanceLocationPolicy(syncScope, type);
+    }
+    policy = assertManualAttendanceLocationPolicyCurrent(policy, evidence);
     // Build base payload
     const payload = {
       device_id: "MobileAPP",
@@ -348,11 +350,7 @@ export const userCheckIn = async ({ employeeCode, type, locationData }) => {
       payload.longitude = currentLocation.longitude;
     }
 
-    if (
-      restrictLocation === 1 &&
-      nearest &&
-      !(type === "OUT" && unrestrictedCheckout === 1)
-    ) {
+    if (policy.requiresRadius && nearest) {
       payload.location = nearest.locationName;
       payload.latitude = nearest.latitude;
       payload.longitude = nearest.longitude;
@@ -360,14 +358,19 @@ export const userCheckIn = async ({ employeeCode, type, locationData }) => {
       payload.radius = nearest.radius;
     }
 
-    // 📡 Send check-in / check-out request
+    current = await assertAttendanceQueueScope(syncScope);
+    policy = await readManualAttendanceLocationPolicy(syncScope, type);
+    assertManualAttendanceLocationPolicyCurrent(policy, evidence);
     const response = await apiClient.post(
       `${baseUrl}/api/method/employee_app.attendance_api.add_log_based_on_employee_field`,
       payload,
       {
-        headers: { Authorization: `Bearer ${token}` },
+        attendanceSyncScope: syncScope,
+        manualAttendancePolicy: { scope: syncScope, type, evidence },
+        headers: { Authorization: `Bearer ${current.accessToken}` },
       },
     );
+    await assertAttendanceQueueScope(syncScope);
 
     const checkinId = response.data?.message?.name;
 
@@ -391,12 +394,22 @@ export const userCheckIn = async ({ employeeCode, type, locationData }) => {
       location: nearest ?? null, // Full location object for Redux
     };
   } catch (error) {
+    if (error.code === "CAPABILITY_SCOPE_CHANGED" && syncScope) {
+      // The transport also checks ownership. Preserve manual attendance's
+      // established scope error when it detects an account change first.
+      try { await assertAttendanceQueueScope(syncScope); } catch (scopeError) { error = scopeError; }
+    }
+    // Refusals, permissions and network failures are expected here and stay
+    // out of Crashlytics; a TypeError building the punch is a bug.
+    if (isProgrammingError(error)) {
+      recordNonFatalError(error, { feature: "attendance", action: "manual_punch", type });
+    }
     return {
       allowed: false,
       message: error.message || "Something went wrong during check-in",
-      distance: null,
-      radius: null,
-      location: null,
+      distance: error.location?.distance ?? null,
+      radius: error.location?.radius ?? null,
+      location: error.location ?? null,
       // The original error, so a caller can tell a dropped connection from a
       // refusal. Flattening everything to a string made those indistinguishable,
       // which is the difference between queueing a punch for later and silently
@@ -431,22 +444,27 @@ export const autoCheckInOut = async ({
   type,
   office = null,
   occurredAt = null,
+  timestamp: preparedTimestamp,
+  syncScope,
 }) => {
   const logPrefix = "[attendance.service/autoCheckInOut]";
   try {
+    if (syncScope) await assertAttendanceQueueScope(syncScope);
     if (!employeeCode) throw new Error("Employee ID is required");
     if (type !== "IN" && type !== "OUT") {
       throw new Error(`Invalid attendance type: ${type}`);
     }
+    syncScope = syncScope ?? await captureAttendanceQueueScope(employeeCode);
+    const current = await assertAttendanceQueueScope(syncScope);
+    if (syncScope.employeeId !== employeeCode) throw createAttendanceScopeChangedError();
+    const baseUrl = current.tenantKey;
+    const token = current.accessToken;
 
-    const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
-    const baseUrl = cleanBaseUrl(rawBaseUrl);
-    if (!baseUrl) throw new Error("Base URL missing");
+    const capabilityScope = await assertCapability("attendance_action.auto_attendance", { baseUrl, employeeCode });
+    await assertEmployeeAutoAttendancePolicy(syncScope, { action: "punch" });
 
-    const token = await AsyncStorage.getItem("access_token");
-    if (!token) throw new Error("Token missing");
-
-    const timestamp = await resolveServerTimestampAt(occurredAt);
+    const timestamp = preparedTimestamp ?? await resolveServerTimestampAt(occurredAt, Date.now(), { syncScope });
+    if (syncScope) await assertAttendanceQueueScope(syncScope);
 
     const payload = {
       device_id: "MobileAPP",
@@ -469,12 +487,20 @@ export const autoCheckInOut = async ({
       payload.location = office?.locationName || "Automatic (geofence)";
     }
 
-    console.log(`${logPrefix} Auto ${type}`, payload);
+    console.log(`${logPrefix} Auto ${type}`);
 
+    await assertCapability("attendance_action.auto_attendance", capabilityScope);
+    await assertEmployeeAutoAttendancePolicy(syncScope, { action: "punch" });
+    assertCapabilityCurrent("attendance_action.auto_attendance", capabilityScope);
+    assertEmployeeAutoAttendancePolicyCurrent(syncScope, { action: "punch" });
     const response = await apiClient.post(
       `${baseUrl}/api/method/employee_app.attendance_api.add_log_based_on_employee_field`,
       payload,
-      { headers: { Authorization: `Bearer ${token}` } },
+      {
+        capabilityScope,
+        headers: { Authorization: `Bearer ${token}` },
+        ...(syncScope ? { attendanceSyncScope: syncScope } : {}),
+      },
     );
 
     const checkinId = response.data?.message?.name;
@@ -493,7 +519,11 @@ export const autoCheckInOut = async ({
       location: office,
     };
   } catch (error) {
-    console.log(`${logPrefix} Failed:`, error?.message);
+    console.log(`${logPrefix} Failed`, { code: error?.code, httpStatus: error?.response?.status });
+    // Same rule as userCheckIn: only a bug in our own code is reported.
+    if (isProgrammingError(error)) {
+      recordNonFatalError(error, { feature: "attendance", action: "auto_punch", type });
+    }
     return {
       allowed: false,
       message: error?.message || "Automatic attendance failed",
@@ -508,12 +538,14 @@ export const autoCheckInOut = async ({
 /**
  * getUserAttendance(employee_id, limit_start, limit_page_length)
  */
-export const getUserAttendance = async (
+const readAttendanceEntries = async (
   employee_id,
   limit_start = 0,
   limit_page_length = 20,
+  { syncScope, attendanceStatusRead = false } = {},
 ) => {
   try {
+    if (syncScope) await assertAttendanceQueueScope(syncScope);
     const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
     const token = await AsyncStorage.getItem("access_token");
     if (!rawBaseUrl || !token) {
@@ -524,8 +556,14 @@ export const getUserAttendance = async (
       };
     }
     const baseUrl = cleanBaseUrl(rawBaseUrl);
+    const capabilityScope = !attendanceStatusRead
+      ? await assertCapability("attendance_action.attendance_history", { baseUrl, employeeCode: employee_id })
+      : undefined;
     const url = `${baseUrl}/api/method/employee_app.attendance_api.get_attendance_details`;
     const response = await apiClient.get(url, {
+      ...(syncScope ? { attendanceSyncScope: syncScope } : {}),
+      ...(capabilityScope ? { capabilityScope } : {}),
+      ...(attendanceStatusRead ? { attendanceStatusRead: true } : {}),
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/x-www-form-urlencoded",
@@ -537,6 +575,7 @@ export const getUserAttendance = async (
       },
       timeout: 10000,
     });
+    if (syncScope) await assertAttendanceQueueScope(syncScope);
     // Return the attendance list
     return response.data?.message || [];
   } catch (error) {
@@ -547,6 +586,10 @@ export const getUserAttendance = async (
     };
   }
 };
+
+/** History is optional; the private session-status read remains essential. */
+export const getUserAttendance = (employeeId, start = 0, length = 20, { syncScope } = {}) =>
+  readAttendanceEntries(employeeId, start, length, { syncScope });
 /**
  * getAttendanceStatus() — returns { custom_in: 0 | 1 }
  */
@@ -571,16 +614,15 @@ export const getUserAttendance = async (
 //   }
 // };
 
-export const getAttendanceStatus = async () => {
+export const getAttendanceStatus = async ({ syncScope } = {}) => {
   try {
+    if (syncScope) await assertAttendanceQueueScope(syncScope);
     const employee_id =
       (await AsyncStorage.getItem("employee_id")) ||
       (await AsyncStorage.getItem("employee_code"));
     if (!employee_id) return { custom_in: 0 };
 
-    const list = await getUserAttendance(employee_id, 0, 10);
-
-    console.log("ATTENDANCE LIST:", list);
+    const list = await readAttendanceEntries(employee_id, 0, 10, { syncScope, attendanceStatusRead: true });
 
     // `getUserAttendance` swallows every failure into `{ error }`, which used to
     // arrive here indistinguishable from "no records" and become custom_in: 0 —
@@ -596,14 +638,13 @@ export const getAttendanceStatus = async () => {
       return { custom_in: 0 };
     }
 
-    const getRecordTime = (entry) =>
-      toTimestampMs(
-        entry?.checkin_time ||
-          entry?.latest_checkin_time ||
-          entry?.timestamp ||
-          entry?.time ||
-          entry?.creation,
-      ) || 0;
+    const getRecordValue = (entry) =>
+      entry?.checkin_time ||
+      entry?.latest_checkin_time ||
+      entry?.timestamp ||
+      entry?.time ||
+      entry?.creation;
+    const getRecordTime = entry => toTimestampMs(getRecordValue(entry)) || 0;
 
     const latest = list.reduce((a, b) => {
       return getRecordTime(a) > getRecordTime(b) ? a : b;
@@ -622,72 +663,107 @@ export const getAttendanceStatus = async () => {
       }, null);
 
     const latestLogType = String(latest?.log_type || "").toUpperCase();
-
-    console.log("LATEST RECORD:", latest);
-
+    // Normalize while the original representation is still available. Parsing
+    // a naive server wall clock to a number first erases its clock domain.
+    const checkin = latestCheckin ? { checkin_time: getRecordValue(latestCheckin) } : { checkin_time: null };
+    const normalized = syncScope ? await normalizeAttendanceStatusClock(checkin, syncScope) : checkin;
+    if (syncScope) await assertAttendanceQueueScope(syncScope);
     return {
       custom_in:
         normalizeCustomIn(latest?.custom_in) === 1 || latestLogType === "IN"
           ? 1
           : 0,
-      checkin_time: latestCheckin ? getRecordTime(latestCheckin) : null,
+      checkin_time: latestCheckin ? toTimestampMs(normalized.checkin_time) || 0 : null,
       log_type: latest?.log_type || null,
     };
   } catch (e) {
-    console.log("STATUS ERROR:", e);
+    console.log("STATUS ERROR:", { code: e?.code, httpStatus: e?.response?.status });
     // Same reasoning as the `list.error` branch above: a thrown failure is not
     // the server reporting a closed session.
     return { custom_in: 0, unavailable: true, error: e?.message };
   }
 };
 // Get daily worked hours
-export const getDailyWorkedHours = async (employeeCode, date) => {
+export const getDailyWorkedHours = async (employeeCode, date, { syncScope } = {}) => {
+  if (syncScope) {
+    await assertAttendanceQueueScope(syncScope);
+    if (syncScope.employeeId !== employeeCode) throw createAttendanceScopeChangedError();
+  }
   const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
+  if (syncScope) await assertAttendanceQueueScope(syncScope);
   const baseUrl = cleanBaseUrl(rawBaseUrl);
   const token = await AsyncStorage.getItem("access_token");
+  if (syncScope) await assertAttendanceQueueScope(syncScope);
   try {
     const response = await apiClient.get(
       `${baseUrl}/api/method/employee_app.attendance_api.get_total_hours`,
       {
+        ...(syncScope ? { attendanceSyncScope: syncScope } : {}),
         headers: { Authorization: `Bearer ${token}` },
         params: { employee: employeeCode, date },
       },
     );
+    if (syncScope) await assertAttendanceQueueScope(syncScope);
     const hours = response.data?.message?.trim();
     return hours ? hours : "00:00";
   } catch (err) {
+    if (syncScope) {
+      await assertAttendanceQueueScope(syncScope);
+      if (err?.code === "ATTENDANCE_SYNC_SCOPE_CHANGED") throw err;
+    }
     return "00:00";
   }
 };
 // Get monthly worked hours
-export const getMonthlyWorkedHours = async (employeeCode, month, year) => {
+export const getMonthlyWorkedHours = async (employeeCode, month, year, { syncScope } = {}) => {
+  if (syncScope) {
+    await assertAttendanceQueueScope(syncScope);
+    if (syncScope.employeeId !== employeeCode) throw createAttendanceScopeChangedError();
+  }
   const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
+  if (syncScope) await assertAttendanceQueueScope(syncScope);
   const baseUrl = cleanBaseUrl(rawBaseUrl);
   const token = await AsyncStorage.getItem("access_token");
+  if (syncScope) await assertAttendanceQueueScope(syncScope);
   try {
     const response = await apiClient.get(
       `${baseUrl}/api/method/employee_app.attendance_api.get_monthly_hours`,
       {
+        ...(syncScope ? { attendanceSyncScope: syncScope } : {}),
         headers: { Authorization: `Bearer ${token}` },
         params: { employee: employeeCode, month, year },
       },
     );
+    if (syncScope) await assertAttendanceQueueScope(syncScope);
     const hours = response.data?.message?.trim();
     return hours ? hours : "00:00";
   } catch (err) {
+    if (syncScope) {
+      await assertAttendanceQueueScope(syncScope);
+      if (err?.code === "ATTENDANCE_SYNC_SCOPE_CHANGED") throw err;
+    }
     return "00:00";
   }
 };
 
-export const getTodayBreaks = async (employeeCode, date) => {
+export const getTodayBreaks = async (employeeCode, date, { syncScope } = {}) => {
+  if (syncScope) {
+    await assertAttendanceQueueScope(syncScope);
+    if (syncScope.employeeId !== employeeCode) throw createAttendanceScopeChangedError();
+  }
   const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
+  if (syncScope) await assertAttendanceQueueScope(syncScope);
   const baseUrl = cleanBaseUrl(rawBaseUrl);
   const token = await AsyncStorage.getItem("access_token");
+  if (syncScope) await assertAttendanceQueueScope(syncScope);
 
   try {
+    const capabilityScope = await assertCapability("attendance_action.employee_checkin_break", { baseUrl, employeeCode });
     const response = await apiClient.get(
       `${baseUrl}/api/method/employee_app.attendance_api.get_today_breaks`,
       {
+        ...(syncScope ? { attendanceSyncScope: syncScope } : {}),
+        capabilityScope,
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -697,31 +773,45 @@ export const getTodayBreaks = async (employeeCode, date) => {
         },
       },
     );
+    if (syncScope) await assertAttendanceQueueScope(syncScope);
 
     const data = response.data?.message;
 
     // Return full object (important for flexibility)
     return data || { total_break_minutes: 0, breaks: [] };
   } catch (err) {
+    if (syncScope) {
+      await assertAttendanceQueueScope(syncScope);
+      if (err?.code === "ATTENDANCE_SYNC_SCOPE_CHANGED") throw err;
+    }
     return { total_break_minutes: 0, breaks: [] };
   }
 };
 
-export const employeeBreak = async ({ employeeCode, type, reason }) => {
+export const employeeBreak = async ({ employeeCode, type, reason, syncScope }) => {
   try {
     if (!employeeCode) throw new Error("Employee ID is required");
+    if (syncScope) {
+      await assertAttendanceQueueScope(syncScope);
+      if (syncScope.employeeId !== employeeCode) throw createAttendanceScopeChangedError();
+    }
 
     const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
+    if (syncScope) await assertAttendanceQueueScope(syncScope);
     const baseUrl = cleanBaseUrl(rawBaseUrl);
     if (!baseUrl) throw new Error("Base URL missing");
 
     const token = await AsyncStorage.getItem("access_token");
+    if (syncScope) await assertAttendanceQueueScope(syncScope);
     if (!token) throw new Error("Token missing");
+
+    const capabilityScope = await assertCapability("attendance_action.employee_checkin_break", { baseUrl, employeeCode });
 
     // const rawTimestamp = await getServerTime();
     // const timestamp = rawTimestamp.split(".")[0];
 
-    const timestamp = (await getServerTime()).split(".")[0];
+    const timestamp = (await getServerTime({ syncScope })).split(".")[0];
+    if (syncScope) await assertAttendanceQueueScope(syncScope);
     console.log("TIMESTAMP SENT:", timestamp);
 
     const formData = new URLSearchParams();
@@ -737,12 +827,15 @@ export const employeeBreak = async ({ employeeCode, type, reason }) => {
       `${baseUrl}/api/method/employee_app.attendance_api.Employee_break`,
       formData.toString(),
       {
+        ...(syncScope ? { attendanceSyncScope: syncScope } : {}),
+        capabilityScope,
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/x-www-form-urlencoded",
         },
       },
     );
+    if (syncScope) await assertAttendanceQueueScope(syncScope);
 
     // const breakId = response.data?.message?.name;
     // console.log("BREAK API RESPONSE:", JSON.stringify(response.data, null, 2));
@@ -771,6 +864,10 @@ export const employeeBreak = async ({ employeeCode, type, reason }) => {
       message: type === "IN" ? "Break started" : "Break ended",
     };
   } catch (error) {
+    if (syncScope) {
+      await assertAttendanceQueueScope(syncScope);
+      if (error?.code === "ATTENDANCE_SYNC_SCOPE_CHANGED") throw error;
+    }
     console.log("Break error:", error?.response?.data || error.message);
 
     return {
@@ -788,8 +885,9 @@ export const createAttendanceRequest = async ({
   reason,
   from_time,
   to_time,
-}) => {
+}, { capabilityScope: expected } = {}) => {
   try {
+    const owner = expected ? await assertCapability("attendance_action.attendance_request", expected) : null;
     if (!employee) throw new Error("Employee ID is required");
 
     const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
@@ -798,6 +896,8 @@ export const createAttendanceRequest = async ({
 
     if (!baseUrl) throw new Error("Base URL missing");
     if (!token) throw new Error("Token missing");
+
+    const capabilityScope = await assertCapability("attendance_action.attendance_request", { ...owner, baseUrl, employeeCode: employee });
 
     const url = `${baseUrl}/api/method/employee_app.gauth.create_attendence_request`;
 
@@ -811,6 +911,7 @@ export const createAttendanceRequest = async ({
     formData.append("to_time", to_time || "");
 
     const response = await apiClient.post(url, formData.toString(), {
+      capabilityScope,
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/x-www-form-urlencoded",
@@ -844,14 +945,16 @@ export const createAttendanceRequest = async ({
   }
 };
 
-export const uploadAttendanceAttachment = async (file, docname) => {
+export const uploadAttendanceAttachment = async (file, docname, { capabilityScope: expected } = {}) => {
   try {
+    const owner = expected ? await assertCapability("attendance_action.attendance_request", expected) : null;
     if (!file?.uri) throw new Error("Invalid file");
     if (!docname) throw new Error("Missing docname");
 
     const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
     const baseUrl = cleanBaseUrl(rawBaseUrl);
     const token = await AsyncStorage.getItem("access_token");
+    const capabilityScope = await assertCapability("attendance_action.attendance_request", { ...owner, baseUrl });
 
     const formData = new FormData();
 
@@ -880,6 +983,7 @@ export const uploadAttendanceAttachment = async (file, docname) => {
     formData.append("doctype", "Attendance Request");
     formData.append("docname", String(docname));
 
+    await assertCapability("attendance_action.attendance_request", capabilityScope);
     const response = await fetch(
       `${baseUrl}/api/method/employee_app.attendance_api.upload_file`,
       {
@@ -921,9 +1025,12 @@ export const getAttendanceRequests = async () => {
       return { error: MISSING_EMPLOYEE_MESSAGE };
     }
 
+    const capabilityScope = await assertCapability("attendance_action.attendance_request", { baseUrl, employeeCode });
+
     const url = `${baseUrl}/api/method/employee_app.employee_list.list_attendance_request`;
 
     const response = await apiClient.get(url, {
+      capabilityScope,
       headers: buildHeaders(token),
     });
 

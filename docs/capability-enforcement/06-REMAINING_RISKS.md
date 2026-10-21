@@ -1,0 +1,24 @@
+# Remaining risks and backend clarification
+
+Current follow-up status: [07](07-FINAL_GAP_ANALYSIS.md) records the R4 employee-mode execution/retry fix and legacy historical-replay limitation; [09](09-RELEASE_READINESS.md) classifies production gates and records current fixes/tests. R4 client regression coverage passes; DV-13 native/device validation remains pending. These qualify the earlier risk inventory below.
+
+## Blocking full settings-authority claims
+
+1. **Overlapping geo/location policy sources.** The repository explicitly leaves precedence unresolved between settings `geo_tagging` and employee `geotagging`, and has no resolved contract for settings `restrict_location` / `unrestricted_checkout_location` versus mandatory employee flags. Existing employee rules are preserved. Do not claim all three settings fields now control attendance. See `03-GEOTAGGING_AND_LOCATION_POLICY.md` and existing P-11.
+2. **Unknown settings compatibility.** Existing omitted/unavailable settings default to available for legacy tenants. Explicit false survives same-scope outages and partial/malformed refreshes, but an unknown permission is not a received denial. Logout clears capability caches, so a fresh session/outage has the same unknown behavior. A versioned complete response contract or approved migration is needed to close optional features before any answer without breaking older tenants. Essential mobile attendance still requires complete employee policy.
+3. **Backend authorization is unverified.** No backend source, credentials or staging tenant were supplied. Client checks do not secure these APIs against other clients or modified builds. Backend owners must independently authorize all feature reads, mutations, attachments and attendance, and validate tenant/employee ownership. No endpoint was probed with production credentials.
+4. **Missing feature contracts.** `employee_shift` is normalized but there is no implemented shift-specific path to enforce. `offline_attendance_version` has no discovered version-gating semantics. Salary advance and trips have no matching settings field; they were not assigned guessed permissions.
+
+## Operational and data-integrity limits
+
+- Settings are received on login, aged foreground refresh or manual retry. There is no immediate remote revocation, continuously active polling or capability lease. A request already dispatched or database admission already begun cannot be recalled by a later response. Native monitoring under its persisted configuration may continue while JS is absent; received explicit automatic disablement stops it when JS runs.
+- Accepted attendance records continue scoped delivery after offline/automatic disablement. This follows the existing integrity contract; backend owners should confirm that historical delivery remains accepted. Unattributed legacy rows remain for review, and are never automatically relabeled or deleted.
+- A denied native receipt remains pending rather than becoming attendance. Existing mode/capture/time/provenance rules still apply when policy changes again. Product owners should confirm retention and desired eventual handling of historical receipts; no new retention/deletion policy was invented.
+- Legacy endpoint-support and administrator mirrors remain older compatibility state. Scoped checks prevent their unknown/true value from overriding a received denial; a stale false can temporarily refuse queueing after an unusual provisioning transition. A tenant-keyed endpoint-support cache is a follow-up, not a second feature authority.
+- Older queued photos remain best effort. If photo upload is now disabled, attendance still delivers and the original photo URI stays in the row; completed-row attachment retry is not implemented. Existing camera association accepts a legacy FormData call despite its misleading parameter name; its pre-existing payload mismatch was preserved rather than changing backend contracts in this audit.
+- Existing native APIs remain compatible; no Kotlin/Swift code or production configuration changed. JavaScript mocks do not establish iOS wake/termination behavior, Android reboot/OEM behavior, native registration latency or live attendance acceptance. These require device/simulator builds and staging.
+- The supplied task includes one example capability payload but no actual Rowad/TDI configurations. Synthetic enabled/disabled fixtures represent configurations without claiming verified production settings.
+
+## Checks that remain unavailable
+
+There is no configured TypeScript project/check script, ESLint configuration or checked-in CI workflow. The lint command fails before analyzing source because configuration is missing. Native/device runs and live backend integration were not performed. See `05-TEST_RESULTS.md` for executed JavaScript checks and retained existing TODO tests.

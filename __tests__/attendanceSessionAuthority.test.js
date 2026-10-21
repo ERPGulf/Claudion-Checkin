@@ -72,7 +72,7 @@ describe("an unreachable server is not a check-out", () => {
 
     const session = await reconcileSessionFromServer({
       activeStartedAt: null,
-      fetchedAt: Date.now(),
+      fetchedAt: Date.now() + 1,
     });
 
     // Demonstrates the damage the guard prevents — the record really does close.

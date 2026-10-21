@@ -1,6 +1,7 @@
 import apiClient from "./apiClient";
 import { getAuthContext, buildHeaders } from "./authHelper";
 import { sanitizeAttachment } from "../../utils/fileName";
+import { assertCapability } from "../capabilityPolicy";
 
 /**
  * Frappe method that files an Employee Resignation for the authenticated
@@ -77,6 +78,7 @@ export const submitResignation = async ({
 }) => {
   try {
     const { baseUrl, token } = await getAuthContext();
+    const capabilityScope = await assertCapability("employee_resignation", { baseUrl });
 
     const formData = new FormData();
     formData.append("resignation_date", resignationDate);
@@ -88,6 +90,7 @@ export const submitResignation = async ({
       `${baseUrl}/api/method/${RESIGNATION_METHOD}`,
       formData,
       {
+        capabilityScope,
         headers: buildHeaders(token, "multipart/form-data"),
         timeout: 30000,
       },
