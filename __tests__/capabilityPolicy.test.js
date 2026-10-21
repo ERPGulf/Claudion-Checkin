@@ -14,6 +14,7 @@ import reducer, {
 } from '../redux/Slices/FeatureSettingsSlice';
 import {
   assertCapability,
+  assertCapabilityCurrent,
   getCapabilitySnapshot,
 } from '../services/capabilityPolicy';
 import { invalidateAuthSession, activateAuthSession, getAuthSessionGeneration } from '../utils/authSessionGuard';
@@ -43,6 +44,22 @@ beforeEach(async () => {
 });
 
 describe('every Boolean capability at the execution boundary', () => {
+  it.each([false, 0, null])('synchronously rejects tenant geo %p received after an automatic ownership read', async geo => {
+    install({ attendance_action: { auto_attendance: true, geo_tagging: 2 } });
+    const owner = await assertCapability('attendance_action.auto_attendance');
+    install({ attendance_action: { auto_attendance: true, geo_tagging: geo } });
+    expect(() => assertCapabilityCurrent('attendance_action.auto_attendance', owner))
+      .toThrow(expect.objectContaining({ code: 'FEATURE_DISABLED', feature: 'attendance_action.auto_attendance' }));
+    await expect(assertCapability('attendance_action.auto_attendance')).rejects.toMatchObject({ code: 'FEATURE_DISABLED' });
+  });
+
+  it('checks authentication generation again at the final synchronous boundary', async () => {
+    const owner = await assertCapability('attendance_action.auto_attendance');
+    invalidateAuthSession();
+    expect(() => assertCapabilityCurrent('attendance_action.auto_attendance', owner))
+      .toThrow(expect.objectContaining({ code: 'CAPABILITY_SCOPE_CHANGED' }));
+  });
+
   it.each(BOOLEAN_PATHS)('%s refuses false and preserves enabled behavior', async path => {
     install(wireFlag(path, false));
     await expect(assertCapability(path)).rejects.toMatchObject({ code: 'FEATURE_DISABLED', retryable: false });

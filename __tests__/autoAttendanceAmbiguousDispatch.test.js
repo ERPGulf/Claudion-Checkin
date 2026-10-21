@@ -1,6 +1,5 @@
 /** @jest-environment jsdom */
 jest.mock("expo-sqlite", () => require("../test-utils/expoSqliteMock"));
-jest.mock("../redux/Store", () => ({ store: { dispatch: jest.fn() } }));
 jest.mock("expo-location", () => ({}));
 jest.mock("../modules/expo-auto-attendance", () => ({
   OFFICE_GEOFENCE_IDENTIFIER: "office-main",
@@ -26,6 +25,7 @@ import { resetOfflineCapability, setOfflineQueueingAllowed } from "../services/o
 import { readSession } from "../utils/attendanceSessionState";
 import { createRegistrationId } from "../utils/autoAttendanceRegistration";
 import { loginQueueEmployee, TEST_TENANT } from "../test-utils/attendanceScope";
+import { beginEmployeeAutoAttendancePolicyReception, receiveEmployeeAutoAttendancePolicy } from "../services/employeeAutoAttendancePolicy";
 
 const { __resetAll } = require("../test-utils/expoSqliteMock");
 const employeeId = "EMP-001";
@@ -45,6 +45,7 @@ beforeEach(async () => {
   await loginQueueEmployee(employeeId); await saveTokens("synthetic-access", "synthetic-refresh");
   await AsyncStorage.multiSet([["restrict_location", "0"], ["unrestricted_checkout_location", "0"]]);
   scope = await captureAttendanceQueueScope(employeeId);
+  await receiveEmployeeAutoAttendancePolicy({ geotagging: 2 }, beginEmployeeAutoAttendancePolicyReception(scope));
   await AsyncStorage.setItem(CONFIG_KEY, JSON.stringify({ employeeId, tenantKey: TEST_TENANT,
     employeeDocname: "HR-EMP-001", rules: { geotagging: 2, restrictLocation: 0, unrestrictedCheckoutLocation: 0, photo: 0 },
     locations: [{ ...office, reporting_radius: 100, location: "Office" }] }));

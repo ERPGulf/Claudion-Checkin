@@ -7,6 +7,12 @@ import {
   createAttendanceScopeChangedError,
 } from "./attendanceQueueProvenance";
 import { resolveLocationCoordinates } from "../../utils/attendanceLocations";
+import {
+  beginEmployeeAutoAttendancePolicyReception,
+  receiveEmployeeAutoAttendancePolicy,
+  getEmployeeAutoAttendancePolicy,
+  parseEmployeeGeotagging,
+} from "../employeeAutoAttendancePolicy";
 
 /**
  * The attendance rules, kept on the device so a check-in can be validated with
@@ -134,6 +140,8 @@ export const buildConfig = (employee, { employeeId, now = Date.now() }) => {
       geotagging: toNumber(employee?.geotagging),
     },
 
+    employeePolicyExplicit: parseEmployeeGeotagging(employee?.geotagging) !== null,
+
     lastUpdated: now,
   };
 };
@@ -216,10 +224,12 @@ export const refreshAttendanceConfig = async (
     if (expectedGeneration !== undefined && expectedGeneration !== scope.generation) {
       throw createAttendanceScopeChangedError();
     }
+    const reception = employeeData === undefined ? null : beginEmployeeAutoAttendancePolicyReception(scope);
     const authMethod = await AsyncStorage.getItem("auth_method");
     const employee = employeeData === undefined
       ? await fetchEmployeeData(employeeId, { syncScope: scope })
       : employeeData;
+    if (reception) await receiveEmployeeAutoAttendancePolicy(employee, reception);
     const previous = await readAttendanceConfig();
     const existing = previous?.employeeId === employeeId && previous.tenantKey === scope.tenantKey
       ? previous : null;
@@ -231,7 +241,8 @@ export const refreshAttendanceConfig = async (
         // A background response can safely disable automatic actions even when
         // its other fields cannot authorize attendance. Sign-in still requires
         // the complete policy contract and never takes this fallback.
-        const explicitRevocation = employee?.geotagging === 0 || employee?.geotagging === "0";
+        const mode = parseEmployeeGeotagging(employee?.geotagging);
+        const explicitRevocation = mode === 0 || mode === 1;
         if (requireCompletePolicy || !existing || !explicitRevocation) throw error;
         revocationOnly = true;
       }
@@ -254,6 +265,14 @@ export const refreshAttendanceConfig = async (
       if (!config.employeeDocname) config.employeeDocname = existing.employeeDocname;
     }
 
+    // The response may have raced a newer employee request. The live scoped
+    // policy owns the mode; geometry caching must not republish an older mode.
+    const policy = await getEmployeeAutoAttendancePolicy(scope);
+    if (policy) {
+      config.rules.geotagging = policy.mode;
+      config.employeePolicyRevision = policy.revision;
+      config.employeePolicyExplicit = policy.explicit;
+    }
     await assertAttendanceQueueScope(scope);
     await AsyncStorage.setItem(CONFIG_KEY, JSON.stringify(config));
     await assertAttendanceQueueScope(scope);
@@ -289,7 +308,15 @@ export const refreshAttendanceConfigIfStale = async (
   const age = existing?.lastUpdated ? now - existing.lastUpdated : Infinity;
 
   if (existing?.locations?.length && age < maxAgeMs) {
-    return { refreshed: false, config: existing };
+    try {
+      const scope = await captureAttendanceQueueScope(employeeId);
+      if (existing.tenantKey === scope.tenantKey && existing.employeeId === scope.employeeId) {
+        await getEmployeeAutoAttendancePolicy(scope);
+        return { refreshed: false, config: existing };
+      }
+    } catch {
+      return { refreshed: false, config: null };
+    }
   }
 
   return refreshAttendanceConfig(employeeId);

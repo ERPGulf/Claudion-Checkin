@@ -1,5 +1,7 @@
 import { requireOptionalNativeModule } from "expo";
-import { assertCapability } from "../../services/capabilityPolicy";
+import { assertCapability, assertCapabilityCurrent } from "../../services/capabilityPolicy";
+import { assertEmployeeAutoAttendancePolicy, assertEmployeeAutoAttendancePolicyCurrent } from "../../services/employeeAutoAttendancePolicy";
+import { readAttendanceQueueScope } from "../../services/offline/attendanceQueueProvenance";
 import { ATTENDANCE_FEATURES } from "../../utils/featureSettings";
 
 /**
@@ -55,24 +57,58 @@ export function supportsDurableEvents() {
     typeof ExpoAutoAttendance?.acknowledgeEvent === "function";
 }
 
-export async function startGeofence({ latitude, longitude, radius, identifier, ...scope }) {
-  await assertCapability(ATTENDANCE_FEATURES.AUTO_ATTENDANCE,
-    { baseUrl: scope.tenantKey, employeeCode: scope.employeeId, generation: scope.generation });
+const captureMonitoringScope = async expectedScope => {
+  if (expectedScope) return expectedScope;
+  const current = await readAttendanceQueueScope();
+  // Keep the first read's owner, including its auth generation. A second read
+  // to discover/capture the employee could adopt a new tenant between awaits.
+  return { tenantKey: current.tenantKey, employeeId: current.employeeId,
+    accountId: current.accountId, generation: current.generation };
+};
+
+export async function startGeofence({ latitude, longitude, radius, identifier, ...scope }, expectedScope) {
+  const captured = await captureMonitoringScope(expectedScope);
+  const owner = { ...captured,
+    ...(scope.tenantKey !== undefined ? { tenantKey: scope.tenantKey } : {}),
+    ...(scope.employeeId !== undefined ? { employeeId: scope.employeeId } : {}),
+    ...(scope.generation !== undefined ? { generation: scope.generation } : {}),
+  };
+  const assertAllowed = async () => {
+    await assertCapability(ATTENDANCE_FEATURES.AUTO_ATTENDANCE,
+      { baseUrl: owner.tenantKey, employeeCode: owner.employeeId, generation: owner.generation });
+    const policy = await assertEmployeeAutoAttendancePolicy(owner, { action: "monitor" });
+    assertCapabilityCurrent(ATTENDANCE_FEATURES.AUTO_ATTENDANCE, owner);
+    return policy;
+  };
+  await assertAllowed();
+  assertCapabilityCurrent(ATTENDANCE_FEATURES.AUTO_ATTENDANCE, owner);
+  const policy = assertEmployeeAutoAttendancePolicyCurrent(owner, { action: "monitor" });
+  if (scope.geotagging !== undefined && Number(scope.geotagging) !== policy.mode) {
+    const error = new Error("Employee automatic attendance policy changed before registration.");
+    error.code = "EMPLOYEE_AUTO_ATTENDANCE_POLICY_CHANGED";
+    throw error;
+  }
   const result = await nativeModule().startGeofence({
     latitude,
     longitude,
     radius,
     identifier,
     ...(supportsDurableEvents() ? {
-      tenantKey: scope.tenantKey,
-      employeeId: scope.employeeId,
+      tenantKey: owner.tenantKey,
+      employeeId: owner.employeeId,
       registrationId: scope.registrationId,
-      geotagging: scope.geotagging,
+      geotagging: policy.mode,
     } : {}),
   });
   try {
-    await assertCapability(ATTENDANCE_FEATURES.AUTO_ATTENDANCE,
-      { baseUrl: scope.tenantKey, employeeCode: scope.employeeId, generation: scope.generation });
+    await assertAllowed();
+    assertCapabilityCurrent(ATTENDANCE_FEATURES.AUTO_ATTENDANCE, owner);
+    const current = assertEmployeeAutoAttendancePolicyCurrent(owner, { action: "monitor" });
+    if (current.mode !== policy.mode) {
+      const error = new Error("Employee automatic attendance policy changed during registration.");
+      error.code = "EMPLOYEE_AUTO_ATTENDANCE_POLICY_CHANGED";
+      throw error;
+    }
   } catch (error) {
     await nativeModule().stopGeofence();
     throw error;
@@ -89,9 +125,34 @@ export function stopGeofence() {
 }
 
 /** Additive iOS repair; an older binary has no unfinished-state retry method. */
-export function retryInitialPresence() {
-  if (typeof ExpoAutoAttendance?.retryInitialPresence !== "function") return Promise.resolve(false);
-  return ExpoAutoAttendance.retryInitialPresence();
+export async function retryInitialPresence(expectedScope) {
+  if (typeof ExpoAutoAttendance?.retryInitialPresence !== "function") return false;
+  const scope = await captureMonitoringScope(expectedScope);
+  const assertAllowed = async () => {
+    await assertCapability(ATTENDANCE_FEATURES.AUTO_ATTENDANCE,
+      { baseUrl: scope.tenantKey, employeeCode: scope.employeeId, generation: scope.generation });
+    const policy = await assertEmployeeAutoAttendancePolicy(scope, { action: "monitor" });
+    assertCapabilityCurrent(ATTENDANCE_FEATURES.AUTO_ATTENDANCE, scope);
+    return policy;
+  };
+  await assertAllowed();
+  assertCapabilityCurrent(ATTENDANCE_FEATURES.AUTO_ATTENDANCE, scope);
+  const policy = assertEmployeeAutoAttendancePolicyCurrent(scope, { action: "monitor" });
+  const result = await ExpoAutoAttendance.retryInitialPresence();
+  try {
+    await assertAllowed();
+    assertCapabilityCurrent(ATTENDANCE_FEATURES.AUTO_ATTENDANCE, scope);
+    const current = assertEmployeeAutoAttendancePolicyCurrent(scope, { action: "monitor" });
+    if (current.mode !== policy.mode) {
+      const error = new Error("Employee automatic attendance policy changed during initial-state retry.");
+      error.code = "EMPLOYEE_AUTO_ATTENDANCE_POLICY_CHANGED";
+      throw error;
+    }
+  } catch (error) {
+    await nativeModule().stopGeofence();
+    throw error;
+  }
+  return result;
 }
 
 /** @returns {boolean} whether a geofence is currently registered. */

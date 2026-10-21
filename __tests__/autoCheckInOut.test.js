@@ -1,4 +1,9 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { loginQueueEmployee } from "../test-utils/attendanceScope";
+import { captureAttendanceQueueScope } from "../services/offline/attendanceQueueProvenance";
+import {
+  beginEmployeeAutoAttendancePolicyReception, receiveEmployeeAutoAttendancePolicy,
+} from "../services/employeeAutoAttendancePolicy";
 
 // attendance.service.js pulls in expo-location / geolib at module load for
 // getOfficeLocation; autoCheckInOut uses neither, so stub them to keep this a
@@ -15,6 +20,7 @@ jest.mock("../services/api/apiClient", () => ({
 // exercised with enabled/disabled policies in capabilityServices and runtime tests.
 jest.mock("../services/capabilityPolicy", () => ({
   assertCapability: jest.fn(() => Promise.resolve()),
+  assertCapabilityCurrent: jest.fn(),
 }));
 
 import apiClient from "../services/api/apiClient";
@@ -25,13 +31,18 @@ import {
 } from "../services/api/attendance.service";
 
 const ADD_LOG_ENDPOINT = "add_log_based_on_employee_field";
+const receiveAuthorizedEmployee = async () => {
+  await loginQueueEmployee("HR-EMP-00011", "https://demo.erpgulf.com", "tok-123");
+  const scope = await captureAttendanceQueueScope("HR-EMP-00011");
+  const reception = beginEmployeeAutoAttendancePolicyReception(scope);
+  await receiveEmployeeAutoAttendancePolicy({ geotagging: 2 }, reception);
+};
 
 describe("autoCheckInOut (geofence-driven attendance)", () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     await AsyncStorage.clear();
-    await AsyncStorage.setItem("baseUrl", "https://demo.erpgulf.com");
-    await AsyncStorage.setItem("access_token", "tok-123");
+    await receiveAuthorizedEmployee();
     // getServerTime() reads through apiClient.get
     apiClient.get.mockResolvedValue({
       data: { message: { server_time: "2026-07-23 10:00:00" } },
@@ -197,8 +208,7 @@ describe("the `auto` flag on add_log_based_on_employee_field", () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     await AsyncStorage.clear();
-    await AsyncStorage.setItem("baseUrl", "https://demo.erpgulf.com");
-    await AsyncStorage.setItem("access_token", "tok-123");
+    await receiveAuthorizedEmployee();
     apiClient.get.mockResolvedValue({
       data: { message: { server_time: "2026-07-23 10:00:00" } },
     });

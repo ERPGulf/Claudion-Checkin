@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Platform } from 'react-native';
 import {
   createLeaveApplication,
@@ -9,6 +9,8 @@ import {
 import { useAttachmentPicker } from './useAttachmentPicker';
 import { hapticsMessage } from '../utils/HapticsMessage';
 import useRequestHistory from './useRequestHistory';
+import { assertCapability, getCapabilitySnapshot } from '../services/capabilityPolicy';
+import { getAuthSessionGeneration } from '../utils/authSessionGuard';
 
 /**
  * The sentinel the picker uses for "nothing chosen". Part of the contract with
@@ -81,6 +83,7 @@ export function formatDate(date) {
  * both screens.
  */
 export default function useLeaveRequest() {
+  const actionGeneration = useRef(getAuthSessionGeneration()).current;
   const [leaveType, setLeaveType] = useState(NO_LEAVE_TYPE);
   const [reason, setReason] = useState('');
   const [fromDate, setFromDate] = useState(new Date());
@@ -96,7 +99,7 @@ export default function useLeaveRequest() {
   const [isTypeSheetVisible, setTypeSheetVisible] = useState(false);
 
   const { pickFromCamera, pickFromGallery, pickDocument } =
-    useAttachmentPicker();
+    useAttachmentPicker('leave_request');
 
   /* ---------------------------------------------------------------------
    * Submitted leave applications — the shared history, newest first.
@@ -290,7 +293,8 @@ export default function useLeaveRequest() {
     try {
       setLoading(true);
 
-      const res = await createLeaveApplication(leaveData);
+      const capabilityScope = await assertCapability('leave_request', { generation: actionGeneration });
+      const res = await createLeaveApplication(leaveData, { capabilityScope });
 
       if (res?.error) {
         hapticsMessage('error');
@@ -305,7 +309,7 @@ export default function useLeaveRequest() {
       }
 
       if (attachment) {
-        const uploadRes = await uploadLeaveAttachment(attachment, docname);
+        const uploadRes = await uploadLeaveAttachment(attachment, docname, { capabilityScope });
 
         if (uploadRes?.error) {
           Alert.alert('Warning', 'Leave created, but attachment upload failed.');
@@ -314,6 +318,7 @@ export default function useLeaveRequest() {
 
       // Refresh before the Alert, so the new request is already in the list
       // behind it rather than appearing a beat after "OK".
+      await getCapabilitySnapshot(capabilityScope);
       await refetchHistory();
       resetHistoryPage();
 

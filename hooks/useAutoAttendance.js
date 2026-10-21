@@ -18,6 +18,11 @@ import {
 } from '../redux/Slices/AutoAttendanceSlice';
 import { getOfficeLocation } from '../services/api/attendance.service';
 import { fetchEmployeeData } from '../services/api/employee.service';
+import { assertEmployeeAutoAttendancePolicy } from '../services/employeeAutoAttendancePolicy';
+import { captureAttendanceQueueScope } from '../services/offline/attendanceQueueProvenance';
+import { assertCapability, assertCapabilityCurrent } from '../services/capabilityPolicy';
+import { useFeatureEnabled } from './useFeatureSettings';
+import { ATTENDANCE_FEATURES } from '../utils/featureSettings';
 import { ensureNotificationSetup } from '../services/notifications/localNotifications';
 import {
   addErrorListener,
@@ -64,13 +69,18 @@ export default function useAutoAttendance() {
   const available = isAvailable();
 
   const geotagging = useSelector(selectAutoAttendanceGeotagging);
-  const allowed = useSelector(selectAutoAttendanceAllowed);
+  const employeeAllowed = useSelector(selectAutoAttendanceAllowed);
   const userEnabled = useSelector(selectAutoAttendanceUserEnabled);
-  const active = useSelector(selectAutoAttendanceActive);
-  const fullActions = useSelector(selectAutoAttendanceFullActions);
+  const employeeActive = useSelector(selectAutoAttendanceActive);
+  const employeeFullActions = useSelector(selectAutoAttendanceFullActions);
+  const capabilityAllowed = useFeatureEnabled(ATTENDANCE_FEATURES.AUTO_ATTENDANCE);
+  const allowed = employeeAllowed && capabilityAllowed;
+  const active = employeeActive && capabilityAllowed;
+  const fullActions = employeeFullActions && capabilityAllowed;
   const employeeCode = useSelector(
     (state) => state.user?.userDetails?.employeeCode,
   );
+  const baseUrl = useSelector((state) => state.user?.baseUrl);
 
   const policy =
     GEOTAGGING_LABELS[geotagging] || GEOTAGGING_LABELS[GEOTAGGING.DISABLED];
@@ -97,6 +107,20 @@ export default function useAutoAttendance() {
   // in production (the simulator UI that flips it is inside a __DEV__ block).
   const devPolicyOverrideRef = useRef(false);
 
+  const assertMonitoringAllowed = async (scope) => {
+    await assertCapability(ATTENDANCE_FEATURES.AUTO_ATTENDANCE, scope);
+    const policy = await assertEmployeeAutoAttendancePolicy(scope, { action: 'monitor' });
+    assertCapabilityCurrent(ATTENDANCE_FEATURES.AUTO_ATTENDANCE, scope);
+    return policy;
+  };
+
+  useEffect(() => {
+    if (!capabilityAllowed) {
+      setMonitoring(false);
+      setPresence(null);
+    }
+  }, [capabilityAllowed]);
+
   const appendLog = useCallback((entry) => {
     setEventLog((prev) =>
       [{ ...entry, receivedAt: Date.now() }, ...prev].slice(0, MAX_LOG_ENTRIES),
@@ -110,15 +134,15 @@ export default function useAutoAttendance() {
     if (devPolicyOverrideRef.current) return;
     if (!employeeCode) return;
     try {
-      const employee = await fetchEmployeeData(employeeCode);
-      dispatch(setAutoAttendanceGeotagging(employee?.geotagging));
+      const scope = await captureAttendanceQueueScope(employeeCode);
+      await fetchEmployeeData(employeeCode, { syncScope: scope });
     } catch (error) {
       console.log(
         '[AutoAttendance] Failed to refresh geotagging policy:',
         error?.message,
       );
     }
-  }, [employeeCode, dispatch]);
+  }, [employeeCode, baseUrl]);
 
   const refreshPermissionStatus = useCallback(async () => {
     try {
@@ -370,6 +394,9 @@ export default function useAutoAttendance() {
 
     setBusy(true);
     try {
+      const scope = await captureAttendanceQueueScope(employeeCode);
+      const assertCurrentMonitoringAllowed = () => assertMonitoringAllowed(scope);
+      await assertCurrentMonitoringAllowed();
       // Whether permission was already in place decides if the bootstrap needs
       // nudging: its run triggered by the opt-in above happens before the OS
       // prompt is answered, so on a first-ever enable it bails at its own
@@ -379,11 +406,13 @@ export default function useAutoAttendance() {
         Location.getForegroundPermissionsAsync(),
         Location.getBackgroundPermissionsAsync(),
       ]);
+      await assertCurrentMonitoringAllowed();
       const wasAlreadyGranted =
         priorForeground.status === 'granted' &&
         priorBackground.status === 'granted';
 
       const granted = await requestPermissions();
+      await assertCurrentMonitoringAllowed();
       setPermissionGranted(granted);
       // Opt-in stays saved even if permission is declined — the user can grant
       // it later (or on the next launch) and monitoring resumes.
@@ -395,6 +424,7 @@ export default function useAutoAttendance() {
       // foreground, so the automatic check-out alert can fire later from the
       // background. Non-blocking: monitoring still starts if the user declines.
       await ensureNotificationSetup();
+      await assertCurrentMonitoringAllowed();
 
       if (!employeeCode) {
         Alert.alert(
@@ -407,7 +437,8 @@ export default function useAutoAttendance() {
       // Validation only — the bootstrap resolves the office again for the
       // registration itself. Catching it here turns an unconfigured account into
       // an explanation instead of a toggle that silently does nothing.
-      const nearest = await getOfficeLocation(employeeCode);
+      const nearest = await getOfficeLocation(employeeCode, { syncScope: scope });
+      await assertCurrentMonitoringAllowed();
       if (!nearest) {
         Alert.alert(
           'No office location configured',
@@ -419,6 +450,7 @@ export default function useAutoAttendance() {
       // The bootstrap registers asynchronously; poll briefly so the Status card
       // shows the real outcome rather than a stale "Not Monitoring".
       const registered = await waitForMonitoring();
+      await assertCurrentMonitoringAllowed();
       setMonitoring(registered);
       console.log(
         registered
@@ -438,8 +470,8 @@ export default function useAutoAttendance() {
     }
   };
 
-  // __DEV__ only below — raw native testing with manual coordinates,
-  // independent of the server policy above.
+  // __DEV__ only below — raw coordinates still require the employee's current
+  // monitoring permission and retain the original authenticated owner.
   const handleStart = async () => {
     const parsed = parseGeofenceInput(latitudeText, longitudeText, radiusText);
     if (parsed.error) {
@@ -450,10 +482,18 @@ export default function useAutoAttendance() {
 
     setBusy(true);
     try {
+      const scope = await captureAttendanceQueueScope(employeeCode);
+      await assertMonitoringAllowed(scope);
       const granted = await requestPermissions();
       if (!granted) return;
-
-      await startGeofence(geofence);
+      await assertMonitoringAllowed(scope);
+      await startGeofence(geofence, scope);
+      try {
+        await assertMonitoringAllowed(scope);
+      } catch (error) {
+        await stopGeofence();
+        throw error;
+      }
       setMonitoring(true);
       console.log('[AutoAttendance] Monitoring started', geofence);
     } catch (error) {
@@ -565,10 +605,9 @@ export default function useAutoAttendance() {
     console.log('[AutoAttendance] Status cleared');
   };
 
-  // __DEV__ only: force a geotagging policy locally (bypassing the server) so
-  // all three states can be exercised without an HR change. It dispatches into
-  // the same Redux state the real policy uses, so AutoAttendanceBootstrap reacts
-  // to it exactly as it would to a server value.
+  // __DEV__ only: preview a policy in the screen. Execution still requires the
+  // scoped employee policy received from the server; a display override cannot
+  // authorize monitoring or attendance.
   const handleSimulatePolicy = (value) => {
     devPolicyOverrideRef.current = true;
     dispatch(setAutoAttendanceGeotagging(value));

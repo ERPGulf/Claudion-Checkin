@@ -1,5 +1,7 @@
 # Test results
 
+This is the previous implementation's test record. The follow-up review's current counts, commands and remaining release gates are in [09-RELEASE_READINESS.md](09-RELEASE_READINESS.md).
+
 Local JavaScript validation on 2026-10-16. No real authentication tokens or production credentials were used in new fixtures. Test transports/native modules are mocked; SQLite integration uses the existing sql.js adapter.
 
 ## Final checks

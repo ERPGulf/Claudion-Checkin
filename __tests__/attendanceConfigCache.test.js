@@ -17,6 +17,12 @@ import {
 } from "../services/offline/attendanceConfigCache";
 import { fetchEmployeeData } from "../services/api/employee.service";
 import { getAuthSessionGeneration, invalidateAuthSession } from "../utils/authSessionGuard";
+import { store } from "../redux/Store";
+import { revertAll } from "../redux/CommonActions";
+import { captureAttendanceQueueScope } from "../services/offline/attendanceQueueProvenance";
+import {
+  beginEmployeeAutoAttendancePolicyReception, receiveEmployeeAutoAttendancePolicy,
+} from "../services/employeeAutoAttendancePolicy";
 
 /**
  * The cache is what makes offline validation possible at all, so its two rules
@@ -36,10 +42,21 @@ const employeeResponse = (overrides = {}) => ({
   ...overrides,
 });
 
+// The production employee API publishes its scoped policy before returning.
+// Preserve that contract while this suite isolates cache/mirror behavior.
+const mockEmployeeResponse = (response) => fetchEmployeeData.mockImplementation(async (employeeId, { syncScope } = {}) => {
+  const scope = syncScope ?? await captureAttendanceQueueScope(employeeId);
+  const reception = beginEmployeeAutoAttendancePolicyReception(scope);
+  await receiveEmployeeAutoAttendancePolicy(response, reception);
+  return response;
+});
+
 beforeEach(async () => {
   await AsyncStorage.clear();
+  store.dispatch(revertAll());
   await loginQueueEmployee("TDI0167");
   jest.clearAllMocks();
+  fetchEmployeeData.mockReset();
 });
 
 describe("buildConfig", () => {
@@ -88,16 +105,16 @@ describe("buildConfig", () => {
 
 describe("refreshAttendanceConfig", () => {
   it("passes the captured employee and tenant scope to policy download", async () => {
-    fetchEmployeeData.mockResolvedValue(employeeResponse());
+    mockEmployeeResponse(employeeResponse());
     await refreshAttendanceConfig("TDI0167");
     expect(fetchEmployeeData).toHaveBeenCalledWith("TDI0167", {
       syncScope: expect.objectContaining({ employeeId: "TDI0167", tenantKey: "https://attendance.example.com" }),
     });
   });
   it("honors explicit policy revocation and explicit empty geometry over a populated cache", async () => {
-    fetchEmployeeData.mockResolvedValue(employeeResponse());
+    mockEmployeeResponse(employeeResponse());
     await refreshAttendanceConfig("TDI0167");
-    fetchEmployeeData.mockResolvedValue(employeeResponse({ geotagging: 0, restrict_location: 0, employee_locations: [] }));
+    mockEmployeeResponse(employeeResponse({ geotagging: 0, restrict_location: 0, employee_locations: [] }));
     const result = await refreshAttendanceConfig("TDI0167");
     expect(result.refreshed).toBe(true);
     expect(result.config).toMatchObject({ rules: { geotagging: 0, restrictLocation: 0 }, locations: [] });
@@ -105,28 +122,28 @@ describe("refreshAttendanceConfig", () => {
   });
 
   it("retains same-scope omitted geometry while updating explicit policy fields", async () => {
-    fetchEmployeeData.mockResolvedValue(employeeResponse());
+    mockEmployeeResponse(employeeResponse());
     await refreshAttendanceConfig("TDI0167");
     const partial = employeeResponse({ geotagging: 0 });
     delete partial.employee_locations;
-    fetchEmployeeData.mockResolvedValue(partial);
+    mockEmployeeResponse(partial);
     const result = await refreshAttendanceConfig("TDI0167");
     expect(result.config.rules.geotagging).toBe(0);
     expect(result.config.locations).toHaveLength(1);
   });
 
-  it("mobile background revocation disables auto actions without weakening incomplete attendance rules", async () => {
+  it.each([0, 1])("mobile background mode %s revocation disables auto actions without weakening incomplete attendance rules", async mode => {
     await AsyncStorage.setItem("auth_method", "mobile");
-    fetchEmployeeData.mockResolvedValue(employeeResponse());
+    mockEmployeeResponse(employeeResponse());
     await refreshAttendanceConfig("TDI0167");
-    fetchEmployeeData.mockResolvedValue({ geotagging: 0, employee_locations: [], restrict_location: 0 });
+    mockEmployeeResponse({ geotagging: mode, employee_locations: [], restrict_location: 0 });
     const result = await refreshAttendanceConfig("TDI0167");
     expect(result.refreshed).toBe(true);
-    expect(result.config).toMatchObject({ rules: { geotagging: 0, restrictLocation: 1 }, locations: [] });
+    expect(result.config).toMatchObject({ rules: { geotagging: mode, restrictLocation: 1 }, locations: [] });
   });
 
   it("mobile hand-off still refuses incomplete policy even when automatic actions are explicitly revoked", async () => {
-    fetchEmployeeData.mockResolvedValue(employeeResponse());
+    mockEmployeeResponse(employeeResponse());
     await refreshAttendanceConfig("TDI0167");
     const result = await refreshAttendanceConfig("TDI0167", {
       requireCompletePolicy: true, employeeData: { geotagging: 0, employee_locations: [] },
@@ -136,7 +153,7 @@ describe("refreshAttendanceConfig", () => {
   });
 
   it("caches a successful download", async () => {
-    fetchEmployeeData.mockResolvedValue(employeeResponse());
+    mockEmployeeResponse(employeeResponse());
 
     const result = await refreshAttendanceConfig("TDI0167");
 
@@ -148,7 +165,7 @@ describe("refreshAttendanceConfig", () => {
   // a background refresh should keep them current rather than leaving them on
   // whatever the last GPS-taking call happened to store.
   it("keeps the individual AsyncStorage keys in step", async () => {
-    fetchEmployeeData.mockResolvedValue(employeeResponse());
+    mockEmployeeResponse(employeeResponse());
 
     await refreshAttendanceConfig("TDI0167");
 
@@ -160,7 +177,7 @@ describe("refreshAttendanceConfig", () => {
   // A stale cache is last week's offices; an emptied one is no offices at all,
   // and the gate would refuse every punch.
   it("keeps the previous cache when the download fails", async () => {
-    fetchEmployeeData.mockResolvedValue(employeeResponse());
+    mockEmployeeResponse(employeeResponse());
     await refreshAttendanceConfig("TDI0167");
 
     fetchEmployeeData.mockRejectedValue(new Error("Network Error"));
@@ -177,10 +194,10 @@ describe("refreshAttendanceConfig", () => {
   });
 
   it("treats an explicit empty location list as removal of previously cached locations", async () => {
-    fetchEmployeeData.mockResolvedValue(employeeResponse());
+    mockEmployeeResponse(employeeResponse());
     await refreshAttendanceConfig("TDI0167");
 
-    fetchEmployeeData.mockResolvedValue(employeeResponse({ employee_locations: [] }));
+    mockEmployeeResponse(employeeResponse({ employee_locations: [] }));
     const result = await refreshAttendanceConfig("TDI0167");
 
     expect(result.refreshed).toBe(true);
@@ -193,7 +210,7 @@ describe("refreshAttendanceConfig", () => {
   // attendance — they were told to go online and fetch a configuration they
   // already had.
   it("caches an empty list, and still counts it as configuration", async () => {
-    fetchEmployeeData.mockResolvedValue(employeeResponse({ employee_locations: [] }));
+    mockEmployeeResponse(employeeResponse({ employee_locations: [] }));
 
     const result = await refreshAttendanceConfig("TDI0167");
 
@@ -241,7 +258,7 @@ describe("mobile attendance policy hand-off", () => {
   it.each([0, 1, "0", "1", false, true])(
     "accepts the explicit policy flag %p",
     async (flag) => {
-      fetchEmployeeData.mockResolvedValue(employeeResponse({
+      mockEmployeeResponse(employeeResponse({
         restrict_location: flag,
         unrestricted_checkout_location: flag,
         photo: flag,
@@ -259,7 +276,7 @@ describe("mobile attendance policy hand-off", () => {
   it.each(["restrict_location", "unrestricted_checkout_location", "photo"])(
     "retains the previous cache and mirrors when %s is missing",
     async (field) => {
-      fetchEmployeeData.mockResolvedValue(employeeResponse());
+      mockEmployeeResponse(employeeResponse());
       await refreshAttendanceConfig("TDI0167");
       const before = await AsyncStorage.multiGet([
         CONFIG_KEY, "restrict_location", "unrestricted_checkout_location", "photo",
@@ -268,7 +285,7 @@ describe("mobile attendance policy hand-off", () => {
       await AsyncStorage.setItem("auth_method", "mobile");
       const partial = employeeResponse({ restrict_location: 0, photo: 1 });
       delete partial[field];
-      fetchEmployeeData.mockResolvedValue(partial);
+      mockEmployeeResponse(partial);
 
       const result = await refreshAttendanceConfig("TDI0167");
 
@@ -286,7 +303,7 @@ describe("mobile attendance policy hand-off", () => {
         ["unrestricted_checkout_location", "0"],
         ["photo", "1"],
       ]);
-      fetchEmployeeData.mockResolvedValue(employeeResponse({
+      mockEmployeeResponse(employeeResponse({
         restrict_location: restrictLocation,
       }));
 
@@ -303,7 +320,7 @@ describe("mobile attendance policy hand-off", () => {
 
   it("automatically rejects partial policy on later mobile refreshes", async () => {
     await AsyncStorage.setItem("auth_method", "mobile");
-    fetchEmployeeData.mockResolvedValue({});
+    mockEmployeeResponse({});
 
     const result = await refreshAttendanceConfig("TDI0167");
 
@@ -316,7 +333,7 @@ describe("mobile attendance policy hand-off", () => {
     { locations: [{ location: "Synthetic office", reporting_radius: 100 }] },
     { locations: [{ latitude: 25.28, longitude: 51.52, reporting_radius: 0 }] },
   ])("refuses restricted policy without a usable reporting location: %p", async ({ locations }) => {
-    fetchEmployeeData.mockResolvedValue(employeeResponse({ employee_locations: locations }));
+    mockEmployeeResponse(employeeResponse({ employee_locations: locations }));
 
     const result = await refreshAttendanceConfig("TDI0167", {
       requireCompletePolicy: true,
@@ -328,7 +345,7 @@ describe("mobile attendance policy hand-off", () => {
   });
 
   it("accepts an explicitly unrestricted employee with no reporting locations", async () => {
-    fetchEmployeeData.mockResolvedValue(employeeResponse({
+    mockEmployeeResponse(employeeResponse({
       restrict_location: 0,
       employee_locations: [],
     }));
@@ -343,7 +360,7 @@ describe("mobile attendance policy hand-off", () => {
 
   it("preserves the QR path's existing missing-policy defaults", async () => {
     await AsyncStorage.setItem("auth_method", "qr");
-    fetchEmployeeData.mockResolvedValue({});
+    mockEmployeeResponse({});
 
     const result = await refreshAttendanceConfig("TDI0167");
 
@@ -353,8 +370,26 @@ describe("mobile attendance policy hand-off", () => {
 });
 
 describe("refreshAttendanceConfigIfStale", () => {
+  it.each([
+    ["tenant", { tenantKey: "https://other-synthetic.example.test" }],
+    ["employee", { employeeId: "OTHER-SYNTHETIC-EMPLOYEE" }],
+  ])("refreshes a young cache owned by another %s", async (_label, owner) => {
+    await AsyncStorage.setItem(CONFIG_KEY, JSON.stringify({
+      ...buildConfig(employeeResponse(), { employeeId: "TDI0167", now: Date.now() }),
+      tenantKey: "https://attendance.example.com", ...owner,
+    }));
+    mockEmployeeResponse(employeeResponse({ geotagging: 0 }));
+
+    const result = await refreshAttendanceConfigIfStale("TDI0167", { now: Date.now() });
+
+    expect(fetchEmployeeData).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({ refreshed: true, config: {
+      tenantKey: "https://attendance.example.com", employeeId: "TDI0167", rules: { geotagging: 0 },
+    } });
+  });
+
   it("skips the request while the cache is fresh", async () => {
-    fetchEmployeeData.mockResolvedValue(employeeResponse());
+    mockEmployeeResponse(employeeResponse());
     await refreshAttendanceConfig("TDI0167");
     fetchEmployeeData.mockClear();
 
@@ -364,7 +399,7 @@ describe("refreshAttendanceConfigIfStale", () => {
   });
 
   it("refreshes once the cache is past its age", async () => {
-    fetchEmployeeData.mockResolvedValue(employeeResponse());
+    mockEmployeeResponse(employeeResponse());
     await refreshAttendanceConfig("TDI0167");
     fetchEmployeeData.mockClear();
 
@@ -376,7 +411,7 @@ describe("refreshAttendanceConfigIfStale", () => {
   });
 
   it("always refreshes when there is no cache at all", async () => {
-    fetchEmployeeData.mockResolvedValue(employeeResponse());
+    mockEmployeeResponse(employeeResponse());
     await refreshAttendanceConfigIfStale("TDI0167");
     expect(fetchEmployeeData).toHaveBeenCalled();
   });
@@ -407,7 +442,7 @@ describe("clearAttendanceConfig", () => {
   // The previous employee's reporting locations must not govern the next one's
   // offline check-ins.
   it("drops the cache on logout", async () => {
-    fetchEmployeeData.mockResolvedValue(employeeResponse());
+    mockEmployeeResponse(employeeResponse());
     await refreshAttendanceConfig("TDI0167");
 
     await clearAttendanceConfig();

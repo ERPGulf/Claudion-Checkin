@@ -10,15 +10,16 @@ import { assertCapability } from "../capabilityPolicy";
 /**
  * CREATE COMPLAINT
  */
-export const createComplaint = async ({ message }) => {
+export const createComplaint = async ({ message }, { capabilityScope: expected } = {}) => {
   try {
+    const owner = expected ? await assertCapability("complaints", expected) : null;
     const { baseUrl, token, employeeCode } = await getAuthContext();
 
     if (!employeeCode) {
       return { error: MISSING_EMPLOYEE_MESSAGE };
     }
 
-    const capabilityScope = await assertCapability("complaints", { baseUrl, employeeCode });
+    const capabilityScope = await assertCapability("complaints", { ...owner, baseUrl, employeeCode });
 
     // 🔥 Get accurate server time
     const serverTime = await getServerTime();
@@ -54,14 +55,16 @@ export const createComplaint = async ({ message }) => {
 /**
  * UPLOAD COMPLAINT ATTACHMENT
  */
-export const uploadComplaintAttachment = async (file, docname) => {
+export const uploadComplaintAttachment = async (file, docname, { capabilityScope: expected } = {}) => {
   try {
+
+    const owner = expected ? await assertCapability("complaints", expected) : null;
 
     if (!file?.uri) throw new Error("Invalid file");
     if (!docname) throw new Error("Missing docname");
 
     const { baseUrl, token } = await getAuthContext();
-    const capabilityScope = await assertCapability("complaints", { baseUrl });
+    const capabilityScope = await assertCapability("complaints", { ...owner, baseUrl });
 
     const formData = new FormData();
 

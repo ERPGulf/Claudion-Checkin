@@ -12,9 +12,9 @@ const expense = `${tenant}/api/method/employee_app.attendance_api.create_expense
 const history = `${tenant}/api/method/employee_app.attendance_api.get_attendance_details`;
 let mock;
 let refresh;
-const receive = wire => {
+const receive = (wire, ownerTenant = tenant) => {
   mockRootState.featureSettings = reducer(mockRootState.featureSettings, settingsReceived({
-    scope: buildSettingsScope(tenant, 'EMP-SYNTHETIC'),
+    scope: buildSettingsScope(ownerTenant, 'EMP-SYNTHETIC'),
     settings: normalizeFeatureSettings(wire),
   }));
 };
@@ -44,6 +44,60 @@ it('blocks direct axios invocation before the transport and permits an enabled c
   receive({ expense_claim: true });
   await expect(apiClient.post(expense, {})).resolves.toMatchObject({ status: 200 });
   expect(mock.history.post).toHaveLength(1);
+});
+
+it.each(['method/', '/method/'])('permits same-tenant relative feature URLs starting with %s', async prefix => {
+  const path = `${prefix}employee_app.attendance_api.create_expense_claim`;
+  mock.onPost(path).reply(200, { message: {} });
+  await expect(apiClient.post(path, {})).resolves.toMatchObject({ status: 200 });
+  expect(mock.history.post[0].baseURL).toBe(`${tenant}/api`);
+});
+
+it('rejects a foreign baseURL for a relative feature request using the auth-skip transport header', async () => {
+  const path = 'method/employee_app.attendance_api.create_expense_claim';
+  mock.onPost(path).reply(200, {});
+  await expect(apiClient.post(path, {}, {
+    baseURL: 'https://beta.example.test/api',
+    headers: { 'x-skip-auth': 'true', Authorization: 'Bearer synthetic-access' },
+  })).rejects.toMatchObject({ code: 'CAPABILITY_SCOPE_CHANGED' });
+  expect(mock.history.post).toHaveLength(0);
+});
+
+it('rejects a foreign effective baseURL when Axios is configured to combine an absolute feature URL', async () => {
+  mock.onPost(expense).reply(200, {});
+  await expect(apiClient.post(expense, {}, {
+    baseURL: 'https://beta.example.test/api',
+    allowAbsoluteUrls: false,
+  })).rejects.toMatchObject({ code: 'CAPABILITY_SCOPE_CHANGED' });
+  expect(mock.history.post).toHaveLength(0);
+});
+
+it('refuses a relative feature request whose resolved tenant predates its current token and policy', async () => {
+  const path = 'method/employee_app.attendance_api.create_expense_claim';
+  const nextTenant = 'https://beta.example.test';
+  mock.onPost(path).reply(200, {});
+  const originalRead = AsyncStorage.getItem.getMockImplementation();
+  let switched = false;
+  AsyncStorage.getItem.mockImplementation(async key => {
+    const value = await originalRead(key);
+    if (key === 'baseUrl' && !switched) {
+      switched = true;
+      // A real session transition finishes before the interceptor continues
+      // with its previously read base URL. New tokens/policy belong to beta.
+      await clearTokens();
+      await AsyncStorage.setItem('baseUrl', nextTenant);
+      await saveTokens('synthetic-beta-access', 'synthetic-beta-refresh');
+      receive({ expense_claim: true }, nextTenant);
+    }
+    return value;
+  });
+  try {
+    await expect(apiClient.post(path, {})).rejects.toMatchObject({ code: 'CAPABILITY_SCOPE_CHANGED' });
+    expect(switched).toBe(true);
+    expect(mock.history.post).toHaveLength(0);
+  } finally {
+    AsyncStorage.getItem.mockImplementation(originalRead);
+  }
 });
 
 it('rechecks a received revocation before retrying a 401', async () => {

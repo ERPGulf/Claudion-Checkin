@@ -33,6 +33,7 @@ import {
 } from "../services/offline/AttendanceDatabase";
 import {
   claimNextPending,
+  enqueue,
   listAll,
 } from "../services/offline/AttendanceQueueRepository";
 import {
@@ -165,7 +166,7 @@ afterEach(() => {
 });
 
 describe("M0 current behaviour: replay attribution and the NULL-tenant stall (A)", () => {
-  it("characterizes current behaviour: a failed historical replay queues without tenant and blocks a younger scoped punch [M0-A1]", async () => {
+  it("refuses a new unowned historical replay while retaining an already accepted NULL-tenant row and its ordering protection [M0-A1]", async () => {
     const pending = evaluatePendingEvent({
       lastEvent: {
         identifier: "office-main",
@@ -178,20 +179,22 @@ describe("M0 current behaviour: replay attribution and the NULL-tenant stall (A)
     expect(pending.status).toBe(PENDING_EVENT.READY);
     fetchShouldAttemptRequest.mockResolvedValue(true);
 
-    // Real online API fails; real cached-policy gate and queue preserve the punch.
+    // A historical event without an owner cannot borrow the current policy.
     const replay = await submit({
       type: pending.type,
       occurredAt: pending.occurredAt,
     });
-    expect(replay).toMatchObject({ allowed: true, queued: true });
-    expect(replay.row).toMatchObject({
+    expect(replay).toMatchObject({ allowed: false, reason: "scope-changed" });
+    expect(await listAll()).toEqual([]);
+    expect(apiClient.post).not.toHaveBeenCalled();
+    // Rows already accepted by older binaries remain retained, without
+    // inventing ownership or allowing them to be resubmitted automatically.
+    const legacy = await enqueue({ employeeId: EMPLOYEE_A, tenantKey: null,
+      attendanceType: "auto", action: "checkin", timestamp: "2026-10-09 08:00:00" });
+    expect(legacy.row).toMatchObject({
       employeeId: EMPLOYEE_A,
       tenantKey: null,
       timestamp: "2026-10-09 08:00:00",
-    });
-    expect(apiClient.post.mock.calls[0][1]).toMatchObject({
-      auto: true,
-      log_type: "IN",
     });
     expect(
       await claimNextPending(NOW, {
@@ -216,7 +219,7 @@ describe("M0 current behaviour: replay attribution and the NULL-tenant stall (A)
     expect(bulkCalls()).toHaveLength(0);
     const rows = await listAll();
     expect(rows).toHaveLength(2);
-    expect(rows.find((row) => row.id === replay.row.id)).toMatchObject({
+    expect(rows.find((row) => row.id === legacy.row.id)).toMatchObject({
       tenantKey: null,
       status: QUEUE_STATUS.PENDING,
     });
@@ -241,12 +244,14 @@ describe("M0 current behaviour: replay attribution and the NULL-tenant stall (A)
     expect(claimed.id).toBe(result.row.id);
   });
 
-  it("characterizes current behaviour: a later online EXIT bypasses the pending NULL-tenant IN and closes the local session [M0-A3]", async () => {
+  it("retains legacy accepted NULL-tenant evidence while a current-owner online EXIT closes its restored session [M0-A3]", async () => {
+    const legacy = await enqueue({ employeeId: EMPLOYEE_A, tenantKey: null,
+      attendanceType: "auto", action: "checkin", timestamp: "2026-10-09 08:00:00" });
     const checkin = await performSessionTransition({
       type: "IN",
       origin: SESSION_ORIGIN.AUTO,
       at: at(8),
-      execute: () => submit(),
+      execute: async () => ({ allowed: true, queued: true, row: legacy.row }),
     });
     expect(checkin.queued).toBe(true);
     expect((await listAll())[0].tenantKey).toBeNull();

@@ -2,6 +2,8 @@
 
 > Historical baseline at `de722c9`. Read [11-RELIABILITY-FIXES.md](11-RELIABILITY-FIXES.md) for the current fixes, regression results, native-build limits and physical-device validation plan. Source line anchors below refer to the baseline.
 
+> R4 follow-up, 2026-10-16: current employee-mode authority is the scoped policy metadata in the existing `AutoAttendanceSlice`, received through `services/employeeAutoAttendancePolicy.js`. All employee transports/handoff writers share revision/scope-checked reception. Automatic monitoring, event processing, offline admission/final INSERT, direct POST and 401 retries recheck current mode after awaits; accepted rows remain deliverable. This supersedes the historical unscoped automatic-service and UI-only tenant-gate descriptions below. See [current reception/execution contracts](../capability-enforcement/07-FINAL_GAP_ANALYSIS.md#d7--r4-employee-mode-reception-and-execution-fixed) and [release/device gates](../capability-enforcement/09-RELEASE_READINESS.md). No native SDK architecture or tenant/employee precedence change was made.
+
 Source baseline and evidence labels: [00-OVERVIEW.md](00-OVERVIEW.md). This repository contains client contracts, not implementations of the Frappe methods. Server authorization, deduplication, policy enforcement, accepted employee identifiers, timezone interpretation, and live SDK refresh compatibility are **UNKNOWN / UNVERIFIED**.
 
 ## Enablement and policy

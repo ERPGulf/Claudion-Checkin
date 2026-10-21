@@ -76,7 +76,7 @@ export default function useLoanApplication() {
   const [loadingProducts, setLoadingProducts] = useState(false);
 
   const { pickFromCamera, pickFromGallery, pickDocument } =
-    useAttachmentPicker();
+    useAttachmentPicker('loan_application');
 
   const showToast = useCallback(msg => {
     if (Platform.OS === 'android') ToastAndroid.show(msg, ToastAndroid.SHORT);

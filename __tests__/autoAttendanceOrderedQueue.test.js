@@ -34,6 +34,7 @@ import { pushCheckin } from "../services/offline/AttendanceApi";
 import { verifyQueuedAttendance } from "../services/offline/AttendanceVerification";
 import { loginQueueEmployee, TEST_TENANT } from "../test-utils/attendanceScope";
 import { performSessionTransition, readSession, SESSION_ORIGIN } from "../utils/attendanceSessionState";
+import { beginEmployeeAutoAttendancePolicyReception, receiveEmployeeAutoAttendancePolicy } from "../services/employeeAutoAttendancePolicy";
 
 const { __resetAll } = require("../test-utils/expoSqliteMock");
 const employeeId = "EMP-001";
@@ -63,6 +64,7 @@ beforeEach(async () => {
   resetOfflineCapability();
   fetchShouldAttemptRequest.mockResolvedValue(true);
   evaluateOfflineAttendance.mockResolvedValue(acceptedGate);
+  await receiveEmployeeAutoAttendancePolicy({ geotagging: 2 }, beginEmployeeAutoAttendancePolicyReception(sourceScope));
   pushCheckin.mockImplementation(async row => ({ result: "inserted", serverCheckinId: `SERVER-${row.id}`, response: {} }));
 });
 

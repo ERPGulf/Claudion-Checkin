@@ -75,7 +75,7 @@ jest.mock("../services/notifications/localNotifications", () => ({
 // Keep apiClient teardown/expiry real and direct its dispatch into this test's
 // real root reducer, avoiding the application's persistent singleton store.
 jest.mock("../redux/Store", () => ({
-  store: { dispatch: (action) => mockStore.dispatch(action) },
+  store: { dispatch: (action) => mockStore.dispatch(action), getState: () => mockStore?.getState() ?? {} },
 }));
 
 import AutoAttendanceBootstrap from "../components/AutoAttendanceBootstrap";
@@ -127,6 +127,12 @@ import {
   markEventProcessed,
   MAX_REPLAY_AGE_MS,
 } from "../utils/geofenceEventLog";
+import {
+  beginEmployeeAutoAttendancePolicyReception,
+  receiveEmployeeAutoAttendancePolicy,
+} from "../services/employeeAutoAttendancePolicy";
+import { settingsReceived } from "../redux/Slices/FeatureSettingsSlice";
+import { buildSettingsScope, normalizeFeatureSettings } from "../utils/featureSettings";
 
 const EMPLOYEE_A = "M0-EMPLOYEE-A";
 const EMPLOYEE_B = "M0-EMPLOYEE-B";
@@ -172,6 +178,10 @@ const provision = async (employeeCode = EMPLOYEE_A, tenant = TENANT_A) => {
     ["api_key", `fixture-account-${employeeCode}`],
   ]);
   await saveTokens("fixture-access", "fixture-refresh");
+};
+const receiveEmployeeMode = async (mode = 2, employee = EMPLOYEE_A) => {
+  const scope = await captureAttendanceQueueScope(employee);
+  return receiveEmployeeAutoAttendancePolicy({ geotagging: mode }, beginEmployeeAutoAttendancePolicyReception(scope));
 };
 
 const manualTransition = (type, at) =>
@@ -219,6 +229,7 @@ const emit = async (transition, timestamp = Date.now()) => {
 
 const loginThroughReducers = async (employeeCode, tenant) => {
   await provision(employeeCode, tenant);
+  await receiveEmployeeMode(2, employeeCode);
   await applySessionOwner(employeeCode);
   await act(async () => {
     mockStore.dispatch(setEmployeeCode(employeeCode));
@@ -261,6 +272,7 @@ describe("M0 current-behaviour characterization", () => {
     await provision();
     await applySessionOwner(EMPLOYEE_A);
     buildStore();
+    await receiveEmployeeMode();
     httpMock = new MockAdapter(apiClient);
     refreshMock = new MockAdapter(plainAxios);
   });
@@ -272,7 +284,7 @@ describe("M0 current-behaviour characterization", () => {
     logSpy.mockRestore();
   });
 
-  it("characterizes current behaviour: A pre-launch replay passes null sourceScope even with valid current provisioning", async () => {
+  it("retains an unattributed pre-launch event without creating attendance", async () => {
     const crossedAt = Date.now() - 60_000;
     mockNativeLastEvent = nativeResponse("ENTER", crossedAt);
     submitAutoAttendance.mockResolvedValue({
@@ -287,17 +299,11 @@ describe("M0 current-behaviour characterization", () => {
       tenantKey: TENANT_A,
       employeeId: EMPLOYEE_A,
     });
-    expect(submitAutoAttendance).toHaveBeenCalledTimes(1);
-    expect(submitAutoAttendance).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: "IN",
-        employeeCode: EMPLOYEE_A,
-        occurredAt: crossedAt,
-        sourceScope: null,
-      }),
-    );
-    expect((await readSession()).startedAt).toBe(crossedAt);
-    expect(await getLastProcessedEventAt()).toBe(crossedAt);
+    expect(submitAutoAttendance).not.toHaveBeenCalled();
+    expect((await readSession()).status).toBe(SESSION_STATUS.CHECKED_OUT);
+    expect(await getLastProcessedEventAt()).toBeNull();
+    expect(mockNativeLastEvent.timestamp).toBe(crossedAt);
+    expect(clearLastEvent).not.toHaveBeenCalled();
     expect(autoCheckInOut).not.toHaveBeenCalled();
   });
 
@@ -312,6 +318,67 @@ describe("M0 current-behaviour characterization", () => {
       authenticated: true,
     });
     expect(sourceScope).not.toHaveProperty("accessToken");
+    expect(autoCheckInOut).toHaveBeenCalledWith(expect.objectContaining({ syncScope: sourceScope }));
+  });
+
+  it.each(["tenant", "reauthentication"])("refuses a retained live listener after %s changes during an awaited count", async (change) => {
+    await mountBootstrap();
+    let releaseCount;
+    getQueueCounts.mockImplementationOnce(() => new Promise(resolve => { releaseCount = resolve; }));
+    let pending;
+    await act(async () => {
+      pending = [...mockListeners.ENTER][0](nativeResponse("ENTER", Date.now()));
+    });
+    await waitFor(() => expect(releaseCount).toBeDefined());
+    if (change === "tenant") await provision(EMPLOYEE_A, TENANT_B);
+    else {
+      await clearTokens();
+      await provision();
+    }
+    await act(async () => {
+      releaseCount({ mayAffectServerCount: 0 });
+      await pending;
+    });
+    expect(autoCheckInOut).not.toHaveBeenCalled();
+    expect((await readSession()).status).toBe(SESSION_STATUS.CHECKED_OUT);
+    expect(await getLastProcessedEventAt()).toBeNull();
+  });
+
+  it.each([0, 1])("refuses a pending live punch after employee mode changes from 2 to %s", async mode => {
+    await mountBootstrap();
+    let releaseCount;
+    getQueueCounts.mockImplementationOnce(() => new Promise(resolve => { releaseCount = resolve; }));
+    let pending;
+    await act(async () => {
+      pending = [...mockListeners.ENTER][0](nativeResponse("ENTER", Date.now()));
+    });
+    await waitFor(() => expect(releaseCount).toBeDefined());
+    await act(async () => { await receiveEmployeeMode(mode); });
+    await act(async () => {
+      releaseCount({ mayAffectServerCount: 0 });
+      await pending;
+    });
+    expect(submitAutoAttendance).not.toHaveBeenCalled();
+    expect(autoCheckInOut).not.toHaveBeenCalled();
+    expect((await readSession()).status).toBe(SESSION_STATUS.CHECKED_OUT);
+    expect(await getLastProcessedEventAt()).toBeNull();
+  });
+
+  it("resumes legacy online automatic attendance after a fresh mode 2 response with offline disabled and no cache", async () => {
+    mockStore.dispatch(settingsReceived({
+      scope: buildSettingsScope(TENANT_A, EMPLOYEE_A),
+      settings: normalizeFeatureSettings({ attendance_action: { offline_attendance: false, auto_attendance: true } }),
+    }));
+    await receiveEmployeeMode(0);
+    render(<Provider store={mockStore}><AutoAttendanceBootstrap /></Provider>);
+    await flushStartup();
+    expect(startGeofence).not.toHaveBeenCalled();
+    await act(async () => { await receiveEmployeeMode(2); });
+    await waitFor(() => expect(mockListeners.ENTER.size).toBe(1));
+    expect(await AsyncStorage.getItem("attendanceConfigCache")).toBeNull();
+    await emit("ENTER");
+    expect(autoCheckInOut).toHaveBeenCalledTimes(1);
+    expect(submitAutoAttendance).toHaveBeenCalledWith(expect.objectContaining({ employeeCode: EMPLOYEE_A }));
   });
 
   it("characterizes current behaviour: B a restart inside retains manual checkout until a native ENTER", async () => {
@@ -347,7 +414,7 @@ describe("M0 current-behaviour characterization", () => {
       latitude: OFFICE_A.latitude,
       longitude: OFFICE_A.longitude,
       radius: OFFICE_A.radius,
-    });
+    }, expect.objectContaining({ tenantKey: TENANT_A, employeeId: EMPLOYEE_A }));
     mockOffice = OFFICE_B;
 
     await act(async () => {
@@ -367,6 +434,7 @@ describe("M0 current-behaviour characterization", () => {
     await mountBootstrap();
     mockOffice = OFFICE_B;
     await provision(EMPLOYEE_B);
+    await receiveEmployeeMode(2, EMPLOYEE_B);
     await applySessionOwner(EMPLOYEE_B);
 
     await act(async () => {
@@ -374,7 +442,8 @@ describe("M0 current-behaviour characterization", () => {
     });
     await flushStartup();
 
-    expect(getOfficeLocation).toHaveBeenLastCalledWith(EMPLOYEE_B);
+    expect(getOfficeLocation).toHaveBeenLastCalledWith(EMPLOYEE_B,
+      expect.objectContaining({ syncScope: expect.objectContaining({ employeeId: EMPLOYEE_B }) }));
     expect(startGeofence).toHaveBeenCalledTimes(1);
     expect(mockListeners.ENTER.size).toBe(1);
   });
@@ -439,7 +508,7 @@ describe("M0 current-behaviour characterization", () => {
     expect(await AsyncStorage.getItem("refresh_token")).toBeNull();
   });
 
-  it("characterizes current behaviour: E employee B can replay A's unattributed native response after logout and re-enabling", async () => {
+  it("does not replay A's unattributed native event as B after logout and re-enabling", async () => {
     await mountBootstrap();
     const oldMark = Date.now() - 2 * 60 * 60 * 1000;
     const crossedByAAt = Date.now() - 60 * 60 * 1000;
@@ -459,20 +528,13 @@ describe("M0 current-behaviour characterization", () => {
     });
     await flushStartup();
 
-    expect(autoCheckInOut).toHaveBeenCalledTimes(1);
-    expect(autoCheckInOut).toHaveBeenCalledWith(
-      expect.objectContaining({
-        employeeCode: EMPLOYEE_B,
-        type: "IN",
-        occurredAt: crossedByAAt,
-      }),
-    );
-    expect(submitAutoAttendance).toHaveBeenCalledWith(
-      expect.objectContaining({ employeeCode: EMPLOYEE_B, sourceScope: null }),
-    );
+    expect(autoCheckInOut).not.toHaveBeenCalled();
+    expect(submitAutoAttendance).not.toHaveBeenCalled();
     expect(await AsyncStorage.getItem(SESSION_OWNER_KEY)).toBe(EMPLOYEE_B);
-    expect(await getLastProcessedEventAt()).toBe(crossedByAAt);
-    expect((await readSession()).startedAt).toBe(crossedByAAt);
+    expect(await getLastProcessedEventAt()).toBe(oldMark);
+    expect((await readSession()).status).toBe(SESSION_STATUS.CHECKED_OUT);
+    expect(mockNativeLastEvent.timestamp).toBe(crossedByAAt);
+    expect(clearLastEvent).not.toHaveBeenCalled();
   });
 
   it("characterizes current behaviour: E applySessionOwner ignores tenant changes for an unchanged employee code", async () => {
@@ -624,22 +686,22 @@ describe("M0 current-behaviour characterization", () => {
     );
   });
 
-  it("characterizes current behaviour: G delayed replay uses the crossing timestamp", async () => {
+  it("retains a delayed unowned ENTER without assigning it to the current session", async () => {
     const crossedAt = Date.now() - 90 * 60 * 1000;
     mockNativeLastEvent = nativeResponse("ENTER", crossedAt);
 
     await mountBootstrap();
 
-    expect(autoCheckInOut).toHaveBeenCalledWith(
-      expect.objectContaining({ type: "IN", occurredAt: crossedAt }),
-    );
-    expect((await readSession()).startedAt).toBe(crossedAt);
+    expect(autoCheckInOut).not.toHaveBeenCalled();
+    expect((await readSession()).status).toBe(SESSION_STATUS.CHECKED_OUT);
+    expect(await getLastProcessedEventAt()).toBeNull();
   });
 
   it("characterizes current behaviour: G the high-water mark blocks a duplicate replay even after manual checkout makes IN legal", async () => {
-    const crossedAt = Date.now() - 90 * 60 * 1000;
-    mockNativeLastEvent = nativeResponse("ENTER", crossedAt);
     const initialMount = await mountBootstrap();
+    const crossedAt = Date.now();
+    await emit("ENTER", crossedAt);
+    mockNativeLastEvent = nativeResponse("ENTER", crossedAt);
     await manualTransition("OUT", Date.now() - 60_000);
     await initialMount.unmountAsync();
 
@@ -662,7 +724,7 @@ describe("M0 current-behaviour characterization", () => {
     expect(await getLastProcessedEventAt()).toBe(processedAt);
   });
 
-  it("characterizes current behaviour: G a replayed EXIT predating an open session is marked handled without closing it", async () => {
+  it("retains an unowned EXIT predating an open session without closing it", async () => {
     const startedAt = Date.now() - 60_000;
     await manualTransition("IN", startedAt);
     mockNativeLastEvent = nativeResponse("EXIT", startedAt - 60_000);
@@ -671,10 +733,10 @@ describe("M0 current-behaviour characterization", () => {
 
     expect(submitAutoAttendance).not.toHaveBeenCalled();
     expect((await readSession()).status).toBe(SESSION_STATUS.CHECKED_IN);
-    expect(await getLastProcessedEventAt()).toBe(startedAt - 60_000);
+    expect(await getLastProcessedEventAt()).toBeNull();
   });
 
-  it("characterizes current behaviour: G live delivery bypasses replay timestamp guards and can close before the session started", async () => {
+  it("refuses an alleged live crossing that predates the current observed scope", async () => {
     await mountBootstrap();
     const enteredAt = Date.now();
     await emit("ENTER", enteredAt);
@@ -682,12 +744,11 @@ describe("M0 current-behaviour characterization", () => {
 
     expect(autoCheckInOut.mock.calls.map(([input]) => input.type)).toEqual([
       "IN",
-      "OUT",
     ]);
     expect(await readSession()).toMatchObject({
-      status: SESSION_STATUS.CHECKED_OUT,
+      status: SESSION_STATUS.CHECKED_IN,
       startedAt: enteredAt,
-      endedAt: enteredAt - 60_000,
+      endedAt: null,
     });
     expect(await getLastProcessedEventAt()).toBe(enteredAt);
   });
@@ -711,7 +772,7 @@ describe("M0 current-behaviour characterization", () => {
     },
   );
 
-  it("characterizes current behaviour: G refused replay remains unprocessed and is retried at the next mount", async () => {
+  it("keeps an unattributed event unprocessed across repeated mounts", async () => {
     const crossedAt = Date.now() - 60_000;
     mockNativeLastEvent = nativeResponse("ENTER", crossedAt);
     autoCheckInOut.mockResolvedValueOnce({
@@ -725,8 +786,9 @@ describe("M0 current-behaviour characterization", () => {
 
     await mountBootstrap();
 
-    expect(autoCheckInOut).toHaveBeenCalledTimes(2);
-    expect(await getLastProcessedEventAt()).toBe(crossedAt);
+    expect(autoCheckInOut).not.toHaveBeenCalled();
+    expect(await getLastProcessedEventAt()).toBeNull();
+    expect(mockNativeLastEvent.timestamp).toBe(crossedAt);
   });
 });
 

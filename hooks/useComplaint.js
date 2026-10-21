@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Alert } from 'react-native';
 import {
   createComplaint,
@@ -6,6 +6,8 @@ import {
 } from '../services/api/complaint.service';
 import { useAttachmentPicker } from './useAttachmentPicker';
 import { hapticsMessage } from '../utils/HapticsMessage';
+import { assertCapability, getCapabilitySnapshot } from '../services/capabilityPolicy';
+import { getAuthSessionGeneration } from '../utils/authSessionGuard';
 
 /**
  * Everything the complaint form does, lifted out of the screen so the modern UI
@@ -33,13 +35,14 @@ import { hapticsMessage } from '../utils/HapticsMessage';
  * derived from state that already exists and gates nothing.
  */
 export default function useComplaint() {
+  const actionGeneration = useRef(getAuthSessionGeneration()).current;
   const [message, setMessage] = useState('');
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [isBottomSheetVisible, setBottomSheetVisible] = useState(false);
 
   const { pickFromCamera, pickFromGallery, pickDocument } =
-    useAttachmentPicker();
+    useAttachmentPicker('complaints');
 
   /* ---------------------------------------------------------------------
    * Attachment. The sheet is dismissed before the picker opens, then the
@@ -93,7 +96,8 @@ export default function useComplaint() {
     try {
       const date = new Date().toISOString().replace('T', ' ').slice(0, 19);
 
-      const result = await createComplaint({ date, message });
+      const capabilityScope = await assertCapability('complaints', { generation: actionGeneration });
+      const result = await createComplaint({ date, message }, { capabilityScope });
 
       // The service's own copy, shown as-is; everything thrown below gets the
       // fixed message instead.
@@ -110,9 +114,10 @@ export default function useComplaint() {
       }
 
       if (file) {
-        await uploadComplaintAttachment(file, docname);
+        await uploadComplaintAttachment(file, docname, { capabilityScope });
       }
 
+      await getCapabilitySnapshot(capabilityScope);
       hapticsMessage('success');
       Alert.alert('Success', 'Complaint submitted successfully');
 

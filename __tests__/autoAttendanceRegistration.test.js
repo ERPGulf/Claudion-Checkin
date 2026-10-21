@@ -7,7 +7,6 @@ jest.mock("../modules/expo-auto-attendance", () => ({
   getRegisteredGeofences: jest.fn(), isMonitoring: jest.fn(), hasFullAccuracy: jest.fn(),
   retryInitialPresence: jest.fn(),
 }));
-jest.mock("../services/offline/attendanceQueueProvenance", () => ({ assertAttendanceQueueScope: jest.fn() }));
 
 import * as Location from "expo-location";
 import * as Native from "../modules/expo-auto-attendance";
@@ -17,10 +16,14 @@ import { loginQueueEmployee } from "../test-utils/attendanceScope";
 import { store } from "../redux/Store";
 import { settingsReceived } from "../redux/Slices/FeatureSettingsSlice";
 import { buildSettingsScope, normalizeFeatureSettings } from "../utils/featureSettings";
+import { captureAttendanceQueueScope } from "../services/offline/attendanceQueueProvenance";
+import { beginEmployeeAutoAttendancePolicyReception, receiveEmployeeAutoAttendancePolicy } from "../services/employeeAutoAttendancePolicy";
 
-const scope = { tenantKey: "https://attendance.example.com", employeeId: "EMP-001" };
+let scope = { tenantKey: "https://attendance.example.com", employeeId: "EMP-001" };
 const office = { latitude: 25.28, longitude: 51.52, reporting_radius: 100, location: "Office" };
 const config = { ...scope, rules: { geotagging: 2 }, locations: [office] };
+const receiveMode = async mode => receiveEmployeeAutoAttendancePolicy({ geotagging: mode },
+  beginEmployeeAutoAttendancePolicyReception(await captureAttendanceQueueScope(scope.employeeId)));
 const registered = (overrides = {}) => {
   const value = { ...scope, identifier: "office-main", latitude: office.latitude, longitude: office.longitude,
     radius: 100, geotagging: 2, ...overrides };
@@ -30,6 +33,7 @@ const registered = (overrides = {}) => {
 beforeEach(async () => {
   await AsyncStorage.clear();
   await loginQueueEmployee(scope.employeeId, scope.tenantKey);
+  scope = await captureAttendanceQueueScope(scope.employeeId);
   store.dispatch({ type: "REVERT_ALL" });
   jest.clearAllMocks();
   Location.getForegroundPermissionsAsync.mockResolvedValue({ status: "granted" });
@@ -42,12 +46,53 @@ beforeEach(async () => {
   Native.stopGeofence.mockResolvedValue(undefined);
   Native.startGeofence.mockResolvedValue(undefined);
   Native.retryInitialPresence.mockResolvedValue(false);
+  await receiveMode(2);
 });
 
 const receiveAutomaticAvailability = value => store.dispatch(settingsReceived({
   scope: buildSettingsScope(scope.tenantKey, scope.employeeId),
   settings: normalizeFeatureSettings({ attendance_action: { auto_attendance: value } }),
 }));
+const receiveGeo = value => store.dispatch(settingsReceived({
+  scope: buildSettingsScope(scope.tenantKey, scope.employeeId),
+  settings: normalizeFeatureSettings({ attendance_action: { auto_attendance: true, geo_tagging: value } }),
+}));
+
+it.each([false, 0, null])("stops tenant geo %s despite employee mode 2 and an existing registration", async value => {
+  Native.isMonitoring.mockReturnValue(true);
+  Native.getRegisteredGeofences.mockReturnValue([registered()]);
+  receiveGeo(value);
+  await reconcileAutoAttendanceRegistration(scope, config);
+  expect(Native.stopGeofence).toHaveBeenCalledTimes(1);
+  expect(Native.startGeofence).not.toHaveBeenCalled();
+  expect(Native.retryInitialPresence).not.toHaveBeenCalled();
+});
+
+it("does not register after tenant geo is revoked during office GPS selection", async () => {
+  Location.getCurrentPositionAsync.mockImplementationOnce(async () => {
+    receiveGeo(0);
+    return { coords: { latitude: office.latitude, longitude: office.longitude } };
+  });
+  await reconcileAutoAttendanceRegistration(scope, { ...config, locations: [office, { ...office, latitude: 26 }] });
+  expect(Native.startGeofence).not.toHaveBeenCalled();
+  expect(Native.stopGeofence).toHaveBeenCalledTimes(1);
+});
+
+it("removes retained monitoring when tenant geo is disabled during an initial-presence retry", async () => {
+  Native.isMonitoring.mockReturnValue(true);
+  Native.getRegisteredGeofences.mockReturnValue([registered()]);
+  Native.retryInitialPresence.mockImplementationOnce(async () => receiveGeo(0));
+  await reconcileAutoAttendanceRegistration(scope, config);
+  expect(Native.stopGeofence).toHaveBeenCalledTimes(1);
+  expect(Native.startGeofence).not.toHaveBeenCalled();
+});
+
+it("removes monitoring when tenant geo changes during native registration", async () => {
+  Native.startGeofence.mockImplementationOnce(async () => receiveGeo(0));
+  await reconcileAutoAttendanceRegistration(scope, config);
+  expect(Native.startGeofence).toHaveBeenCalledTimes(1);
+  expect(Native.stopGeofence).toHaveBeenCalledTimes(2);
+});
 
 it("stops a tenant-disabled fence even when employee mode and permissions permit monitoring", async () => {
   receiveAutomaticAvailability(false);
@@ -85,7 +130,8 @@ it("stops a registration if capability changes while native registration is pend
 it("registers a single configured office without GPS or an inside snapshot", async () => {
   await reconcileAutoAttendanceRegistration(scope, config);
   expect(Location.getCurrentPositionAsync).not.toHaveBeenCalled();
-  expect(Native.startGeofence).toHaveBeenCalledWith(expect.objectContaining({ ...scope, radius: 100, geotagging: 2 }));
+  expect(Native.startGeofence).toHaveBeenCalledWith(expect.objectContaining({ tenantKey: scope.tenantKey,
+    employeeId: scope.employeeId, radius: 100, geotagging: 2 }), scope);
 });
 
 it.each([
@@ -217,9 +263,37 @@ it("repairs unavailable native monitoring even when saved geometry matches", asy
 });
 
 it("preserves warnings-only registration and stops disabled policy", async () => {
+  await receiveMode(1);
   await reconcileAutoAttendanceRegistration(scope, { ...config, rules: { geotagging: 1 } });
-  expect(Native.startGeofence).toHaveBeenCalledWith(expect.objectContaining({ geotagging: 1 }));
+  expect(Native.startGeofence).toHaveBeenCalledWith(expect.objectContaining({ geotagging: 1 }), scope);
   Native.startGeofence.mockClear();
+  await receiveMode(0);
   await reconcileAutoAttendanceRegistration(scope, { ...config, rules: { geotagging: 0 } });
   expect(Native.startGeofence).not.toHaveBeenCalled();
+});
+
+it.each([0, 1])("uses employee mode %s received during office GPS selection", async mode => {
+  Location.getCurrentPositionAsync.mockImplementation(async () => {
+    await receiveMode(mode);
+    return { coords: { latitude: office.latitude, longitude: office.longitude } };
+  });
+  await reconcileAutoAttendanceRegistration(scope, { ...config, locations: [office, { ...office, latitude: 26 }] });
+  if (mode === 0) expect(Native.startGeofence).not.toHaveBeenCalled();
+  else expect(Native.startGeofence).toHaveBeenCalledWith(expect.objectContaining({ geotagging: 1 }), scope);
+});
+
+it.each([0, 1])("stops a retained registration when employee mode changes to %s during native initial-presence retry", async mode => {
+  Native.isMonitoring.mockReturnValue(true);
+  Native.getRegisteredGeofences.mockReturnValue([registered()]);
+  Native.retryInitialPresence.mockImplementationOnce(async () => receiveMode(mode));
+  await reconcileAutoAttendanceRegistration(scope, config);
+  expect(Native.stopGeofence).toHaveBeenCalledTimes(1);
+  expect(Native.startGeofence).not.toHaveBeenCalled();
+});
+
+it("uses a received employee re-enable over an older config denial", async () => {
+  await receiveMode(0);
+  await receiveMode(2);
+  await reconcileAutoAttendanceRegistration(scope, { ...config, rules: { geotagging: 0 } });
+  expect(Native.startGeofence).toHaveBeenCalledWith(expect.objectContaining({ geotagging: 2 }), scope);
 });

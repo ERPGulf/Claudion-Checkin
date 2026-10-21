@@ -31,6 +31,7 @@ import { createRegistrationId } from "../utils/autoAttendanceRegistration";
 import { store } from "../redux/Store";
 import { settingsReceived, settingsInvalidated } from "../redux/Slices/FeatureSettingsSlice";
 import { buildSettingsScope, normalizeFeatureSettings } from "../utils/featureSettings";
+import { beginEmployeeAutoAttendancePolicyReception, receiveEmployeeAutoAttendancePolicy } from "../services/employeeAutoAttendancePolicy";
 
 const { __resetAll } = require("../test-utils/expoSqliteMock");
 const employeeId = "EMP-001";
@@ -47,6 +48,8 @@ const event = (eventId, sequence, transition = "ENTER", overrides = {}) => {
   return result;
 };
 const drain = () => drainAutoAttendanceEvents({ scope });
+const receiveMode = async mode => receiveEmployeeAutoAttendancePolicy({ geotagging: mode },
+  beginEmployeeAutoAttendancePolicyReception(scope));
 
 beforeEach(async () => {
   store.dispatch(settingsInvalidated());
@@ -67,12 +70,72 @@ beforeEach(async () => {
   getAttendanceStatus.mockResolvedValue({ custom_in: 0 });
   evaluateOfflineAttendance.mockResolvedValue({ allowed: true, coords: null, location: null, config });
   verifyQueuedAttendance.mockResolvedValue({ verified: false, reason: "no-exact-match-in-visible-history" });
+  await receiveMode(2);
 });
 
 const receiveAutomaticAvailability = value => store.dispatch(settingsReceived({
   scope: buildSettingsScope(TEST_TENANT, employeeId),
   settings: normalizeFeatureSettings({ attendance_action: { auto_attendance: value } }),
 }));
+const receiveGeo = value => store.dispatch(settingsReceived({
+  scope: buildSettingsScope(TEST_TENANT, employeeId),
+  settings: normalizeFeatureSettings({ attendance_action: { auto_attendance: true, geo_tagging: value } }),
+}));
+
+it.each(["ENTER", "EXIT"])("retains a background %s receipt without a new punch under tenant geo 0 / employee mode 2", async transition => {
+  receiveGeo(0);
+  const source = event(`tenant-geo-${transition}`, 1, transition);
+  journal = [source];
+  await drain();
+  expect(autoCheckInOut).not.toHaveBeenCalled();
+  expect(await listAll()).toEqual([]);
+  expect(await Events.findEvent(source.eventId)).toMatchObject({ status: "pending", reason: "capability-disabled" });
+});
+
+it("rechecks tenant geo 0 received during a pending event server-clock request", async () => {
+  resolveServerTimestampAt.mockImplementationOnce(async at => {
+    receiveGeo(0);
+    return wallClock(at);
+  });
+  journal = [event("tenant-geo-clock", 1)];
+  await drain();
+  expect(autoCheckInOut).not.toHaveBeenCalled();
+  expect(await listAll()).toEqual([]);
+  expect(await Events.findEvent("tenant-geo-clock"))
+    .toMatchObject({ status: "pending", reason: "capability-disabled", onlineAttemptAt: null });
+});
+
+it("does not adopt another tenant's geo authorization for an event pending during tenant switching", async () => {
+  const nextTenant = "https://next-synthetic.example.test";
+  resolveServerTimestampAt.mockImplementationOnce(async at => {
+    receiveGeo(0);
+    await loginQueueEmployee(employeeId, nextTenant);
+    store.dispatch(settingsReceived({ scope: buildSettingsScope(nextTenant, employeeId),
+      settings: normalizeFeatureSettings({ attendance_action: { auto_attendance: true, geo_tagging: 2 } }) }));
+    const nextScope = await captureAttendanceQueueScope(employeeId);
+    await receiveEmployeeAutoAttendancePolicy({ geotagging: 2 }, beginEmployeeAutoAttendancePolicyReception(nextScope));
+    return wallClock(at);
+  });
+  journal = [event("tenant-geo-switch", 1)];
+  await expect(drain()).rejects.toMatchObject({ code: "ATTENDANCE_SYNC_SCOPE_CHANGED" });
+  expect(autoCheckInOut).not.toHaveBeenCalled();
+  expect(await listAll()).toEqual([]);
+  expect(await Events.findEvent("tenant-geo-switch"))
+    .toMatchObject({ tenantKey: TEST_TENANT, onlineAttemptAt: null });
+});
+
+it("recovers an accepted source event after tenant geo is disabled", async () => {
+  const source = event("accepted-before-tenant-geo", 1);
+  await enqueue({ employeeId, tenantKey: TEST_TENANT, attendanceType: "auto", action: "checkin",
+    timestamp: wallClock(source.timestamp), sourceEventId: source.eventId });
+  receiveGeo(0);
+  journal = [source];
+  await drain();
+  expect(autoCheckInOut).not.toHaveBeenCalled();
+  expect(await listAll()).toHaveLength(1);
+  expect(await Events.findEvent(source.eventId)).toMatchObject({ status: "handled" });
+  expect(await readSession()).toMatchObject({ status: "CHECKED_IN", sourceEventId: source.eventId });
+});
 
 it("retains native receipts without creating punches when automatic attendance is disabled", async () => {
   receiveAutomaticAvailability(false);
@@ -96,6 +159,53 @@ it("rechecks a received automatic denial during timestamp resolution", async () 
   expect(autoCheckInOut).not.toHaveBeenCalled();
   expect(await listAll()).toEqual([]);
   expect((await Events.findEvent("revoked-during-action")).status).toBe("pending");
+});
+
+it.each([0, 1])("retains new native attendance when employee mode is %s, then accepts a legitimate re-enable", async mode => {
+  await receiveMode(mode);
+  journal = [event(`employee-mode-${mode}`, 1)];
+  await drain();
+  expect(autoCheckInOut).not.toHaveBeenCalled();
+  expect(await listAll()).toEqual([]);
+  expect(await Events.findEvent(`employee-mode-${mode}`))
+    .toMatchObject({ status: "pending", reason: "employee-policy-disabled" });
+  await receiveMode(2);
+  await drain();
+  expect(autoCheckInOut).toHaveBeenCalledTimes(1);
+});
+
+it.each([0, 1])("rechecks employee mode %s received during pending server-clock work", async mode => {
+  resolveServerTimestampAt.mockImplementation(async at => {
+    await receiveMode(mode);
+    return wallClock(at);
+  });
+  journal = [event(`employee-clock-${mode}`, 1)];
+  await drain();
+  expect(autoCheckInOut).not.toHaveBeenCalled();
+  expect(await listAll()).toEqual([]);
+  expect(await Events.findEvent(`employee-clock-${mode}`))
+    .toMatchObject({ status: "pending", reason: "employee-policy-disabled", onlineAttemptAt: null });
+});
+
+it("does not let an older cached mode 0 override a newly received employee mode 2", async () => {
+  await AsyncStorage.setItem(CONFIG_KEY, JSON.stringify({ ...config, rules: { geotagging: 0 } }));
+  await receiveMode(2);
+  journal = [event("new-employee-response", 1)];
+  await drain();
+  expect(autoCheckInOut).toHaveBeenCalledTimes(1);
+});
+
+it("recovers an already accepted source queue row after employee mode is revoked", async () => {
+  const source = event("accepted-before-revocation", 1);
+  await enqueue({ employeeId, tenantKey: TEST_TENANT, attendanceType: "auto", action: "checkin",
+    timestamp: wallClock(source.timestamp), sourceEventId: source.eventId });
+  await receiveMode(0);
+  journal = [source];
+  await drain();
+  expect(autoCheckInOut).not.toHaveBeenCalled();
+  expect(await listAll()).toHaveLength(1);
+  expect(await Events.findEvent(source.eventId)).toMatchObject({ status: "handled" });
+  expect(await readSession()).toMatchObject({ status: "CHECKED_IN", sourceEventId: source.eventId });
 });
 
 it("retains a local service denial without requiring evidence for a request never dispatched", async () => {

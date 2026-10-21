@@ -1,4 +1,5 @@
 const { createSlice } = require("@reduxjs/toolkit");
+import { buildSettingsScope } from "../../utils/featureSettings";
 
 /**
  * Automatic attendance has two independent inputs:
@@ -59,6 +60,14 @@ export const normalizeGeotagging = (value) => {
 
 const initialState = {
   geotagging: GEOTAGGING.DISABLED,
+  // The existing slice owns received employee policy as well as its UI value.
+  // A bare legacy geotagging value cannot authorize a different employee/site.
+  employeePolicy: null,
+  // The same ordered employee response also owns mandatory manual-location
+  // facts. Keep them separate so a location-only response cannot erase a mode.
+  employeeLocationPolicy: null,
+  policySequence: 0,
+  policyRequest: null,
   userEnabled: false,
   // Bumped to ask AutoAttendanceBootstrap — the single owner of geofence
   // registration — to re-run its startup sequence. The AutoAttendance screen
@@ -74,6 +83,39 @@ export const AutoAttendanceSlice = createSlice({
   initialState,
   extraReducers: (builder) => builder.addCase("REVERT_ALL", () => initialState),
   reducers: {
+    employeePolicyRequested: (state, action) => {
+      state.policySequence = Math.max(state.policySequence || 0, action.payload.revision);
+      state.policyRequest = action.payload;
+    },
+    employeePolicyReceived: (state, action) => {
+      const policy = action.payload;
+      if (state.policyRequest?.revision !== policy.revision ||
+          state.policyRequest?.scope !== policy.scope ||
+          state.policyRequest?.generation !== policy.generation) return;
+      if (policy.locationPolicy && Object.keys(policy.locationPolicy).length) {
+        const previous = state.employeeLocationPolicy;
+        const matching = previous?.scope === policy.scope && previous?.accountId === policy.accountId;
+        state.employeeLocationPolicy = {
+          ...(matching ? previous : {}),
+          ...policy.locationPolicy,
+          scope: policy.scope,
+          accountId: policy.accountId,
+          generation: policy.generation,
+          revision: policy.revision,
+        };
+      }
+      if (policy.mode === null) return; // A partial response cannot erase a mode.
+      const { locationPolicy, ...automaticPolicy } = policy;
+      state.employeePolicy = automaticPolicy;
+      state.geotagging = policy.mode;
+    },
+    employeePolicyRestored: (state, action) => {
+      const policy = action.payload;
+      if (state.employeePolicy?.scope === policy.scope &&
+          state.employeePolicy?.accountId === policy.accountId) return;
+      state.employeePolicy = policy;
+      state.geotagging = policy.mode;
+    },
     setAutoAttendanceGeotagging: (state, action) => {
       state.geotagging = normalizeGeotagging(action.payload);
     },
@@ -89,13 +131,22 @@ export const AutoAttendanceSlice = createSlice({
 });
 
 export const {
+  employeePolicyRequested,
+  employeePolicyReceived,
+  employeePolicyRestored,
   setAutoAttendanceGeotagging,
   setAutoAttendanceUserEnabled,
   requestAutoAttendanceSync,
 } = AutoAttendanceSlice.actions;
 
-export const selectAutoAttendanceGeotagging = (state) =>
-  normalizeGeotagging(state.autoAttendance?.geotagging);
+export const selectAutoAttendanceGeotagging = (state) => {
+  const policy = state.autoAttendance?.employeePolicy;
+  if (state.user) {
+    const scope = buildSettingsScope(state.user.baseUrl, state.user.userDetails?.employeeCode);
+    return scope && policy?.scope === scope ? normalizeGeotagging(policy.mode) : GEOTAGGING.DISABLED;
+  }
+  return normalizeGeotagging(policy?.mode ?? state.autoAttendance?.geotagging);
+};
 
 // The administrator allows automatic attendance (policy is 1 or 2).
 export const selectAutoAttendanceAllowed = (state) =>

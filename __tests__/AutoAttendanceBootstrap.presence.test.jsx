@@ -4,6 +4,14 @@ import { Provider } from "react-redux";
 import { configureStore } from "@reduxjs/toolkit";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+let mockStore;
+jest.mock("../redux/Store", () => ({
+  store: {
+    getState: () => mockStore?.getState() ?? {},
+    dispatch: action => mockStore?.dispatch(action),
+  },
+}));
+
 /**
  * Presence reconciliation when monitoring starts.
  *
@@ -116,13 +124,14 @@ import RootReducer from "../redux/RootReducer";
 import {
   GEOTAGGING,
   requestAutoAttendanceSync,
+  setAutoAttendanceUserEnabled,
 } from "../redux/Slices/AutoAttendanceSlice";
 import {
   autoCheckInOut,
   getOfficeLocation,
 } from "../services/api/attendance.service";
 import { fetchEmployeeData } from "../services/api/employee.service";
-import { startGeofence } from "../modules/expo-auto-attendance";
+import { startGeofence, stopGeofence } from "../modules/expo-auto-attendance";
 import {
   performSessionTransition,
   readSession,
@@ -133,19 +142,28 @@ import { getLastProcessedEventAt } from "../utils/geofenceEventLog";
 import { getAttendanceStatus } from "../services/api/attendance.service";
 import { syncNow } from "../services/offline/BackgroundSyncManager";
 import { getQueueCounts } from "../services/offline/AttendanceQueueService";
+import { captureAttendanceQueueScope } from "../services/offline/attendanceQueueProvenance";
+import {
+  beginEmployeeAutoAttendancePolicyReception,
+  receiveEmployeeAutoAttendancePolicy,
+} from "../services/employeeAutoAttendancePolicy";
+import { settingsReceived } from "../redux/Slices/FeatureSettingsSlice";
+import { buildSettingsScope, normalizeFeatureSettings } from "../utils/featureSettings";
 
 const EMPLOYEE_CODE = "HR-EMP-00011";
 
-const buildStore = (geotagging = GEOTAGGING.ALL_ACTIONS) =>
-  configureStore({
+const buildStore = (geotagging = GEOTAGGING.ALL_ACTIONS) => {
+  mockStore = configureStore({
     reducer: RootReducer,
     preloadedState: {
       userAuth: { isLoggedIn: true, token: "tok" },
-      user: { userDetails: { employeeCode: EMPLOYEE_CODE } },
+      user: { baseUrl: "https://fixture.example.test", userDetails: { employeeCode: EMPLOYEE_CODE } },
       autoAttendance: { geotagging, userEnabled: true },
     },
     middleware: (getDefault) => getDefault({ serializableCheck: false }),
   });
+  return mockStore;
+};
 
 const manualCheckIn = (at) =>
   performSessionTransition({
@@ -158,9 +176,16 @@ const manualCheckIn = (at) =>
 describe("AutoAttendanceBootstrap presence reconciliation", () => {
   let store;
 
+  const receiveTenantGeo = value => store.dispatch(settingsReceived({
+    scope: buildSettingsScope("https://fixture.example.test", EMPLOYEE_CODE),
+    settings: normalizeFeatureSettings({ attendance_action: { geo_tagging: value, auto_attendance: true } }),
+  }));
+
   const mountBootstrap = async (geotagging = GEOTAGGING.ALL_ACTIONS) => {
     const attached = listeners.onGeofenceExit.length + 1;
     store = buildStore(geotagging);
+    const scope = await captureAttendanceQueueScope(EMPLOYEE_CODE);
+    await receiveEmployeeAutoAttendancePolicy({ geotagging }, beginEmployeeAutoAttendancePolicyReception(scope));
     render(
       <Provider store={store}>
         <AutoAttendanceBootstrap />
@@ -191,6 +216,101 @@ describe("AutoAttendanceBootstrap presence reconciliation", () => {
     fetchEmployeeData.mockResolvedValue({ geotagging: GEOTAGGING.ALL_ACTIONS });
     getOfficeLocation.mockImplementation(() => Promise.resolve(mockOffice));
     await AsyncStorage.clear();
+    await AsyncStorage.multiSet([
+      ["baseUrl", "https://fixture.example.test"],
+      ["employee_code", EMPLOYEE_CODE],
+      ["access_token", "fixture-access"],
+    ]);
+  });
+
+  it.each([false, 0, null])("tenant geo %s prevents employee mode 2 legacy monitoring on login", async value => {
+    store = buildStore();
+    const scope = await captureAttendanceQueueScope(EMPLOYEE_CODE);
+    await receiveEmployeeAutoAttendancePolicy({ geotagging: 2 }, beginEmployeeAutoAttendancePolicyReception(scope));
+    receiveTenantGeo(value);
+    render(<Provider store={store}><AutoAttendanceBootstrap /></Provider>);
+    await flushStartup();
+    expect(stopGeofence).toHaveBeenCalled();
+    expect(startGeofence).not.toHaveBeenCalled();
+    expect(autoCheckInOut).not.toHaveBeenCalled();
+    expect(store.getState().autoAttendance.employeePolicy.mode).toBe(2);
+  });
+
+  it("does not register after tenant geo is revoked during the office/GPS wait", async () => {
+    let releaseOffice;
+    getOfficeLocation.mockImplementationOnce(() => new Promise(resolve => { releaseOffice = resolve; }));
+    await mountBootstrap();
+    await waitFor(() => expect(releaseOffice).toBeDefined());
+    await act(async () => { receiveTenantGeo(0); });
+    await act(async () => { releaseOffice(OFFICE_INSIDE); });
+    await flushStartup();
+    expect(startGeofence).not.toHaveBeenCalled();
+    expect(stopGeofence).toHaveBeenCalled();
+    expect(autoCheckInOut).not.toHaveBeenCalled();
+  });
+
+  it("removes a late legacy native registration after tenant geo revocation", async () => {
+    let releaseStart;
+    startGeofence.mockImplementationOnce(() => new Promise(resolve => {
+      releaseStart = () => { mockIsMonitoring = true; resolve(); };
+    }));
+    await mountBootstrap();
+    await waitFor(() => expect(releaseStart).toBeDefined());
+    await act(async () => { receiveTenantGeo(0); });
+    await act(async () => { releaseStart(); });
+    await flushStartup();
+    expect(mockIsMonitoring).toBe(false);
+    expect(stopGeofence).toHaveBeenCalled();
+    expect(autoCheckInOut).not.toHaveBeenCalled();
+  });
+
+  it("does not register after employee mode 0 arrives during the office/GPS wait", async () => {
+    let releaseOffice;
+    getOfficeLocation.mockImplementationOnce(() => new Promise(resolve => { releaseOffice = resolve; }));
+    await mountBootstrap();
+    await waitFor(() => expect(releaseOffice).toBeDefined());
+    await act(async () => {
+      const scope = await captureAttendanceQueueScope(EMPLOYEE_CODE);
+      await receiveEmployeeAutoAttendancePolicy({ geotagging: 0 }, beginEmployeeAutoAttendancePolicyReception(scope));
+    });
+    await act(async () => { releaseOffice(OFFICE_INSIDE); });
+    await flushStartup();
+    expect(startGeofence).not.toHaveBeenCalled();
+    expect(stopGeofence).toHaveBeenCalled();
+    expect(autoCheckInOut).not.toHaveBeenCalled();
+  });
+
+  it("removes a native registration completed after employee mode 0 was received", async () => {
+    let releaseStart;
+    startGeofence.mockImplementationOnce(() => new Promise(resolve => {
+      releaseStart = () => { mockIsMonitoring = true; resolve(); };
+    }));
+    await mountBootstrap();
+    await waitFor(() => expect(releaseStart).toBeDefined());
+    await act(async () => {
+      const scope = await captureAttendanceQueueScope(EMPLOYEE_CODE);
+      await receiveEmployeeAutoAttendancePolicy({ geotagging: 0 }, beginEmployeeAutoAttendancePolicyReception(scope));
+    });
+    await act(async () => { releaseStart(); });
+    await flushStartup();
+    expect(mockIsMonitoring).toBe(false);
+    expect(stopGeofence).toHaveBeenCalled();
+    expect(autoCheckInOut).not.toHaveBeenCalled();
+  });
+
+  it("keeps monitoring stopped when the user opts out during native registration", async () => {
+    let releaseStart;
+    startGeofence.mockImplementationOnce(() => new Promise(resolve => {
+      releaseStart = () => { mockIsMonitoring = true; resolve(); };
+    }));
+    await mountBootstrap();
+    await waitFor(() => expect(releaseStart).toBeDefined());
+    await act(async () => { store.dispatch(setAutoAttendanceUserEnabled(false)); });
+    await act(async () => { releaseStart(); });
+    await flushStartup();
+    expect(mockIsMonitoring).toBe(false);
+    expect(stopGeofence).toHaveBeenCalled();
+    expect(autoCheckInOut).not.toHaveBeenCalled();
   });
 
   // The reported scenario: monitoring was enabled outside, turned off, the user
@@ -215,6 +335,7 @@ describe("AutoAttendanceBootstrap presence reconciliation", () => {
         latitude: OFFICE_INSIDE.latitude,
         radius: OFFICE_INSIDE.radius,
       }),
+      expect.objectContaining({ tenantKey: "https://fixture.example.test", employeeId: EMPLOYEE_CODE }),
     );
   });
 
@@ -265,7 +386,7 @@ describe("AutoAttendanceBootstrap presence reconciliation", () => {
     expect(await getLastProcessedEventAt()).toBeNull();
   });
 
-  it("leaves a later native EXIT replayable after a manual check-in", async () => {
+  it("retains a later unowned native EXIT without closing the manual check-in", async () => {
     await performSessionTransition({ type: "IN", origin: SESSION_ORIGIN.MANUAL,
       at: Date.now() - 60000, execute: async () => ({ allowed: true }) });
     await mountBootstrap();
@@ -283,16 +404,16 @@ describe("AutoAttendanceBootstrap presence reconciliation", () => {
 
     await mountBootstrap();
 
-    await waitFor(() => expect(autoCheckInOut).toHaveBeenCalledTimes(1));
-    expect(autoCheckInOut).toHaveBeenCalledWith(
-      expect.objectContaining({ type: "OUT", occurredAt: leftAt }),
-    );
-    expect((await readSession()).status).toBe(SESSION_STATUS.CHECKED_OUT);
+    await flushStartup();
+    expect(autoCheckInOut).not.toHaveBeenCalled();
+    expect((await readSession()).status).toBe(SESSION_STATUS.CHECKED_IN);
+    expect(await getLastProcessedEventAt()).toBeNull();
+    expect(mockNativeLastEvent.timestamp).toBe(leftAt);
   });
 
   // Replay runs first so the log carries the real crossing time; presence would
   // only ever be able to claim "now".
-  it("prefers a replayed ENTER's crossing time over now", async () => {
+  it("does not replace an unowned historical ENTER with a presence-based check-in", async () => {
     const enteredAt = Date.now() - 25 * 60 * 1000;
     mockNativeLastEvent = {
       transition: "ENTER",
@@ -302,15 +423,11 @@ describe("AutoAttendanceBootstrap presence reconciliation", () => {
 
     await mountBootstrap();
 
-    await waitFor(() => expect(autoCheckInOut).toHaveBeenCalledTimes(1));
-    expect(autoCheckInOut).toHaveBeenCalledWith(
-      expect.objectContaining({ type: "IN", occurredAt: enteredAt }),
-    );
-    expect((await readSession()).startedAt).toBe(enteredAt);
-
-    // Presence saw the session was already open and stood down.
     await flushStartup();
-    expect(autoCheckInOut).toHaveBeenCalledTimes(1);
+    expect(autoCheckInOut).not.toHaveBeenCalled();
+    expect((await readSession()).status).toBe(SESSION_STATUS.CHECKED_OUT);
+    expect(await getLastProcessedEventAt()).toBeNull();
+    expect(mockNativeLastEvent.timestamp).toBe(enteredAt);
   });
 
   it("never logs under the warnings-only policy", async () => {

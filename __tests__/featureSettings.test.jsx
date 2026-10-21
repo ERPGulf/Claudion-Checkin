@@ -60,6 +60,7 @@ jest.mock('../services/api/authHelper', () => ({
 /* eslint-disable import/first */
 import {
   ATTENDANCE_FEATURES,
+  BOOLEAN_PATHS,
   DEFAULT_WHEN_UNKNOWN,
   FEATURES,
   buildSettingsScope,
@@ -70,10 +71,13 @@ import {
   isRouteEnabled,
   normalizeBoolean,
   normalizeFeatureSettings,
+  mergeFeatureSettings,
+  hasRecognizedFeatureSettings,
 } from '../utils/featureSettings';
 import { getFeatureSettings } from '../services/api/featureSettings.service';
 import reducer, {
   settingsReceived,
+  settingsRequested,
   settingsFailed,
   settingsInvalidated,
   selectFeatureSettings,
@@ -199,6 +203,34 @@ describe('normalizeFeatureSettings', () => {
   });
 });
 
+describe('mandatory tenant geo veto for automatic attendance', () => {
+  it.each([false, 0, '0', null])('disables the automatic capability and route for tenant geo %p', geo => {
+    const settings = normalizeFeatureSettings({ attendance_action: { auto_attendance: true, geo_tagging: geo } });
+    expect(isFeatureEnabled(settings, ATTENDANCE_FEATURES.AUTO_ATTENDANCE)).toBe(false);
+    expect(isRouteEnabled(settings, 'Auto attendance')).toBe(false);
+    expect(isRouteEnabled(settings, 'Attendance action')).toBe(true);
+    expect(isFeatureEnabled(settings, ATTENDANCE_FEATURES.PHOTO_UPLOAD)).toBe(true);
+  });
+
+  it('preserves a known geo veto through an omitted refresh and JSON cache hydration', () => {
+    const received = normalizeFeatureSettings({ attendance_action: { geo_tagging: null, auto_attendance: true } });
+    const restored = JSON.parse(JSON.stringify(received));
+    const refreshed = mergeFeatureSettings(restored, normalizeFeatureSettings({ attendance_action: { auto_attendance: true } }));
+    expect(isFeatureEnabled(refreshed, ATTENDANCE_FEATURES.AUTO_ATTENDANCE)).toBe(false);
+    expect(normalizeFeatureSettings({}).attendance_action.geo_tagging_level).toBeNull();
+    expect(isFeatureEnabled(normalizeFeatureSettings({}), ATTENDANCE_FEATURES.AUTO_ATTENDANCE)).toBe(true);
+  });
+
+  it.each([1, 2, true, 'invalid'])('does not invent an employee-mode mapping or extra grant for tenant geo %p', geo => {
+    expect(isFeatureEnabled(normalizeFeatureSettings({ attendance_action: {
+      geo_tagging: geo, auto_attendance: true,
+    } }), ATTENDANCE_FEATURES.AUTO_ATTENDANCE)).toBe(true);
+    expect(isFeatureEnabled(normalizeFeatureSettings({ attendance_action: {
+      geo_tagging: geo, auto_attendance: false,
+    } }), ATTENDANCE_FEATURES.AUTO_ATTENDANCE)).toBe(false);
+  });
+});
+
 describe('normalizeBoolean', () => {
   it('accepts the shapes Frappe Check fields arrive in', () => {
     expect(normalizeBoolean(true)).toBe(true);
@@ -215,9 +247,13 @@ describe('normalizeBoolean', () => {
   it('reports anything unrecognisable as unknown rather than false', () => {
     // A typo in the payload must not silently disable a feature.
     expect(normalizeBoolean(undefined)).toBeNull();
-    expect(normalizeBoolean(null)).toBeNull();
     expect(normalizeBoolean('maybe')).toBeNull();
     expect(normalizeBoolean({})).toBeNull();
+  });
+
+  it('treats explicit backend null as disabled, distinct from an omitted value', () => {
+    expect(normalizeBoolean(null)).toBe(false);
+    expect(normalizeBoolean(undefined)).toBeNull();
   });
 });
 
@@ -737,15 +773,109 @@ describe('geoTaggingLevel accepts the enum', () => {
 
   // Level 0 is a real answer; everything below is genuinely "no answer", and
   // must not collapse into 0.
-  it.each([3, -1, 1.5, NaN, '', '  ', 'something new', null, undefined, {}])(
+  it.each([3, -1, 1.5, NaN, '', '  ', 'something new', true, undefined, {}])(
     'reports %p as unknown',
     (input) => {
       expect(geoTaggingLevel(input)).toBeNull();
     },
   );
 
+  it.each([false, null])('reads the tenant disabled value %p as level 0', input => {
+    expect(geoTaggingLevel(input)).toBe(0);
+    const settings = normalizeFeatureSettings({ attendance_action: { geo_tagging: input } });
+    expect(getFeatureValue(settings, 'attendance_action.geo_tagging_level')).toBe(0);
+    expect(getFeatureValue(settings, 'attendance_action.geo_tagging')).toBe('0');
+  });
+
   // A sentence that merely starts with a digit is prose, not an enum.
   it('does not read a number out of the middle of a label', () => {
     expect(geoTaggingLevel('2 warnings issued')).toBe(1);
+  });
+});
+
+describe('confirmed explicit-null capability contract', () => {
+  const payloadFor = (path, value) => path.startsWith('attendance_action.')
+    ? { attendance_action: { [path.slice('attendance_action.'.length)]: value } }
+    : { [path]: value };
+
+  it.each(BOOLEAN_PATHS)('disables %s and supersedes a cached allow', path => {
+    const previous = normalizeFeatureSettings(payloadFor(path, true));
+    const next = normalizeFeatureSettings(payloadFor(path, null));
+    expect(isFeatureEnabled(next, path)).toBe(false);
+    expect(isFeatureEnabled(mergeFeatureSettings(previous, next), path)).toBe(false);
+    expect(hasRecognizedFeatureSettings(payloadFor(path, null))).toBe(true);
+    const hydrated = JSON.parse(JSON.stringify(mergeFeatureSettings(previous, next)));
+    expect(isFeatureEnabled(hydrated, path)).toBe(false);
+  });
+
+  it('preserves missing and malformed compatibility without reinterpreting old persisted unknowns', () => {
+    const previous = normalizeFeatureSettings({ expense_claim: true, leave_request: false });
+    const partial = normalizeFeatureSettings({ expense_claim: 'unexpected', complaints: null });
+    const merged = mergeFeatureSettings(previous, partial);
+    expect(isFeatureEnabled(merged, FEATURES.EXPENSE_CLAIM)).toBe(true);
+    expect(isFeatureEnabled(merged, FEATURES.LEAVE_REQUEST)).toBe(false);
+    expect(isFeatureEnabled(merged, FEATURES.COMPLAINTS)).toBe(false);
+    expect(isFeatureEnabled(JSON.parse(JSON.stringify(emptyFeatureSettings())), FEATURES.COMPLAINTS))
+      .toBe(DEFAULT_WHEN_UNKNOWN);
+    expect(hasRecognizedFeatureSettings({ attendance_action: null })).toBe(false);
+    expect(hasRecognizedFeatureSettings({ complaints: 'unexpected' })).toBe(false);
+  });
+
+  it('clears an explicitly null version as metadata without granting or denying offline permission', () => {
+    const previous = normalizeFeatureSettings({ attendance_action: {
+      offline_attendance: true, offline_attendance_version: '1',
+    } });
+    const next = normalizeFeatureSettings({ attendance_action: { offline_attendance_version: null } });
+    const merged = mergeFeatureSettings(previous, next);
+    expect(merged.attendance_action.offline_attendance_version).toBeNull();
+    expect(isFeatureEnabled(merged, ATTENDANCE_FEATURES.OFFLINE_ATTENDANCE)).toBe(true);
+    expect(BOOLEAN_PATHS).not.toContain('attendance_action.offline_attendance_version');
+    expect(hasRecognizedFeatureSettings({ attendance_action: { offline_attendance_version: null } })).toBe(true);
+    expect(mergeFeatureSettings(previous, normalizeFeatureSettings({ complaints: false }))
+      .attendance_action.offline_attendance_version).toBe('1');
+    expect(mergeFeatureSettings(previous, normalizeFeatureSettings({ attendance_action: {
+      offline_attendance_version: {},
+    } })).attendance_action.offline_attendance_version).toBe('1');
+    const updated = mergeFeatureSettings(merged, normalizeFeatureSettings({ attendance_action: {
+      offline_attendance_version: '2',
+    } }));
+    expect(updated.attendance_action.offline_attendance_version).toBe('2');
+    expect(updated._explicitNullFields).toBeUndefined();
+  });
+
+  it('replaces a cached tenant geo level with explicit disabled values but retains it for missing/malformed data', () => {
+    const previous = normalizeFeatureSettings({ attendance_action: { geo_tagging: 2 } });
+    for (const value of [false, null, 0]) {
+      const merged = mergeFeatureSettings(previous, normalizeFeatureSettings({ attendance_action: { geo_tagging: value } }));
+      expect(merged.attendance_action.geo_tagging_level).toBe(0);
+      expect(merged.attendance_action.geo_tagging).toBe('0');
+    }
+    for (const value of [undefined, true, 'unexpected', {}]) {
+      const merged = mergeFeatureSettings(previous, normalizeFeatureSettings({ attendance_action: { geo_tagging: value } }));
+      expect(merged.attendance_action.geo_tagging_level).toBe(2);
+    }
+  });
+
+  it('keeps null revocation through reducer hydration and rejects an older response', () => {
+    const scope = buildSettingsScope('https://null-alpha.example.test', 'EMP-NULL');
+    let state = reducer(undefined, settingsReceived({
+      scope, settings: normalizeFeatureSettings({ expense_claim: true }),
+    }));
+    state = reducer(state, settingsRequested({ scope, requestId: 'older' }));
+    state = reducer(state, settingsRequested({ scope, requestId: 'latest' }));
+    state = reducer(state, settingsReceived({
+      scope, requestId: 'latest', settings: normalizeFeatureSettings({ expense_claim: null }),
+    }));
+    state = reducer(state, settingsReceived({
+      scope, requestId: 'older', settings: normalizeFeatureSettings({ expense_claim: true }),
+    }));
+    const hydrated = JSON.parse(JSON.stringify(state));
+    expect(isFeatureEnabled(selectScopedFeatureSettings({ featureSettings: hydrated }, scope), FEATURES.EXPENSE_CLAIM)).toBe(false);
+    const otherScope = buildSettingsScope('https://null-beta.example.test', 'EMP-NULL');
+    expect(selectScopedFeatureSettings({ featureSettings: hydrated }, otherScope)).toBeNull();
+    state = reducer(hydrated, settingsReceived({
+      scope: otherScope, settings: normalizeFeatureSettings({ expense_claim: null }),
+    }));
+    expect(isFeatureEnabled(selectScopedFeatureSettings({ featureSettings: state }, otherScope), FEATURES.EXPENSE_CLAIM)).toBe(false);
   });
 });

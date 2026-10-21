@@ -2,7 +2,8 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import apiClient from "./apiClient";
 import { cleanBaseUrl } from "./utils";
-import { assertAttendanceQueueScope, createAttendanceScopeChangedError } from "../offline/attendanceQueueProvenance";
+import { assertAttendanceQueueScope, captureAttendanceQueueScope, createAttendanceScopeChangedError } from "../offline/attendanceQueueProvenance";
+import { beginEmployeeAutoAttendancePolicyReception, receiveEmployeeAutoAttendancePolicy } from "../employeeAutoAttendancePolicy";
 
 /**
  * fetchEmployeeData(employeeCode)
@@ -10,8 +11,10 @@ import { assertAttendanceQueueScope, createAttendanceScopeChangedError } from ".
  */
 export const fetchEmployeeData = async (employeeCode, { syncScope } = {}) => {
   try {
-    const current = syncScope ? await assertAttendanceQueueScope(syncScope) : null;
-    if (syncScope && syncScope.employeeId !== employeeCode) throw createAttendanceScopeChangedError();
+    syncScope = syncScope ?? await captureAttendanceQueueScope(employeeCode);
+    const current = await assertAttendanceQueueScope(syncScope);
+    if (syncScope.employeeId !== employeeCode) throw createAttendanceScopeChangedError();
+    const reception = beginEmployeeAutoAttendancePolicyReception(syncScope);
     const rawBaseUrl = current?.tenantKey ?? await AsyncStorage.getItem("baseUrl");
     const baseUrl = cleanBaseUrl(rawBaseUrl);
     if (!baseUrl) throw new Error("Base URL missing");
@@ -30,7 +33,7 @@ export const fetchEmployeeData = async (employeeCode, { syncScope } = {}) => {
       },
       timeout: 10000,
     });
-    if (syncScope) await assertAttendanceQueueScope(syncScope);
+    await receiveEmployeeAutoAttendancePolicy(data.message, reception);
 
     return data.message;
   } catch (error) {

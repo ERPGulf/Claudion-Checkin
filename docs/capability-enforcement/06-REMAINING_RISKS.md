@@ -1,5 +1,7 @@
 # Remaining risks and backend clarification
 
+Current follow-up status: [07](07-FINAL_GAP_ANALYSIS.md) records the R4 employee-mode execution/retry fix and legacy historical-replay limitation; [09](09-RELEASE_READINESS.md) classifies production gates and records current fixes/tests. R4 client regression coverage passes; DV-13 native/device validation remains pending. These qualify the earlier risk inventory below.
+
 ## Blocking full settings-authority claims
 
 1. **Overlapping geo/location policy sources.** The repository explicitly leaves precedence unresolved between settings `geo_tagging` and employee `geotagging`, and has no resolved contract for settings `restrict_location` / `unrestricted_checkout_location` versus mandatory employee flags. Existing employee rules are preserved. Do not claim all three settings fields now control attendance. See `03-GEOTAGGING_AND_LOCATION_POLICY.md` and existing P-11.

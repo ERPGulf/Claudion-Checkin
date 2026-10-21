@@ -49,6 +49,7 @@ import { resolveNearestOffice } from "../services/offline/offlineAttendanceGate"
 import { formatOfflineTimestamp, normalizeAttendanceStatusClock } from "../utils/serverClock";
 import { captureAttendanceQueueScope, assertAttendanceQueueScope } from "../services/offline/attendanceQueueProvenance";
 import { selectFeatureSettings } from "../redux/Slices/FeatureSettingsSlice";
+import { resolveManualAttendanceLocationPolicy } from "../services/manualAttendanceLocationPolicy";
 import {
   ATTENDANCE_FEATURES,
   isFeatureEnabled,
@@ -83,12 +84,14 @@ export default function useAttendanceAction() {
   // the policy has to cover attendance actions before the geofence will close
   // this session — otherwise promising an automatic check-out would be a lie.
   const autoMonitoringActive = useSelector(selectAutoAttendanceActive);
-  const autoActionsEnabled =
-    useSelector(selectAutoAttendanceFullActions) && autoMonitoringActive;
-  const employeeCode = userDetails?.employeeCode;
-  // Employee location/geo rules remain independent: precedence of overlapping
-  // tenant policy fields is unresolved (see capability-enforcement docs03).
   const featureSettings = useSelector(selectFeatureSettings);
+  const autoActionsEnabled =
+    useSelector(selectAutoAttendanceFullActions) && autoMonitoringActive &&
+    isFeatureEnabled(featureSettings, ATTENDANCE_FEATURES.AUTO_ATTENDANCE);
+  const employeeCode = userDetails?.employeeCode;
+  // Manual tenant restrictions add to mandatory employee restrictions.
+  // Tenant geo zero additionally vetoes automatic attendance; other tenant geo
+  // level meanings remain unresolved and do not alter manual location rules.
   const breakFeatureEnabled = isFeatureEnabled(
     featureSettings,
     ATTENDANCE_FEATURES.EMPLOYEE_CHECKIN_BREAK,
@@ -945,7 +948,12 @@ export default function useAttendanceAction() {
   // The screens render their own "Loading settings..." state off
   // `restrictionLoaded`. It used to be an early `return` right here, which also
   // meant every hook below it had to stay above — a rules-of-hooks trap.
-  const allowCheckoutAnywhere = checkin === true && unrestrictedCheckout === 1;
+  const manualLocationInput = { settings: featureSettings,
+    employeeRestrictLocation: restrictLocation, employeeUnrestrictedCheckout: unrestrictedCheckout };
+  const manualInPolicy = resolveManualAttendanceLocationPolicy({ ...manualLocationInput, type: "IN" });
+  const manualOutPolicy = resolveManualAttendanceLocationPolicy({ ...manualLocationInput, type: "OUT" });
+  const unrestrictedManualCheckout = manualInPolicy.requiresRadius && !manualOutPolicy.requiresRadius;
+  const allowCheckoutAnywhere = checkin === true && unrestrictedManualCheckout;
 
   /**
    * Check-in / check-out entry point. Photo mode ("photo" === "1") diverts to
@@ -993,8 +1001,8 @@ export default function useAttendanceAction() {
     autoActionsEnabled,
     dateTime,
     // location gating
-    restrictLocation,
-    unrestrictedCheckout,
+    restrictLocation: manualInPolicy.requiresRadius ? 1 : 0,
+    unrestrictedCheckout: unrestrictedManualCheckout ? 1 : 0,
     restrictionLoaded,
     allowCheckoutAnywhere,
     inTarget,

@@ -3,6 +3,13 @@ jest.mock("expo-sqlite", () => require("../test-utils/expoSqliteMock"));
 const mockListeners = { enter: new Set(), exit: new Set(), error: new Set() };
 let mockJournal = [];
 let mockReconnect;
+let mockStore;
+jest.mock("../redux/Store", () => ({
+  store: {
+    getState: () => mockStore?.getState() ?? {},
+    dispatch: action => mockStore?.dispatch(action),
+  },
+}));
 jest.mock("../modules/expo-auto-attendance", () => ({
   OFFICE_GEOFENCE_IDENTIFIER: "office-main", isAvailable: () => true, supportsDurableEvents: () => true,
   getPendingEvents: jest.fn(() => [...mockJournal]),
@@ -43,6 +50,7 @@ import * as Native from "../modules/expo-auto-attendance";
 import AutoAttendanceBootstrap from "../components/AutoAttendanceBootstrap";
 import RootReducer from "../redux/RootReducer";
 import { setSignOut } from "../redux/Slices/AuthSlice";
+import { setBaseUrl } from "../redux/Slices/UserSlice";
 import { CONFIG_KEY, refreshAttendanceConfig } from "../services/offline/attendanceConfigCache";
 import { fetchShouldAttemptRequest } from "../services/offline/NetworkListener";
 import { listAll } from "../services/offline/AttendanceQueueRepository";
@@ -53,6 +61,11 @@ import { loginQueueEmployee, TEST_TENANT } from "../test-utils/attendanceScope";
 import { createRegistrationId } from "../utils/autoAttendanceRegistration";
 import { settingsReceived } from "../redux/Slices/FeatureSettingsSlice";
 import { buildSettingsScope, normalizeFeatureSettings } from "../utils/featureSettings";
+import { captureAttendanceQueueScope } from "../services/offline/attendanceQueueProvenance";
+import {
+  beginEmployeeAutoAttendancePolicyReception,
+  receiveEmployeeAutoAttendancePolicy,
+} from "../services/employeeAutoAttendancePolicy";
 const { __resetAll } = require("../test-utils/expoSqliteMock");
 let config;
 let store;
@@ -66,6 +79,14 @@ const receiveAutomaticAvailability = value => store.dispatch(settingsReceived({
   scope: buildSettingsScope(TEST_TENANT, "EMP-001"),
   settings: normalizeFeatureSettings({ attendance_action: { auto_attendance: value } }),
 }));
+const receiveTenantGeo = (value, tenant = TEST_TENANT) => store.dispatch(settingsReceived({
+  scope: buildSettingsScope(tenant, "EMP-001"),
+  settings: normalizeFeatureSettings({ attendance_action: { geo_tagging: value, auto_attendance: true } }),
+}));
+const receiveEmployeeMode = async mode => {
+  const scope = await captureAttendanceQueueScope("EMP-001");
+  return receiveEmployeeAutoAttendancePolicy({ geotagging: mode }, beginEmployeeAutoAttendancePolicyReception(scope));
+};
 
 beforeEach(async () => {
   __resetAll(); resetDatabaseHandle(); resetOfflineCapability();
@@ -83,6 +104,7 @@ beforeEach(async () => {
     userAuth: { isLoggedIn: true }, user: { baseUrl: TEST_TENANT, userDetails: { employeeCode: "EMP-001" } },
     autoAttendance: { geotagging: 2, userEnabled: true, syncRequestId: 0 },
   } });
+  mockStore = store;
 });
 
 it("restores a denied automatic capability without registering or submitting a captured event", async () => {
@@ -93,6 +115,76 @@ it("restores a denied automatic capability without registering or submitting a c
   expect(await listAll()).toEqual([]);
   expect(Native.startGeofence).not.toHaveBeenCalled();
   expect(Native.stopGeofence).toHaveBeenCalled();
+});
+
+it.each([false, 0, null])("tenant geo %s prevents employee mode 2 monitoring and captured-event attendance on cold start", async value => {
+  await receiveEmployeeMode(2);
+  receiveTenantGeo(value);
+  mockJournal = [event("tenant-geo-disabled-cold-start", "ENTER", 1)];
+  mount();
+  await waitFor(async () => expect(await findEvent("tenant-geo-disabled-cold-start")).toMatchObject({ status: "pending" }));
+  expect(await listAll()).toEqual([]);
+  expect(Native.startGeofence).not.toHaveBeenCalled();
+  expect(Native.stopGeofence).toHaveBeenCalled();
+  expect(store.getState().autoAttendance.employeePolicy.mode).toBe(2);
+});
+
+it("a geo-only disabling refresh stops monitoring and preserves later background receipts", async () => {
+  receiveTenantGeo(2);
+  mount();
+  await waitFor(() => expect(Native.startGeofence).toHaveBeenCalledTimes(1));
+  Native.stopGeofence.mockClear();
+  await act(async () => {
+    store.dispatch(settingsReceived({ scope: buildSettingsScope(TEST_TENANT, "EMP-001"),
+      settings: normalizeFeatureSettings({ attendance_action: { geo_tagging: 0 } }) }));
+  });
+  await waitFor(() => expect(Native.stopGeofence).toHaveBeenCalled());
+  expect(store.getState().featureSettings.settings.attendance_action.auto_attendance).toBe(true);
+  await act(async () => {
+    mockJournal = [event("background-after-tenant-geo-disabled", "ENTER", 1)];
+    mockListeners.enter.forEach(listener => listener(mockJournal[0]));
+  });
+  await waitFor(async () => expect(await findEvent("background-after-tenant-geo-disabled")).toMatchObject({ status: "pending" }));
+  expect(await listAll()).toEqual([]);
+  expect(Native.startGeofence).toHaveBeenCalledTimes(1);
+});
+
+it("tenant geo revocation stops immediately while a scoped employee refresh remains pending", async () => {
+  await receiveEmployeeMode(2);
+  receiveTenantGeo(2);
+  fetchShouldAttemptRequest.mockResolvedValue(true);
+  let releaseRefresh;
+  refreshAttendanceConfig.mockImplementation(() => new Promise(resolve => { releaseRefresh = resolve; }));
+  mount();
+  await waitFor(() => expect(releaseRefresh).toBeDefined());
+  Native.stopGeofence.mockClear();
+  await act(async () => { receiveTenantGeo(0); });
+  await waitFor(() => expect(Native.stopGeofence).toHaveBeenCalled());
+  await act(async () => { releaseRefresh({ refreshed: false, config }); });
+  expect(Native.startGeofence).not.toHaveBeenCalled();
+  expect(await listAll()).toEqual([]);
+});
+
+it("a tenant switch cannot apply another tenant's permitted geo policy to a pending native event", async () => {
+  receiveTenantGeo(0);
+  mockJournal = [event("tenant-a-revoked-crossing", "ENTER", 1)];
+  mount();
+  await waitFor(async () => expect(await findEvent("tenant-a-revoked-crossing")).toMatchObject({ status: "pending" }));
+  const otherTenant = "https://other-attendance.example.test";
+  config = { ...config, tenantKey: otherTenant };
+  await act(async () => {
+    await loginQueueEmployee("EMP-001", otherTenant);
+    await AsyncStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+    store.dispatch(setBaseUrl(otherTenant));
+    receiveTenantGeo(2, otherTenant);
+    await receiveEmployeeMode(2);
+  });
+  await waitFor(() => expect(Native.startGeofence).toHaveBeenCalledWith(
+    expect.objectContaining({ tenantKey: otherTenant, geotagging: 2 }),
+    expect.objectContaining({ tenantKey: otherTenant }),
+  ));
+  expect(await listAll()).toEqual([]);
+  expect(await findEvent("tenant-a-revoked-crossing")).toMatchObject({ status: "pending", tenantKey: TEST_TENANT });
 });
 
 it("stops live monitoring on a received denial and retains later native callbacks", async () => {
@@ -129,6 +221,7 @@ it("refreshes connected policy before replay so authoritative revocation creates
   const revoked = { ...config, locations: [], rules: { ...config.rules, geotagging: 0, restrictLocation: 0 } };
   refreshAttendanceConfig.mockImplementation(async () => {
     expect(await listAll()).toEqual([]);
+    await receiveEmployeeMode(0);
     await AsyncStorage.setItem(CONFIG_KEY, JSON.stringify(revoked));
     return { refreshed: true, config: revoked };
   });
@@ -137,6 +230,65 @@ it("refreshes connected policy before replay so authoritative revocation creates
   expect(await listAll()).toEqual([]);
   expect((await findEvent("revoked-enter")).status).toBe("pending");
   expect(Native.startGeofence).not.toHaveBeenCalled();
+});
+
+it.each([0, 1])("employee mode %s refuses fresh punches while mode 1 retains eligible monitoring", async mode => {
+  await receiveEmployeeMode(mode);
+  mockJournal = [event(`employee-mode-${mode}`, "ENTER", 1)];
+  mount();
+  await waitFor(async () => expect(await findEvent(`employee-mode-${mode}`)).not.toBeNull());
+  expect(await listAll()).toEqual([]);
+  if (mode === 0) {
+    expect(Native.startGeofence).not.toHaveBeenCalled();
+    expect(Native.stopGeofence).toHaveBeenCalled();
+  } else {
+    await waitFor(() => expect(Native.startGeofence).toHaveBeenCalledWith(
+      expect.objectContaining({ geotagging: 1 }), expect.objectContaining({ employeeId: "EMP-001" }),
+    ));
+  }
+});
+
+it("a new employee response authorizes mode 2 despite an older cached mode 0", async () => {
+  config = { ...config, rules: { ...config.rules, geotagging: 0 } };
+  await AsyncStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+  await receiveEmployeeMode(2);
+  mount();
+  await waitFor(() => expect(Native.startGeofence).toHaveBeenCalledWith(
+    expect.objectContaining({ geotagging: 2 }), expect.objectContaining({ employeeId: "EMP-001" }),
+  ));
+  expect(store.getState().autoAttendance.employeePolicy.mode).toBe(2);
+});
+
+it("employee mode 0 stops monitoring while an older configuration refresh is pending", async () => {
+  await receiveEmployeeMode(2);
+  fetchShouldAttemptRequest.mockResolvedValue(true);
+  let releaseRefresh;
+  refreshAttendanceConfig.mockImplementation(() => new Promise(resolve => { releaseRefresh = resolve; }));
+  mount();
+  await waitFor(() => expect(refreshAttendanceConfig).toHaveBeenCalled());
+  Native.stopGeofence.mockClear();
+  await act(async () => { await receiveEmployeeMode(0); });
+  await waitFor(() => expect(Native.stopGeofence).toHaveBeenCalled());
+  await act(async () => { releaseRefresh({ refreshed: false, config }); });
+  expect(Native.startGeofence).not.toHaveBeenCalled();
+  expect(await listAll()).toEqual([]);
+  expect(store.getState().autoAttendance.employeePolicy.mode).toBe(0);
+});
+
+it("updates live native monitoring to warnings-only without accepting a delayed punch", async () => {
+  await receiveEmployeeMode(2);
+  mount();
+  await waitFor(() => expect(Native.startGeofence).toHaveBeenCalledTimes(1));
+  await act(async () => { await receiveEmployeeMode(1); });
+  await waitFor(() => expect(Native.startGeofence).toHaveBeenLastCalledWith(
+    expect.objectContaining({ geotagging: 1 }), expect.objectContaining({ employeeId: "EMP-001" }),
+  ));
+  await act(async () => {
+    mockJournal = [event("delayed-after-employee-revocation", "ENTER", 1)];
+    mockListeners.enter.forEach(listener => listener(mockJournal[0]));
+  });
+  await waitFor(async () => expect(await findEvent("delayed-after-employee-revocation")).not.toBeNull());
+  expect(await listAll()).toEqual([]);
 });
 
 it("replays cached offline events without waiting for a network policy request", async () => {

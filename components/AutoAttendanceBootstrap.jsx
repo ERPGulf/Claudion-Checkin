@@ -1,15 +1,13 @@
 import React, { useEffect, useRef } from "react";
 import DurableAutoAttendanceBootstrap from "./DurableAutoAttendanceBootstrap";
 import { useDispatch, useSelector } from "react-redux";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Location from "expo-location";
 import { selectIsLoggedIn } from "../redux/Slices/AuthSlice";
+import { selectBaseUrl } from "../redux/Slices/UserSlice";
 import {
-  normalizeGeotagging,
   selectAutoAttendanceActive,
-  selectAutoAttendanceFullActions,
+  selectAutoAttendanceGeotagging,
   selectAutoAttendanceSyncRequestId,
-  setAutoAttendanceGeotagging,
 } from "../redux/Slices/AutoAttendanceSlice";
 import { setCheckin, setCheckout } from "../redux/Slices/AttendanceSlice";
 import {
@@ -54,9 +52,14 @@ import {
   submitAutoAttendance,
 } from "../services/offline/AttendanceQueueService";
 import { syncNow } from "../services/offline/BackgroundSyncManager";
-import { captureAttendanceQueueScope } from "../services/offline/attendanceQueueProvenance";
+import { assertAttendanceQueueScope, captureAttendanceQueueScope } from "../services/offline/attendanceQueueProvenance";
 import { useFeatureEnabled } from "../hooks/useFeatureSettings";
 import { ATTENDANCE_FEATURES } from "../utils/featureSettings";
+import { assertCapability, assertCapabilityCurrent } from "../services/capabilityPolicy";
+import {
+  assertEmployeeAutoAttendancePolicy,
+  getEmployeeAutoAttendancePolicy,
+} from "../services/employeeAutoAttendancePolicy";
 
 const LOG_PREFIX = "[AutoAttendanceBootstrap]";
 
@@ -74,8 +77,8 @@ const LOG_PREFIX = "[AutoAttendanceBootstrap]";
  *  - re-attach the geofence ENTER/EXIT listeners on every app launch/login,
  *    since those are JS-side and don't survive a JS engine restart even
  *    though the native geofence registration itself does,
- *  - replay a transition the OS delivered while JS was not running at all
- *    (see replayPendingEvent below), and
+ *  - retain unattributed historical transitions from older binaries without
+ *    submitting them under the current account (see replayPendingEvent), and
  *  - perform the real check-in/checkout API call when the policy is
  *    "all attendance actions" (geotagging === 2), so it fires from anywhere in
  *    the app, not just while the AutoAttendance screen happens to be mounted.
@@ -98,20 +101,21 @@ export default function AutoAttendanceBootstrap() {
 function LegacyAutoAttendanceBootstrap() {
   const dispatch = useDispatch();
   const isLoggedIn = useSelector(selectIsLoggedIn);
+  const baseUrl = useSelector(selectBaseUrl);
   const employeeActive = useSelector(selectAutoAttendanceActive);
+  const employeeMode = useSelector(selectAutoAttendanceGeotagging);
   const capabilityAllowed = useFeatureEnabled(ATTENDANCE_FEATURES.AUTO_ATTENDANCE);
   const active = employeeActive && capabilityAllowed;
-  const fullActions = useSelector(selectAutoAttendanceFullActions);
   const syncRequestId = useSelector(selectAutoAttendanceSyncRequestId);
   const employeeCode = useSelector(
     (state) => state.user?.userDetails?.employeeCode,
   );
 
   // Read inside the listener closures without re-subscribing on every change.
-  const fullActionsRef = useRef(fullActions);
-  fullActionsRef.current = fullActions;
   const capabilityAllowedRef = useRef(capabilityAllowed);
   capabilityAllowedRef.current = capabilityAllowed;
+  const employeeActiveRef = useRef(employeeActive);
+  employeeActiveRef.current = employeeActive;
   const employeeCodeRef = useRef(employeeCode);
   employeeCodeRef.current = employeeCode;
   // The office geofence's reporting location, captured when monitoring is
@@ -120,20 +124,29 @@ function LegacyAutoAttendanceBootstrap() {
   // Serializes the startup sequence across effect runs — see the chain below.
   const startupRef = useRef(Promise.resolve());
 
+  const assertAutomaticAllowed = async (scope, action) => {
+    await assertCapability(ATTENDANCE_FEATURES.AUTO_ATTENDANCE, scope);
+    const policy = await assertEmployeeAutoAttendancePolicy(scope, { action });
+    // Employee/cache reception yields too: a tenant geo revocation received
+    // during that work must apply before retaining monitoring or a new punch.
+    assertCapabilityCurrent(ATTENDANCE_FEATURES.AUTO_ATTENDANCE, scope);
+    return policy;
+  };
+
   // Sync the server-side geotagging policy into Redux whenever we log in or the
   // employee changes. Uses the lightweight employee-data GET (no GPS); on
-  // failure, falls back to whatever getOfficeLocation last cached so an offline
-  // launch still respects the last known policy.
+  // failure, restores only a scoped cache through the same policy receiver.
   useEffect(() => {
     if (!isLoggedIn || !employeeCode) return undefined;
 
     let cancelled = false;
 
     (async () => {
+      let scope;
       try {
-        const employee = await fetchEmployeeData(employeeCode);
+        scope = { ...await captureAttendanceQueueScope(employeeCode), isCancelled: () => cancelled };
+        const employee = await fetchEmployeeData(employeeCode, { syncScope: scope });
         if (cancelled) return;
-        dispatch(setAutoAttendanceGeotagging(employee?.geotagging));
         console.log(
           `${LOG_PREFIX} Geotagging policy synced`,
           employee?.geotagging,
@@ -144,10 +157,7 @@ function LegacyAutoAttendanceBootstrap() {
           error?.message,
         );
         try {
-          const cached = await AsyncStorage.getItem("geotagging");
-          if (!cancelled && cached != null) {
-            dispatch(setAutoAttendanceGeotagging(normalizeGeotagging(cached)));
-          }
+          if (scope && !cancelled) await getEmployeeAutoAttendancePolicy(scope);
         } catch (cacheError) {
           console.log(
             `${LOG_PREFIX} Failed to read cached geotagging:`,
@@ -160,7 +170,7 @@ function LegacyAutoAttendanceBootstrap() {
     return () => {
       cancelled = true;
     };
-  }, [isLoggedIn, employeeCode, dispatch]);
+  }, [isLoggedIn, employeeCode, baseUrl, dispatch]);
 
   useEffect(() => {
     if (!isAvailable()) return undefined;
@@ -174,10 +184,11 @@ function LegacyAutoAttendanceBootstrap() {
 
     let cancelled = false;
     // Only events observed during this registration have evidence of ownership.
-    // Native replay from before it carries no backend identity; preserve it as
-    // unknown if it queues, rather than assigning today's company.
+    // Native replay from before it carries no backend identity and must not
+    // become attendance for today's account.
     const scopeObservedAt = Date.now();
-    const queueScope = captureAttendanceQueueScope(employeeCode).catch(() => null);
+    const queueScope = captureAttendanceQueueScope(employeeCode)
+      .then(scope => ({ ...scope, isCancelled: () => cancelled })).catch(() => null);
 
     // A geofence transition is a request to move the attendance session state
     // machine, not an unconditional API call. The machine decides:
@@ -227,7 +238,7 @@ function LegacyAutoAttendanceBootstrap() {
     const performAttendanceAction = async (
       type,
       occurredAt,
-      { markProcessed = true } = {},
+      { markProcessed = true, observedLive = false } = {},
     ) => {
       const recordHandled = async (at) => {
         if (markProcessed) await markEventProcessed(at);
@@ -237,25 +248,27 @@ function LegacyAutoAttendanceBootstrap() {
       // native crossing is location evidence, not authority to submit a punch.
       if (cancelled || !capabilityAllowedRef.current) return;
 
-      // geotagging === 1 ("warnings only"): the crossing is detected and shown
-      // on the AutoAttendance screen, but must never become an attendance log.
-      // Mark it handled anyway — the policy in force AT THE CROSSING governs, so
-      // raising the policy to 2 later must not retroactively replay it.
-      if (!fullActionsRef.current) {
-        console.log(
-          `${LOG_PREFIX} Policy does not cover attendance actions; ignoring ${type}`,
-        );
-        await recordHandled(occurredAt);
-        return;
-      }
-
       // Transient, not a decision: retry on the next launch once it is known.
       const code = employeeCodeRef.current;
       if (!code) return;
 
       try {
-        const sourceScope = occurredAt == null || occurredAt >= scopeObservedAt
+        const sourceScope = observedLive && Number.isFinite(occurredAt) && occurredAt >= scopeObservedAt
           ? await queueScope : null;
+        // Older native records have no capture-time owner. Current credentials
+        // cannot authorize another account's historical crossing. Keep its
+        // native evidence and high-water mark intact for review.
+        if (!sourceScope) return;
+        await assertAttendanceQueueScope(sourceScope);
+        const policy = await getEmployeeAutoAttendancePolicy(sourceScope);
+        // Warnings-only observations are handled without creating attendance.
+        // Disabled/unknown policies retain the event instead of authorizing it.
+        if (policy?.mode === 1) {
+          await recordHandled(occurredAt);
+          return;
+        }
+        const assertPunchAllowed = () => assertAutomaticAllowed(sourceScope, "punch");
+        await assertPunchAllowed();
         // Same queue the manual screens use, differing only in `attendanceType`
         // and in which API call it wraps. A geofence crossing is precisely when
         // the network is least reliable — a car park, a basement, a site with no
@@ -264,7 +277,9 @@ function LegacyAutoAttendanceBootstrap() {
           type,
           origin: SESSION_ORIGIN.AUTO,
           at: occurredAt,
+          assertCurrent: () => assertAttendanceQueueScope(sourceScope),
           execute: async () => {
+            await assertPunchAllowed();
             // A check-in must never overtake a punch the server has not seen.
             // The OS can deliver an ENTER the instant the fence is registered at
             // login — before the startup drain has uploaded the check-out that
@@ -292,19 +307,23 @@ function LegacyAutoAttendanceBootstrap() {
               );
             }
 
+            await assertPunchAllowed();
             return submitAutoAttendance({
               type,
               employeeCode: code,
               occurredAt,
               forceQueue,
               sourceScope,
-              online: () =>
-                autoCheckInOut({
+              online: async () => {
+                await assertPunchAllowed();
+                return autoCheckInOut({
                   employeeCode: code,
                   type,
                   office: officeRef.current,
                   occurredAt,
-                }),
+                  syncScope: sourceScope,
+                });
+              },
             });
           },
         });
@@ -378,21 +397,18 @@ function LegacyAutoAttendanceBootstrap() {
     // — attaching afterwards risks silently missing that first check-in.
     const subscriptions = [
       addGeofenceEnterListener((event) =>
-        performAttendanceAction("IN", event?.timestamp),
+        performAttendanceAction("IN", event?.timestamp, { observedLive: true }),
       ),
       addGeofenceExitListener((event) =>
-        performAttendanceAction("OUT", event?.timestamp),
+        performAttendanceAction("OUT", event?.timestamp, { observedLive: true }),
       ),
     ];
 
     /**
-     * Applies a transition the OS delivered to native code while JS was not
-     * running (app killed, or launched by the OS for the event itself). Native
-     * persists the last transition but cannot call the attendance API, so
-     * without this a check-out could be lost until the user next pressed a
-     * button. Safe to run on every launch: the high-water mark skips events
-     * already handled, and the session state machine skips ones that would not
-     * change anything.
+     * Inspects the older native binary's last transition. It has no original
+     * tenant/employee metadata, so an actionable historical event is retained
+     * without attendance submission. Existing expiry/high-water rules remain;
+     * provenance-aware replay is available through the durable bootstrap.
      */
     const replayPendingEvent = async () => {
       try {
@@ -419,29 +435,9 @@ function LegacyAutoAttendanceBootstrap() {
           return;
         }
 
-        // A crossing that predates the open session cannot be about it —
-        // replaying it would stamp a check-out before its own check-in. Happens
-        // when a manual check-in wins the race against this replay at launch.
-        if (pending.type === "OUT") {
-          const session = await readSession();
-          if (
-            isSessionActive(session) &&
-            session.startedAt &&
-            pending.occurredAt < session.startedAt
-          ) {
-            console.log(
-              `${LOG_PREFIX} Discarding EXIT that predates the open session`,
-            );
-            await markEventProcessed(pending.occurredAt);
-            return;
-          }
-        }
-
-        console.log(
-          `${LOG_PREFIX} Replaying missed ${lastEvent?.transition} from`,
-          new Date(pending.occurredAt).toISOString(),
-        );
-        await performAttendanceAction(pending.type, pending.occurredAt);
+        // An older binary cannot prove which tenant/employee captured this
+        // record. Retain it; only a fresh observed event may create attendance.
+        console.log(`${LOG_PREFIX} Retaining native event without capture-time ownership`);
       } catch (error) {
         console.log(`${LOG_PREFIX} Replay failed:`, error?.message);
       }
@@ -461,10 +457,15 @@ function LegacyAutoAttendanceBootstrap() {
      */
     const ensureMonitoring = async () => {
       try {
+        const sourceScope = await queueScope;
+        if (!sourceScope) return null;
+        const assertMonitoringAllowed = () => assertAutomaticAllowed(sourceScope, "monitor");
+        await assertMonitoringAllowed();
         const [foreground, background] = await Promise.all([
           Location.getForegroundPermissionsAsync(),
           Location.getBackgroundPermissionsAsync(),
         ]);
+        await assertMonitoringAllowed();
         if (
           foreground.status !== "granted" ||
           background.status !== "granted"
@@ -475,8 +476,9 @@ function LegacyAutoAttendanceBootstrap() {
           return null;
         }
 
-        const nearest = await getOfficeLocation(employeeCode);
-        if (cancelled || !nearest) return null;
+        const nearest = await getOfficeLocation(employeeCode, { syncScope: sourceScope });
+        await assertMonitoringAllowed();
+        if (!nearest) return null;
 
         officeRef.current = nearest;
 
@@ -484,12 +486,30 @@ function LegacyAutoAttendanceBootstrap() {
         // re-adding an existing fence re-triggers the OS initial-state check and,
         // on iOS, briefly stops the region being monitored.
         if (!isMonitoring()) {
+          // A same-owner sync request replaces this JS effect while its native
+          // start is pending. Preserve that registration if current employee
+          // policy still permits it; owner/generation changes remain invalid.
+          const registrationScope = { ...sourceScope };
+          delete registrationScope.isCancelled;
           await startGeofence({
             identifier: OFFICE_GEOFENCE_IDENTIFIER,
             latitude: nearest.latitude,
             longitude: nearest.longitude,
             radius: nearest.radius > 0 ? nearest.radius : 100,
-          });
+          }, registrationScope);
+          // A native registration may complete after policy or login changes.
+          // Remove that late registration before retaining monitoring.
+          try {
+            await assertAutomaticAllowed(registrationScope, "monitor");
+            if (!employeeActiveRef.current || !capabilityAllowedRef.current) {
+              await stopGeofence();
+              return null;
+            }
+          } catch (error) {
+            await stopGeofence();
+            throw error;
+          }
+          if (cancelled) return null;
           console.log(`${LOG_PREFIX} Monitoring (re)established`, nearest);
         }
 
@@ -634,7 +654,7 @@ function LegacyAutoAttendanceBootstrap() {
     // exactly one startup sequence in flight, which is what makes this component
     // safe to be the sole registrar.
     //
-    // Replay supplies captured event time. Presence only restores server state;
+    // Historical records remain unowned. Presence only restores server state;
     // a location snapshot must never supply an attendance transition.
     startupRef.current = startupRef.current
       .then(async () => {
@@ -654,7 +674,7 @@ function LegacyAutoAttendanceBootstrap() {
       cancelled = true;
       subscriptions.forEach((subscription) => subscription.remove());
     };
-  }, [isLoggedIn, active, employeeCode, syncRequestId, dispatch]);
+  }, [isLoggedIn, active, employeeMode, employeeCode, baseUrl, syncRequestId, dispatch]);
 
   return null;
 }

@@ -19,9 +19,11 @@
  *
  *   strings   offline_attendance_version ("1")
  *
- *   enum      geo_tagging — 0 disabled, 1 warnings only, 2 all attendance
- *             actions. Older builds send the ERPNext select *label* instead
- *             ("Enable geotagging for all attendance actions").
+ *   enum      tenant geo_tagging — 0 disabled, 1 and 2 retain the backend's
+ *             existing levels; false/null mean disabled. Older builds send
+ *             ERPNext select labels. Level 0 vetoes automatic functionality
+ *             regardless of employee mode. Other level meanings remain
+ *             unresolved; this parser does not change employee geotagging.
  *
  * `geo_tagging` is read into `geo_tagging_level`, the 0/1/2 enum the rest of the
  * app already speaks (redux/Slices/AutoAttendanceSlice). Both forms are accepted
@@ -49,7 +51,7 @@
  * staging verification. Unknown availability retains legacy compatibility, and
  * is explicitly different from an administrator's received false.
  *
- * An explicit `false` is always honoured, and it is honoured *through an
+ * An explicit `false` or wire `null` is always honoured, and it is honoured *through an
  * outage*: the last successful settings for a scope are persisted with it, so a
  * failed refresh keeps the previous answer rather than reverting to the
  * optimistic default. Only a scope that has never been fetched is optimistic.
@@ -92,17 +94,20 @@ export const BOOLEAN_PATHS = [
 ];
 
 const BOOLEAN_PATH_SET = new Set(BOOLEAN_PATHS);
+const OFFLINE_VERSION_PATH = 'attendance_action.offline_attendance_version';
 
 /**
  * Frappe Check fields arrive as `true`, `1` or `"1"` depending on how the
  * endpoint serialises them, and a tenant on an older build may send `"true"`.
- * Anything not recognisably true-or-false is reported as unknown (`null`) so it
+ * Explicit wire null disables a capability under the confirmed backend
+ * contract. Missing/undefined and anything not recognisably true-or-false is
+ * reported as unknown (normalised `null`) so it
  * falls through to the default rather than being coerced to `false` — a typo in
  * the payload must not silently disable a feature.
  */
 export function normalizeBoolean(value) {
   if (value === true || value === 1) return true;
-  if (value === false || value === 0) return false;
+  if (value === false || value === 0 || value === null) return false;
 
   if (typeof value === 'string') {
     const text = value.trim().toLowerCase();
@@ -130,7 +135,7 @@ function normalizeString(value) {
   return null;
 }
 
-/** The three geotagging policies, matching redux/Slices/AutoAttendanceSlice. */
+/** The tenant enum's existing levels; no tenant/employee merge is implied. */
 export const GEO_TAGGING_LEVELS = { DISABLED: 0, WARNINGS_ONLY: 1, ALL_ACTIONS: 2 };
 
 /**
@@ -150,11 +155,14 @@ export const GEO_TAGGING_LEVELS = { DISABLED: 0, WARNINGS_ONLY: 1, ALL_ACTIONS: 
  * is the opposite of what `0` means. An administrator turning geotagging off
  * would have read as no answer at all.
  *
- * Still returns null for anything unrecognised, so a caller falls back to the
- * per-employee `geotagging` value `attendanceConfigCache` stores rather than
- * inventing a policy.
+ * Tenant false and explicit null mean disabled. Boolean true has no confirmed
+ * enum meaning and must not become level 2. Unrecognised values stay unknown;
+ * `isFeatureEnabled` enforces the confirmed zero-level automatic veto;
+ * parsing does not invent other precedence over employee `geotagging`.
  */
 export function geoTaggingLevel(value) {
+  if (value === false || value === null) return 0;
+
   if (typeof value === 'number') {
     return Number.isInteger(value) && value >= 0 && value <= 2 ? value : null;
   }
@@ -177,9 +185,9 @@ export function geoTaggingLevel(value) {
 }
 
 /**
- * The normalised shape. Every value is either a settled value or `null` for
- * "the server did not tell us", which is what lets `isFeatureEnabled`
- * distinguish an explicit `false` from an absent field.
+ * The normalised shape. Boolean wire null becomes false before entering this
+ * shape. Normalised null means missing/malformed, preserving both partial
+ * refresh semantics and legacy persisted unknown values.
  */
 export function emptyFeatureSettings() {
   return {
@@ -252,7 +260,16 @@ export function normalizeFeatureSettings(raw) {
   target.offline_attendance_version = normalizeString(
     attendance.offline_attendance_version,
   );
-  target.geo_tagging = normalizeString(attendance.geo_tagging);
+  // Versions are metadata, never Boolean permissions. Keep explicit null
+  // separate from a missing version so a partial refresh can clear an old
+  // version without clearing it whenever the server omits the field. This
+  // optional serialized marker leaves older persisted shapes compatible.
+  if (attendance.offline_attendance_version === null) {
+    settings._explicitNullFields = [OFFLINE_VERSION_PATH];
+  }
+  target.geo_tagging = attendance.geo_tagging === false || attendance.geo_tagging === null
+    ? '0'
+    : normalizeString(attendance.geo_tagging);
   // From the raw value, not from the normalised string above: `normalizeString`
   // is lossy for this field (it renders a numeric 0 as "0"), and the level is
   // the form every caller actually uses.
@@ -270,7 +287,8 @@ export function hasRecognizedFeatureSettings(raw) {
       : normalized[path];
     return value !== null;
   }) || normalized.attendance_action.geo_tagging_level !== null ||
-    normalized.attendance_action.offline_attendance_version !== null;
+    normalized.attendance_action.offline_attendance_version !== null ||
+    normalized._explicitNullFields?.includes(OFFLINE_VERSION_PATH) === true;
 }
 
 /** Missing fields in a refresh cannot retract a previously explicit answer. */
@@ -278,6 +296,7 @@ export function mergeFeatureSettings(previous, next) {
   if (!previous) return next;
   const merged = { ...previous, attendance_action: { ...previous.attendance_action } };
   for (const [key, value] of Object.entries(next || {})) {
+    if (key === '_explicitNullFields') continue;
     if (key === 'attendance_action') {
       for (const [name, setting] of Object.entries(value || {})) {
         if (setting !== null && setting !== undefined) merged.attendance_action[name] = setting;
@@ -285,6 +304,12 @@ export function mergeFeatureSettings(previous, next) {
     } else if (value !== null && value !== undefined) {
       merged[key] = value;
     }
+  }
+  if (next?._explicitNullFields?.includes(OFFLINE_VERSION_PATH)) {
+    merged.attendance_action.offline_attendance_version = null;
+    merged._explicitNullFields = [OFFLINE_VERSION_PATH];
+  } else if (next?.attendance_action?.offline_attendance_version != null) {
+    delete merged._explicitNullFields;
   }
   return merged;
 }
@@ -320,6 +345,13 @@ export function isFeatureEnabled(settings, path) {
   }
 
   if (!settings || typeof settings !== 'object') return DEFAULT_WHEN_UNKNOWN;
+
+  // Backend-confirmed tenant veto for automatic geofence functionality. The
+  // normalized level distinguishes explicit false/0/null (0) from an omitted
+  // or malformed field (unknown). Other levels do not invent a tenant mode or
+  // raise the employee's independent geotagging authorization.
+  if (path === ATTENDANCE_FEATURES.AUTO_ATTENDANCE &&
+      settings.attendance_action?.geo_tagging_level === GEO_TAGGING_LEVELS.DISABLED) return false;
 
   const value = path.startsWith('attendance_action.')
     ? settings.attendance_action?.[path.slice('attendance_action.'.length)]

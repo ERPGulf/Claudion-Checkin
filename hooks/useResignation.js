@@ -36,7 +36,7 @@ export default function useResignation() {
   const activeSlot = useRef('file1');
 
   const { pickFromCamera, pickFromGallery, pickDocument } =
-    useAttachmentPicker();
+    useAttachmentPicker('employee_resignation');
 
   /* ---------------------------------------------------------------------
    * Attachments. The sheet is dismissed before the picker opens, then the

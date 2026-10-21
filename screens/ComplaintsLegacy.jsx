@@ -1,4 +1,4 @@
-import React, { useState, useLayoutEffect } from "react";
+import React, { useState, useRef, useLayoutEffect } from "react";
 import {
   View,
   Text,
@@ -18,6 +18,8 @@ import AttachmentPicker from "../components/attachment/AttachmentPicker";
 import AttachmentBottomSheet from "../components/attachment/AttachmentBottomSheet";
 
 import { useAttachmentPicker } from "../hooks/useAttachmentPicker";
+import { assertCapability, getCapabilitySnapshot } from "../services/capabilityPolicy";
+import { getAuthSessionGeneration } from "../utils/authSessionGuard";
 
 import {
   createComplaint,
@@ -40,6 +42,7 @@ import {
  * route at `screens/Complaints.jsx` unconditionally.
  */
 const ComplaintsLegacy = () => {
+  const actionGeneration = useRef(getAuthSessionGeneration()).current;
   const [message, setMessage] = useState("");
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -48,7 +51,7 @@ const ComplaintsLegacy = () => {
   const navigation = useNavigation();
 
   const { pickFromCamera, pickFromGallery, pickDocument } =
-    useAttachmentPicker();
+    useAttachmentPicker("complaints");
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -113,7 +116,8 @@ const ComplaintsLegacy = () => {
     try {
       const date = new Date().toISOString().replace("T", " ").slice(0, 19);
 
-      const result = await createComplaint({ date, message });
+      const capabilityScope = await assertCapability("complaints", { generation: actionGeneration });
+      const result = await createComplaint({ date, message }, { capabilityScope });
 
       if (result.error) {
         throw new Error(result.error);
@@ -126,9 +130,10 @@ const ComplaintsLegacy = () => {
       }
 
       if (file) {
-        await uploadComplaintAttachment(file, docname);
+        await uploadComplaintAttachment(file, docname, { capabilityScope });
       }
 
+      await getCapabilitySnapshot(capabilityScope);
       Alert.alert("Success", "Complaint submitted successfully");
 
       setMessage("");

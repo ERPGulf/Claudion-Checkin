@@ -68,6 +68,10 @@ describe("AutoAttendanceSlice", () => {
     );
     expect(state).toEqual({
       geotagging: 0,
+      employeePolicy: null,
+      employeeLocationPolicy: null,
+      policyRequest: null,
+      policySequence: 0,
       userEnabled: false,
       syncRequestId: 0,
     });

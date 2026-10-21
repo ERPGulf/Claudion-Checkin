@@ -1,6 +1,5 @@
 /** @jest-environment jsdom */
 jest.mock("expo-sqlite", () => require("../test-utils/expoSqliteMock"));
-jest.mock("../redux/Store", () => ({ store: { dispatch: jest.fn() } }));
 let mockState;
 let mockDark = false;
 jest.mock("react-redux", () => ({ useSelector: selector => selector(mockState), useDispatch: () => jest.fn() }));
@@ -39,6 +38,7 @@ import { fetchShouldAttemptRequest } from "../services/offline/NetworkListener";
 import * as session from "../utils/attendanceSessionState";
 import { loginQueueEmployee, TEST_TENANT } from "../test-utils/attendanceScope";
 import { ingestNativeEvent } from "../services/offline/AutoAttendanceEventRepository";
+import { beginEmployeeAutoAttendancePolicyReception, receiveEmployeeAutoAttendancePolicy } from "../services/employeeAutoAttendancePolicy";
 
 const EMPLOYEE = "EMP-001";
 const OTHER_TENANT = "https://another.example.com";
@@ -500,14 +500,21 @@ it("reports optional photo failure while attendance remains successful", async (
   expect((await repository.listAll())[0].status).toBe("synced");
 });
 
-it("stamps future automatic records from the originating scope and keeps unattributed replay unknown", async () => {
+it("stamps new current-owner automatic records, refuses unowned new replay and preserves accepted legacy evidence", async () => {
   setOfflineQueueingAllowed(true);
   fetchShouldAttemptRequest.mockResolvedValue(false);
-  await AsyncStorage.setItem("attendanceConfigCache", JSON.stringify({ employeeId: EMPLOYEE, locations: [], rules: { restrictLocation: 0 } }));
+  const owner = await captureAttendanceQueueScope(EMPLOYEE);
+  await receiveEmployeeAutoAttendancePolicy({ geotagging: 2 }, beginEmployeeAutoAttendancePolicyReception(owner));
+  await AsyncStorage.setItem("attendanceConfigCache", JSON.stringify({ employeeId: EMPLOYEE, tenantKey: TEST_TENANT,
+    locations: [], rules: { restrictLocation: 0, geotagging: 2 } }));
   await submitAutoAttendance({ type: "IN", employeeCode: EMPLOYEE });
   expect((await repository.listAll())[0].tenantKey).toBe(TEST_TENANT);
-  await submitAutoAttendance({ type: "OUT", employeeCode: EMPLOYEE, occurredAt: new Date(2026, 6, 1, 18).getTime() });
-  expect((await repository.listAll()).find(row => row.action === "checkout").tenantKey).toBeNull();
+  expect(await submitAutoAttendance({ type: "OUT", employeeCode: EMPLOYEE, occurredAt: new Date(2026, 6, 1, 18).getTime() }))
+    .toMatchObject({ allowed: false, reason: "scope-changed" });
+  expect(await repository.listAll()).toHaveLength(1);
+  const legacy = await seed({ tenantKey: null, attendanceType: "auto", action: "checkout", timestamp: "2026-07-01 18:00:00" });
+  await recovery();
+  expect(await repository.findById(legacy.row.id)).toEqual(legacy.row);
 });
 
 it("refuses a scoped delayed automatic event after the active tenant changes", async () => {

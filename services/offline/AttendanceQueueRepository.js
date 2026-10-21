@@ -178,6 +178,7 @@ export const enqueue = async ({
   payload = {},
   sessionId = null,
   sourceEventId = null,
+  assertCurrent,
   now = Date.now(),
 }) => {
   if (!employeeId) throw new Error("enqueue: employeeId is required");
@@ -185,6 +186,25 @@ export const enqueue = async ({
   if (!action) throw new Error("enqueue: action is required");
 
   const database = await getDatabase();
+
+  if (typeof assertCurrent === "function") {
+    // Recovery of an accepted row is evidence, not new admission. Keep it
+    // available after policy changes while guarding the actual new INSERT.
+    const sourceRow = sourceEventId ? await database.getFirstAsync(
+      `SELECT * FROM ${QUEUE_TABLE}
+        WHERE tenantKey IS ? AND employeeId = ? AND sourceEventId = ? LIMIT 1;`,
+      [tenantKey, employeeId, sourceEventId],
+    ) : null;
+    const existing = sourceRow ?? await database.getFirstAsync(
+      `SELECT * FROM ${QUEUE_TABLE}
+        WHERE tenantKey IS ? AND employeeId = ? AND timestamp = ? AND action = ? LIMIT 1;`,
+      [tenantKey, employeeId, timestamp, action],
+    );
+    if (existing) return { row: hydrate(existing), inserted: false };
+    // This callback is synchronous: no awaited policy/DB preparation may
+    // separate current authorization from submitting the database write.
+    assertCurrent();
+  }
 
   const result = await database.runAsync(
     `INSERT INTO ${QUEUE_TABLE}

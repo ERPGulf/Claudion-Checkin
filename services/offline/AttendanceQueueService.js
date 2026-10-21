@@ -35,8 +35,15 @@ import {
 } from "./offlineCapability";
 import { assertAttendanceQueueScope, captureAttendanceQueueScope } from "./attendanceQueueProvenance";
 import { listUncertainEvents } from "./AutoAttendanceEventRepository";
-import { assertCapability } from "../capabilityPolicy";
+import { assertCapability, assertCapabilityCurrent } from "../capabilityPolicy";
+import { assertEmployeeAutoAttendancePolicy, assertEmployeeAutoAttendancePolicyCurrent } from "../employeeAutoAttendancePolicy";
 import { ATTENDANCE_FEATURES } from "../../utils/featureSettings";
+
+const assertAutomaticCapabilityCurrent = (sourceScope, { queueing = false } = {}) => {
+  assertCapabilityCurrent(ATTENDANCE_FEATURES.AUTO_ATTENDANCE, sourceScope);
+  if (queueing) assertCapabilityCurrent(ATTENDANCE_FEATURES.OFFLINE_ATTENDANCE, sourceScope);
+  return assertEmployeeAutoAttendancePolicyCurrent(sourceScope, { action: "punch" });
+};
 
 const checkAutomaticCapability = async (employeeCode, sourceScope, { queueing = false } = {}) => {
   const context = sourceScope?.tenantKey
@@ -44,6 +51,8 @@ const checkAutomaticCapability = async (employeeCode, sourceScope, { queueing = 
   try {
     await assertCapability(ATTENDANCE_FEATURES.AUTO_ATTENDANCE, context);
     if (queueing) await assertCapability(ATTENDANCE_FEATURES.OFFLINE_ATTENDANCE, context);
+    await assertEmployeeAutoAttendancePolicy(sourceScope, { action: "punch" });
+    assertAutomaticCapabilityCurrent(sourceScope, { queueing });
     // Kept for callers of the pre-existing mirror API. The scoped capability
     // assertion above is authoritative even before the bootstrap effect runs.
     if (queueing && isOfflineQueueingDisallowed()) {
@@ -51,7 +60,8 @@ const checkAutomaticCapability = async (employeeCode, sourceScope, { queueing = 
     }
     return null;
   } catch (error) {
-    return { allowed: false, reason: error?.code === "CAPABILITY_SCOPE_CHANGED"
+    return { allowed: false, reason: error?.code?.startsWith("EMPLOYEE_AUTO_ATTENDANCE")
+      ? "employee-policy-disabled" : ["CAPABILITY_SCOPE_CHANGED", "ATTENDANCE_SYNC_SCOPE_CHANGED"].includes(error?.code)
       ? "scope-changed" : queueing ? "admin-disabled" : "capability-disabled",
       message: queueing ? OFFLINE_DISABLED_MESSAGE : error.message, error, location: null };
   }
@@ -256,41 +266,59 @@ const queueAttendance = async ({
   // received denial must govern the insert, not merely the original attempt.
   const capabilityRefusal = await checkAutomaticCapability(employeeCode, sourceScope, { queueing: true });
   if (capabilityRefusal) return capabilityRefusal;
+  try {
+    assertAutomaticCapabilityCurrent(sourceScope, { queueing: true });
+  } catch (error) {
+    return { allowed: false, reason: error?.code === "FEATURE_DISABLED" ? "admin-disabled" :
+      error?.code === "CAPABILITY_SCOPE_CHANGED" ? "scope-changed" : "employee-policy-disabled",
+    message: error.message, error, location: null };
+  }
 
-  const { row, inserted } = await enqueue({
-    employeeId: employeeCode,
-    // Old caches have no tenant provenance either. Their docname cannot be
-    // carried onto an attributable row for a different company's employee.
-    employeeDocname: !tenantKey || (config?.tenantKey === tenantKey && config?.employeeId === employeeCode)
-      ? config?.employeeDocname ?? null : null,
-    tenantKey,
-    sourceEventId,
-    attendanceType,
-    action: logTypeToAction(type),
-    timestamp,
-    latitude: gate?.coords?.latitude ?? null,
-    longitude: gate?.coords?.longitude ?? null,
-    accuracy: gate?.coords?.accuracy ?? null,
-    address: gate?.location?.locationName ?? null,
-    deviceId: DEVICE_ID,
-    payload: {
-      ...(sourceParentEventId ? { sourceParentEventId } : {}),
-      location: gate?.location?.locationName,
-      distance: gate?.location?.distance,
-      radius: gate?.location?.radius,
-      // Vestigial. The endpoint still accepts the field, but nothing on either
-      // side computes or consumes it and the app has no overtime concept, so it
-      // is always 0. Kept rather than dropped because removing a key the bulk
-      // insert expects could reject the whole call — and that rejection is
-      // indistinguishable from a real validation failure. Do not wire this up
-      // without a server-side change that says what is supposed to set it.
-      over_time: 0,
-      // Photo-mode tenants only. The upload needs a docname the server has not
-      // issued yet, so the URI is carried here and the sync service attaches it
-      // after the row lands. Never sent to the bulk endpoint.
-      photoUri: photoUri ?? undefined,
-    },
-  });
+  let acceptance;
+  try {
+    acceptance = await enqueue({
+      employeeId: employeeCode,
+      // Old caches have no tenant provenance either. Their docname cannot be
+      // carried onto an attributable row for a different company's employee.
+      employeeDocname: !tenantKey || (config?.tenantKey === tenantKey && config?.employeeId === employeeCode)
+        ? config?.employeeDocname ?? null : null,
+      tenantKey,
+      sourceEventId,
+      attendanceType,
+      assertCurrent: () => assertAutomaticCapabilityCurrent(sourceScope, { queueing: true }),
+      action: logTypeToAction(type),
+      timestamp,
+      latitude: gate?.coords?.latitude ?? null,
+      longitude: gate?.coords?.longitude ?? null,
+      accuracy: gate?.coords?.accuracy ?? null,
+      address: gate?.location?.locationName ?? null,
+      deviceId: DEVICE_ID,
+      payload: {
+        ...(sourceParentEventId ? { sourceParentEventId } : {}),
+        location: gate?.location?.locationName,
+        distance: gate?.location?.distance,
+        radius: gate?.location?.radius,
+        // Vestigial. The endpoint still accepts the field, but nothing on either
+        // side computes or consumes it and the app has no overtime concept, so it
+        // is always 0. Kept rather than dropped because removing a key the bulk
+        // insert expects could reject the whole call — and that rejection is
+        // indistinguishable from a real validation failure. Do not wire this up
+        // without a server-side change that says what is supposed to set it.
+        over_time: 0,
+        // Photo-mode tenants only. The upload needs a docname the server has not
+        // issued yet, so the URI is carried here and the sync service attaches it
+        // after the row lands. Never sent to the bulk endpoint.
+        photoUri: photoUri ?? undefined,
+      },
+    });
+  } catch (error) {
+    if (!error?.code?.startsWith("EMPLOYEE_AUTO_ATTENDANCE") &&
+      !["FEATURE_DISABLED", "CAPABILITY_SCOPE_CHANGED", "ATTENDANCE_SYNC_SCOPE_CHANGED"].includes(error?.code)) throw error;
+    return { allowed: false, reason: ["ATTENDANCE_SYNC_SCOPE_CHANGED", "CAPABILITY_SCOPE_CHANGED"].includes(error.code)
+      ? "scope-changed" : error.code === "FEATURE_DISABLED" ? "admin-disabled" : "employee-policy-disabled",
+    message: error.message, error, location: null };
+  }
+  const { row, inserted } = acceptance;
 
   // The older timestamp/action constraint remains intact for server contract
   // compatibility. It cannot prove a different native input was accepted.
@@ -496,9 +524,6 @@ export const submitAttendance = async ({
     return submitOnlineOnly({ type, employeeCode, online, sourceScope });
   }
 
-  const capabilityRefusal = await checkAutomaticCapability(employeeCode, sourceScope);
-  if (capabilityRefusal) return capabilityRefusal;
-
   // Capture before network/gate awaits. Historical native replays must bring
   // their originating scope; the current account cannot prove past ownership.
   if (sourceScope === undefined) {
@@ -530,6 +555,11 @@ export const submitAttendance = async ({
       return { allowed: false, reason: "source-event-needs-review", row: existing, sourceEventId, location: null };
     }
   }
+
+  // Accepted source rows above are recovery evidence, rather than a request to
+  // authorize another punch. Every new automatic action needs current policy.
+  const capabilityRefusal = await checkAutomaticCapability(employeeCode, sourceScope);
+  if (capabilityRefusal) return capabilityRefusal;
 
   // Enforce both IN and OUT order at the submission seam, so an online EXIT
   // cannot bypass an earlier queued ENTER. Unknown legacy rows remain blockers.
@@ -584,18 +614,20 @@ export const submitAttendance = async ({
    */
   const attemptOnline = async () => {
     const localCapabilityRefusal = async (failure) => {
-      if (failure?.error?.code !== "FEATURE_DISABLED") return null;
+      const employeeRefusal = failure?.error?.code?.startsWith("EMPLOYEE_AUTO_ATTENDANCE");
+      if (failure?.error?.code !== "FEATURE_DISABLED" && !employeeRefusal) return null;
       // The service/request guard refused before transport. Do not leave a
       // dispatch-intent marker that would demand impossible server evidence.
       if (strictOrdering && typeof onKnownNoInsert === "function") {
         await onKnownNoInsert({ httpStatus: null, failureClass: FAILURE_CLASS.CONFIGURATION });
       }
-      return { ...failure, allowed: false, reason: "capability-disabled" };
+      return { ...failure, allowed: false, reason: employeeRefusal ? "employee-policy-disabled" : "capability-disabled" };
     };
     try {
       if (strictOrdering) await assertAttendanceQueueScope(sourceScope);
       const refusal = await checkAutomaticCapability(employeeCode, sourceScope);
       if (refusal) return { done: true, result: refusal };
+      assertAutomaticCapabilityCurrent(sourceScope);
       const result = await online();
 
       if (result?.allowed) {

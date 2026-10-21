@@ -31,7 +31,7 @@ const UPLOAD_CAPABILITIES = {
   'Employee Checkin': 'attendance_action.photo_upload',
 };
 
-function requestField(data, key) {
+export function requestField(data, key) {
   if (!data) return undefined;
   if (typeof data.get === 'function') return data.get(key);
   // React Native FormData exposes its entries as _parts, not get().

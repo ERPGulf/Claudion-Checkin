@@ -8,15 +8,16 @@ import {
 import { parseError } from "./errorHelper";
 import { assertCapability } from "../capabilityPolicy";
 
-export const createLeaveApplication = async (leaveData) => {
+export const createLeaveApplication = async (leaveData, { capabilityScope: expected } = {}) => {
   try {
+    const owner = expected ? await assertCapability("leave_request", expected) : null;
     const { baseUrl, token, employeeCode } = await getAuthContext();
 
     if (!employeeCode) {
       return { error: MISSING_EMPLOYEE_MESSAGE };
     }
 
-    const capabilityScope = await assertCapability("leave_request", { baseUrl, employeeCode });
+    const capabilityScope = await assertCapability("leave_request", { ...owner, baseUrl, employeeCode });
 
     const url = `${baseUrl}/api/method/employee_app.attendance_api.create_leave_application`;
 
@@ -85,14 +86,16 @@ export const getLeaveTypes = async () => {
   }
 };
 
-export const uploadLeaveAttachment = async (file, docname) => {
+export const uploadLeaveAttachment = async (file, docname, { capabilityScope: expected } = {}) => {
   try {
+
+    const owner = expected ? await assertCapability("leave_request", expected) : null;
 
     if (!file?.uri) throw new Error("Invalid file data");
     if (!docname) throw new Error("Missing docname");
 
     const { baseUrl, token } = await getAuthContext();
-    const capabilityScope = await assertCapability("leave_request", { baseUrl });
+    const capabilityScope = await assertCapability("leave_request", { ...owner, baseUrl });
 
     const formData = new FormData();
 

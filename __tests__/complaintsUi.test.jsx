@@ -289,7 +289,9 @@ describe('useComplaint', () => {
     act(() => result.current.setFile(FILE));
     await submit(result);
 
-    expect(uploadComplaintAttachment).toHaveBeenCalledWith(FILE, 'EC-0007');
+    expect(uploadComplaintAttachment).toHaveBeenCalledWith(FILE, 'EC-0007', {
+      capabilityScope: expect.objectContaining({ generation: expect.any(Number) }),
+    });
     expect(Alert.alert).toHaveBeenCalledWith(
       'Success',
       'Complaint submitted successfully',

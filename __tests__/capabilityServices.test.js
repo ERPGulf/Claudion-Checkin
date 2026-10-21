@@ -1,4 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { loginQueueEmployee } from '../test-utils/attendanceScope';
+import { captureAttendanceQueueScope } from '../services/offline/attendanceQueueProvenance';
+import { beginEmployeeAutoAttendancePolicyReception, receiveEmployeeAutoAttendancePolicy } from '../services/employeeAutoAttendancePolicy';
 import apiClient from '../services/api/apiClient';
 import { assertCapability } from '../services/capabilityPolicy';
 import * as expenses from '../services/api/expense.service';
@@ -10,7 +13,7 @@ import * as records from '../services/api/records.service';
 import { submitResignation } from '../services/api/resignation.service';
 import { userFileUpload, putUserFile } from '../services/api/upload.service';
 
-jest.mock('../services/capabilityPolicy', () => ({ assertCapability: jest.fn() }));
+jest.mock('../services/capabilityPolicy', () => ({ assertCapability: jest.fn(), assertCapabilityCurrent: jest.fn() }));
 jest.mock('../services/api/apiClient', () => ({
   __esModule: true,
   default: { get: jest.fn(), post: jest.fn(), put: jest.fn() },
@@ -51,12 +54,10 @@ beforeEach(async () => {
   jest.clearAllMocks();
   jest.spyOn(console, 'log').mockImplementation(() => {});
   await AsyncStorage.clear();
-  await AsyncStorage.multiSet([
-    ['baseUrl', 'https://tenant.example'],
-    ['access_token', 'synthetic-access'],
-    ['employee_code', employee],
-  ]);
-  assertCapability.mockResolvedValue(undefined);
+  await loginQueueEmployee(employee, 'https://tenant.example');
+  const scope = await captureAttendanceQueueScope(employee);
+  await receiveEmployeeAutoAttendancePolicy({ geotagging: 2 }, beginEmployeeAutoAttendancePolicyReception(scope));
+  assertCapability.mockReset().mockResolvedValue(undefined);
   const reply = { data: { message: { name: 'DOC-1', server_time: '2026-10-16 08:30:00' } } };
   apiClient.get.mockResolvedValue(reply);
   apiClient.post.mockResolvedValue(reply);

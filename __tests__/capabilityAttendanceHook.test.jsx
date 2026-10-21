@@ -7,6 +7,7 @@ import Toast from 'react-native-toast-message';
 import useAttendanceAction from '../hooks/useAttendanceAction';
 import RootReducer from '../redux/RootReducer';
 import { settingsReceived } from '../redux/Slices/FeatureSettingsSlice';
+import { employeePolicyRequested, employeePolicyReceived, setAutoAttendanceUserEnabled } from '../redux/Slices/AutoAttendanceSlice';
 import { buildSettingsScope, normalizeFeatureSettings } from '../utils/featureSettings';
 import { getTodayBreaks, employeeBreak } from '../services/api/attendance.service';
 import { performManualAttendanceTransition } from '../services/offline/ManualAttendanceService';
@@ -58,6 +59,21 @@ beforeEach(async () => {
   });
 });
 afterEach(() => { cleanup(); jest.useRealTimers(); });
+
+it('removes the automatic checkout promise after tenant geo denial while keeping manual checkout available', async () => {
+  const receipt = { scope, generation: attendanceScope.generation, revision: 1 };
+  store.dispatch(employeePolicyRequested(receipt));
+  store.dispatch(employeePolicyReceived({ ...receipt, accountId: attendanceScope.accountId, mode: 2 }));
+  store.dispatch(setAutoAttendanceUserEnabled(true));
+  update({ auto_attendance: true, geo_tagging: 2 });
+  mount();
+  await waitFor(() => expect(hook.restrictionLoaded).toBe(true));
+  expect(hook.autoActionsEnabled).toBe(true);
+  act(() => { update({ auto_attendance: true, geo_tagging: 0 }); });
+  expect(hook.autoActionsEnabled).toBe(false);
+  await act(async () => { await hook.handlePrimaryAction(); });
+  expect(performManualAttendanceTransition).toHaveBeenCalled();
+});
 
 it('suppresses disabled break reads and retained callbacks without deleting break state', async () => {
   const saved = String(Date.now() - 60_000);
@@ -130,4 +146,28 @@ it('rechecks photo availability in a retained attendance callback and preserves 
   await act(async () => { await retained(); });
   expect(mockNavigation.navigate).not.toHaveBeenCalledWith('Attendance camera', expect.anything());
   expect(performManualAttendanceTransition).toHaveBeenCalled();
+});
+
+it('updates shared manual location UI when tenant restriction and checkout exception refresh', async () => {
+  mount();
+  await waitFor(() => expect(hook.restrictionLoaded).toBe(true));
+  expect(hook.restrictLocation).toBe(0);
+  act(() => { update({ restrict_location: true, unrestricted_checkout_location: false }); });
+  expect(hook.restrictLocation).toBe(1);
+  expect(hook.allowCheckoutAnywhere).toBe(false);
+  act(() => { update({ restrict_location: true, unrestricted_checkout_location: true }); });
+  expect(hook.restrictLocation).toBe(1);
+  expect(hook.allowCheckoutAnywhere).toBe(true);
+  act(() => { update({ restrict_location: false, unrestricted_checkout_location: true }); });
+  expect(hook.restrictLocation).toBe(0);
+  expect(hook.unrestrictedCheckout).toBe(0);
+});
+
+it('retains mandatory employee checkout restriction in the shared UI when tenant allows outside checkout', async () => {
+  await AsyncStorage.multiSet([['restrict_location', '1'], ['unrestricted_checkout_location', '0']]);
+  update({ restrict_location: true, unrestricted_checkout_location: true });
+  mount();
+  await waitFor(() => expect(hook.restrictionLoaded).toBe(true));
+  expect(hook.restrictLocation).toBe(1);
+  expect(hook.allowCheckoutAnywhere).toBe(false);
 });

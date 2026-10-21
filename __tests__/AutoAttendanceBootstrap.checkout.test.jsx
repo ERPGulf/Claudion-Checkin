@@ -4,6 +4,14 @@ import { Provider } from "react-redux";
 import { configureStore } from "@reduxjs/toolkit";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+let mockStore;
+jest.mock("../redux/Store", () => ({
+  store: {
+    getState: () => mockStore?.getState() ?? {},
+    dispatch: action => mockStore?.dispatch(action),
+  },
+}));
+
 // Native geofencing module: capture the ENTER/EXIT listeners the component
 // attaches so the tests can fire real transitions at it.
 const listeners = { onGeofenceEnter: [], onGeofenceExit: [] };
@@ -93,15 +101,20 @@ import {
   SESSION_STATUS,
 } from "../utils/attendanceSessionState";
 import { getLastProcessedEventAt } from "../utils/geofenceEventLog";
+import { captureAttendanceQueueScope } from "../services/offline/attendanceQueueProvenance";
+import {
+  beginEmployeeAutoAttendancePolicyReception,
+  receiveEmployeeAutoAttendancePolicy,
+} from "../services/employeeAutoAttendancePolicy";
 
 const EMPLOYEE_CODE = "HR-EMP-00011";
 
-const buildStore = (geotagging = GEOTAGGING.ALL_ACTIONS) =>
-  configureStore({
+const buildStore = (geotagging = GEOTAGGING.ALL_ACTIONS) => {
+  mockStore = configureStore({
     reducer: RootReducer,
     preloadedState: {
       userAuth: { isLoggedIn: true, token: "tok" },
-      user: { userDetails: { employeeCode: EMPLOYEE_CODE } },
+      user: { baseUrl: "https://fixture.example.test", userDetails: { employeeCode: EMPLOYEE_CODE } },
       autoAttendance: {
         geotagging,
         userEnabled: true,
@@ -109,6 +122,8 @@ const buildStore = (geotagging = GEOTAGGING.ALL_ACTIONS) =>
     },
     middleware: (getDefault) => getDefault({ serializableCheck: false }),
   });
+  return mockStore;
+};
 
 /** Performs a manual check-in exactly as the attendance screens do. */
 const manualCheckIn = (at) =>
@@ -147,8 +162,10 @@ describe("AutoAttendanceBootstrap geofence transitions", () => {
   let store;
 
   /** Renders the bootstrap under a given server policy. */
-  const renderBootstrap = (geotagging = GEOTAGGING.ALL_ACTIONS) => {
+  const renderBootstrap = async (geotagging = GEOTAGGING.ALL_ACTIONS) => {
     store = buildStore(geotagging);
+    const scope = await captureAttendanceQueueScope(EMPLOYEE_CODE);
+    await receiveEmployeeAutoAttendancePolicy({ geotagging }, beginEmployeeAutoAttendancePolicyReception(scope));
     render(
       <Provider store={store}>
         <AutoAttendanceBootstrap />
@@ -160,7 +177,7 @@ describe("AutoAttendanceBootstrap geofence transitions", () => {
   const mountBootstrap = async (geotagging = GEOTAGGING.ALL_ACTIONS) => {
     const attached = listeners.onGeofenceExit.length + 1;
 
-    renderBootstrap(geotagging);
+    await renderBootstrap(geotagging);
 
     await waitFor(() =>
       expect(listeners.onGeofenceExit).toHaveLength(attached),
@@ -190,6 +207,11 @@ describe("AutoAttendanceBootstrap geofence transitions", () => {
     fetchEmployeeData.mockResolvedValue({ geotagging: GEOTAGGING.ALL_ACTIONS });
     submitAutoAttendance.mockImplementation(({ online }) => online());
     await AsyncStorage.clear();
+    await AsyncStorage.multiSet([
+      ["baseUrl", "https://fixture.example.test"],
+      ["employee_code", EMPLOYEE_CODE],
+      ["access_token", "fixture-access"],
+    ]);
   });
 
   describe("live transitions", () => {
@@ -304,7 +326,7 @@ describe("AutoAttendanceBootstrap geofence transitions", () => {
   // the attendance call needs JS. These cover picking that up at next launch.
   describe("replay of a transition missed while JS was not running", () => {
 
-    it("checks out at launch using the time the user actually left", async () => {
+    it("retains an unowned launch EXIT without checking out the current employee", async () => {
       await manualCheckIn(startedWorkAt());
       const occurredAt = leftTheOfficeAt();
       mockNativeLastEvent = {
@@ -315,18 +337,17 @@ describe("AutoAttendanceBootstrap geofence transitions", () => {
 
       await mountBootstrap();
 
-      await waitFor(() => expect(autoCheckInOut).toHaveBeenCalledTimes(1));
-      expect(autoCheckInOut).toHaveBeenCalledWith(
-        expect.objectContaining({ type: "OUT", occurredAt }),
-      );
+      await flushReplay();
+      expect(autoCheckInOut).not.toHaveBeenCalled();
+      expect(await getLastProcessedEventAt()).toBeNull();
+      expect(mockNativeLastEvent.timestamp).toBe(occurredAt);
 
       const session = await readSession();
       expect(session).toMatchObject({
-        status: SESSION_STATUS.CHECKED_OUT,
+        status: SESSION_STATUS.CHECKED_IN,
         origin: SESSION_ORIGIN.MANUAL,
-        closedBy: SESSION_ORIGIN.AUTO,
-        // Backdated to the crossing, not to app launch.
-        endedAt: occurredAt,
+        closedBy: null,
+        endedAt: null,
       });
     });
 
@@ -339,7 +360,8 @@ describe("AutoAttendanceBootstrap geofence transitions", () => {
       };
 
       await mountBootstrap();
-      await waitFor(() => expect(autoCheckInOut).toHaveBeenCalledTimes(1));
+      await flushReplay();
+      expect(autoCheckInOut).not.toHaveBeenCalled();
 
       // Second launch, same native record, and the user has checked in again.
       await manualCheckIn(startedWorkAt());
@@ -393,30 +415,28 @@ describe("AutoAttendanceBootstrap geofence transitions", () => {
       expect((await readSession()).status).toBe(SESSION_STATUS.CHECKED_IN);
     });
 
-    it("retries at the next launch when the replayed call fails", async () => {
+    it("preserves an unowned EXIT across launches without dispatching it", async () => {
       await manualCheckIn(startedWorkAt());
       mockNativeLastEvent = {
         transition: "EXIT",
         identifier: "office-main",
         timestamp: leftTheOfficeAt(),
       };
-      autoCheckInOut.mockResolvedValueOnce({
-        allowed: false,
-        message: "Network down",
-      });
-
       await mountBootstrap();
-      await waitFor(() => expect(autoCheckInOut).toHaveBeenCalledTimes(1));
+      await flushReplay();
+      expect(autoCheckInOut).not.toHaveBeenCalled();
       expect((await readSession()).status).toBe(SESSION_STATUS.CHECKED_IN);
 
       autoCheckInOut.mockClear();
       await mountBootstrap();
 
-      await waitFor(() => expect(autoCheckInOut).toHaveBeenCalledTimes(1));
-      expect((await readSession()).status).toBe(SESSION_STATUS.CHECKED_OUT);
+      await flushReplay();
+      expect(autoCheckInOut).not.toHaveBeenCalled();
+      expect((await readSession()).status).toBe(SESSION_STATUS.CHECKED_IN);
+      expect(await getLastProcessedEventAt()).toBeNull();
     });
 
-    it("discards an EXIT that predates the session currently open", async () => {
+    it("retains an unowned EXIT that predates the session currently open", async () => {
       // A manual check-in won the race against the launch replay: the crossing
       // happened before the session it would otherwise close.
       const occurredAt = Date.now() - 90 * 60 * 1000;
@@ -431,14 +451,14 @@ describe("AutoAttendanceBootstrap geofence transitions", () => {
 
       await flushReplay();
       expect(autoCheckInOut).not.toHaveBeenCalled();
-      expect(await getLastProcessedEventAt()).toBe(occurredAt);
+      expect(await getLastProcessedEventAt()).toBeNull();
 
       const session = await readSession();
       expect(session.status).toBe(SESSION_STATUS.CHECKED_IN);
       expect(session.startedAt).toBeGreaterThan(occurredAt);
     });
 
-    it("replays a missed ENTER as a check-in", async () => {
+    it("retains a missed unowned ENTER without a check-in", async () => {
       const occurredAt = Date.now() - 20 * 60 * 1000;
       mockNativeLastEvent = {
         transition: "ENTER",
@@ -448,11 +468,11 @@ describe("AutoAttendanceBootstrap geofence transitions", () => {
 
       await mountBootstrap();
 
-      await waitFor(() => expect(autoCheckInOut).toHaveBeenCalledTimes(1));
-      expect(autoCheckInOut).toHaveBeenCalledWith(
-        expect.objectContaining({ type: "IN", occurredAt }),
-      );
-      expect((await readSession()).startedAt).toBe(occurredAt);
+      await flushReplay();
+      expect(autoCheckInOut).not.toHaveBeenCalled();
+      expect((await readSession()).status).toBe(SESSION_STATUS.CHECKED_OUT);
+      expect(await getLastProcessedEventAt()).toBeNull();
+      expect(mockNativeLastEvent.timestamp).toBe(occurredAt);
     });
 
     it("ignores a missed ENTER when the user is already checked in", async () => {
@@ -483,7 +503,7 @@ describe("AutoAttendanceBootstrap geofence transitions", () => {
         timestamp: leftTheOfficeAt(),
       };
 
-      renderBootstrap(GEOTAGGING.DISABLED);
+      await renderBootstrap(GEOTAGGING.DISABLED);
       await flushReplay();
 
       expect(listeners.onGeofenceExit).toHaveLength(0);
@@ -516,13 +536,11 @@ describe("AutoAttendanceBootstrap geofence transitions", () => {
         timestamp: leftTheOfficeAt(),
       };
 
-      // Launch under "warnings only": the crossing is recorded as handled.
+      // No old binary capture-time owner exists, even under warnings only.
       await mountBootstrap(GEOTAGGING.WARNINGS_ONLY);
       await flushReplay();
       expect(autoCheckInOut).not.toHaveBeenCalled();
-      expect(await getLastProcessedEventAt()).toBe(
-        mockNativeLastEvent.timestamp,
-      );
+      expect(await getLastProcessedEventAt()).toBeNull();
 
       // Admin raises the policy; the earlier crossing must not be logged now.
       fetchEmployeeData.mockResolvedValue({

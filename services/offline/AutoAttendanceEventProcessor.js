@@ -12,7 +12,8 @@ import { formatOfflineTimestamp, normalizeAttendanceStatusClock } from "../../ut
 import { normalizeCustomIn, toTimestampMs } from "../../utils/attendanceSession";
 import { validOffice, nativeRadiusMatchesRequested } from "../../utils/autoAttendanceRegistration";
 import { resolveLocationCoordinates } from "../../utils/attendanceLocations";
-import { assertCapability } from "../capabilityPolicy";
+import { assertCapability, assertCapabilityCurrent } from "../capabilityPolicy";
+import { assertEmployeeAutoAttendancePolicy } from "../employeeAutoAttendancePolicy";
 import { ATTENDANCE_FEATURES } from "../../utils/featureSettings";
 import {
   applySessionOwner, clearUnverifiedSessionOwner, performSessionTransition,
@@ -27,10 +28,14 @@ const automaticCapabilityRefusal = async (scope) => {
   try {
     await assertCapability(ATTENDANCE_FEATURES.AUTO_ATTENDANCE,
       { baseUrl: scope.tenantKey, employeeCode: scope.employeeId, generation: scope.generation });
+    await assertEmployeeAutoAttendancePolicy(scope, { action: "punch" });
+    assertCapabilityCurrent(ATTENDANCE_FEATURES.AUTO_ATTENDANCE, scope);
     return null;
   } catch (error) {
-    if (error?.code !== "FEATURE_DISABLED") throw error;
-    return { allowed: false, reason: "capability-disabled", message: error.message, error };
+    const employeeRefusal = error?.code?.startsWith("EMPLOYEE_AUTO_ATTENDANCE");
+    if (error?.code !== "FEATURE_DISABLED" && !employeeRefusal) throw error;
+    return { allowed: false, reason: employeeRefusal ? "employee-policy-disabled" : "capability-disabled",
+      message: error.message, error };
   }
 };
 
@@ -170,12 +175,8 @@ const processRow = async (input, scope, config) => {
     await updateOwned(row.eventId, { status: HANDLED, reason: "warnings-only" });
     return {};
   }
-  if (Number(row.event.geotagging) !== 2 || Number(config.rules?.geotagging) !== 2) {
+  if (Number(row.event.geotagging) !== 2) {
     await updateOwned(row.eventId, { status: PENDING, reason: "policy-not-all-actions" });
-    return { stop: true };
-  }
-  if (await automaticCapabilityRefusal(scope)) {
-    await updateOwned(row.eventId, { status: PENDING, reason: "capability-disabled" });
     return { stop: true };
   }
   const existing = await findBySourceEventId({ sourceEventId: row.eventId, tenantKey: scope.tenantKey, employeeId: scope.employeeId });
@@ -206,6 +207,13 @@ const processRow = async (input, scope, config) => {
     const result = await runTransition(row, scope, async () => ({ allowed: true, name: verification.evidence.name }));
     await saveOutcome(row, result);
     return { result };
+  }
+  // Existing queue rows and verified earlier dispatches remain recoverable
+  // after policy revocation. A fresh action below must use the current mode.
+  const refusal = await automaticCapabilityRefusal(scope);
+  if (refusal) {
+    await updateOwned(row.eventId, { status: PENDING, reason: refusal.reason });
+    return { stop: true };
   }
   const type = row.transition === "ENTER" ? "IN" : "OUT";
   const result = await runTransition(row, scope, async (session) => {
@@ -250,6 +258,8 @@ const processRow = async (input, scope, config) => {
     if (await Events.findPunchTimestampCollision(row, timestamp)) {
       return { allowed: false, reason: "source-event-collision" };
     }
+    const currentRefusal = await automaticCapabilityRefusal(scope);
+    if (currentRefusal) return currentRefusal;
     return submitAutoAttendance({ type, employeeCode: scope.employeeId, occurredAt: row.occurredAt,
       sourceScope: scope, sourceEventId: row.eventId, timestamp, forceQueue, strictOrdering: true, skipPosition: true,
       sourceParentEventId,
@@ -263,6 +273,11 @@ const processRow = async (input, scope, config) => {
         if (refusal) return refusal;
         row = await updateOwned(row.eventId, { onlineAttemptAt: Date.now() });
         await assertAttendanceQueueScope(scope);
+        const currentRefusal = await automaticCapabilityRefusal(scope);
+        if (currentRefusal) {
+          row = await updateOwned(row.eventId, { onlineAttemptAt: null });
+          return currentRefusal;
+        }
         const reportingLocation = config.locations.find(location => {
           const coordinates = resolveLocationCoordinates(location);
           return coordinates?.latitude === row.event.latitude && coordinates?.longitude === row.event.longitude;

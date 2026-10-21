@@ -2,7 +2,8 @@ import * as Location from "expo-location";
 import * as Native from "../modules/expo-auto-attendance";
 import { resolveLocationCoordinates, pickNearest, scoreLocations } from "./attendanceLocations";
 import { assertAttendanceQueueScope } from "../services/offline/attendanceQueueProvenance";
-import { assertCapability } from "../services/capabilityPolicy";
+import { assertCapability, assertCapabilityCurrent } from "../services/capabilityPolicy";
+import { assertEmployeeAutoAttendancePolicy, assertEmployeeAutoAttendancePolicyCurrent } from "../services/employeeAutoAttendancePolicy";
 import { ATTENDANCE_FEATURES } from "./featureSettings";
 
 export const createRegistrationId = ({ tenantKey, employeeId, latitude, longitude, radius, geotagging }) =>
@@ -79,13 +80,21 @@ export const selectRegistrationOffice = async (config, registered = []) => {
 let registrations = Promise.resolve();
 export const reconcileAutoAttendanceRegistration = (scope, config) => {
   const task = registrations.then(async () => {
-    if (!scope || !config || ![1, 2].includes(Number(config.rules?.geotagging))) {
+    if (!scope || !config) {
       await Native.stopGeofence();
       return null;
     }
     await assertAttendanceQueueScope(scope);
-    const assertAllowed = () => assertCapability(ATTENDANCE_FEATURES.AUTO_ATTENDANCE,
-      { baseUrl: scope.tenantKey, employeeCode: scope.employeeId, generation: scope.generation });
+    const assertCurrent = () => {
+      assertCapabilityCurrent(ATTENDANCE_FEATURES.AUTO_ATTENDANCE, scope);
+      return assertEmployeeAutoAttendancePolicyCurrent(scope, { action: "monitor" });
+    };
+    const assertAllowed = async () => {
+      await assertCapability(ATTENDANCE_FEATURES.AUTO_ATTENDANCE,
+        { baseUrl: scope.tenantKey, employeeCode: scope.employeeId, generation: scope.generation });
+      await assertEmployeeAutoAttendancePolicy(scope, { action: "monitor" });
+      return assertCurrent();
+    };
     try { await assertAllowed(); } catch {
       await Native.stopGeofence();
       return null;
@@ -95,6 +104,10 @@ export const reconcileAutoAttendanceRegistration = (scope, config) => {
       Location.getForegroundPermissionsAsync(), Location.getBackgroundPermissionsAsync(),
     ]);
     await assertAttendanceQueueScope(scope);
+    try { await assertAllowed(); } catch {
+      await Native.stopGeofence();
+      return null;
+    }
     if (foreground.status !== "granted" || background.status !== "granted" || !Native.hasFullAccuracy()) {
       await Native.stopGeofence();
       return null;
@@ -102,7 +115,11 @@ export const reconcileAutoAttendanceRegistration = (scope, config) => {
     const registered = Native.getRegisteredGeofences() ?? [];
     const office = await selectRegistrationOffice(config, registered);
     await assertAttendanceQueueScope(scope);
-    try { await assertAllowed(); } catch {
+    let currentPolicy;
+    try {
+      await assertAllowed();
+      currentPolicy = assertCurrent();
+    } catch {
       await Native.stopGeofence();
       return null;
     }
@@ -113,26 +130,43 @@ export const reconcileAutoAttendanceRegistration = (scope, config) => {
         const radius = Number(location.reporting_radius) > 0 ? Number(location.reporting_radius) : 100;
         return registered.some(fence => fence.latitude === coords?.latitude && fence.longitude === coords?.longitude &&
           registeredRadiusMatches(fence, radius) && fence.tenantKey === scope.tenantKey && fence.employeeId === scope.employeeId &&
-          fence.geotagging === Number(config.rules?.geotagging));
+          fence.geotagging === currentPolicy.mode);
       });
       if (!configured) await Native.stopGeofence();
       return null;
     }
     const desired = { ...office, identifier: Native.OFFICE_GEOFENCE_IDENTIFIER,
-      tenantKey: scope.tenantKey, employeeId: scope.employeeId, geotagging: Number(config.rules.geotagging) };
+      tenantKey: scope.tenantKey, employeeId: scope.employeeId, generation: scope.generation,
+      geotagging: currentPolicy.mode };
     desired.registrationId = createRegistrationId(desired);
     if (Native.isMonitoring() && registered.length === 1 && registeredOfficeMatches(registered[0], desired)) {
-      if (typeof Native.retryInitialPresence === "function") await Native.retryInitialPresence();
+      if (typeof Native.retryInitialPresence === "function") await Native.retryInitialPresence(scope);
       await assertAttendanceQueueScope(scope);
+      try {
+        await assertAllowed();
+        if (assertCurrent().mode !== desired.geotagging) {
+          await Native.stopGeofence();
+          return null;
+        }
+      } catch {
+        await Native.stopGeofence();
+        return null;
+      }
       return desired;
     }
     await Native.stopGeofence();
     await assertAttendanceQueueScope(scope);
-    await assertAllowed();
+    try {
+      await assertAllowed();
+      if (assertCurrent().mode !== desired.geotagging) return null;
+    } catch {
+      return null;
+    }
     let timeout;
     try {
+      assertCurrent();
       await Promise.race([
-        Native.startGeofence(desired),
+        Native.startGeofence(desired, scope),
         new Promise((_, reject) => { timeout = setTimeout(() => reject(new Error("Geofence registration timed out")), 20000); }),
       ]);
     } catch (error) {
@@ -143,7 +177,13 @@ export const reconcileAutoAttendanceRegistration = (scope, config) => {
       clearTimeout(timeout);
     }
     await assertAttendanceQueueScope(scope);
-    try { await assertAllowed(); } catch {
+    try {
+      await assertAllowed();
+      if (assertCurrent().mode !== desired.geotagging) {
+        await Native.stopGeofence();
+        return null;
+      }
+    } catch {
       await Native.stopGeofence();
       return null;
     }

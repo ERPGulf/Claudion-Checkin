@@ -25,9 +25,17 @@ jest.mock("../services/offline/offlineAttendanceGate", () => ({
   __esModule: true,
   evaluateOfflineAttendance: jest.fn(),
 }));
+// These queue decision tests isolate employee authorization at its shared seam;
+// the scoped boundary block below exercises the real policy implementation.
+jest.mock("../services/employeeAutoAttendancePolicy", () => ({
+  ...jest.requireActual("../services/employeeAutoAttendancePolicy"),
+  assertEmployeeAutoAttendancePolicy: jest.fn(),
+  assertEmployeeAutoAttendancePolicyCurrent: jest.fn(),
+}));
 
 import {
   QUEUE_STATUS,
+  getDatabase,
   resetDatabaseHandle,
 } from "../services/offline/AttendanceDatabase";
 import { listAll } from "../services/offline/AttendanceQueueRepository";
@@ -60,6 +68,8 @@ import { settingsReceived, settingsInvalidated } from "../redux/Slices/FeatureSe
 import { buildSettingsScope, normalizeFeatureSettings } from "../utils/featureSettings";
 import { loginQueueEmployee, TEST_TENANT } from "../test-utils/attendanceScope";
 import { captureAttendanceQueueScope } from "../services/offline/attendanceQueueProvenance";
+import { assertEmployeeAutoAttendancePolicy, assertEmployeeAutoAttendancePolicyCurrent, beginEmployeeAutoAttendancePolicyReception,
+  receiveEmployeeAutoAttendancePolicy } from "../services/employeeAutoAttendancePolicy";
 
 const { __resetAll } = require("../test-utils/expoSqliteMock");
 
@@ -73,7 +83,7 @@ const acceptedGate = {
   reason: "within-radius",
   location: { locationName: "Doha HQ", distance: 12, radius: 100 },
   coords: { latitude: 25.28, longitude: 51.52, accuracy: 8 },
-  config: { employeeDocname: "HR-EMP-00001" },
+  config: { tenantKey: TEST_TENANT, employeeId: "TDI0167", employeeDocname: "HR-EMP-00001" },
 };
 
 const networkFailure = () => ({
@@ -94,7 +104,10 @@ const networkFailure = () => ({
 const submitQueueable = (options) =>
   submitAttendance({ attendanceType: "auto", ...options });
 
-beforeEach(() => {
+beforeEach(async () => {
+  await AsyncStorage.clear();
+  await loginQueueEmployee("TDI0167");
+  store.dispatch(settingsInvalidated());
   __resetAll();
   resetDatabaseHandle();
   jest.clearAllMocks();
@@ -105,6 +118,8 @@ beforeEach(() => {
   fetchShouldAttemptRequest.mockImplementation(() => fetchIsOnline());
   evaluateOfflineAttendance.mockResolvedValue(acceptedGate);
   resetOfflineCapability();
+  assertEmployeeAutoAttendancePolicy.mockResolvedValue({ mode: 2 });
+  assertEmployeeAutoAttendancePolicyCurrent.mockReturnValue({ mode: 2 });
 });
 
 describe("authoritative capability enforcement at automatic admission", () => {
@@ -117,6 +132,13 @@ describe("authoritative capability enforcement at automatic admission", () => {
     store.dispatch(settingsInvalidated());
     await loginQueueEmployee("TDI0167");
     sourceScope = await captureAttendanceQueueScope("TDI0167");
+    assertEmployeeAutoAttendancePolicy.mockImplementation(
+      jest.requireActual("../services/employeeAutoAttendancePolicy").assertEmployeeAutoAttendancePolicy,
+    );
+    assertEmployeeAutoAttendancePolicyCurrent.mockImplementation(
+      jest.requireActual("../services/employeeAutoAttendancePolicy").assertEmployeeAutoAttendancePolicyCurrent,
+    );
+    await receiveEmployeeAutoAttendancePolicy({ geotagging: 2 }, beginEmployeeAutoAttendancePolicyReception(sourceScope));
   });
   afterEach(async () => {
     store.dispatch(settingsInvalidated());
@@ -141,6 +163,64 @@ describe("authoritative capability enforcement at automatic admission", () => {
     expect(await listAll()).toEqual([]);
   });
 
+  it.each([false, 0, null])("refuses new online and offline punches with tenant geo %s and employee mode 2", async value => {
+    receive({ auto_attendance: true, offline_attendance: true, geo_tagging: value });
+    const online = jest.fn(async () => ({ allowed: true }));
+    expect(await submitAutoAttendance({ type: "IN", employeeCode: "TDI0167", sourceScope, online }))
+      .toMatchObject({ allowed: false, reason: "capability-disabled" });
+    fetchIsOnline.mockResolvedValue(false);
+    expect(await submitAutoAttendance({ type: "OUT", employeeCode: "TDI0167", sourceScope, online }))
+      .toMatchObject({ allowed: false, reason: "capability-disabled" });
+    expect(online).not.toHaveBeenCalled();
+    expect(evaluateOfflineAttendance).not.toHaveBeenCalled();
+    expect(await listAll()).toEqual([]);
+  });
+
+  it("rechecks tenant geo after offline GPS admission work", async () => {
+    fetchIsOnline.mockResolvedValue(false);
+    evaluateOfflineAttendance.mockImplementationOnce(async () => {
+      receive({ geo_tagging: 0 });
+      return acceptedGate;
+    });
+    expect(await submitAutoAttendance({ type: "IN", employeeCode: "TDI0167", sourceScope, online: jest.fn() }))
+      .toMatchObject({ allowed: false, error: { code: "FEATURE_DISABLED" } });
+    expect(await listAll()).toEqual([]);
+  });
+
+  it("checks tenant geo immediately before INSERT after awaited database preparation", async () => {
+    fetchIsOnline.mockResolvedValue(false);
+    const database = await getDatabase();
+    const read = database.getFirstAsync.bind(database);
+    let revoked = false;
+    const pendingRead = jest.spyOn(database, "getFirstAsync").mockImplementation(async (query, values) => {
+      const row = await read(query, values);
+      if (!revoked && query.includes("timestamp = ? AND action = ?")) {
+        revoked = true;
+        receive({ geo_tagging: 0 });
+      }
+      return row;
+    });
+    try {
+      expect(await submitAutoAttendance({ type: "IN", employeeCode: "TDI0167", sourceScope, online: jest.fn() }))
+        .toMatchObject({ allowed: false, error: { code: "FEATURE_DISABLED" } });
+      expect(revoked).toBe(true);
+      expect(await listAll()).toEqual([]);
+    } finally {
+      pendingRead.mockRestore();
+    }
+  });
+
+  it("recovers an already accepted source row after tenant geo is disabled", async () => {
+    fetchIsOnline.mockResolvedValue(false);
+    await submitAutoAttendance({ type: "IN", employeeCode: "TDI0167", sourceScope, sourceEventId: "accepted-before-geo", online: jest.fn() });
+    const before = await listAll();
+    expect(before).toHaveLength(1);
+    receive({ geo_tagging: 0 });
+    expect(await submitAutoAttendance({ type: "IN", employeeCode: "TDI0167", sourceScope, sourceEventId: "accepted-before-geo", online: jest.fn() }))
+      .toMatchObject({ allowed: true, alreadyQueued: true });
+    expect(await listAll()).toEqual(before);
+  });
+
   it("rechecks offline capability after an asynchronous location gate", async () => {
     receive({ offline_attendance: true });
     fetchIsOnline.mockResolvedValue(false);
@@ -160,6 +240,64 @@ describe("authoritative capability enforcement at automatic admission", () => {
     expect(before).toHaveLength(1);
     receive({ offline_attendance: false, auto_attendance: false });
     await submitAutoAttendance({ type: "OUT", employeeCode: "TDI0167", sourceScope, online: jest.fn() });
+    expect(await listAll()).toEqual(before);
+  });
+
+  it.each([0, 1])("refuses direct automatic online execution and offline admission in employee mode %s", async mode => {
+    await receiveEmployeeAutoAttendancePolicy({ geotagging: mode }, beginEmployeeAutoAttendancePolicyReception(sourceScope));
+    const online = jest.fn(async () => ({ allowed: true }));
+    expect(await submitAutoAttendance({ type: "IN", employeeCode: "TDI0167", sourceScope, online }))
+      .toMatchObject({ allowed: false, reason: "employee-policy-disabled" });
+    fetchIsOnline.mockResolvedValue(false);
+    expect(await submitAutoAttendance({ type: "IN", employeeCode: "TDI0167", sourceScope, online }))
+      .toMatchObject({ allowed: false, reason: "employee-policy-disabled" });
+    expect(online).not.toHaveBeenCalled();
+    expect(evaluateOfflineAttendance).not.toHaveBeenCalled();
+    expect(await listAll()).toEqual([]);
+  });
+
+  it.each([0, 1])("rejects new queue admission if employee mode changes to %s during GPS", async mode => {
+    fetchIsOnline.mockResolvedValue(false);
+    evaluateOfflineAttendance.mockImplementation(async () => {
+      await receiveEmployeeAutoAttendancePolicy({ geotagging: mode }, beginEmployeeAutoAttendancePolicyReception(sourceScope));
+      return acceptedGate;
+    });
+    expect(await submitAutoAttendance({ type: "IN", employeeCode: "TDI0167", sourceScope, online: jest.fn() }))
+      .toMatchObject({ allowed: false, reason: "employee-policy-disabled" });
+    expect(await listAll()).toEqual([]);
+  });
+
+  it.each([0, 1])("rejects a new row if employee mode changes to %s during database admission preparation", async mode => {
+    fetchIsOnline.mockResolvedValue(false);
+    const database = await getDatabase();
+    const read = database.getFirstAsync.bind(database);
+    let revoked = false;
+    const pendingRead = jest.spyOn(database, "getFirstAsync").mockImplementation(async (query, values) => {
+      const row = await read(query, values);
+      if (!revoked && query.includes("timestamp = ? AND action = ?")) {
+        revoked = true;
+        await receiveEmployeeAutoAttendancePolicy({ geotagging: mode }, beginEmployeeAutoAttendancePolicyReception(sourceScope));
+      }
+      return row;
+    });
+    try {
+      expect(await submitAutoAttendance({ type: "IN", employeeCode: "TDI0167", sourceScope, online: jest.fn() }))
+        .toMatchObject({ allowed: false, reason: "employee-policy-disabled" });
+      expect(revoked).toBe(true);
+      expect(await listAll()).toEqual([]);
+    } finally {
+      pendingRead.mockRestore();
+    }
+  });
+
+  it("keeps a previously accepted outbox row after employee policy revocation", async () => {
+    fetchIsOnline.mockResolvedValue(false);
+    await submitAutoAttendance({ type: "IN", employeeCode: "TDI0167", sourceScope, sourceEventId: "accepted-source", online: jest.fn() });
+    const before = await listAll();
+    expect(before).toHaveLength(1);
+    await receiveEmployeeAutoAttendancePolicy({ geotagging: 0 }, beginEmployeeAutoAttendancePolicyReception(sourceScope));
+    expect(await submitAutoAttendance({ type: "IN", employeeCode: "TDI0167", sourceScope, sourceEventId: "accepted-source", online: jest.fn() }))
+      .toMatchObject({ allowed: true, alreadyQueued: true });
     expect(await listAll()).toEqual(before);
   });
 });
@@ -623,12 +761,14 @@ describe("the shared queue", () => {
   });
 
   it("does not queue the same punch twice", async () => {
+    const sourceScope = await captureAttendanceQueueScope("TDI0167");
     const submit = () =>
       submitQueueable({
         type: "IN",
         employeeCode: "TDI0167",
         online: jest.fn(),
         occurredAt: 1_800_000_000_000,
+        sourceScope,
       });
 
     const first = await submit();
@@ -685,6 +825,12 @@ describe("input validation", () => {
  * lands behind that punch in the employee's FIFO.
  */
 describe("forceQueue", () => {
+  beforeEach(async () => {
+    await loginQueueEmployee("HR-EMP-00001");
+    evaluateOfflineAttendance.mockResolvedValue({ ...acceptedGate,
+      config: { ...acceptedGate.config, employeeId: "HR-EMP-00001" } });
+  });
+
   it("skips the online attempt and queues instead", async () => {
     const online = jest.fn(() => Promise.resolve({ allowed: true, name: "X" }));
 

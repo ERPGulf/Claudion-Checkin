@@ -1,5 +1,7 @@
 # Capability enforcement audit
 
+Follow-up review: [07-FINAL_GAP_ANALYSIS.md](07-FINAL_GAP_ANALYSIS.md) records additional confirmed gaps and targeted fixes; [09-RELEASE_READINESS.md](09-RELEASE_READINESS.md) is the current release verdict. Stage A/B and provenance statements below describe the earlier task.
+
 ## Stage A — baseline, before production changes
 
 Inspected on 2026-10-16. This section records the pre-change findings; the numbered companion documents describe the implementation and remaining limits. No production code was changed before this audit was recorded.

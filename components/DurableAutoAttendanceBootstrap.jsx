@@ -4,7 +4,7 @@ import { useDispatch, useSelector, useStore } from "react-redux";
 import { selectIsLoggedIn } from "../redux/Slices/AuthSlice";
 import { selectBaseUrl, selectEmployeeCode } from "../redux/Slices/UserSlice";
 import {
-  selectAutoAttendanceUserEnabled, selectAutoAttendanceSyncRequestId, setAutoAttendanceGeotagging,
+  selectAutoAttendanceUserEnabled, selectAutoAttendanceSyncRequestId, selectAutoAttendanceGeotagging,
 } from "../redux/Slices/AutoAttendanceSlice";
 import { setCheckin, setCheckout } from "../redux/Slices/AttendanceSlice";
 import * as Native from "../modules/expo-auto-attendance";
@@ -17,6 +17,8 @@ import { isSessionActive, publishCurrentSession, TRANSITION_RESULT } from "../ut
 import { presentLocalNotification } from "../services/notifications/localNotifications";
 import { useFeatureEnabled } from "../hooks/useFeatureSettings";
 import { ATTENDANCE_FEATURES } from "../utils/featureSettings";
+import { getEmployeeAutoAttendancePolicy } from "../services/employeeAutoAttendancePolicy";
+import { assertCapabilityCurrent } from "../services/capabilityPolicy";
 
 /** Journal replay needs neither a fresh GPS fix nor permission to register again. */
 export default function DurableAutoAttendanceBootstrap() {
@@ -26,15 +28,17 @@ export default function DurableAutoAttendanceBootstrap() {
   const employeeId = useSelector(selectEmployeeCode);
   const baseUrl = useSelector(selectBaseUrl);
   const enabled = useSelector(selectAutoAttendanceUserEnabled);
+  const employeeMode = useSelector(selectAutoAttendanceGeotagging);
   const capabilityAllowed = useFeatureEnabled(ATTENDANCE_FEATURES.AUTO_ATTENDANCE);
   const syncRequestId = useSelector(selectAutoAttendanceSyncRequestId);
   const work = useRef(Promise.resolve());
 
   // Do not wait behind an in-flight employee refresh to stop monitoring after
-  // settings revocation. Captured receipts remain durable and attributable.
+  // settings/tenant geo revocation. Captured receipts remain durable and
+  // attributable; automatic monitoring cannot outlive its authorization.
   useEffect(() => {
-    if (!capabilityAllowed) Native.stopGeofence().catch(() => {});
-  }, [capabilityAllowed]);
+    if (!capabilityAllowed || employeeMode === 0 || !enabled || !loggedIn) Native.stopGeofence().catch(() => {});
+  }, [capabilityAllowed, employeeMode, enabled, loggedIn]);
 
   useEffect(() => {
     let cancelled = false;
@@ -82,9 +86,17 @@ export default function DurableAutoAttendanceBootstrap() {
           await reconcileAutoAttendanceRegistration(null, null);
           return;
         }
-        dispatch(setAutoAttendanceGeotagging(config.rules?.geotagging));
+        // Reception is centralized; an older cache read cannot replace a newly
+        // received employee mode. Geometry remains the scoped cached geometry.
+        const policy = await getEmployeeAutoAttendancePolicy(scope);
+        // Restoring the first scoped cache schedules the mode-dependent run.
+        // Leave registration to that run instead of racing its effect cleanup.
+        if ((policy?.mode ?? 0) !== employeeMode) return;
+        config = { ...config, rules: { ...config.rules, geotagging: policy?.mode ?? 0 } };
+        assertCapabilityCurrent(ATTENDANCE_FEATURES.AUTO_ATTENDANCE, scope);
         // New configuration may unblock receipts retained at initial hydration.
         if (enabled) await drainAutoAttendanceEvents({ scope, onTransition: result => onTransition(result, scope) });
+        assertCapabilityCurrent(ATTENDANCE_FEATURES.AUTO_ATTENDANCE, scope);
         await reconcileAutoAttendanceRegistration(enabled ? scope : null, enabled ? config : null);
       }).catch(report);
       return work.current;
@@ -104,6 +116,6 @@ export default function DurableAutoAttendanceBootstrap() {
       reconnect();
       subscriptions.forEach(subscription => subscription.remove());
     };
-  }, [loggedIn, employeeId, baseUrl, enabled, capabilityAllowed, syncRequestId, dispatch, store]);
+  }, [loggedIn, employeeId, baseUrl, enabled, employeeMode, capabilityAllowed, syncRequestId, dispatch, store]);
   return null;
 }

@@ -33,7 +33,7 @@ export default function useExpenseClaimForm({ onSubmit, resetSignal } = {}) {
   const [expenseTypes, setExpenseTypes] = useState([]);
 
   const { pickFromCamera, pickFromGallery, pickDocument } =
-    useAttachmentPicker();
+    useAttachmentPicker('expense_claim');
 
   const showToast = useCallback(msg => {
     if (Platform.OS === 'android') ToastAndroid.show(msg, ToastAndroid.SHORT);

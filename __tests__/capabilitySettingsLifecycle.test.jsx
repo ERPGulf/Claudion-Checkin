@@ -38,6 +38,7 @@ const startRefresh = async () => {
 
 beforeEach(async () => {
   jest.clearAllMocks();
+  getFeatureSettings.mockReset();
   activateAuthSession(getAuthSessionGeneration());
   await AsyncStorage.clear();
   await AsyncStorage.multiSet([
@@ -50,14 +51,14 @@ beforeEach(async () => {
 });
 afterEach(cleanup);
 
-it('keeps the latest settings response when an older request finishes later', async () => {
+it.each([false, null])('keeps the latest disabled setting %p when an older request finishes later', async disabled => {
   const old = deferred();
   const latest = deferred();
   getFeatureSettings.mockReturnValueOnce(old.promise).mockReturnValueOnce(latest.promise);
   mount();
   const first = await startRefresh();
   const second = await startRefresh();
-  await act(async () => { latest.resolve(response(false)); await second.pending; });
+  await act(async () => { latest.resolve(response(disabled)); await second.pending; });
   expect(hook.isEnabled('expense_claim')).toBe(false);
   await act(async () => { old.resolve(response(true)); await first.pending; });
   expect(hook.isEnabled('expense_claim')).toBe(false);
@@ -155,4 +156,42 @@ it('retains the last known denial and marks it stale when settings refresh fails
   expect(hook.isEnabled('expense_claim')).toBe(false);
   expect(hook.health).toBe('stale');
   expect(hook.status).toBe('error');
+});
+
+it('replaces a cached allow with explicit null and keeps the denial during an outage', async () => {
+  mockStore.dispatch(settingsReceived({ scope, settings: response(true).message }));
+  getFeatureSettings.mockResolvedValueOnce(response(null));
+  mount();
+  expect(hook.isEnabled('expense_claim')).toBe(true);
+  await act(async () => { await hook.refresh(); });
+  expect(hook.isEnabled('expense_claim')).toBe(false);
+  getFeatureSettings.mockResolvedValueOnce({ error: 'Synthetic settings outage' });
+  await act(async () => { await hook.refresh(); });
+  expect(hook.isEnabled('expense_claim')).toBe(false);
+  expect(hook.health).toBe('stale');
+});
+
+it('hydrates the persisted null-derived denial on a cold start without internet', async () => {
+  mockStore.dispatch(settingsReceived({ scope, settings: response(null).message }));
+  const persisted = JSON.parse(JSON.stringify(mockStore.getState()));
+  mockStore = configureStore({ reducer: RootReducer, preloadedState: persisted });
+  getFeatureSettings.mockResolvedValueOnce({ error: 'Synthetic cold-start settings outage' });
+  mount();
+  expect(hook.isEnabled('expense_claim')).toBe(false);
+  await act(async () => { await hook.refresh(); });
+  expect(hook.isEnabled('expense_claim')).toBe(false);
+  expect(hook.health).toBe('stale');
+});
+
+it('keeps explicit null scoped to its tenant during switching and applies the new tenant null response', async () => {
+  mockStore.dispatch(settingsReceived({ scope, settings: response(null).message }));
+  mount();
+  expect(hook.isEnabled('expense_claim')).toBe(false);
+  await AsyncStorage.setItem('baseUrl', otherTenant);
+  act(() => { mockStore.dispatch(setBaseUrl(otherTenant)); });
+  expect(hook.isEnabled('expense_claim')).toBe(true);
+  getFeatureSettings.mockResolvedValueOnce(response(null));
+  await act(async () => { await hook.refresh(); });
+  expect(hook.isEnabled('expense_claim')).toBe(false);
+  expect(mockStore.getState().featureSettings.scope).toBe(buildSettingsScope(otherTenant, employeeCode));
 });
