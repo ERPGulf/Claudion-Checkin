@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Platform } from 'react-native';
+import { Alert, AppState, Platform } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useDispatch, useSelector } from 'react-redux';
 import * as Location from 'expo-location';
@@ -7,16 +7,16 @@ import { getPreciseDistance } from 'geolib';
 import {
   GEOTAGGING,
   GEOTAGGING_LABELS,
+  locationAccessDeclined,
   requestAutoAttendanceSync,
-  selectAutoAttendanceActive,
   selectAutoAttendanceAllowed,
+  selectAutoAttendanceConfigured,
   selectAutoAttendanceFullActions,
   selectAutoAttendanceGeotagging,
-  selectAutoAttendanceUserEnabled,
+  selectAutoAttendanceMonitoring,
+  selectAutoAttendanceScope,
   setAutoAttendanceGeotagging,
-  setAutoAttendanceUserEnabled,
 } from '../redux/Slices/AutoAttendanceSlice';
-import { getOfficeLocation } from '../services/api/attendance.service';
 import { fetchEmployeeData } from '../services/api/employee.service';
 import { assertEmployeeAutoAttendancePolicy } from '../services/employeeAutoAttendancePolicy';
 import { captureAttendanceQueueScope } from '../services/offline/attendanceQueueProvenance';
@@ -44,8 +44,13 @@ import {
   DEFAULT_GEOFENCE,
   MAX_LOG_ENTRIES,
   WARNING_CODES,
+  askForLocationAccess,
+  describeAutoAttendanceStatus,
+  locationAccessKey,
   parseGeofenceInput,
   readDevicePosition,
+  readLocationAccess,
+  requestLocationAccess,
   resolveOfficeName,
   waitForMonitoring,
 } from '../utils/autoAttendance';
@@ -54,11 +59,11 @@ import {
  * Every bit of automatic-attendance logic, shared by the classic and modern
  * screens so neither can drift from the other.
  *
- * The Redux selectors, the native listener subscriptions, the focus re-checks,
- * the permission flow and all seven handlers are lifted verbatim from the
- * original screen — same effect dependencies, same Alert copy, same ordering,
- * same `devPolicyOverrideRef` semantics. Nothing here was retuned while moving
- * it, and nothing about geofencing, monitoring or the APIs changed.
+ * The Redux selectors, the native listener subscriptions, the focus re-checks
+ * and the handlers were lifted from the original screen. Whether automatic
+ * attendance is on is the employer's configuration, read here and never set;
+ * the permission flow is the one shared with sign-in onboarding
+ * (utils/autoAttendance `askForLocationAccess`).
  *
  * Only the stack header stays in the screens: each renders its own, because
  * that is the one genuinely presentational thing this hook would otherwise own.
@@ -70,23 +75,25 @@ export default function useAutoAttendance() {
 
   const geotagging = useSelector(selectAutoAttendanceGeotagging);
   const employeeAllowed = useSelector(selectAutoAttendanceAllowed);
-  const userEnabled = useSelector(selectAutoAttendanceUserEnabled);
-  const employeeActive = useSelector(selectAutoAttendanceActive);
+  // The employer's configuration — nothing on this screen can change it.
+  const configured = useSelector(selectAutoAttendanceConfigured);
+  const registration = useSelector(selectAutoAttendanceMonitoring);
   const employeeFullActions = useSelector(selectAutoAttendanceFullActions);
   const capabilityAllowed = useFeatureEnabled(ATTENDANCE_FEATURES.AUTO_ATTENDANCE);
   const allowed = employeeAllowed && capabilityAllowed;
-  const active = employeeActive && capabilityAllowed;
   const fullActions = employeeFullActions && capabilityAllowed;
   const employeeCode = useSelector(
     (state) => state.user?.userDetails?.employeeCode,
   );
   const baseUrl = useSelector((state) => state.user?.baseUrl);
+  const settingsScope = useSelector(selectAutoAttendanceScope);
 
   const policy =
     GEOTAGGING_LABELS[geotagging] || GEOTAGGING_LABELS[GEOTAGGING.DISABLED];
 
   const [monitoring, setMonitoring] = useState(false);
-  const [permissionGranted, setPermissionGranted] = useState(false);
+  // Everything automatic attendance needs (see readLocationAccess); null until read.
+  const [permissionGranted, setPermissionGranted] = useState(null);
   const [lastEvent, setLastEvent] = useState(null);
   const [eventLog, setEventLog] = useState([]);
   const [permissionError, setPermissionError] = useState(null);
@@ -107,9 +114,14 @@ export default function useAutoAttendance() {
   // in production (the simulator UI that flips it is inside a __DEV__ block).
   const devPolicyOverrideRef = useRef(false);
 
+  const status = describeAutoAttendanceStatus({
+    configured, permitted: permissionGranted, monitoring: registration,
+  });
+  const active = status.key === 'active';
+
   const assertMonitoringAllowed = async (scope) => {
     await assertCapability(ATTENDANCE_FEATURES.AUTO_ATTENDANCE, scope);
-    const policy = await assertEmployeeAutoAttendancePolicy(scope, { action: 'monitor' });
+    const policy = await assertEmployeeAutoAttendancePolicy(scope);
     assertCapabilityCurrent(ATTENDANCE_FEATURES.AUTO_ATTENDANCE, scope);
     return policy;
   };
@@ -146,13 +158,7 @@ export default function useAutoAttendance() {
 
   const refreshPermissionStatus = useCallback(async () => {
     try {
-      const [foreground, background] = await Promise.all([
-        Location.getForegroundPermissionsAsync(),
-        Location.getBackgroundPermissionsAsync(),
-      ]);
-      setPermissionGranted(
-        foreground.status === 'granted' && background.status === 'granted',
-      );
+      setPermissionGranted((await readLocationAccess()).granted);
     } catch (error) {
       console.log(
         '[AutoAttendance] Failed to read permission status:',
@@ -326,6 +332,20 @@ export default function useAutoAttendance() {
     refreshPresence,
   ]);
 
+  // Coming back from Settings does not refocus the screen, so a permission
+  // granted there would otherwise go unseen until the next visit. The
+  // bootstrap registers on the same foreground; poll briefly for its outcome.
+  useEffect(() => {
+    if (!available) return undefined;
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') return;
+      refreshReliabilityStatus();
+      refreshPermissionStatus();
+      waitForMonitoring(5000).then(setMonitoring);
+    });
+    return () => subscription.remove();
+  }, [available, refreshReliabilityStatus, refreshPermissionStatus]);
+
   // Recompute presence when monitoring turns on (e.g. right after the user
   // enables it, or when AutoAttendanceBootstrap re-registers the fence); clear
   // it when monitoring stops, since there's no boundary to be inside/outside of.
@@ -338,128 +358,49 @@ export default function useAutoAttendance() {
     }
   }, [available, monitoring, refreshPresence]);
 
-  const requestPermissions = async () => {
-    const foreground = await Location.requestForegroundPermissionsAsync();
-    if (foreground.status !== 'granted') {
-      console.log('[AutoAttendance] Permission denied (foreground location)');
-      setPermissionError(
-        'Location permission was denied. Allow location access to use automatic attendance.',
-      );
-      return false;
-    }
-
-    const background = await Location.requestBackgroundPermissionsAsync();
-    if (background.status !== 'granted') {
-      console.log('[AutoAttendance] Permission denied (background location)');
-      setPermissionError(
-        'Background location was denied. Choose "Allow all the time" (Android) or "Always" (iOS) in system settings so check-in works when the app is closed.',
-      );
-      return false;
-    }
-
-    console.log('[AutoAttendance] Permission granted (fine + background)');
-    setPermissionError(null);
-    return true;
-  };
-
-  // The administrator sets the policy (server-side geotagging); this is the
-  // user's own opt-in. Turning it on persists `userEnabled` (redux-persist), so
-  // the service stays on across relaunches, secures the permissions monitoring
-  // needs, and validates that an office is actually configured.
+  // The employer decides whether automatic attendance is on; this only obtains
+  // the location access it needs — explaining first, asking for what is
+  // missing, or offering Settings once the system will no longer ask. A manual
+  // retry, so it runs even after an onboarding the employee declined.
   //
   // It deliberately does NOT call startGeofence. AutoAttendanceBootstrap is the
-  // single registrar: it reacts to `userEnabled` flipping, owns the ENTER/EXIT
-  // listeners that perform the real check-in/checkout, and re-establishes
-  // monitoring on every launch. Registering here as well meant two concurrent
-  // startGeofence calls for the same fence, which on iOS is rejected outright
-  // ("Another geofence registration is already in progress") or cancels the
-  // in-flight registration — losing the initial-state check that produces the
-  // automatic check-in when the user is already inside.
-  const handleToggleEnabled = async (value) => {
+  // single registrar: it owns the ENTER/EXIT listeners that perform the real
+  // check-in/checkout and re-establishes monitoring on every launch. Registering
+  // here as well meant two concurrent startGeofence calls for the same fence,
+  // which on iOS is rejected outright ("Another geofence registration is
+  // already in progress") or cancels the in-flight registration — losing the
+  // initial-state check that produces the automatic check-in when the user is
+  // already inside.
+  const handleGrantLocationAccess = async () => {
     if (busy) return;
-
-    if (!value) {
-      // Clearing the opt-in is enough to stop monitoring — the bootstrap's
-      // effect calls stopGeofence when it sees the feature go inactive. Reflect
-      // it locally so the Status card updates without waiting for a re-render.
-      dispatch(setAutoAttendanceUserEnabled(false));
-      setMonitoring(false);
-      setPresence(null);
-      return;
-    }
-
-    // Persist the opt-in first, so it survives even if the user backgrounds the
-    // app during the permission prompt.
-    dispatch(setAutoAttendanceUserEnabled(true));
-
     setBusy(true);
     try {
       const scope = await captureAttendanceQueueScope(employeeCode);
-      const assertCurrentMonitoringAllowed = () => assertMonitoringAllowed(scope);
-      await assertCurrentMonitoringAllowed();
-      // Whether permission was already in place decides if the bootstrap needs
-      // nudging: its run triggered by the opt-in above happens before the OS
-      // prompt is answered, so on a first-ever enable it bails at its own
-      // permission check. When permission was already granted that run is
-      // sufficient, and asking for another would only burn a second GPS fix.
-      const [priorForeground, priorBackground] = await Promise.all([
-        Location.getForegroundPermissionsAsync(),
-        Location.getBackgroundPermissionsAsync(),
-      ]);
-      await assertCurrentMonitoringAllowed();
-      const wasAlreadyGranted =
-        priorForeground.status === 'granted' &&
-        priorBackground.status === 'granted';
+      await assertMonitoringAllowed(scope);
+      const access = await askForLocationAccess({ fromTap: true });
+      await assertMonitoringAllowed(scope);
+      setPermissionGranted(access.granted);
+      if (!access.granted) {
+        if (access.asked) {
+          dispatch(locationAccessDeclined({ scope: settingsScope, key: locationAccessKey(access) }));
+        }
+        return;
+      }
 
-      const granted = await requestPermissions();
-      await assertCurrentMonitoringAllowed();
-      setPermissionGranted(granted);
-      // Opt-in stays saved even if permission is declined — the user can grant
-      // it later (or on the next launch) and monitoring resumes.
-      if (!granted) return;
-
-      if (!wasAlreadyGranted) dispatch(requestAutoAttendanceSync());
+      // The bootstrap's own run checked permission before it was granted.
+      dispatch(requestAutoAttendanceSync());
 
       // Secure notification permission + Android channel now, in the
       // foreground, so the automatic check-out alert can fire later from the
       // background. Non-blocking: monitoring still starts if the user declines.
       await ensureNotificationSetup();
-      await assertCurrentMonitoringAllowed();
-
-      if (!employeeCode) {
-        Alert.alert(
-          'Not available yet',
-          "Your employee record hasn't finished loading. Try again in a moment.",
-        );
-        return;
-      }
-
-      // Validation only — the bootstrap resolves the office again for the
-      // registration itself. Catching it here turns an unconfigured account into
-      // an explanation instead of a toggle that silently does nothing.
-      const nearest = await getOfficeLocation(employeeCode, { syncScope: scope });
-      await assertCurrentMonitoringAllowed();
-      if (!nearest) {
-        Alert.alert(
-          'No office location configured',
-          'Your account has no reporting location set up. Contact HR/admin to enable automatic attendance.',
-        );
-        return;
-      }
+      await assertMonitoringAllowed(scope);
 
       // The bootstrap registers asynchronously; poll briefly so the Status card
       // shows the real outcome rather than a stale "Not Monitoring".
-      const registered = await waitForMonitoring();
-      await assertCurrentMonitoringAllowed();
-      setMonitoring(registered);
-      console.log(
-        registered
-          ? '[AutoAttendance] Monitoring enabled'
-          : '[AutoAttendance] Monitoring not registered yet',
-        nearest,
-      );
+      setMonitoring(await waitForMonitoring());
     } catch (error) {
-      console.log('[AutoAttendance] Failed to enable monitoring:', error);
+      console.log('[AutoAttendance] Failed to obtain location access:', error);
       // Fixed copy: the error is native/network text, not something to show.
       Alert.alert(
         'Could not turn on monitoring',
@@ -484,8 +425,7 @@ export default function useAutoAttendance() {
     try {
       const scope = await captureAttendanceQueueScope(employeeCode);
       await assertMonitoringAllowed(scope);
-      const granted = await requestPermissions();
-      if (!granted) return;
+      if (!(await requestLocationAccess()).granted) return;
       await assertMonitoringAllowed(scope);
       await startGeofence(geofence, scope);
       try {
@@ -629,9 +569,12 @@ export default function useAutoAttendance() {
     geotagging,
     policy,
     allowed,
-    userEnabled,
-    active,
+    configured,
     fullActions,
+
+    // Operational state: configured is not the same as working
+    status,
+    active,
 
     // Live state
     monitoring,
@@ -654,7 +597,7 @@ export default function useAutoAttendance() {
 
     // Actions
     refreshPresence,
-    handleToggleEnabled,
+    handleGrantLocationAccess,
     handleStart,
     handleStop,
     handleUseCurrentLocation,

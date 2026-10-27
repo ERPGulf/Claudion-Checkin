@@ -24,7 +24,7 @@ import { syncPendingAttendance, resetSyncService } from "../services/offline/Att
 import { resetOfflineCapability, setOfflineQueueingAllowed } from "../services/offline/offlineCapability";
 import { readSession } from "../utils/attendanceSessionState";
 import { createRegistrationId } from "../utils/autoAttendanceRegistration";
-import { loginQueueEmployee, TEST_TENANT } from "../test-utils/attendanceScope";
+import { enableAutomaticAttendance, loginQueueEmployee, TEST_TENANT } from "../test-utils/attendanceScope";
 import { beginEmployeeAutoAttendancePolicyReception, receiveEmployeeAutoAttendancePolicy } from "../services/employeeAutoAttendancePolicy";
 
 const { __resetAll } = require("../test-utils/expoSqliteMock");
@@ -43,6 +43,7 @@ beforeEach(async () => {
   __resetAll(); resetDatabaseHandle(); resetSyncService(); resetOfflineCapability();
   await clearTokens(); await AsyncStorage.clear();
   await loginQueueEmployee(employeeId); await saveTokens("synthetic-access", "synthetic-refresh");
+  enableAutomaticAttendance(employeeId);
   await AsyncStorage.multiSet([["restrict_location", "0"], ["unrestricted_checkout_location", "0"]]);
   scope = await captureAttendanceQueueScope(employeeId);
   await receiveEmployeeAutoAttendancePolicy({ geotagging: 2 }, beginEmployeeAutoAttendancePolicyReception(scope));

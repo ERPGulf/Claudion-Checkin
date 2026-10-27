@@ -116,12 +116,15 @@ export const getEmployeeAutoAttendancePolicy = async owner => {
   return matchingPolicy(owner);
 };
 
-/** Final synchronous check after an awaited boundary, from the current slice. */
-export const assertEmployeeAutoAttendancePolicyCurrent = (owner, { action = 'punch' } = {}) => {
+/**
+ * Final synchronous check after an awaited boundary, from the current slice.
+ * Monitoring and punching need the same mode: only 2 is automatic; warnings-only
+ * (1) is never monitored.
+ */
+export const assertEmployeeAutoAttendancePolicyCurrent = (owner) => {
   assertAttendanceSessionCurrent(owner);
   const policy = matchingPolicy(owner);
-  const allowed = policy && (action === 'monitor' ? policy.mode === 1 || policy.mode === 2 : policy.mode === 2);
-  if (!allowed) {
+  if (policy?.mode !== 2) {
     const error = new Error(policy
       ? 'Automatic attendance is disabled by your employee policy.'
       : 'Employee automatic attendance policy is unavailable. Refresh your employee settings.');
@@ -133,7 +136,7 @@ export const assertEmployeeAutoAttendancePolicyCurrent = (owner, { action = 'pun
   return { ...policy, ...owner, mode: policy.mode, revision: policy.revision, policyScope: policy.scope };
 };
 
-export const assertEmployeeAutoAttendancePolicy = async (owner, options) => {
+export const assertEmployeeAutoAttendancePolicy = async (owner) => {
   await getEmployeeAutoAttendancePolicy(owner);
-  return assertEmployeeAutoAttendancePolicyCurrent(owner, options);
+  return assertEmployeeAutoAttendancePolicyCurrent(owner);
 };

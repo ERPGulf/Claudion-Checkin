@@ -155,7 +155,7 @@ export const selectScopedFeatureSettings = (state, scope) => {
 export const makeSelectFeatureEnabled = path => state =>
   isFeatureEnabled(selectFeatureSettings(state), path);
 
-/** A non-boolean setting (`geo_tagging`, `offline_attendance_version`). */
+/** A non-boolean setting (`offline_attendance_version`). */
 export const makeSelectFeatureValue = path => state =>
   getFeatureValue(selectFeatureSettings(state), path);
 

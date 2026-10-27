@@ -104,10 +104,17 @@ const networkFailure = () => ({
 const submitQueueable = (options) =>
   submitAttendance({ attendanceType: "auto", ...options });
 
+// The employer has enabled automatic attendance; tests that disable it say so.
+const enableAutomaticTenant = (employeeId = "TDI0167") => store.dispatch(settingsReceived({
+  scope: buildSettingsScope(TEST_TENANT, employeeId),
+  settings: normalizeFeatureSettings({ attendance_action: { geo_tagging: true } }),
+}));
+
 beforeEach(async () => {
   await AsyncStorage.clear();
   await loginQueueEmployee("TDI0167");
   store.dispatch(settingsInvalidated());
+  enableAutomaticTenant();
   __resetAll();
   resetDatabaseHandle();
   jest.clearAllMocks();
@@ -126,10 +133,11 @@ describe("authoritative capability enforcement at automatic admission", () => {
   let sourceScope;
   const receive = attendance => store.dispatch(settingsReceived({
     scope: buildSettingsScope(TEST_TENANT, "TDI0167"),
-    settings: normalizeFeatureSettings({ attendance_action: attendance }),
+    settings: normalizeFeatureSettings({ attendance_action: { geo_tagging: true, ...attendance } }),
   }));
   beforeEach(async () => {
     store.dispatch(settingsInvalidated());
+    enableAutomaticTenant();
     await loginQueueEmployee("TDI0167");
     sourceScope = await captureAttendanceQueueScope("TDI0167");
     assertEmployeeAutoAttendancePolicy.mockImplementation(
@@ -155,7 +163,7 @@ describe("authoritative capability enforcement at automatic admission", () => {
   });
 
   it("refuses a new automatic online action when the tenant disables automatic attendance", async () => {
-    receive({ auto_attendance: false });
+    receive({ geo_tagging: false });
     const online = jest.fn(async () => ({ allowed: true }));
     expect(await submitAutoAttendance({ type: "IN", employeeCode: "TDI0167", sourceScope, online }))
       .toMatchObject({ allowed: false, reason: "capability-disabled" });
@@ -163,8 +171,8 @@ describe("authoritative capability enforcement at automatic admission", () => {
     expect(await listAll()).toEqual([]);
   });
 
-  it.each([false, 0, null])("refuses new online and offline punches with tenant geo %s and employee mode 2", async value => {
-    receive({ auto_attendance: true, offline_attendance: true, geo_tagging: value });
+  it.each([false, null, 0, "true"])("refuses new online and offline punches with tenant geo %s and employee mode 2", async value => {
+    receive({ offline_attendance: true, geo_tagging: value });
     const online = jest.fn(async () => ({ allowed: true }));
     expect(await submitAutoAttendance({ type: "IN", employeeCode: "TDI0167", sourceScope, online }))
       .toMatchObject({ allowed: false, reason: "capability-disabled" });
@@ -238,7 +246,7 @@ describe("authoritative capability enforcement at automatic admission", () => {
     await submitAutoAttendance({ type: "IN", employeeCode: "TDI0167", sourceScope, online: jest.fn() });
     const before = await listAll();
     expect(before).toHaveLength(1);
-    receive({ offline_attendance: false, auto_attendance: false });
+    receive({ offline_attendance: false, geo_tagging: false });
     await submitAutoAttendance({ type: "OUT", employeeCode: "TDI0167", sourceScope, online: jest.fn() });
     expect(await listAll()).toEqual(before);
   });
@@ -827,6 +835,7 @@ describe("input validation", () => {
 describe("forceQueue", () => {
   beforeEach(async () => {
     await loginQueueEmployee("HR-EMP-00001");
+    enableAutomaticTenant("HR-EMP-00001");
     evaluateOfflineAttendance.mockResolvedValue({ ...acceptedGate,
       config: { ...acceptedGate.config, employeeId: "HR-EMP-00001" } });
   });

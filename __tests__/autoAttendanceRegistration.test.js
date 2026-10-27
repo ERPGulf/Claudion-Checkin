@@ -35,6 +35,7 @@ beforeEach(async () => {
   await loginQueueEmployee(scope.employeeId, scope.tenantKey);
   scope = await captureAttendanceQueueScope(scope.employeeId);
   store.dispatch({ type: "REVERT_ALL" });
+  receiveAutomaticAvailability(true);
   jest.clearAllMocks();
   Location.getForegroundPermissionsAsync.mockResolvedValue({ status: "granted" });
   Location.getBackgroundPermissionsAsync.mockResolvedValue({ status: "granted" });
@@ -49,19 +50,16 @@ beforeEach(async () => {
   await receiveMode(2);
 });
 
+// The tenant's automatic-attendance switch, `attendance_action.geo_tagging`.
 const receiveAutomaticAvailability = value => store.dispatch(settingsReceived({
   scope: buildSettingsScope(scope.tenantKey, scope.employeeId),
-  settings: normalizeFeatureSettings({ attendance_action: { auto_attendance: value } }),
-}));
-const receiveGeo = value => store.dispatch(settingsReceived({
-  scope: buildSettingsScope(scope.tenantKey, scope.employeeId),
-  settings: normalizeFeatureSettings({ attendance_action: { auto_attendance: true, geo_tagging: value } }),
+  settings: normalizeFeatureSettings({ attendance_action: { geo_tagging: value } }),
 }));
 
 it.each([false, 0, null])("stops tenant geo %s despite employee mode 2 and an existing registration", async value => {
   Native.isMonitoring.mockReturnValue(true);
   Native.getRegisteredGeofences.mockReturnValue([registered()]);
-  receiveGeo(value);
+  receiveAutomaticAvailability(value);
   await reconcileAutoAttendanceRegistration(scope, config);
   expect(Native.stopGeofence).toHaveBeenCalledTimes(1);
   expect(Native.startGeofence).not.toHaveBeenCalled();
@@ -70,7 +68,7 @@ it.each([false, 0, null])("stops tenant geo %s despite employee mode 2 and an ex
 
 it("does not register after tenant geo is revoked during office GPS selection", async () => {
   Location.getCurrentPositionAsync.mockImplementationOnce(async () => {
-    receiveGeo(0);
+    receiveAutomaticAvailability(false);
     return { coords: { latitude: office.latitude, longitude: office.longitude } };
   });
   await reconcileAutoAttendanceRegistration(scope, { ...config, locations: [office, { ...office, latitude: 26 }] });
@@ -81,14 +79,14 @@ it("does not register after tenant geo is revoked during office GPS selection", 
 it("removes retained monitoring when tenant geo is disabled during an initial-presence retry", async () => {
   Native.isMonitoring.mockReturnValue(true);
   Native.getRegisteredGeofences.mockReturnValue([registered()]);
-  Native.retryInitialPresence.mockImplementationOnce(async () => receiveGeo(0));
+  Native.retryInitialPresence.mockImplementationOnce(async () => receiveAutomaticAvailability(false));
   await reconcileAutoAttendanceRegistration(scope, config);
   expect(Native.stopGeofence).toHaveBeenCalledTimes(1);
   expect(Native.startGeofence).not.toHaveBeenCalled();
 });
 
 it("removes monitoring when tenant geo changes during native registration", async () => {
-  Native.startGeofence.mockImplementationOnce(async () => receiveGeo(0));
+  Native.startGeofence.mockImplementationOnce(async () => receiveAutomaticAvailability(false));
   await reconcileAutoAttendanceRegistration(scope, config);
   expect(Native.startGeofence).toHaveBeenCalledTimes(1);
   expect(Native.stopGeofence).toHaveBeenCalledTimes(2);
@@ -262,11 +260,11 @@ it("repairs unavailable native monitoring even when saved geometry matches", asy
   expect(Native.startGeofence).toHaveBeenCalledTimes(1);
 });
 
-it("preserves warnings-only registration and stops disabled policy", async () => {
+it("never registers warnings-only or disabled employees", async () => {
   await receiveMode(1);
   await reconcileAutoAttendanceRegistration(scope, { ...config, rules: { geotagging: 1 } });
-  expect(Native.startGeofence).toHaveBeenCalledWith(expect.objectContaining({ geotagging: 1 }), scope);
-  Native.startGeofence.mockClear();
+  expect(Native.startGeofence).not.toHaveBeenCalled();
+  expect(Native.stopGeofence).toHaveBeenCalled();
   await receiveMode(0);
   await reconcileAutoAttendanceRegistration(scope, { ...config, rules: { geotagging: 0 } });
   expect(Native.startGeofence).not.toHaveBeenCalled();
@@ -278,8 +276,7 @@ it.each([0, 1])("uses employee mode %s received during office GPS selection", as
     return { coords: { latitude: office.latitude, longitude: office.longitude } };
   });
   await reconcileAutoAttendanceRegistration(scope, { ...config, locations: [office, { ...office, latitude: 26 }] });
-  if (mode === 0) expect(Native.startGeofence).not.toHaveBeenCalled();
-  else expect(Native.startGeofence).toHaveBeenCalledWith(expect.objectContaining({ geotagging: 1 }), scope);
+  expect(Native.startGeofence).not.toHaveBeenCalled();
 });
 
 it.each([0, 1])("stops a retained registration when employee mode changes to %s during native initial-presence retry", async mode => {

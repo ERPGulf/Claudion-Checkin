@@ -4,7 +4,8 @@ import { useDispatch, useSelector, useStore } from "react-redux";
 import { selectIsLoggedIn } from "../redux/Slices/AuthSlice";
 import { selectBaseUrl, selectEmployeeCode } from "../redux/Slices/UserSlice";
 import {
-  selectAutoAttendanceUserEnabled, selectAutoAttendanceSyncRequestId, selectAutoAttendanceGeotagging,
+  autoAttendanceMonitoringChanged, selectAutoAttendanceConfigured, selectAutoAttendanceGeotagging,
+  selectAutoAttendanceScope, selectAutoAttendanceSyncRequestId,
 } from "../redux/Slices/AutoAttendanceSlice";
 import { setCheckin, setCheckout } from "../redux/Slices/AttendanceSlice";
 import * as Native from "../modules/expo-auto-attendance";
@@ -13,6 +14,7 @@ import { addReconnectListener, fetchShouldAttemptRequest } from "../services/off
 import { captureAttendanceQueueScope, assertAttendanceQueueScope } from "../services/offline/attendanceQueueProvenance";
 import { drainAutoAttendanceEvents, ingestPendingNativeEvents } from "../services/offline/AutoAttendanceEventProcessor";
 import { reconcileAutoAttendanceRegistration } from "../utils/autoAttendanceRegistration";
+import { readLocationAccess } from "../utils/autoAttendance";
 import { isSessionActive, publishCurrentSession, TRANSITION_RESULT } from "../utils/attendanceSessionState";
 import { presentLocalNotification } from "../services/notifications/localNotifications";
 import { useFeatureEnabled } from "../hooks/useFeatureSettings";
@@ -27,7 +29,9 @@ export default function DurableAutoAttendanceBootstrap() {
   const loggedIn = useSelector(selectIsLoggedIn);
   const employeeId = useSelector(selectEmployeeCode);
   const baseUrl = useSelector(selectBaseUrl);
-  const enabled = useSelector(selectAutoAttendanceUserEnabled);
+  // The employer's configuration; there is no employee switch.
+  const enabled = useSelector(selectAutoAttendanceConfigured);
+  const settingsScope = useSelector(selectAutoAttendanceScope);
   const employeeMode = useSelector(selectAutoAttendanceGeotagging);
   const capabilityAllowed = useFeatureEnabled(ATTENDANCE_FEATURES.AUTO_ATTENDANCE);
   const syncRequestId = useSelector(selectAutoAttendanceSyncRequestId);
@@ -63,6 +67,12 @@ export default function DurableAutoAttendanceBootstrap() {
           data: { type: "auto-checkout", pendingSync: result.queued } });
       }
     };
+    // What the screen and the manual check-out hint show: established, or why not.
+    const publish = (state) => {
+      const current = store.getState().autoAttendance?.monitoring;
+      if (cancelled || !enabled || (current?.scope === settingsScope && current?.state === state)) return;
+      dispatch(autoAttendanceMonitoringChanged({ scope: settingsScope, state }));
+    };
     const run = ({ refresh = false } = {}) => {
       work.current = work.current.catch(() => {}).then(async () => {
         // Capture first, including after logout. Receipts keep their original owner.
@@ -84,6 +94,7 @@ export default function DurableAutoAttendanceBootstrap() {
         }
         if (config?.tenantKey !== scope.tenantKey || config?.employeeId !== scope.employeeId) {
           await reconcileAutoAttendanceRegistration(null, null);
+          publish("unavailable");
           return;
         }
         // Reception is centralized; an older cache read cannot replace a newly
@@ -97,7 +108,14 @@ export default function DurableAutoAttendanceBootstrap() {
         // New configuration may unblock receipts retained at initial hydration.
         if (enabled) await drainAutoAttendanceEvents({ scope, onTransition: result => onTransition(result, scope) });
         assertCapabilityCurrent(ATTENDANCE_FEATURES.AUTO_ATTENDANCE, scope);
-        await reconcileAutoAttendanceRegistration(enabled ? scope : null, enabled ? config : null);
+        const registered = await reconcileAutoAttendanceRegistration(enabled ? scope : null, enabled ? config : null)
+          .catch((error) => {
+            publish("unavailable");
+            throw error;
+          });
+        if (!enabled) return;
+        if (registered && Native.isMonitoring()) publish("active");
+        else publish((await readLocationAccess()).granted ? "unavailable" : "permission");
       }).catch(report);
       return work.current;
     };
@@ -116,6 +134,6 @@ export default function DurableAutoAttendanceBootstrap() {
       reconnect();
       subscriptions.forEach(subscription => subscription.remove());
     };
-  }, [loggedIn, employeeId, baseUrl, enabled, employeeMode, capabilityAllowed, syncRequestId, dispatch, store]);
+  }, [loggedIn, employeeId, baseUrl, settingsScope, enabled, employeeMode, capabilityAllowed, syncRequestId, dispatch, store]);
   return null;
 }

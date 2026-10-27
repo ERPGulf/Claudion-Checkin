@@ -291,6 +291,62 @@ describe("Session resilience", () => {
   });
 
   // -------------------------------------------------------------------------
+  // F7 — the refresh endpoint's 401 relays the OAuth server's answer
+  //
+  // `create_refresh_token` answers 401 { data: "<upstream body>" } for every
+  // non-200 from Frappe's OAuth server, so a bench restart or a busy server
+  // looked exactly like a revoked token and signed employees out.
+  // -------------------------------------------------------------------------
+  describe("F7 · a relayed upstream failure is not a rejected token", () => {
+    const relay = (upstream) => ({ data: upstream });
+
+    it.each([
+      ["a gateway page (bench restart, overload)", "<html><head><title>502 Bad Gateway</title></head></html>"],
+      ["an empty upstream answer", ""],
+      ["an upstream server exception", JSON.stringify({ exc_type: "QueryDeadlockError" })],
+      ["an upstream answer the backend could not parse", "Error decoding JSON: Expecting value: line 1 column 1 (char 0)"],
+      ["a PermissionError, which says nothing about the token", JSON.stringify({ exc_type: "PermissionError" })],
+    ])("keeps the session when the relay carries %s", async (_, upstream) => {
+      const cleanup = jest.fn();
+      registerSessionCleanupHandler(cleanup);
+      mock.onGet(API_URL).reply(401);
+      refreshMock.onPost(REFRESH_URL).reply(401, relay(upstream));
+
+      const error = await apiClient.get(API_URL).catch((err) => err);
+
+      expect(error.message).not.toMatch(/session expired/i);
+      expect(await storedTokens()).toEqual({ access: "OLD_TOKEN", refresh: "REFRESH_1" });
+      expect(cleanup).not.toHaveBeenCalled();
+    });
+
+    it("recovers on the next refresh once the upstream answers", async () => {
+      mock.onGet(API_URL).replyOnce(401);
+      refreshMock.onPost(REFRESH_URL).replyOnce(401, relay("<html>504 Gateway Time-out</html>"));
+      await expect(apiClient.get(API_URL)).rejects.toBeTruthy();
+
+      refreshMock.onPost(REFRESH_URL).reply(200, { data: { access_token: "NEW_TOKEN" } });
+      mock.onGet(API_URL).replyOnce(401);
+      mock.onGet(API_URL).reply(200, { ok: true });
+
+      expect((await apiClient.get(API_URL)).data.ok).toBe(true);
+      expect((await storedTokens()).access).toBe("NEW_TOKEN");
+    });
+
+    it.each([
+      ["no Active token carries it (unknown or revoked)", { exc_type: "DoesNotExistError" }],
+      ["an OAuth invalid_grant", { error: "invalid_grant", status_code: 400 }],
+    ])("ends the session when the relay says %s", async (_, upstream) => {
+      mock.onGet(API_URL).reply(401);
+      refreshMock.onPost(REFRESH_URL).reply(401, relay(JSON.stringify(upstream)));
+
+      await expect(apiClient.get(API_URL)).rejects.toThrow(/session expired/i);
+
+      expect((await storedTokens()).access).toBeNull();
+      expect(await AsyncStorage.getItem("baseUrl")).toBe("https://example.com");
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // F6 / logout semantics — what a forced expiry may and may not delete
   // -------------------------------------------------------------------------
   describe("Forced expiry keeps the tenant", () => {

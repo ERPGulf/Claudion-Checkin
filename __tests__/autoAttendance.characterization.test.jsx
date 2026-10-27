@@ -85,8 +85,7 @@ import { setBaseUrl, setEmployeeCode } from "../redux/Slices/UserSlice";
 import {
   GEOTAGGING,
   requestAutoAttendanceSync,
-  selectAutoAttendanceActive,
-  setAutoAttendanceUserEnabled,
+  selectAutoAttendanceConfigured,
 } from "../redux/Slices/AutoAttendanceSlice";
 import {
   autoCheckInOut,
@@ -132,6 +131,7 @@ import {
   receiveEmployeeAutoAttendancePolicy,
 } from "../services/employeeAutoAttendancePolicy";
 import { settingsReceived } from "../redux/Slices/FeatureSettingsSlice";
+import { automaticAttendanceSettings } from "../test-utils/attendanceScope";
 import { buildSettingsScope, normalizeFeatureSettings } from "../utils/featureSettings";
 
 const EMPLOYEE_A = "M0-EMPLOYEE-A";
@@ -160,9 +160,9 @@ const buildStore = () => {
     preloadedState: {
       userAuth: { isLoggedIn: true, token: "fixture-access" },
       user: { userDetails: { employeeCode: EMPLOYEE_A }, baseUrl: TENANT_A },
+      featureSettings: automaticAttendanceSettings(EMPLOYEE_A, TENANT_A),
       autoAttendance: {
         geotagging: GEOTAGGING.ALL_ACTIONS,
-        userEnabled: true,
         syncRequestId: 0,
       },
     },
@@ -237,6 +237,8 @@ const loginThroughReducers = async (employeeCode, tenant) => {
     mockStore.dispatch(
       setSignIn({ isLoggedIn: true, token: "fixture-access" }),
     );
+    // What FeatureSettingsBootstrap fetches after sign-in.
+    mockStore.dispatch(settingsReceived(automaticAttendanceSettings(employeeCode, tenant)));
   });
   await flushStartup();
 };
@@ -367,7 +369,7 @@ describe("M0 current-behaviour characterization", () => {
   it("resumes legacy online automatic attendance after a fresh mode 2 response with offline disabled and no cache", async () => {
     mockStore.dispatch(settingsReceived({
       scope: buildSettingsScope(TENANT_A, EMPLOYEE_A),
-      settings: normalizeFeatureSettings({ attendance_action: { offline_attendance: false, auto_attendance: true } }),
+      settings: normalizeFeatureSettings({ attendance_action: { offline_attendance: false, geo_tagging: true } }),
     }));
     await receiveEmployeeMode(0);
     render(<Provider store={mockStore}><AutoAttendanceBootstrap /></Provider>);
@@ -429,7 +431,7 @@ describe("M0 current-behaviour characterization", () => {
     );
   });
 
-  it("characterizes current behaviour: C employee reassignment also trusts the old monitoring flag", async () => {
+  it("characterizes current behaviour: C employee reassignment waits for the new employee's own configuration", async () => {
     mockIsMonitoring = false;
     await mountBootstrap();
     mockOffice = OFFICE_B;
@@ -442,9 +444,23 @@ describe("M0 current-behaviour characterization", () => {
     });
     await flushStartup();
 
+    // A's settings are A's: nothing starts for B on them.
+    expect(selectAutoAttendanceConfigured(mockStore.getState())).toBe(false);
+    expect(mockListeners.ENTER.size).toBe(0);
+
+    await act(async () => {
+      mockStore.dispatch(settingsReceived(automaticAttendanceSettings(EMPLOYEE_B, TENANT_A)));
+    });
+    await flushStartup();
+
     expect(getOfficeLocation).toHaveBeenLastCalledWith(EMPLOYEE_B,
       expect.objectContaining({ syncScope: expect.objectContaining({ employeeId: EMPLOYEE_B }) }));
-    expect(startGeofence).toHaveBeenCalledTimes(1);
+    // B's own registration, not A's monitoring carried over.
+    expect(stopGeofence).toHaveBeenCalled();
+    expect(startGeofence).toHaveBeenLastCalledWith(
+      expect.objectContaining({ latitude: OFFICE_B.latitude, longitude: OFFICE_B.longitude }),
+      expect.objectContaining({ employeeId: EMPLOYEE_B }),
+    );
     expect(mockListeners.ENTER.size).toBe(1);
   });
 
@@ -465,7 +481,7 @@ describe("M0 current-behaviour characterization", () => {
     await flushStartup();
 
     expect(mockStore.getState().userAuth.isLoggedIn).toBe(false);
-    expect(mockStore.getState().autoAttendance.userEnabled).toBe(false);
+    expect(selectAutoAttendanceConfigured(mockStore.getState())).toBe(false);
     expect(stopGeofence).toHaveBeenCalledTimes(1);
     expect(mockListeners.ENTER.size).toBe(0);
     expect(clearLastEvent).not.toHaveBeenCalled();
@@ -477,7 +493,7 @@ describe("M0 current-behaviour characterization", () => {
     expect(await AsyncStorage.getItem("access_token")).toBeNull();
   });
 
-  it("characterizes current behaviour: E terminal refresh expiry resets opt-in and retains session/processed mark through the real interceptor", async () => {
+  it("characterizes current behaviour: E terminal refresh expiry clears the configuration and retains session/processed mark through the real interceptor", async () => {
     await mountBootstrap();
     await manualTransition("IN", Date.now() - 2 * 60 * 60 * 1000);
     const processedAt = Date.now() - 60 * 60 * 1000;
@@ -497,7 +513,7 @@ describe("M0 current-behaviour characterization", () => {
 
     expect(refreshMock.history.post).toHaveLength(1);
     expect(mockStore.getState().userAuth.isLoggedIn).toBe(false);
-    expect(mockStore.getState().autoAttendance.userEnabled).toBe(false);
+    expect(selectAutoAttendanceConfigured(mockStore.getState())).toBe(false);
     expect(stopGeofence).toHaveBeenCalledTimes(1);
     expect(clearLastEvent).not.toHaveBeenCalled();
     expect(await AsyncStorage.getItem(SESSION_STATE_KEY)).toBe(
@@ -508,7 +524,7 @@ describe("M0 current-behaviour characterization", () => {
     expect(await AsyncStorage.getItem("refresh_token")).toBeNull();
   });
 
-  it("does not replay A's unattributed native event as B after logout and re-enabling", async () => {
+  it("does not replay A's unattributed native event as B after logout and B's configured sign-in", async () => {
     await mountBootstrap();
     const oldMark = Date.now() - 2 * 60 * 60 * 1000;
     const crossedByAAt = Date.now() - 60 * 60 * 1000;
@@ -521,11 +537,7 @@ describe("M0 current-behaviour characterization", () => {
     await flushStartup();
 
     await loginThroughReducers(EMPLOYEE_B, TENANT_B);
-    expect(mockStore.getState().autoAttendance.userEnabled).toBe(false);
-    expect(await getLastProcessedEventAt()).toBe(oldMark);
-    await act(async () => {
-      mockStore.dispatch(setAutoAttendanceUserEnabled(true));
-    });
+    expect(selectAutoAttendanceConfigured(mockStore.getState())).toBe(true);
     await flushStartup();
 
     expect(autoCheckInOut).not.toHaveBeenCalled();
@@ -569,29 +581,21 @@ describe("M0 current-behaviour characterization", () => {
     expect(await getLastProcessedEventAt()).toBe(processedAt);
   });
 
-  it("characterizes current behaviour: F logout/login requires a fresh opt-in despite the refreshed server policy", async () => {
+  it("characterizes current behaviour: F logout/login resumes monitoring from the refreshed employer configuration, with no employee action", async () => {
     await mountBootstrap();
     await clearTokens();
     await act(async () => {
       clearStore();
     });
     await flushStartup();
+    expect(mockListeners.ENTER.size).toBe(0);
+
     await loginThroughReducers(EMPLOYEE_A, TENANT_A);
 
     expect(mockStore.getState().autoAttendance.geotagging).toBe(
       GEOTAGGING.ALL_ACTIONS,
     );
-    expect(mockStore.getState().autoAttendance.userEnabled).toBe(false);
-    expect(selectAutoAttendanceActive(mockStore.getState())).toBe(false);
-    expect(startGeofence).not.toHaveBeenCalled();
-    expect(mockListeners.ENTER.size).toBe(0);
-
-    await act(async () => {
-      mockStore.dispatch(setAutoAttendanceUserEnabled(true));
-    });
-    await flushStartup();
-
-    expect(selectAutoAttendanceActive(mockStore.getState())).toBe(true);
+    expect(selectAutoAttendanceConfigured(mockStore.getState())).toBe(true);
     expect(startGeofence).toHaveBeenCalledTimes(1);
     expect(mockListeners.ENTER.size).toBe(1);
   });

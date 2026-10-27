@@ -13,7 +13,7 @@ import {
   settingsFailed, settingsReceived, settingsRequested, selectFeatureSettings,
   makeSelectFeatureEnabled,
 } from '../redux/Slices/FeatureSettingsSlice';
-import { buildSettingsScope, normalizeFeatureSettings } from '../utils/featureSettings';
+import { ATTENDANCE_FEATURES, buildSettingsScope, normalizeFeatureSettings } from '../utils/featureSettings';
 import { getAuthSessionGeneration } from '../utils/authSessionGuard';
 import apiClient, { clearTokens, plainAxios, saveTokens } from '../services/api/apiClient';
 import { getFeatureSettings } from '../services/api/featureSettings.service';
@@ -38,7 +38,7 @@ const tenant = 'https://geo-alpha.example.test';
 const otherTenant = 'https://geo-beta.example.test';
 const employeeId = 'EMP-GEO-SYNTHETIC';
 const employeeDocname = 'EMP-DOC-GEO-SYNTHETIC';
-const automaticFeature = 'attendance_action.auto_attendance';
+const automaticFeature = ATTENDANCE_FEATURES.AUTO_ATTENDANCE;
 const endpoint = (method, owner = tenant) => `${owner}/api/method/employee_app.${method}`;
 const settingsUrl = endpoint('gauth.employee_checkin_setting');
 const employeeUrl = endpoint('attendance_api.get_employee_data');
@@ -56,7 +56,7 @@ let sequence = 0;
 
 const receiveSettings = (attendance, owner = tenant) => mockStore.dispatch(settingsReceived({
   scope: buildSettingsScope(owner, employeeId), settings: normalizeFeatureSettings({
-    attendance_action: { auto_attendance: true, offline_attendance: true, ...attendance },
+    attendance_action: { geo_tagging: true, offline_attendance: true, ...attendance },
   }),
 }));
 const receiveMode = async (mode, owner = tenant) => {
@@ -78,8 +78,8 @@ const fetchSettings = async () => {
 };
 const receiveGeoFromBackend = async value => {
   http.onGet(settingsUrl).reply(200, { message: { attendance_action: { geo_tagging: value } } });
-  const response = await fetchSettings();
-  expect(response).toHaveProperty('message.attendance_action.geo_tagging_level', 0);
+  await fetchSettings();
+  expect(makeSelectFeatureEnabled(automaticFeature)(mockStore.getState())).toBe(value === true);
 };
 const automaticPosts = () => http.history.post.filter(request => {
   if (!request.url.endsWith('attendance_api.add_log_based_on_employee_field')) return false;
@@ -98,7 +98,7 @@ beforeEach(async () => {
   } });
   await loginQueueEmployee(employeeId, tenant);
   await saveTokens('synthetic-geo-access', 'synthetic-geo-refresh');
-  receiveSettings({ geo_tagging: 2 });
+  receiveSettings({ geo_tagging: true });
   http = new MockAdapter(apiClient);
   refresh = new MockAdapter(plainAxios);
   http.onGet(clockUrl).reply(200, clock);
@@ -134,33 +134,38 @@ it.each([false, 0, null])('hydrates received tenant geo=%s denial through JSON p
   expect(automaticPosts()).toHaveLength(0);
 });
 
-it.each([false, 0, null])('preserves a received geo=%s denial when a partial refresh omits geo-tagging', async geo => {
+it.each([false, 0, null])('stays denied after geo=%s when a partial refresh omits geo_tagging', async geo => {
   await receiveGeoFromBackend(geo);
-  http.onGet(settingsUrl).reply(200, { message: { attendance_action: { auto_attendance: true } } });
+  http.onGet(settingsUrl).reply(200, { message: { attendance_action: { photo_upload: true } } });
   const response = await fetchSettings();
-  expect(response.message.attendance_action.geo_tagging_level).toBeNull();
-  expect(mockStore.getState().featureSettings.settings.attendance_action.geo_tagging_level).toBe(0);
+  expect(response.message.attendance_action.geo_tagging).toBeNull();
+  expect(mockStore.getState().featureSettings.settings.attendance_action.geo_tagging).toBeNull();
   expect(await automaticService('IN')).toMatchObject({ allowed: false });
   expect(automaticPosts()).toHaveLength(0);
 });
 
-it('keeps a missing geo-tagging field distinct from an explicit disabled mode on the first response', () => {
+it('does not carry a cached geo_tagging true into a partial refresh that omits it', async () => {
+  http.onGet(settingsUrl).reply(200, { message: { attendance_action: { photo_upload: true } } });
+  await fetchSettings();
+  expect(makeSelectFeatureEnabled(automaticFeature)(mockStore.getState())).toBe(false);
+  expect(await automaticService('IN')).toMatchObject({ allowed: false, error: { code: FEATURE_DISABLED } });
+  expect(automaticPosts()).toHaveLength(0);
+});
+
+it('treats a first response without geo_tagging as disabled', () => {
   mockStore = makeStore({ userAuth: { isLoggedIn: true }, user: {
     baseUrl: tenant, userDetails: { employeeCode: employeeId },
   } });
-  receiveSettings({});
-  expect(selectFeatureSettings(mockStore.getState()).attendance_action.geo_tagging_level).toBeNull();
-  // Missing-field authorization retains existing compatibility until the
-  // backend defines it; it must not be silently rewritten as received zero.
-  expect(makeSelectFeatureEnabled(automaticFeature)(mockStore.getState())).toBe(true);
+  mockStore.dispatch(settingsReceived({ scope: buildSettingsScope(tenant, employeeId),
+    settings: normalizeFeatureSettings({ attendance_action: { offline_attendance: true } }) }));
+  expect(selectFeatureSettings(mockStore.getState()).attendance_action.geo_tagging).toBeNull();
+  expect(makeSelectFeatureEnabled(automaticFeature)(mockStore.getState())).toBe(false);
 });
 
-it.each([true, 'invalid', {}, 9])('does not replace a received disabled tenant mode with malformed/ambiguous geo=%p', async geo => {
-  await receiveGeoFromBackend(0);
-  http.onGet(settingsUrl).reply(200, { message: { attendance_action: {
-    auto_attendance: true, geo_tagging: geo,
-  } } });
-  expect((await fetchSettings()).message.attendance_action.geo_tagging_level).toBeNull();
+it.each(['invalid', {}, 9, 2, 'true'])('does not enable from a malformed geo=%p after a denial', async geo => {
+  await receiveGeoFromBackend(false);
+  http.onGet(settingsUrl).reply(200, { message: { attendance_action: { geo_tagging: geo } } });
+  expect((await fetchSettings()).message.attendance_action.geo_tagging).toBe(false);
   expect(await automaticService('IN')).toMatchObject({ allowed: false });
   expect(automaticPosts()).toHaveLength(0);
 });
@@ -208,7 +213,7 @@ it.each([false, 0, null])('returns a local denial from the automatic service whe
   expect(refresh.history.post).toHaveLength(1);
 });
 
-it('ignores an older same-owner tenant mode 2 response finishing after a newer explicit-null denial', async () => {
+it('ignores an older same-owner geo_tagging true response finishing after a newer explicit-null denial', async () => {
   let release, started;
   const sent = new Promise(resolve => { started = resolve; });
   http.onGet(settingsUrl).replyOnce(() => {
@@ -218,23 +223,23 @@ it('ignores an older same-owner tenant mode 2 response finishing after a newer e
   const old = fetchSettings();
   await sent;
   await receiveGeoFromBackend(null);
-  release([200, { message: { attendance_action: { geo_tagging: 2 } } }]);
+  release([200, { message: { attendance_action: { geo_tagging: true } } }]);
   await old;
-  expect(mockStore.getState().featureSettings.settings.attendance_action.geo_tagging_level).toBe(0);
+  expect(mockStore.getState().featureSettings.settings.attendance_action.geo_tagging).toBe(false);
   expect(await automaticService('IN')).toMatchObject({ allowed: false, error: { code: FEATURE_DISABLED } });
   expect(automaticPosts()).toHaveLength(0);
 });
 
-it('reenables automatic attendance after an authoritative tenant mode 2 replaces zero', async () => {
-  await receiveGeoFromBackend(0);
+it('reenables automatic attendance when a fresh geo_tagging true replaces false', async () => {
+  await receiveGeoFromBackend(false);
   expect(await automaticService('IN')).toMatchObject({ allowed: false });
-  http.onGet(settingsUrl).reply(200, { message: { attendance_action: { geo_tagging: 2 } } });
-  expect((await fetchSettings()).message.attendance_action.geo_tagging_level).toBe(2);
+  http.onGet(settingsUrl).reply(200, { message: { attendance_action: { geo_tagging: true } } });
+  expect((await fetchSettings()).message.attendance_action.geo_tagging).toBe(true);
   expect(await automaticService('IN')).toMatchObject({ allowed: true });
   expect(automaticPosts()).toHaveLength(1);
 });
 
-it.each([[0, false], [1, false], [2, true]])('preserves employee mode %s when tenant geo mode 2 permits automatic functionality', async (mode, allowed) => {
+it.each([[0, false], [1, false], [2, true]])('preserves employee mode %s when tenant geo_tagging true permits automatic functionality', async (mode, allowed) => {
   await receiveMode(mode);
   expect(await automaticService('IN')).toMatchObject({ allowed });
   if (!allowed) {
@@ -243,8 +248,8 @@ it.each([[0, false], [1, false], [2, true]])('preserves employee mode %s when te
   expect(automaticPosts()).toHaveLength(allowed ? 1 : 0);
 });
 
-it.each(['IN', 'OUT'])('allows manual %s with tenant geo=0 while retaining the manual request contract', async type => {
-  await receiveGeoFromBackend(0);
+it.each(['IN', 'OUT'])('allows manual %s with tenant geo_tagging false while retaining the manual request contract', async type => {
+  await receiveGeoFromBackend(false);
   // No employee location restriction applies in this fixture. Tenant geo does
   // not create one or disable the manual execution path.
   await AsyncStorage.multiSet([['restrict_location', '0'], ['unrestricted_checkout_location', '0']]);
@@ -256,20 +261,20 @@ it.each(['IN', 'OUT'])('allows manual %s with tenant geo=0 while retaining the m
 });
 
 it('does not reuse a foreign tenant denial or employee grant after switching tenants', async () => {
-  await receiveGeoFromBackend(0);
+  await receiveGeoFromBackend(false);
   await loginQueueEmployee(employeeId, otherTenant);
   await saveTokens('synthetic-geo-other', 'synthetic-geo-other-refresh');
   mockStore.dispatch(setBaseUrl(otherTenant));
   expect(selectFeatureSettings(mockStore.getState())).toBeNull();
   // The foreign tenant's employee mode 2 is also insufficient for this owner.
   expect(await automaticService('IN')).toMatchObject({ allowed: false });
-  receiveSettings({ geo_tagging: 0 }, otherTenant);
+  receiveSettings({ geo_tagging: false }, otherTenant);
   await receiveMode(2, otherTenant);
   expect(await automaticService('IN')).toMatchObject({ allowed: false, error: { code: FEATURE_DISABLED } });
   expect(automaticPosts()).toHaveLength(0);
 });
 
-it('does not resume an old automatic clock continuation after switching to a tenant with geo=0', async () => {
+it('does not resume an old automatic clock continuation after switching to a tenant with geo_tagging false', async () => {
   let release, started;
   const sent = new Promise(resolve => { started = resolve; });
   http.onGet(clockUrl).reply(() => {
@@ -281,7 +286,7 @@ it('does not resume an old automatic clock continuation after switching to a ten
   await loginQueueEmployee(employeeId, otherTenant);
   await saveTokens('synthetic-geo-other', 'synthetic-geo-other-refresh');
   mockStore.dispatch(setBaseUrl(otherTenant));
-  receiveSettings({ geo_tagging: 0 }, otherTenant);
+  receiveSettings({ geo_tagging: false }, otherTenant);
   await receiveMode(2, otherTenant);
   release([200, clock]);
   expect(await result).toMatchObject({ allowed: false });
@@ -289,7 +294,7 @@ it('does not resume an old automatic clock continuation after switching to a ten
   expect(automaticPosts()).toHaveLength(0);
 });
 
-it('does not let a late older tenant settings grant replace the new tenant geo=0 policy', async () => {
+it('does not let a late older tenant settings grant replace the new tenant geo_tagging false policy', async () => {
   let release, started;
   const sent = new Promise(resolve => { started = resolve; });
   http.onGet(settingsUrl).replyOnce(() => {
@@ -302,11 +307,11 @@ it('does not let a late older tenant settings grant replace the new tenant geo=0
   await saveTokens('synthetic-geo-other', 'synthetic-geo-other-refresh');
   mockStore.dispatch(setBaseUrl(otherTenant));
   http.onGet(endpoint('gauth.employee_checkin_setting', otherTenant)).reply(200, {
-    message: { attendance_action: { geo_tagging: 0, auto_attendance: true } },
+    message: { attendance_action: { geo_tagging: false } },
   });
   await fetchSettings();
   await receiveMode(2, otherTenant);
-  release([200, { message: { attendance_action: { geo_tagging: 2, auto_attendance: true } } }]);
+  release([200, { message: { attendance_action: { geo_tagging: true } } }]);
   expect(await result).toHaveProperty('error');
   expect(mockStore.getState().featureSettings.scope).toBe(buildSettingsScope(otherTenant, employeeId));
   expect(await automaticService('IN')).toMatchObject({ allowed: false, error: { code: FEATURE_DISABLED } });
@@ -317,7 +322,7 @@ it.each([false, 0, null])('delivers previously accepted automatic queue rows aft
   const row = (await enqueue({ tenantKey: tenant, employeeId, employeeDocname,
     attendanceType: 'auto', timestamp: '2026-10-20 09:00:00', action: 'checkin' })).row;
   await receiveGeoFromBackend(geo);
-  receiveSettings({ auto_attendance: false, offline_attendance: false });
+  receiveSettings({ geo_tagging: false, offline_attendance: false });
   http.onPost(endpoint('attendance_api.add_offline_employee_checkins')).reply(200, {
     message: { status: 'success', inserted: ['CHECKIN-GEO-SYNTHETIC'], failed: [] },
   });

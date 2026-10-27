@@ -18,6 +18,7 @@ import { scoreLocations, pickNearest } from "../../utils/attendanceLocations";
 import { assertCompleteAttendancePolicy } from "../offline/attendanceConfigCache";
 import { getAuthSessionGeneration } from "../../utils/authSessionGuard";
 import { assertCapability, assertCapabilityCurrent } from "../capabilityPolicy";
+import { ATTENDANCE_FEATURES } from "../../utils/featureSettings";
 import {
   readManualAttendanceLocationPolicy, assertManualAttendanceLocationPolicyCurrent,
 } from "../manualAttendanceLocationPolicy";
@@ -460,8 +461,8 @@ export const autoCheckInOut = async ({
     const baseUrl = current.tenantKey;
     const token = current.accessToken;
 
-    const capabilityScope = await assertCapability("attendance_action.auto_attendance", { baseUrl, employeeCode });
-    await assertEmployeeAutoAttendancePolicy(syncScope, { action: "punch" });
+    const capabilityScope = await assertCapability(ATTENDANCE_FEATURES.AUTO_ATTENDANCE, { baseUrl, employeeCode });
+    await assertEmployeeAutoAttendancePolicy(syncScope);
 
     const timestamp = preparedTimestamp ?? await resolveServerTimestampAt(occurredAt, Date.now(), { syncScope });
     if (syncScope) await assertAttendanceQueueScope(syncScope);
@@ -489,10 +490,10 @@ export const autoCheckInOut = async ({
 
     console.log(`${logPrefix} Auto ${type}`);
 
-    await assertCapability("attendance_action.auto_attendance", capabilityScope);
-    await assertEmployeeAutoAttendancePolicy(syncScope, { action: "punch" });
-    assertCapabilityCurrent("attendance_action.auto_attendance", capabilityScope);
-    assertEmployeeAutoAttendancePolicyCurrent(syncScope, { action: "punch" });
+    await assertCapability(ATTENDANCE_FEATURES.AUTO_ATTENDANCE, capabilityScope);
+    await assertEmployeeAutoAttendancePolicy(syncScope);
+    assertCapabilityCurrent(ATTENDANCE_FEATURES.AUTO_ATTENDANCE, capabilityScope);
+    assertEmployeeAutoAttendancePolicyCurrent(syncScope);
     const response = await apiClient.post(
       `${baseUrl}/api/method/employee_app.attendance_api.add_log_based_on_employee_field`,
       payload,

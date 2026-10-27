@@ -76,13 +76,13 @@ export async function startGeofence({ latitude, longitude, radius, identifier, .
   const assertAllowed = async () => {
     await assertCapability(ATTENDANCE_FEATURES.AUTO_ATTENDANCE,
       { baseUrl: owner.tenantKey, employeeCode: owner.employeeId, generation: owner.generation });
-    const policy = await assertEmployeeAutoAttendancePolicy(owner, { action: "monitor" });
+    const policy = await assertEmployeeAutoAttendancePolicy(owner);
     assertCapabilityCurrent(ATTENDANCE_FEATURES.AUTO_ATTENDANCE, owner);
     return policy;
   };
   await assertAllowed();
   assertCapabilityCurrent(ATTENDANCE_FEATURES.AUTO_ATTENDANCE, owner);
-  const policy = assertEmployeeAutoAttendancePolicyCurrent(owner, { action: "monitor" });
+  const policy = assertEmployeeAutoAttendancePolicyCurrent(owner);
   if (scope.geotagging !== undefined && Number(scope.geotagging) !== policy.mode) {
     const error = new Error("Employee automatic attendance policy changed before registration.");
     error.code = "EMPLOYEE_AUTO_ATTENDANCE_POLICY_CHANGED";
@@ -103,7 +103,7 @@ export async function startGeofence({ latitude, longitude, radius, identifier, .
   try {
     await assertAllowed();
     assertCapabilityCurrent(ATTENDANCE_FEATURES.AUTO_ATTENDANCE, owner);
-    const current = assertEmployeeAutoAttendancePolicyCurrent(owner, { action: "monitor" });
+    const current = assertEmployeeAutoAttendancePolicyCurrent(owner);
     if (current.mode !== policy.mode) {
       const error = new Error("Employee automatic attendance policy changed during registration.");
       error.code = "EMPLOYEE_AUTO_ATTENDANCE_POLICY_CHANGED";
@@ -131,18 +131,18 @@ export async function retryInitialPresence(expectedScope) {
   const assertAllowed = async () => {
     await assertCapability(ATTENDANCE_FEATURES.AUTO_ATTENDANCE,
       { baseUrl: scope.tenantKey, employeeCode: scope.employeeId, generation: scope.generation });
-    const policy = await assertEmployeeAutoAttendancePolicy(scope, { action: "monitor" });
+    const policy = await assertEmployeeAutoAttendancePolicy(scope);
     assertCapabilityCurrent(ATTENDANCE_FEATURES.AUTO_ATTENDANCE, scope);
     return policy;
   };
   await assertAllowed();
   assertCapabilityCurrent(ATTENDANCE_FEATURES.AUTO_ATTENDANCE, scope);
-  const policy = assertEmployeeAutoAttendancePolicyCurrent(scope, { action: "monitor" });
+  const policy = assertEmployeeAutoAttendancePolicyCurrent(scope);
   const result = await ExpoAutoAttendance.retryInitialPresence();
   try {
     await assertAllowed();
     assertCapabilityCurrent(ATTENDANCE_FEATURES.AUTO_ATTENDANCE, scope);
-    const current = assertEmployeeAutoAttendancePolicyCurrent(scope, { action: "monitor" });
+    const current = assertEmployeeAutoAttendancePolicyCurrent(scope);
     if (current.mode !== policy.mode) {
       const error = new Error("Employee automatic attendance policy changed during initial-state retry.");
       error.code = "EMPLOYEE_AUTO_ATTENDANCE_POLICY_CHANGED";

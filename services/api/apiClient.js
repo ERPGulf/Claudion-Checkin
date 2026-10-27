@@ -309,13 +309,53 @@ const refreshErrorText = (err) => {
 };
 
 /**
+ * The OAuth server's own answer, when the refresh endpoint relayed one.
+ *
+ * `employee_app.gauth.create_refresh_token` forwards the refresh to Frappe's
+ * OAuth `get_token` and answers 401 `{ "data": "<upstream body>" }` for ANY
+ * upstream answer other than 200: a revoked token, but equally the 502 of a
+ * bench restart, a 504 under load, a 429 or a deadlock. That 401 says nothing
+ * on its own; only the relayed body does.
+ *
+ * @returns the parsed upstream body, or undefined when this is not that relay.
+ */
+const relayedRefreshAnswer = (err) => {
+  const payload = parseJsonString(err?.response?.data);
+  return typeof payload?.data === "string" ? parseJsonString(payload.data) : undefined;
+};
+
+/** OAuth errors that name the grant itself as dead. */
+const REJECTED_GRANT_ERRORS = new Set(["invalid_grant", "invalid_client", "unauthorized_client"]);
+
+/**
+ * Whether the relayed answer rejects the credential. Frappe raises
+ * DoesNotExistError when no Active OAuth Bearer Token carries the refresh
+ * token, i.e. it is unknown or revoked. A gateway page, an empty body or any
+ * other exception means the upstream never answered the question.
+ */
+const isRelayedCredentialRejection = (answer) =>
+  !!answer && typeof answer === "object" &&
+  (answer.exc_type === "DoesNotExistError" || TERMINAL_EXC_TYPES.has(answer.exc_type) ||
+    REJECTED_GRANT_ERRORS.has(answer.error));
+
+/** Diagnostics only: the relayed failure's type, never its text (it can echo the token). */
+const describeRelayedRefreshAnswer = (err) => {
+  const answer = relayedRefreshAnswer(err);
+  if (answer === undefined) return null;
+  if (!answer || typeof answer !== "object") return "non-json";
+  return answer.exc_type ?? answer.error ?? "json";
+};
+
+/**
  * Did the server explicitly reject the refresh credential?
  *
  * Only a yes here may end the session. The rule this encodes:
  *
  *   NETWORK FAILURE != AUTHENTICATION FAILURE
  *
- * `401` is the server saying the credential was refused, and is terminal.
+ * `401` is the server saying the credential was refused, and is terminal —
+ * unless it is the refresh endpoint's relay of an upstream failure, which ends
+ * the session only when the relayed answer rejects the credential.
  * `403` is not: Frappe answers it for permission errors, and a reverse proxy,
  * WAF or rate limiter answers it for reasons that have nothing to do with the
  * employee at all. A 403 only ends the session when the body itself names the
@@ -329,7 +369,10 @@ const isTerminalRefreshFailure = (err) => {
   // No response means the request never reached a server that had an opinion.
   if (!status) return false;
 
-  if (status === 401) return true;
+  if (status === 401) {
+    const answer = relayedRefreshAnswer(err);
+    return answer === undefined || isRelayedCredentialRejection(answer);
+  }
 
   if (TERMINAL_EXC_TYPES.has(getRefreshErrorType(err))) return true;
 
@@ -446,6 +489,7 @@ export const refreshAccessToken = async () => {
     console.log("refreshAccessToken failed", {
       refreshToken: maskToken(refresh),
       ...getErrorDebugInfo(err),
+      relayed: describeRelayedRefreshAnswer(err),
     });
 
     // The ONLY path that ends a session: the server answered, and what it said

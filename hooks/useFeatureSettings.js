@@ -81,9 +81,7 @@ export function useRouteEnabled(routeName) {
 }
 
 /**
- * A non-boolean setting: `attendance_action.geo_tagging`,
- * `attendance_action.geo_tagging_level`,
- * `attendance_action.offline_attendance_version`.
+ * A non-boolean setting: `attendance_action.offline_attendance_version`.
  *
  * Separate from `useFeatureEnabled` on purpose — these are not flags, and
  * reading a version string through a boolean helper is how a `"0"` version ends

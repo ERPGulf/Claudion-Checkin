@@ -20,6 +20,7 @@ import UpdateBanner from "./components/UpdateBanner";
 import ThemedStatusBar from "./components/common/ThemedStatusBar";
 import OfflineBanner from "./components/common/OfflineBanner";
 import AutoAttendanceBootstrap from "./components/AutoAttendanceBootstrap";
+import AutoAttendanceOnboarding from "./components/AutoAttendanceOnboarding";
 import OfflineAttendanceBootstrap from "./components/OfflineAttendanceBootstrap";
 import FeatureSettingsBootstrap from "./components/FeatureSettingsBootstrap";
 import CrashReportingBootstrap from "./components/CrashReportingBootstrap";
@@ -186,6 +187,7 @@ export default function App() {
           <QueryClientProvider client={queryClient}>
             <FcmBootstrap />
             <AutoAttendanceBootstrap />
+            <AutoAttendanceOnboarding />
             <OfflineAttendanceBootstrap />
             {/* Fetches server-driven feature availability for the session. The
                 navigator below does not wait on it — it renders off the

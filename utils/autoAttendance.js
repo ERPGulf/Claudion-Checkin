@@ -1,9 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Alert, Linking, Platform } from 'react-native';
 import * as Location from 'expo-location';
 import { getPreciseDistance } from 'geolib';
 import { format } from 'date-fns';
 import { GEOTAGGING } from '../redux/Slices/AutoAttendanceSlice';
-import { isMonitoring } from '../modules/expo-auto-attendance';
+import { hasFullAccuracy, isMonitoring } from '../modules/expo-auto-attendance';
 
 /**
  * Pure/IO helpers for the automatic-attendance screen, lifted verbatim out of
@@ -116,7 +117,7 @@ export const readDevicePosition = async () => {
 };
 
 // AutoAttendanceBootstrap owns registration, and it has a GPS fix plus a network
-// round-trip to get through before the fence exists. Poll so the toggle reports
+// round-trip to get through before the fence exists. Poll so the screen reports
 // the real outcome instead of a stale "Not Monitoring"; a timeout is not an
 // error — the bootstrap keeps retrying on the next launch/focus.
 export const waitForMonitoring = async (timeoutMs = 15000, intervalMs = 400) => {
@@ -127,6 +128,124 @@ export const waitForMonitoring = async (timeoutMs = 15000, intervalMs = 400) => 
     // eslint-disable-next-line no-await-in-loop
     await new Promise((resolve) => setTimeout(resolve, intervalMs));
   }
+};
+
+/* -------------------------------------------------------------------------
+ * Location access — the one permission flow, shared by sign-in onboarding,
+ * the screen's "Grant location access" and the bootstrap's reported state.
+ * ---------------------------------------------------------------------- */
+
+/**
+ * What background geofencing needs: foreground and background ("Always" /
+ * "Allow all the time") location, and precise accuracy (iOS Precise Location,
+ * Android ACCESS_FINE_LOCATION). Read from the OS every time — never from a
+ * record of what was asked before. `blocked`: the system will show no prompt
+ * for the first missing step, so only Settings can change it.
+ */
+export const readLocationAccess = async () => {
+  const [foreground, background] = await Promise.all([
+    Location.getForegroundPermissionsAsync(),
+    Location.getBackgroundPermissionsAsync(),
+  ]);
+  const precise = foreground.status === 'granted' && hasFullAccuracy();
+  let blocked = false;
+  if (foreground.status !== 'granted') blocked = foreground.canAskAgain === false;
+  else if (background.status !== 'granted') blocked = background.canAskAgain === false;
+  // iOS offers Precise Location only in Settings; Android asks again with the
+  // foreground request.
+  else if (!precise) blocked = Platform.OS === 'ios';
+  return {
+    foreground: foreground.status,
+    background: background.status,
+    precise,
+    granted: foreground.status === 'granted' && background.status === 'granted' && precise,
+    blocked,
+  };
+};
+
+/** Identifies an OS permission state, so a decline is honoured only until it changes. */
+export const locationAccessKey = (access) =>
+  `${access.foreground}/${access.background}/${access.precise}`;
+
+/**
+ * Foreground first, then background — the order both platforms require — and
+ * only the steps still missing. Returns the state read back from the OS:
+ * asking for "Always" does not mean it was given.
+ */
+export const requestLocationAccess = async () => {
+  let access = await readLocationAccess();
+  if (access.foreground !== 'granted' || (!access.precise && Platform.OS === 'android')) {
+    await Location.requestForegroundPermissionsAsync();
+    access = await readLocationAccess();
+  }
+  if (access.foreground === 'granted' && access.background !== 'granted') {
+    await Location.requestBackgroundPermissionsAsync();
+    access = await readLocationAccess();
+  }
+  return access;
+};
+
+// Android 11+ grants background location only on the app's settings page,
+// which the system opens itself; Android 9 and below has no separate step.
+const ALWAYS_STEP = Platform.OS === 'ios'
+  ? 'allow location access with Precise Location on, then choose "Change to Always Allow"'
+  : Platform.Version >= 30
+    ? 'allow precise location; Android then opens this app\'s location settings, where you choose "Allow all the time"'
+    : Platform.Version >= 29
+      ? 'allow precise location, then choose "Allow all the time"'
+      : 'allow precise location';
+
+/** The prominent disclosure, shown before any system prompt. Resolves whether to continue. */
+const explainLocationAccess = () => new Promise((resolve) => {
+  Alert.alert(
+    'Automatic attendance',
+    'Your employer has turned on automatic attendance. It uses your location to detect when you arrive at or leave your assigned work locations, including when the app is not open.' +
+      `\n\nWhen asked, ${ALWAYS_STEP}.`,
+    [
+      { text: 'Not now', style: 'cancel', onPress: () => resolve(false) },
+      { text: 'Continue', onPress: () => resolve(true) },
+    ],
+    { cancelable: false, onDismiss: () => resolve(false) },
+  );
+});
+
+// Only from a tap: the system will no longer ask, so Settings is the one way in.
+const offerLocationSettings = () => {
+  Alert.alert(
+    'Location permission required',
+    Platform.OS === 'ios'
+      ? 'Open Settings, tap Location, and choose "Always" with Precise Location on.'
+      : 'Open Settings, tap Permissions > Location, and choose "Allow all the time" with "Use precise location" on.',
+    [
+      { text: 'Not now', style: 'cancel' },
+      { text: 'Open Settings', onPress: () => Linking.openSettings() },
+    ],
+  );
+};
+
+let locationAccessFlow = null;
+
+/**
+ * Explains, then asks for whatever is missing — one flow at a time, so a second
+ * caller (a re-render, a refresh, the screen's button) joins the first instead
+ * of stacking dialogs. `fromTap` also offers Settings once the system will no
+ * longer ask; `unless` skips a state the employee already declined. `asked`:
+ * whether the employee answered anything in this flow.
+ */
+export const askForLocationAccess = ({ fromTap = false, unless } = {}) => {
+  if (!locationAccessFlow) {
+    locationAccessFlow = (async () => {
+      const access = await readLocationAccess();
+      if (access.granted || unless?.(access)) return { ...access, asked: false };
+      if (access.blocked) {
+        if (fromTap) offerLocationSettings();
+        return { ...access, asked: false };
+      }
+      if (!(await explainLocationAccess())) return { ...access, asked: true };
+      return { ...(await requestLocationAccess()), asked: true };
+    })().finally(() => { locationAccessFlow = null; });
+  }
+  return locationAccessFlow;
 };
 
 export const parseNumber = (text) => {
@@ -163,6 +282,21 @@ export const describeMonitoring = (monitoring) =>
   monitoring
     ? { tone: 'success', label: 'Monitoring', icon: 'radio-outline' }
     : { tone: 'neutral', label: 'Idle', icon: 'pause-circle-outline' };
+
+/**
+ * What automatic attendance is doing, from the employer's configuration, the
+ * OS permission (`permitted`: null until read) and the bootstrap's report.
+ * Configured alone is never "Active".
+ */
+export const describeAutoAttendanceStatus = ({ configured, permitted, monitoring }) => {
+  if (!configured) return { key: 'disabled', tone: 'neutral', label: 'Disabled by administrator', icon: 'lock-closed-outline' };
+  if (permitted === false || (permitted == null && monitoring === 'permission')) {
+    return { key: 'permission', tone: 'warning', label: 'Location permission required', icon: 'location-outline' };
+  }
+  if (monitoring === 'active') return { key: 'active', tone: 'success', label: 'Active', icon: 'radio-outline' };
+  if (monitoring === 'unavailable') return { key: 'unavailable', tone: 'error', label: 'Monitoring unavailable', icon: 'warning-outline' };
+  return { key: 'starting', tone: 'info', label: 'Initializing monitoring', icon: 'sync-outline' };
+};
 
 /** A geofence transition → badge tone + label. */
 export const describeTransition = (transition) => {

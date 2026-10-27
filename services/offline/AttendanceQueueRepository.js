@@ -114,12 +114,8 @@ const hydrateAll = (rows) => (Array.isArray(rows) ? rows.map(hydrate) : []);
 
 const placeholdersFor = (values) => values.map(() => "?").join(", ");
 
-// Shared by the atomic claim and read-only support diagnostics. Do not infer
-// claimability just from status/due time: an older row or pair can prevent it.
-const CLAIM_DEPENDENCIES_SQL = `
-  NOT EXISTS (
-    SELECT 1 FROM ${QUEUE_TABLE} AS older
-     WHERE older.employeeId = candidate.employeeId
+// An unresolved older row that holds `candidate` back; shared with explainUnclaimable.
+const OLDER_DEPENDENCY_SQL = `older.employeeId = candidate.employeeId
        AND (older.tenantKey IS candidate.tenantKey OR older.tenantKey IS NULL)
        AND ((older.tenantKey IS NULL AND candidate.tenantKey IS NOT NULL)
          OR CASE
@@ -131,7 +127,14 @@ const CLAIM_DEPENDENCIES_SQL = `
              OR (older.timestamp = candidate.timestamp AND older.id < candidate.id)) END)
        AND (older.status IN ('pending', 'syncing', 'needs_review')
          OR (older.status = 'synced' AND older.acceptanceConfirmed <> 1)
-         OR (older.status = 'blocked' AND IFNULL(older.failureClass, '') <> 'endpoint-missing'))
+         OR (older.status = 'blocked' AND IFNULL(older.failureClass, '') <> 'endpoint-missing'))`;
+
+// Shared by the atomic claim and read-only support diagnostics. Do not infer
+// claimability just from status/due time: an older row or pair can prevent it.
+const CLAIM_DEPENDENCIES_SQL = `
+  NOT EXISTS (
+    SELECT 1 FROM ${QUEUE_TABLE} AS older
+     WHERE ${OLDER_DEPENDENCY_SQL}
   ) AND NOT EXISTS (
     SELECT 1 FROM ${QUEUE_TABLE} AS paired
      WHERE paired.id = candidate.pairedAttendanceId
@@ -1165,6 +1168,28 @@ export const listClaimableIds = async ({ employeeId, tenantKey, now = Date.now()
         AND ${CLAIM_DEPENDENCIES_SQL} ORDER BY candidate.timestamp, candidate.id;`,
     [employeeId, tenantKey, now],
   )).map(row => row.id);
+};
+
+/** Development diagnostics: due pending rows the claim skips, and what holds each back. */
+export const explainUnclaimable = async ({ employeeId, tenantKey, now = Date.now() }) => {
+  const claimable = new Set(await listClaimableIds({ employeeId, tenantKey, now }));
+  const database = await getDatabase();
+  const due = hydrateAll(await database.getAllAsync(
+    `SELECT * FROM ${QUEUE_TABLE} WHERE employeeId = ? AND tenantKey = ?
+      AND status = 'pending' AND nextAttemptAt <= ? ORDER BY timestamp, id;`,
+    [employeeId, tenantKey, now],
+  )).filter(row => !claimable.has(row.id));
+  return Promise.all(due.map(async row => ({
+    id: row.id, action: row.action, timestamp: row.timestamp,
+    blockedByOlder: await database.getAllAsync(
+      `SELECT older.id, older.action, older.timestamp, older.status, older.failureClass, older.error
+         FROM ${QUEUE_TABLE} AS older, ${QUEUE_TABLE} AS candidate
+        WHERE candidate.id = ? AND ${OLDER_DEPENDENCY_SQL} ORDER BY older.timestamp, older.id;`,
+      [row.id],
+    ),
+    pairedAttendanceId: row.pairedAttendanceId ?? null,
+    sourceParentEventId: row.payload?.sourceParentEventId ?? null,
+  })));
 };
 
 /**

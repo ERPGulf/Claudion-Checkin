@@ -4,7 +4,6 @@ import {
   Linking,
   Platform,
   ScrollView,
-  Switch,
   Text,
   View,
 } from "react-native";
@@ -90,8 +89,9 @@ function DevGroup({ title, subtitle, children, showDivider = true }) {
  * Nothing here starts a fence, requests a permission or calls an API.
  *
  * Shape: an overview card answering "am I at the office and is this working",
- * then the two things a user can actually act on (the administrator's policy and
- * their own opt-in), then live status. The developer tools — most of the screen's
+ * then what the administrator configured — read-only, with why it is or is not
+ * working and the one thing the employee can do about it (location access),
+ * then live status. The developer tools — most of the screen's
  * height and none of its everyday value — fold into one collapsed card at the
  * bottom, so the page opens on the part people came for.
  *
@@ -107,8 +107,8 @@ function AutoAttendance() {
     identifier,
     geotagging,
     policy,
-    allowed,
-    userEnabled,
+    configured,
+    status,
     active,
     fullActions,
     monitoring,
@@ -127,7 +127,7 @@ function AutoAttendance() {
     radiusText,
     setRadiusText,
     refreshPresence,
-    handleToggleEnabled,
+    handleGrantLocationAccess,
     handleStart,
     handleStop,
     handleUseCurrentLocation,
@@ -236,7 +236,7 @@ function AutoAttendance() {
               </Text>
             </View>
 
-            {active || monitoring ? (
+            {configured || monitoring ? (
               <PressableScale
                 onPress={refreshPresence}
                 disabled={presenceLoading}
@@ -314,28 +314,18 @@ function AutoAttendance() {
             <StatusBadge tone={policyState.tone} label={policyState.label} />
           </SettingsRow>
 
-          {allowed ? (
-            <>
-              <RowDivider size="comfortable" />
-              <SettingsRow
-                size="comfortable"
-                icon="walk-outline"
-                title="Automatic attendance"
-                description="Stays on across app restarts until you turn it off."
-              >
-                <Switch
-                  value={userEnabled}
-                  onValueChange={handleToggleEnabled}
-                  disabled={busy}
-                  trackColor={{ true: colors.primary2 }}
-                  accessibilityLabel="Automatic attendance"
-                />
-              </SettingsRow>
-            </>
-          ) : null}
+          <RowDivider size="comfortable" />
+          <SettingsRow
+            size="comfortable"
+            icon="walk-outline"
+            title="Automatic attendance"
+            description="Managed by your administrator."
+          >
+            <StatusBadge tone={status.tone} label={status.label} />
+          </SettingsRow>
         </Card>
 
-        {allowed && userEnabled && !permissionGranted ? (
+        {status.key === "permission" ? (
           <>
             <ActionButton
               label="Grant location access"
@@ -344,7 +334,7 @@ function AutoAttendance() {
               size="md"
               loading={busy}
               disabled={busy}
-              onPress={() => handleToggleEnabled(true)}
+              onPress={handleGrantLocationAccess}
               style={{ marginTop: SPACING.md }}
             />
             <Text
@@ -354,11 +344,20 @@ function AutoAttendance() {
                 marginTop: SPACING.sm,
               }}
             >
-              Automatic attendance needs &quot;Allow all the time&quot; (Android)
-              or &quot;Always&quot; (iOS) location access to work while the app is
-              closed.
+              Automatic attendance needs precise location with &quot;Allow all
+              the time&quot; (Android) or &quot;Always&quot; (iOS) access to work
+              while the app is closed.
             </Text>
           </>
+        ) : null}
+
+        {status.key === "unavailable" ? (
+          <StatusBanner
+            tone="error"
+            title="Monitoring unavailable"
+            message="Automatic attendance could not start. Check that a work location is assigned to you, or contact your administrator."
+            style={{ marginTop: SPACING.md }}
+          />
         ) : null}
 
         {/* ---------- Status ---------- */}
@@ -408,7 +407,7 @@ function AutoAttendance() {
           />
         </Card>
 
-        {active && permissionError ? (
+        {configured && permissionError ? (
           <StatusBanner
             tone="error"
             title="Location permission needed"
@@ -417,7 +416,7 @@ function AutoAttendance() {
           />
         ) : null}
 
-        {active && reliabilityWarning ? (
+        {configured && reliabilityWarning ? (
           <>
             <StatusBanner
               tone="warning"
@@ -438,7 +437,7 @@ function AutoAttendance() {
           </>
         ) : null}
 
-        {active ? (
+        {configured ? (
           // Neither OS gives a reliable code-level signal for these, so this is
           // user education, not detection. iOS: a swipe-kill from the App
           // Switcher stops Core Location from relaunching the app for a region

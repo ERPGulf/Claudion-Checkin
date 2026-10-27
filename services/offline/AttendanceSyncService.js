@@ -4,6 +4,7 @@ import { FAILURE_CLASS } from "./AttendanceDatabase";
 import {
   MAX_RETRIES,
   claimNextPending,
+  explainUnclaimable,
   beginAttendanceUpload,
   renewAttendanceClaim,
   QUEUE_CLAIM_CHANGED,
@@ -35,6 +36,7 @@ import {
 import { fetchShouldAttemptRequest } from "./NetworkListener";
 import { ATTENDANCE_SCOPE_CHANGED, assertAttendanceQueueScope, captureAttendanceQueueScope } from "./attendanceQueueProvenance";
 import { verifyQueuedAttendance } from "./AttendanceVerification";
+import { isoTime, logAttendanceDiagnostic } from "./attendanceDiagnostics";
 
 /**
  * Draining the queue.
@@ -117,6 +119,30 @@ const ROW_OUTCOME = {
 /** Outcomes that mean the rest of this run is pointless. */
 const HALTS_RUN = new Set([ROW_OUTCOME.OFFLINE, ROW_OUTCOME.BLOCKED, ROW_OUTCOME.SCOPE_CHANGED, ROW_OUTCOME.NEEDS_REVIEW, ROW_OUTCOME.CLAIM_CHANGED]);
 
+// Development diagnostics only: what each settled state means for the queue.
+const QUEUE_LOG = "[AttendanceQueue]";
+const HOLDS_LATER_ROWS = (row) => ["pending", "syncing", "needs_review"].includes(row?.status) ||
+  (row?.status === "synced" && row.acceptanceConfirmed !== 1) ||
+  (row?.status === "blocked" && row.failureClass !== FAILURE_CLASS.ENDPOINT_MISSING);
+const retryEligibility = (row) => {
+  const due = isoTime(row?.nextAttemptAt) ?? "now";
+  if (row?.status === "pending") return row.uploadAttemptAt
+    ? `Due ${due}. A request was already dispatched, so the next claim verifies server history and never re-sends.`
+    : `Due ${due}; will be uploaded.`;
+  if (row?.status === "blocked") return `Blocked ladder, next ${due}; woken early on launch, reconnect or token refresh.`;
+  if (row?.status === "needs_review") return ["upload-outcome-unverified", "server-unavailable"].includes(row.verificationIssue)
+    ? "Never re-sent; server history is re-checked automatically on later runs."
+    : `Never re-sent and not re-checked automatically (verificationIssue=${row.verificationIssue ?? "null"}); only Check server record re-checks it.`;
+  return "Final; no further attempts.";
+};
+const HALT_WHY = {
+  [ROW_OUTCOME.OFFLINE]: "Transport or server failure; later rows would fail the same way.",
+  [ROW_OUTCOME.BLOCKED]: "The server refused in a way later rows would repeat.",
+  [ROW_OUTCOME.NEEDS_REVIEW]: "Every later row for this employee is held behind a needs_review row and is not attempted.",
+  [ROW_OUTCOME.SCOPE_CHANGED]: "The account or tenant changed.",
+  [ROW_OUTCOME.CLAIM_CHANGED]: "Another runtime took the claim.",
+};
+
 const attachConfirmedPhoto = async (row, serverCheckinId, syncScope, report = {}) => {
   if (!row.payload?.photoUri) return;
   const photo = await uploadQueuedPhoto({ photoUri: row.payload.photoUri, docname: serverCheckinId, syncScope });
@@ -165,6 +191,10 @@ const syncRow = async (row, syncScope, report) => {
   try {
     await assertAttendanceQueueScope(syncScope);
     if (row.uploadAttemptAt) {
+      logAttendanceDiagnostic(QUEUE_LOG, `#${row.id} syncing → verification`, {
+        reason: `A request was dispatched at ${isoTime(row.uploadAttemptAt)} without a confirmed outcome; only an exact server-history match may settle it, and it is never re-sent.`,
+        attemptCount: row.attemptCount, retryCount: row.retryCount, lastError: row.error ?? null,
+      });
       const verification = await verifyQueuedAttendance(row, { syncScope });
       await assertAttendanceQueueScope(syncScope);
       await renewAttendanceClaim({ id: row.id, claimOwner: row.claimOwner });
@@ -189,6 +219,10 @@ const syncRow = async (row, syncScope, report) => {
       return ROW_OUTCOME.NEEDS_REVIEW;
     }
     await beginAttendanceUpload({ id: row.id, claimOwner: row.claimOwner });
+    logAttendanceDiagnostic(QUEUE_LOG, `#${row.id} syncing → uploading`, {
+      reason: "uploadAttemptAt recorded before the POST. From here a failure without proof of the outcome is settled only by server history.",
+      attemptCount: row.attemptCount, retryCount: row.retryCount,
+    });
     dispatched = true;
     const outcome = await pushCheckin(row, { syncScope });
     await renewAttendanceClaim({ id: row.id, claimOwner: row.claimOwner });
@@ -363,6 +397,9 @@ const verifyInterruptedUploads = async (scope, syncScope, summary) => {
     } else {
       await recordVerificationIssue({ row, reason: verification.reason || "upload-outcome-unverified" });
     }
+    logAttendanceDiagnostic(QUEUE_LOG, `#${row.id} needs_review → ${verification.verified ? "synced" : "needs_review"} (automatic re-check)`, {
+      reason: verification.verified ? `Verified as ${verification.evidence.name}` : verification.reason,
+    });
   }
 };
 
@@ -588,9 +625,20 @@ export const syncPendingAttendance = async ({
           notifySync({ phase: SYNC_PHASE.START });
         }
 
+        logAttendanceDiagnostic(QUEUE_LOG, `#${row.id} pending → syncing`, {
+          action: row.action, timestamp: row.timestamp, reason: `claimed (${trigger}); no older unresolved row holds it`,
+          attemptCount: row.attemptCount, retryCount: row.retryCount, lastError: row.error ?? null,
+          uploadDispatchedAt: isoTime(row.uploadAttemptAt),
+        });
         const report = { id: row.id, action: row.action, timestamp: row.timestamp };
         const outcome = await syncRow(row, syncScope, report);
         const saved = await findById(row.id);
+        logAttendanceDiagnostic(QUEUE_LOG, `#${row.id} syncing → ${saved?.status}`, {
+          action: row.action, timestamp: row.timestamp, outcome, reason: saved?.error ?? outcome,
+          attemptCount: saved?.attemptCount, retryCount: saved?.retryCount, failureClass: saved?.failureClass ?? null,
+          verificationIssue: saved?.verificationIssue ?? null, uploadDispatchedAt: isoTime(saved?.uploadAttemptAt),
+          retryEligibility: retryEligibility(saved), holdsLaterRows: HOLDS_LATER_ROWS(saved),
+        });
         summary.records.push({
           ...report,
           status: saved?.status,
@@ -618,7 +666,17 @@ export const syncPendingAttendance = async ({
               outcome === ROW_OUTCOME.SCOPE_CHANGED ? "scope-changed" :
               outcome === ROW_OUTCOME.OFFLINE ? "connection-lost" :
                 outcome === ROW_OUTCOME.NEEDS_REVIEW ? "needs-review" : "blocked";
+          logAttendanceDiagnostic(LOG_PREFIX, `run stopped at #${row.id}: ${summary.reason}`, { why: HALT_WHY[outcome] });
           break;
+        }
+      }
+
+      if (__DEV__) {
+        try {
+          const held = await explainUnclaimable(scope);
+          if (held.length) logAttendanceDiagnostic(QUEUE_LOG, `${held.length} due row(s) not claimed`, held);
+        } catch (error) {
+          console.log(`${QUEUE_LOG} Unclaimed-row diagnostics failed:`, error?.message);
         }
       }
 

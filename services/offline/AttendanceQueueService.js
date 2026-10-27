@@ -42,7 +42,7 @@ import { ATTENDANCE_FEATURES } from "../../utils/featureSettings";
 const assertAutomaticCapabilityCurrent = (sourceScope, { queueing = false } = {}) => {
   assertCapabilityCurrent(ATTENDANCE_FEATURES.AUTO_ATTENDANCE, sourceScope);
   if (queueing) assertCapabilityCurrent(ATTENDANCE_FEATURES.OFFLINE_ATTENDANCE, sourceScope);
-  return assertEmployeeAutoAttendancePolicyCurrent(sourceScope, { action: "punch" });
+  return assertEmployeeAutoAttendancePolicyCurrent(sourceScope);
 };
 
 const checkAutomaticCapability = async (employeeCode, sourceScope, { queueing = false } = {}) => {
@@ -51,7 +51,7 @@ const checkAutomaticCapability = async (employeeCode, sourceScope, { queueing = 
   try {
     await assertCapability(ATTENDANCE_FEATURES.AUTO_ATTENDANCE, context);
     if (queueing) await assertCapability(ATTENDANCE_FEATURES.OFFLINE_ATTENDANCE, context);
-    await assertEmployeeAutoAttendancePolicy(sourceScope, { action: "punch" });
+    await assertEmployeeAutoAttendancePolicy(sourceScope);
     assertAutomaticCapabilityCurrent(sourceScope, { queueing });
     // Kept for callers of the pre-existing mirror API. The scoped capability
     // assertion above is authoritative even before the bootstrap effect runs.

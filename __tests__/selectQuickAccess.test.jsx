@@ -30,13 +30,18 @@ import SelectQuickAccess, {
   QUICK_ACCESS_OPTIONS,
 } from '../screens/SelectQuickAccess';
 import quickAccessReducer from '../redux/Slices/QuickAccessSlice';
+import featureSettingsReducer from '../redux/Slices/FeatureSettingsSlice';
+import { automaticAttendanceSettings } from '../test-utils/attendanceScope';
 /* eslint-enable import/first */
 
 /** Real reducer, not a mock store — the point is that add/remove still work. */
-function renderScreen(activeButtons = []) {
+function renderScreen(
+  activeButtons = [],
+  featureSettings = automaticAttendanceSettings('EMP-SYNTHETIC'),
+) {
   const store = configureStore({
-    reducer: { quickAccess: quickAccessReducer },
-    preloadedState: { quickAccess: { activeButtons } },
+    reducer: { quickAccess: quickAccessReducer, featureSettings: featureSettingsReducer },
+    preloadedState: { quickAccess: { activeButtons }, featureSettings },
   });
 
   return { store, ...render(<SelectQuickAccess />, { wrapper: ({ children }) => (
@@ -76,6 +81,13 @@ describe('SelectQuickAccess (modern)', () => {
     ['Attendance request', 'Automatic attendance', 'Leave request',
       'Expense claim', 'Loan application', 'Complaints', 'Vacation list',
       'My QR'].forEach(label => expect(getByText(label)).toBeTruthy());
+  });
+
+  it('offers Automatic attendance only once the employer has enabled it', () => {
+    const { queryByText } = renderScreen([], featureSettingsReducer(undefined, { type: 'init' }));
+
+    expect(queryByText('Automatic attendance')).toBeNull();
+    expect(queryByText('Attendance history')).toBeTruthy();
   });
 
   it('no longer offers Salary advance or Trip details', () => {

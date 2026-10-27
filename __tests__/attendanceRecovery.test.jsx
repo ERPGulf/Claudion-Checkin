@@ -36,7 +36,7 @@ import { ATTENDANCE_HISTORY_METHOD, reconcileAttendanceRow } from "../services/o
 import { uploadQueuedPhoto } from "../services/offline/attendancePhotoUpload";
 import { fetchShouldAttemptRequest } from "../services/offline/NetworkListener";
 import * as session from "../utils/attendanceSessionState";
-import { loginQueueEmployee, TEST_TENANT } from "../test-utils/attendanceScope";
+import { enableAutomaticAttendance, loginQueueEmployee, TEST_TENANT } from "../test-utils/attendanceScope";
 import { ingestNativeEvent } from "../services/offline/AutoAttendanceEventRepository";
 import { beginEmployeeAutoAttendancePolicyReception, receiveEmployeeAutoAttendancePolicy } from "../services/employeeAutoAttendancePolicy";
 
@@ -504,6 +504,7 @@ it("stamps new current-owner automatic records, refuses unowned new replay and p
   setOfflineQueueingAllowed(true);
   fetchShouldAttemptRequest.mockResolvedValue(false);
   const owner = await captureAttendanceQueueScope(EMPLOYEE);
+  enableAutomaticAttendance(EMPLOYEE);
   await receiveEmployeeAutoAttendancePolicy({ geotagging: 2 }, beginEmployeeAutoAttendancePolicyReception(owner));
   await AsyncStorage.setItem("attendanceConfigCache", JSON.stringify({ employeeId: EMPLOYEE, tenantKey: TEST_TENANT,
     locations: [], rules: { restrictLocation: 0, geotagging: 2 } }));

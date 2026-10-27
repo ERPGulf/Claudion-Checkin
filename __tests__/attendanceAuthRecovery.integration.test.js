@@ -75,7 +75,7 @@ const { __resetAll } = require("../test-utils/expoSqliteMock");
  * the seam between authentication and the queue.
  */
 
-import { loginQueueEmployee } from "../test-utils/attendanceScope";
+import { enableAutomaticAttendance, loginQueueEmployee } from "../test-utils/attendanceScope";
 import { captureAttendanceQueueScope } from "../services/offline/attendanceQueueProvenance";
 import { beginEmployeeAutoAttendancePolicyReception, receiveEmployeeAutoAttendancePolicy } from "../services/employeeAutoAttendancePolicy";
 const TENANT = "https://aysha.erpgulf.com";
@@ -95,6 +95,7 @@ const login = async (token) => {
   await AsyncStorage.setItem("baseUrl", "https://aysha.erpgulf.com");
   await AsyncStorage.setItem("access_token", token);
   const owner = await captureAttendanceQueueScope(EMPLOYEE);
+  enableAutomaticAttendance(EMPLOYEE, TENANT);
   await receiveEmployeeAutoAttendancePolicy({ geotagging: 2 }, beginEmployeeAutoAttendancePolicyReception(owner));
 };
 

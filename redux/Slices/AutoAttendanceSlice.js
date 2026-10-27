@@ -1,24 +1,26 @@
 const { createSlice } = require("@reduxjs/toolkit");
-import { buildSettingsScope } from "../../utils/featureSettings";
+import { ATTENDANCE_FEATURES, buildSettingsScope, isFeatureEnabled } from "../../utils/featureSettings";
+import { selectFeatureSettings } from "./FeatureSettingsSlice";
 
 /**
- * Automatic attendance has two independent inputs:
+ * Automatic attendance is configured by the employer alone — there is no
+ * employee switch. Both levels must enable it (`selectAutoAttendanceConfigured`):
  *
- *  - `geotagging` — the server-side policy on the employee's HR record (returned
- *    by `employee_app.attendance_api.get_employee_data`). It is the *ceiling*:
- *    what the administrator ALLOWS. Values mirror the ERPNext select field:
+ *  - the tenant — `employee_checkin_setting` must send
+ *    `attendance_action.geo_tagging: true`. False, null, missing or anything
+ *    else is off (utils/featureSettings).
+ *  - the employee — `geotagging` on their HR record (returned by
+ *    `employee_app.attendance_api.get_employee_data`). Values mirror the
+ *    ERPNext select field:
  *      0 DISABLED       — the feature is not available for this employee.
- *      1 WARNINGS_ONLY  — monitor office entry/exit + surface reliability
- *                         warnings, but do NOT check in/out.
+ *      1 WARNINGS_ONLY  — never monitored and never checked in/out; no
+ *                         warning behaviour is defined for it yet.
  *      2 ALL_ACTIONS    — monitor AND automatically check in/out at the boundary.
  *
- *  - `userEnabled` — the user's own opt-in. Because monitoring uses background
- *    location and battery, the user must turn the service on themselves. This
- *    is persisted (the whole root reducer is persisted to AsyncStorage), so it
- *    stays on across app relaunches.
- *
- * Monitoring only runs when BOTH hold: the admin allows it (geotagging !== 0)
- * AND the user has opted in — see `selectAutoAttendanceActive`.
+ * Configured is not working: monitoring also needs location permission, which
+ * only the employee can grant, and a native registration that succeeded
+ * (`monitoring`, published by the bootstrap). Both answers persist with the
+ * root reducer, so a relaunch restores the last answer received for the account.
  */
 export const GEOTAGGING = {
   DISABLED: 0,
@@ -36,7 +38,7 @@ export const GEOTAGGING_LABELS = {
   [GEOTAGGING.WARNINGS_ONLY]: {
     title: "Warnings only",
     description:
-      "Detects when you enter or leave the office and shows reliability warnings, but does not check you in or out automatically.",
+      "Your location is not monitored, and you are not checked in or out automatically.",
   },
   [GEOTAGGING.ALL_ACTIONS]: {
     title: "All attendance actions",
@@ -68,20 +70,29 @@ const initialState = {
   employeeLocationPolicy: null,
   policySequence: 0,
   policyRequest: null,
-  userEnabled: false,
+  // Native monitoring as the bootstrap last left it, for one account:
+  // { scope, state: 'active' | 'unavailable' | 'permission' }.
+  monitoring: null,
+  // Per account (settings scope, tenant::employee): the location permission
+  // state the employee last declined in, so onboarding does not ask again until
+  // that state changes. Survives sign-out (see REVERT_ALL); keyed, so it never
+  // reaches another account.
+  declinedLocationAccess: {},
   // Bumped to ask AutoAttendanceBootstrap — the single owner of geofence
-  // registration — to re-run its startup sequence. The AutoAttendance screen
-  // uses it after granting location permission: the bootstrap's own attempt ran
-  // the moment the opt-in flipped, which is before the OS prompt was answered,
-  // so it bailed at the permission check and would not otherwise try again
-  // until the next launch.
+  // registration — to re-run its startup sequence. Location access granted
+  // in-app arrives after the bootstrap's own attempt, which bailed at the
+  // permission check and would not otherwise try again until the next
+  // foreground.
   syncRequestId: 0,
 };
 
 export const AutoAttendanceSlice = createSlice({
   name: "autoAttendance",
   initialState,
-  extraReducers: (builder) => builder.addCase("REVERT_ALL", () => initialState),
+  extraReducers: (builder) => builder.addCase("REVERT_ALL", (state) => ({
+    ...initialState,
+    declinedLocationAccess: state.declinedLocationAccess ?? {},
+  })),
   reducers: {
     employeePolicyRequested: (state, action) => {
       state.policySequence = Math.max(state.policySequence || 0, action.payload.revision);
@@ -119,8 +130,13 @@ export const AutoAttendanceSlice = createSlice({
     setAutoAttendanceGeotagging: (state, action) => {
       state.geotagging = normalizeGeotagging(action.payload);
     },
-    setAutoAttendanceUserEnabled: (state, action) => {
-      state.userEnabled = Boolean(action.payload);
+    autoAttendanceMonitoringChanged: (state, action) => {
+      state.monitoring = action.payload;
+    },
+    locationAccessDeclined: (state, action) => {
+      const { scope, key } = action.payload;
+      if (!state.declinedLocationAccess) state.declinedLocationAccess = {};
+      state.declinedLocationAccess[scope] = key;
     },
     // Coerced rather than incremented directly: persisted state written before
     // this field existed rehydrates without it, and undefined + 1 is NaN.
@@ -135,9 +151,23 @@ export const {
   employeePolicyReceived,
   employeePolicyRestored,
   setAutoAttendanceGeotagging,
-  setAutoAttendanceUserEnabled,
+  autoAttendanceMonitoringChanged,
+  locationAccessDeclined,
   requestAutoAttendanceSync,
 } = AutoAttendanceSlice.actions;
+
+/** The signed-in account's settings scope, or null before its employee code. */
+export const selectAutoAttendanceScope = (state) =>
+  state.user?.userDetails?.employeeCode
+    ? buildSettingsScope(state.user.baseUrl, state.user.userDetails.employeeCode)
+    : null;
+
+// The tenant's `geo_tagging: true`, for this account's settings.
+export const selectAutoAttendanceTenantEnabled = (state) =>
+  isFeatureEnabled(selectFeatureSettings(state), ATTENDANCE_FEATURES.AUTO_ATTENDANCE);
+
+export const selectAutoAttendanceDeclinedLocationAccess = (state) =>
+  state.autoAttendance?.declinedLocationAccess?.[selectAutoAttendanceScope(state)] ?? null;
 
 export const selectAutoAttendanceGeotagging = (state) => {
   const policy = state.autoAttendance?.employeePolicy;
@@ -148,25 +178,29 @@ export const selectAutoAttendanceGeotagging = (state) => {
   return normalizeGeotagging(policy?.mode ?? state.autoAttendance?.geotagging);
 };
 
-// The administrator allows automatic attendance (policy is 1 or 2).
+// The employee's geotagging is not disabled (1 or 2).
 export const selectAutoAttendanceAllowed = (state) =>
   selectAutoAttendanceGeotagging(state) !== GEOTAGGING.DISABLED;
-
-// The user's persisted opt-in.
-export const selectAutoAttendanceUserEnabled = (state) =>
-  Boolean(state.autoAttendance?.userEnabled);
 
 export const selectAutoAttendanceSyncRequestId = (state) =>
   Number(state.autoAttendance?.syncRequestId) || 0;
 
-// Effective on-state: monitoring should run only when both are true.
-export const selectAutoAttendanceActive = (state) =>
-  selectAutoAttendanceAllowed(state) && selectAutoAttendanceUserEnabled(state);
+// The employer's effective configuration: tenant `geo_tagging: true` AND
+// employee geotagging 2. Warnings-only (1) is never monitored.
+export const selectAutoAttendanceConfigured = (state) =>
+  selectAutoAttendanceTenantEnabled(state) && selectAutoAttendanceFullActions(state);
+
+// The account's monitoring state, or null before the bootstrap has reported one.
+export const selectAutoAttendanceMonitoring = (state) => {
+  const monitoring = state.autoAttendance?.monitoring;
+  return monitoring && monitoring.scope === selectAutoAttendanceScope(state) ? monitoring.state : null;
+};
+
+// Configured, and the native registration is established.
+export const selectAutoAttendanceOperational = (state) =>
+  selectAutoAttendanceConfigured(state) && selectAutoAttendanceMonitoring(state) === "active";
 
 export const selectAutoAttendanceFullActions = (state) =>
   selectAutoAttendanceGeotagging(state) === GEOTAGGING.ALL_ACTIONS;
-
-export const selectAutoAttendanceShowWarnings = (state) =>
-  selectAutoAttendanceGeotagging(state) >= GEOTAGGING.WARNINGS_ONLY;
 
 export default AutoAttendanceSlice.reducer;

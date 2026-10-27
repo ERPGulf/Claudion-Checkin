@@ -4,6 +4,7 @@ import axios from 'axios';
 import { store } from '../redux/Store';
 import { selectScopedFeatureSettings } from '../redux/Slices/FeatureSettingsSlice';
 import {
+  ATTENDANCE_FEATURES,
   buildSettingsScope,
   featureSettingsHealth,
   isFeatureEnabled,
@@ -113,7 +114,7 @@ export const assertCapabilityRequest = async (config) => {
     ? await assertCapability(path, config.capabilityScope)
     : await getCapabilitySnapshot(config.capabilityScope);
   let employeeScope;
-  if (path === 'attendance_action.auto_attendance') {
+  if (path === ATTENDANCE_FEATURES.AUTO_ATTENDANCE) {
     // Bind direct Axios callers as well as the service wrapper. Retain this
     // owner on retries; a new login cannot supply authority for an old punch.
     const employeeId = requestField(config.data, 'employee_field_value');
@@ -123,7 +124,7 @@ export const assertCapabilityRequest = async (config) => {
     if (employeeScope.employeeId !== employeeId || employeeScope.generation !== snapshot.generation ||
         buildSettingsScope(employeeScope.tenantKey, employeeId) !== snapshot.scope) throw scopeChanged();
     config.employeeAutoAttendanceScope = employeeScope;
-    await assertEmployeeAutoAttendancePolicy(employeeScope, { action: 'punch' });
+    await assertEmployeeAutoAttendancePolicy(employeeScope);
   }
   const manualGuard = manualAttendance ? await assertManualAttendanceLocationRequest(config) : null;
   if (snapshot.generation !== getAuthSessionGeneration() || isAuthSessionSuspended()) throw scopeChanged();
@@ -147,7 +148,7 @@ export const assertCapabilityRequest = async (config) => {
     error.retryable = false;
     throw error;
   }
-  if (employeeScope) assertEmployeeAutoAttendancePolicyCurrent(employeeScope, { action: 'punch' });
+  if (employeeScope) assertEmployeeAutoAttendancePolicyCurrent(employeeScope);
   if (manualGuard) assertManualAttendanceLocationRequestCurrent(config, manualGuard);
   config.capabilityScope = {
     scope: snapshot.scope,

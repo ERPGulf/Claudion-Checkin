@@ -38,7 +38,7 @@ import {
   TRANSITION_RESULT,
 } from "../utils/attendanceSessionState";
 import {
-  selectAutoAttendanceActive,
+  selectAutoAttendanceOperational,
   selectAutoAttendanceFullActions,
 } from "../redux/Slices/AutoAttendanceSlice";
 import {
@@ -80,10 +80,11 @@ export default function useAttendanceAction() {
   const userDetails = useSelector((state) => state.user.userDetails);
   const breakMinutes = useSelector((state) => state.attendance.breakMinutes);
   const sessionOrigin = useSelector((state) => state.attendance.sessionOrigin);
-  // Monitoring has to be running (policy allows it AND the user opted in) and
-  // the policy has to cover attendance actions before the geofence will close
-  // this session — otherwise promising an automatic check-out would be a lie.
-  const autoMonitoringActive = useSelector(selectAutoAttendanceActive);
+  // Monitoring has to be running (configured by the employer AND established
+  // natively, with permission) and the policy has to cover attendance actions
+  // before the geofence will close this session — otherwise promising an
+  // automatic check-out would be a lie.
+  const autoMonitoringActive = useSelector(selectAutoAttendanceOperational);
   const featureSettings = useSelector(selectFeatureSettings);
   const autoActionsEnabled =
     useSelector(selectAutoAttendanceFullActions) && autoMonitoringActive &&

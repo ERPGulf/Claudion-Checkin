@@ -4,7 +4,6 @@ import {
   Linking,
   Platform,
   ScrollView,
-  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -199,7 +198,8 @@ export default function AutoAttendanceScreen() {
     geotagging,
     policy,
     allowed,
-    userEnabled,
+    configured,
+    status,
     active,
     fullActions,
     monitoring,
@@ -218,7 +218,7 @@ export default function AutoAttendanceScreen() {
     radiusText,
     setRadiusText,
     refreshPresence,
-    handleToggleEnabled,
+    handleGrantLocationAccess,
     handleStart,
     handleStop,
     handleUseCurrentLocation,
@@ -277,7 +277,7 @@ export default function AutoAttendanceScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {active || monitoring ? (
+        {configured || monitoring ? (
           <PresenceCard
             presence={presence}
             loading={presenceLoading}
@@ -323,26 +323,21 @@ export default function AutoAttendanceScreen() {
             </View>
           </View>
 
-          {allowed ? (
-            <View className="flex-row items-center justify-between mt-3 pt-3 border-t border-gray-100">
-              <View className="flex-1 pr-3">
-                <Text className="text-sm font-semibold text-gray-800">
-                  Turn on automatic attendance
-                </Text>
-                <Text className="text-xs text-gray-500 mt-0.5">
-                  Stays on across app restarts until you turn it off.
-                </Text>
-              </View>
-              <Switch
-                value={userEnabled}
-                onValueChange={handleToggleEnabled}
-                disabled={busy}
-                trackColor={{ true: COLORS.primary }}
-              />
+          <View className="flex-row items-center justify-between mt-3 pt-3 border-t border-gray-100">
+            <View className="flex-1 pr-3">
+              <Text className="text-sm font-semibold text-gray-800">
+                Automatic attendance
+              </Text>
+              <Text className="text-xs text-gray-500 mt-0.5">
+                Managed by your administrator.
+              </Text>
             </View>
-          ) : null}
+            <Text className="text-xs font-semibold text-gray-600">
+              {status.label}
+            </Text>
+          </View>
 
-          {allowed && userEnabled && !permissionGranted ? (
+          {status.key === "permission" ? (
             <>
               <TouchableOpacity
                 className="flex-row items-center justify-center mt-3 py-2.5 rounded-lg"
@@ -350,7 +345,7 @@ export default function AutoAttendanceScreen() {
                   backgroundColor: COLORS.primary,
                   opacity: busy ? 0.5 : 1,
                 }}
-                onPress={() => handleToggleEnabled(true)}
+                onPress={handleGrantLocationAccess}
                 disabled={busy}
               >
                 <Ionicons
@@ -363,10 +358,21 @@ export default function AutoAttendanceScreen() {
                 </Text>
               </TouchableOpacity>
               <Text className="text-xs text-gray-400 mt-2">
-                Automatic attendance needs "Allow all the time" (Android) or
-                "Always" (iOS) location access to work while the app is closed.
+                Automatic attendance needs precise location with "Allow all the
+                time" (Android) or "Always" (iOS) access to work while the app
+                is closed.
               </Text>
             </>
+          ) : null}
+
+          {status.key === "unavailable" ? (
+            <View className="flex-row items-start bg-red-50 rounded-lg px-3 py-2 mt-3">
+              <Ionicons name="warning-outline" size={18} color="#DC2626" />
+              <Text className="text-xs text-red-600 ml-2 flex-1">
+                Automatic attendance could not start. Check that a work location
+                is assigned to you, or contact your administrator.
+              </Text>
+            </View>
           ) : null}
         </SectionCard>
 
@@ -394,7 +400,7 @@ export default function AutoAttendanceScreen() {
             label="Timestamp"
             value={formatTimestamp(lastEvent?.timestamp)}
           />
-          {active && permissionError ? (
+          {configured && permissionError ? (
             <View className="flex-row items-start bg-red-50 rounded-lg px-3 py-2 mt-2">
               <Ionicons name="warning-outline" size={18} color="#DC2626" />
               <Text className="text-xs text-red-600 ml-2 flex-1">
@@ -402,7 +408,7 @@ export default function AutoAttendanceScreen() {
               </Text>
             </View>
           ) : null}
-          {active && reliabilityWarning ? (
+          {configured && reliabilityWarning ? (
             <View className="flex-row items-start bg-amber-50 rounded-lg px-3 py-2 mt-2">
               <Ionicons name="alert-circle-outline" size={18} color="#B45309" />
               <Text className="text-xs ml-2 flex-1" style={{ color: "#B45309" }}>
@@ -412,7 +418,7 @@ export default function AutoAttendanceScreen() {
           ) : null}
         </SectionCard>
 
-        {active ? (
+        {configured ? (
           // Neither OS gives a reliable code-level signal for these, so this
           // is user education, not detection. iOS: a swipe-kill from the App
           // Switcher stops Core Location from relaunching the app for a

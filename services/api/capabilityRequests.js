@@ -1,3 +1,5 @@
+import { ATTENDANCE_FEATURES } from '../../utils/featureSettings';
+
 /**
  * Feature-specific wire methods. Shared employee, clock, totals and QR methods
  * intentionally have no feature gate: attendance/session restoration uses them.
@@ -62,7 +64,7 @@ export function capabilityForRequest(config = {}) {
   if (method === 'employee_app.attendance_api.add_log_based_on_employee_field') {
     const automatic = requestField(config.data, 'auto');
     return automatic === true || automatic === 1 || automatic === 'true' || automatic === '1'
-      ? 'attendance_action.auto_attendance'
+      ? ATTENDANCE_FEATURES.AUTO_ATTENDANCE
       : null;
   }
   if (method === 'employee_app.attendance_api.upload_file') {

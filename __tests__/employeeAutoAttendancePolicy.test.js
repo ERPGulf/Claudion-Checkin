@@ -73,7 +73,6 @@ it.each([[0, 2], [2, 0]])("a received mode %s wins over cached mode %s even with
 
 it("seeds an owned cache at cold boot and replaces it with an explicit live response", async () => {
   await restoreEmployeeAutoAttendancePolicy(owner, cached(1));
-  await expect(assertEmployeeAutoAttendancePolicy(owner, { action: "monitor" })).resolves.toMatchObject({ mode: 1 });
   await expect(assertEmployeeAutoAttendancePolicy(owner)).rejects.toMatchObject({ mode: 1 });
   await receive(2);
   await expect(assertEmployeeAutoAttendancePolicy(owner)).resolves.toMatchObject({ mode: 2, source: "response" });

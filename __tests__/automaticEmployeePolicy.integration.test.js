@@ -37,7 +37,7 @@ let refresh;
 const receiveSettings = (overrides = {}, tenant = TEST_TENANT) => store.dispatch(settingsReceived({
   scope: buildSettingsScope(tenant, employeeId),
   settings: normalizeFeatureSettings({ attendance_action: {
-    auto_attendance: true, offline_attendance: true, attendance_history: false, ...overrides,
+    geo_tagging: true, offline_attendance: true, attendance_history: false, ...overrides,
   } }),
 }));
 const receiveMode = async mode => {
@@ -251,7 +251,7 @@ it.each([0, 1])("delivers previously accepted queue rows after employee mode cha
     employeeDocname: "EMP-DOC-SYNTHETIC-R4", attendanceType: "auto",
     timestamp: "2026-10-15 09:00:00", action: "checkin" })).row;
   await receiveMode(mode);
-  receiveSettings({ offline_attendance: false, auto_attendance: false });
+  receiveSettings({ offline_attendance: false, geo_tagging: false });
   http.onPost(endpoint("add_offline_employee_checkins")).reply(200, {
     message: { status: "success", inserted: ["CHECKIN-SYNTHETIC-R4"], failed: [] },
   });

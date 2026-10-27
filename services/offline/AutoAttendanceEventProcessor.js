@@ -1,3 +1,4 @@
+import { AppState } from "react-native";
 import * as Native from "../../modules/expo-auto-attendance";
 import * as Events from "./AutoAttendanceEventRepository";
 import { findBySourceEventId } from "./AttendanceQueueRepository";
@@ -6,7 +7,7 @@ import { canonicalAttendanceTime, verifyQueuedAttendance } from "./AttendanceVer
 import { assertAttendanceQueueScope } from "./attendanceQueueProvenance";
 import { captureAttendanceQueueScope } from "./attendanceQueueProvenance";
 import { readAttendanceConfig } from "./attendanceConfigCache";
-import { fetchShouldAttemptRequest } from "./NetworkListener";
+import { fetchShouldAttemptRequest, isOnline } from "./NetworkListener";
 import { autoCheckInOut, getAttendanceStatus, resolveServerTimestampAt } from "../api/attendance.service";
 import { formatOfflineTimestamp, normalizeAttendanceStatusClock } from "../../utils/serverClock";
 import { normalizeCustomIn, toTimestampMs } from "../../utils/attendanceSession";
@@ -28,7 +29,7 @@ const automaticCapabilityRefusal = async (scope) => {
   try {
     await assertCapability(ATTENDANCE_FEATURES.AUTO_ATTENDANCE,
       { baseUrl: scope.tenantKey, employeeCode: scope.employeeId, generation: scope.generation });
-    await assertEmployeeAutoAttendancePolicy(scope, { action: "punch" });
+    await assertEmployeeAutoAttendancePolicy(scope);
     assertCapabilityCurrent(ATTENDANCE_FEATURES.AUTO_ATTENDANCE, scope);
     return null;
   } catch (error) {
@@ -130,13 +131,24 @@ const restoreVerifiedOwner = async (scope) => {
 };
 
 const saveOutcome = async (row, result) => {
+  const queueRowId = result.response?.queueRowId ?? result.response?.row?.id ?? null;
   await updateOwned(row.eventId, {
     status: HANDLED, reason: result.reason ?? null,
     sessionAt: result.session?.startedAt ?? result.session?.endedAt ?? null,
-    queueRowId: result.response?.queueRowId ?? result.response?.row?.id ?? null,
+    queueRowId,
     outcome: { status: result.status, queued: result.queued, serverConfirmed: result.serverConfirmed,
       name: result.response?.name ?? null },
   });
+  // Development only: one line per processed crossing, for device testing.
+  if (__DEV__) {
+    console.log("[AutoAttendance] Event processed", {
+      eventId: row.eventId, transition: row.transition, geofence: row.event?.identifier,
+      detectedAt: new Date(row.occurredAt).toISOString(), receivedAt: new Date(row.receivedAt).toISOString(),
+      appState: AppState.currentState, transport: isOnline?.() ?? null, status: result.status ?? null,
+      reason: result.reason ?? null, queued: !!result.queued, serverConfirmed: !!result.serverConfirmed,
+      queueRowId, serverRecord: result.response?.name ?? null, session: result.session?.status ?? null,
+    });
+  }
   notifyQueueChanged();
 };
 

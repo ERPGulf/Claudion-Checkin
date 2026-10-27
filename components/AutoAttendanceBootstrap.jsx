@@ -5,8 +5,10 @@ import * as Location from "expo-location";
 import { selectIsLoggedIn } from "../redux/Slices/AuthSlice";
 import { selectBaseUrl } from "../redux/Slices/UserSlice";
 import {
-  selectAutoAttendanceActive,
+  autoAttendanceMonitoringChanged,
+  selectAutoAttendanceConfigured,
   selectAutoAttendanceGeotagging,
+  selectAutoAttendanceScope,
   selectAutoAttendanceSyncRequestId,
 } from "../redux/Slices/AutoAttendanceSlice";
 import { setCheckin, setCheckout } from "../redux/Slices/AttendanceSlice";
@@ -56,6 +58,7 @@ import { assertAttendanceQueueScope, captureAttendanceQueueScope } from "../serv
 import { useFeatureEnabled } from "../hooks/useFeatureSettings";
 import { ATTENDANCE_FEATURES } from "../utils/featureSettings";
 import { assertCapability, assertCapabilityCurrent } from "../services/capabilityPolicy";
+import { readLocationAccess } from "../utils/autoAttendance";
 import {
   assertEmployeeAutoAttendancePolicy,
   getEmployeeAutoAttendancePolicy,
@@ -102,7 +105,8 @@ function LegacyAutoAttendanceBootstrap() {
   const dispatch = useDispatch();
   const isLoggedIn = useSelector(selectIsLoggedIn);
   const baseUrl = useSelector(selectBaseUrl);
-  const employeeActive = useSelector(selectAutoAttendanceActive);
+  const employeeActive = useSelector(selectAutoAttendanceConfigured);
+  const settingsScope = useSelector(selectAutoAttendanceScope);
   const employeeMode = useSelector(selectAutoAttendanceGeotagging);
   const capabilityAllowed = useFeatureEnabled(ATTENDANCE_FEATURES.AUTO_ATTENDANCE);
   const active = employeeActive && capabilityAllowed;
@@ -124,9 +128,9 @@ function LegacyAutoAttendanceBootstrap() {
   // Serializes the startup sequence across effect runs — see the chain below.
   const startupRef = useRef(Promise.resolve());
 
-  const assertAutomaticAllowed = async (scope, action) => {
+  const assertAutomaticAllowed = async (scope) => {
     await assertCapability(ATTENDANCE_FEATURES.AUTO_ATTENDANCE, scope);
-    const policy = await assertEmployeeAutoAttendancePolicy(scope, { action });
+    const policy = await assertEmployeeAutoAttendancePolicy(scope);
     // Employee/cache reception yields too: a tenant geo revocation received
     // during that work must apply before retaining monitoring or a new punch.
     assertCapabilityCurrent(ATTENDANCE_FEATURES.AUTO_ATTENDANCE, scope);
@@ -267,7 +271,7 @@ function LegacyAutoAttendanceBootstrap() {
           await recordHandled(occurredAt);
           return;
         }
-        const assertPunchAllowed = () => assertAutomaticAllowed(sourceScope, "punch");
+        const assertPunchAllowed = () => assertAutomaticAllowed(sourceScope);
         await assertPunchAllowed();
         // Same queue the manual screens use, differing only in `attendanceType`
         // and in which API call it wraps. A geofence crossing is precisely when
@@ -459,7 +463,7 @@ function LegacyAutoAttendanceBootstrap() {
       try {
         const sourceScope = await queueScope;
         if (!sourceScope) return null;
-        const assertMonitoringAllowed = () => assertAutomaticAllowed(sourceScope, "monitor");
+        const assertMonitoringAllowed = () => assertAutomaticAllowed(sourceScope);
         await assertMonitoringAllowed();
         const [foreground, background] = await Promise.all([
           Location.getForegroundPermissionsAsync(),
@@ -500,7 +504,7 @@ function LegacyAutoAttendanceBootstrap() {
           // A native registration may complete after policy or login changes.
           // Remove that late registration before retaining monitoring.
           try {
-            await assertAutomaticAllowed(registrationScope, "monitor");
+            await assertAutomaticAllowed(registrationScope);
             if (!employeeActiveRef.current || !capabilityAllowedRef.current) {
               await stopGeofence();
               return null;
@@ -660,6 +664,10 @@ function LegacyAutoAttendanceBootstrap() {
       .then(async () => {
         if (cancelled) return;
         const office = await ensureMonitoring();
+        // Status only: a failed permission read must not hold up the replay.
+        const state = office && isMonitoring() ? "active"
+          : (await readLocationAccess().catch(() => null))?.granted ? "unavailable" : "permission";
+        if (!cancelled) dispatch(autoAttendanceMonitoringChanged({ scope: settingsScope, state }));
         await replayPendingEvent();
         await reconcilePresence(office);
       })
@@ -674,7 +682,7 @@ function LegacyAutoAttendanceBootstrap() {
       cancelled = true;
       subscriptions.forEach((subscription) => subscription.remove());
     };
-  }, [isLoggedIn, active, employeeMode, employeeCode, baseUrl, syncRequestId, dispatch]);
+  }, [isLoggedIn, active, employeeMode, employeeCode, baseUrl, settingsScope, syncRequestId, dispatch]);
 
   return null;
 }

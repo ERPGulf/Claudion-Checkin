@@ -67,7 +67,7 @@ import {
 } from "../utils/attendanceSessionState";
 import { evaluatePendingEvent, PENDING_EVENT } from "../utils/geofenceEventLog";
 import { resetServerClockCache } from "../utils/serverClock";
-import { loginQueueEmployee } from "../test-utils/attendanceScope";
+import { enableAutomaticAttendance, loginQueueEmployee } from "../test-utils/attendanceScope";
 
 const { __resetAll } = require("../test-utils/expoSqliteMock");
 
@@ -116,6 +116,7 @@ const login = async (
   token = TOKEN,
 ) => {
   await loginQueueEmployee(employeeId, tenantKey, token);
+  enableAutomaticAttendance(employeeId, tenantKey);
   await cacheConfig(employeeId, tenantKey);
 };
 

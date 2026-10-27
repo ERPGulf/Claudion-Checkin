@@ -32,7 +32,7 @@ import { resetOfflineCapability, setOfflineQueueingAllowed } from "../services/o
 import { resetSyncService, syncPendingAttendance } from "../services/offline/AttendanceSyncService";
 import { pushCheckin } from "../services/offline/AttendanceApi";
 import { verifyQueuedAttendance } from "../services/offline/AttendanceVerification";
-import { loginQueueEmployee, TEST_TENANT } from "../test-utils/attendanceScope";
+import { enableAutomaticAttendance, loginQueueEmployee, TEST_TENANT } from "../test-utils/attendanceScope";
 import { performSessionTransition, readSession, SESSION_ORIGIN } from "../utils/attendanceSessionState";
 import { beginEmployeeAutoAttendancePolicyReception, receiveEmployeeAutoAttendancePolicy } from "../services/employeeAutoAttendancePolicy";
 
@@ -59,6 +59,7 @@ beforeEach(async () => {
   resetSyncService();
   await AsyncStorage.clear();
   await loginQueueEmployee(employeeId);
+  enableAutomaticAttendance(employeeId);
   sourceScope = await captureAttendanceQueueScope(employeeId);
   jest.clearAllMocks();
   resetOfflineCapability();

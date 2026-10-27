@@ -34,7 +34,7 @@ beforeEach(async () => {
   store.dispatch(settingsReceived({
     scope: buildSettingsScope(TEST_TENANT, employeeId),
     settings: normalizeFeatureSettings({ attendance_action: {
-      offline_attendance: false, auto_attendance: false, attendance_history: false, photo_upload: false,
+      offline_attendance: false, geo_tagging: false, attendance_history: false, photo_upload: false,
     } }),
   }));
   http = new MockAdapter(apiClient);

@@ -102,6 +102,7 @@ import {
 } from "../utils/attendanceSessionState";
 import { getLastProcessedEventAt } from "../utils/geofenceEventLog";
 import { captureAttendanceQueueScope } from "../services/offline/attendanceQueueProvenance";
+import { automaticAttendanceSettings } from "../test-utils/attendanceScope";
 import {
   beginEmployeeAutoAttendancePolicyReception,
   receiveEmployeeAutoAttendancePolicy,
@@ -115,10 +116,8 @@ const buildStore = (geotagging = GEOTAGGING.ALL_ACTIONS) => {
     preloadedState: {
       userAuth: { isLoggedIn: true, token: "tok" },
       user: { baseUrl: "https://fixture.example.test", userDetails: { employeeCode: EMPLOYEE_CODE } },
-      autoAttendance: {
-        geotagging,
-        userEnabled: true,
-      },
+      featureSettings: automaticAttendanceSettings(EMPLOYEE_CODE, "https://fixture.example.test"),
+      autoAttendance: { geotagging },
     },
     middleware: (getDefault) => getDefault({ serializableCheck: false }),
   });
@@ -494,8 +493,11 @@ describe("AutoAttendanceBootstrap geofence transitions", () => {
   // The server-side `geotagging` policy: 0 disabled, 1 warnings only,
   // 2 all attendance actions.
   describe("geotagging policy levels", () => {
-    it("never monitors or logs when the policy is disabled", async () => {
-      fetchEmployeeData.mockResolvedValue({ geotagging: GEOTAGGING.DISABLED });
+    it.each([
+      ["disabled", GEOTAGGING.DISABLED],
+      ["warnings-only", GEOTAGGING.WARNINGS_ONLY],
+    ])("never monitors or logs when the policy is %s", async (_, geotagging) => {
+      fetchEmployeeData.mockResolvedValue({ geotagging });
       await manualCheckIn(startedWorkAt());
       mockNativeLastEvent = {
         transition: "EXIT",
@@ -503,24 +505,11 @@ describe("AutoAttendanceBootstrap geofence transitions", () => {
         timestamp: leftTheOfficeAt(),
       };
 
-      await renderBootstrap(GEOTAGGING.DISABLED);
+      await renderBootstrap(geotagging);
       await flushReplay();
 
       expect(listeners.onGeofenceExit).toHaveLength(0);
       expect(stopGeofence).toHaveBeenCalled();
-      expect(autoCheckInOut).not.toHaveBeenCalled();
-      expect((await readSession()).status).toBe(SESSION_STATUS.CHECKED_IN);
-    });
-
-    it("detects a crossing under warnings-only but never turns it into a log", async () => {
-      fetchEmployeeData.mockResolvedValue({
-        geotagging: GEOTAGGING.WARNINGS_ONLY,
-      });
-      await manualCheckIn(startedWorkAt());
-
-      await mountBootstrap(GEOTAGGING.WARNINGS_ONLY);
-      await fireGeofence("EXIT");
-
       expect(autoCheckInOut).not.toHaveBeenCalled();
       expect((await readSession()).status).toBe(SESSION_STATUS.CHECKED_IN);
     });
@@ -536,8 +525,8 @@ describe("AutoAttendanceBootstrap geofence transitions", () => {
         timestamp: leftTheOfficeAt(),
       };
 
-      // No old binary capture-time owner exists, even under warnings only.
-      await mountBootstrap(GEOTAGGING.WARNINGS_ONLY);
+      // Warnings-only is not monitored; the crossing has no capture-time owner.
+      await renderBootstrap(GEOTAGGING.WARNINGS_ONLY);
       await flushReplay();
       expect(autoCheckInOut).not.toHaveBeenCalled();
       expect(await getLastProcessedEventAt()).toBeNull();

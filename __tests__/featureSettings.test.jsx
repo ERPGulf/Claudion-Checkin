@@ -65,7 +65,6 @@ import {
   FEATURES,
   buildSettingsScope,
   emptyFeatureSettings,
-  geoTaggingLevel,
   getFeatureValue,
   isFeatureEnabled,
   isRouteEnabled,
@@ -105,7 +104,7 @@ const FULL_RESPONSE = {
     restrict_location: true,
     unrestricted_checkout_location: true,
     employee_shift: false,
-    geo_tagging: 'Enable geotagging for all attendance actions',
+    geo_tagging: true,
     employee_checkin_break: false,
     attendance_request: true,
     attendance_history: true,
@@ -157,11 +156,10 @@ describe('normalizeFeatureSettings', () => {
     expect(s.attendance_action.employee_checkin_break).toBe(false);
     expect(s.attendance_action.attendance_history).toBe(true);
 
-    // The two that are strings must stay strings, not be coerced to booleans.
+    // The version stays a string, never coerced to a boolean.
     expect(s.attendance_action.offline_attendance_version).toBe('1');
-    expect(s.attendance_action.geo_tagging).toBe(
-      'Enable geotagging for all attendance actions',
-    );
+    expect(getFeatureValue(s, 'attendance_action.offline_attendance_version')).toBe('1');
+    expect(s.attendance_action.geo_tagging).toBe(true);
   });
 
   it('unwraps the Frappe { message } envelope', () => {
@@ -203,31 +201,71 @@ describe('normalizeFeatureSettings', () => {
   });
 });
 
-describe('mandatory tenant geo veto for automatic attendance', () => {
-  it.each([false, 0, '0', null])('disables the automatic capability and route for tenant geo %p', geo => {
-    const settings = normalizeFeatureSettings({ attendance_action: { auto_attendance: true, geo_tagging: geo } });
-    expect(isFeatureEnabled(settings, ATTENDANCE_FEATURES.AUTO_ATTENDANCE)).toBe(false);
-    expect(isRouteEnabled(settings, 'Auto attendance')).toBe(false);
-    expect(isRouteEnabled(settings, 'Attendance action')).toBe(true);
-    expect(isFeatureEnabled(settings, ATTENDANCE_FEATURES.PHOTO_UPLOAD)).toBe(true);
+describe('tenant geo_tagging is the automatic attendance switch', () => {
+  const tenant = geo => normalizeFeatureSettings({ attendance_action: { geo_tagging: geo } });
+  const automatic = settings => isFeatureEnabled(settings, ATTENDANCE_FEATURES.AUTO_ATTENDANCE);
+
+  it('enables automatic attendance and its screen only for a real boolean true', () => {
+    expect(automatic(tenant(true))).toBe(true);
+    expect(isRouteEnabled(tenant(true), 'Auto attendance')).toBe(true);
   });
 
-  it('preserves a known geo veto through an omitted refresh and JSON cache hydration', () => {
-    const received = normalizeFeatureSettings({ attendance_action: { geo_tagging: null, auto_attendance: true } });
-    const restored = JSON.parse(JSON.stringify(received));
-    const refreshed = mergeFeatureSettings(restored, normalizeFeatureSettings({ attendance_action: { auto_attendance: true } }));
-    expect(isFeatureEnabled(refreshed, ATTENDANCE_FEATURES.AUTO_ATTENDANCE)).toBe(false);
-    expect(normalizeFeatureSettings({}).attendance_action.geo_tagging_level).toBeNull();
-    expect(isFeatureEnabled(normalizeFeatureSettings({}), ATTENDANCE_FEATURES.AUTO_ATTENDANCE)).toBe(true);
+  it.each([false, null, undefined, 0, 1, 2, 'true', 'false', {}])('keeps it off for tenant geo_tagging %p', geo => {
+    expect(automatic(tenant(geo))).toBe(false);
+    expect(isRouteEnabled(tenant(geo), 'Auto attendance')).toBe(false);
+    // Only automatic attendance: the rest keeps its own answer.
+    expect(isRouteEnabled(tenant(geo), 'Attendance action')).toBe(true);
+    expect(isFeatureEnabled(tenant(geo), ATTENDANCE_FEATURES.PHOTO_UPLOAD)).toBe(DEFAULT_WHEN_UNKNOWN);
   });
 
-  it.each([1, 2, true, 'invalid'])('does not invent an employee-mode mapping or extra grant for tenant geo %p', geo => {
-    expect(isFeatureEnabled(normalizeFeatureSettings({ attendance_action: {
-      geo_tagging: geo, auto_attendance: true,
-    } }), ATTENDANCE_FEATURES.AUTO_ATTENDANCE)).toBe(true);
-    expect(isFeatureEnabled(normalizeFeatureSettings({ attendance_action: {
-      geo_tagging: geo, auto_attendance: false,
-    } }), ATTENDANCE_FEATURES.AUTO_ATTENDANCE)).toBe(false);
+  it('stays off before any settings arrive', () => {
+    expect(automatic(null)).toBe(false);
+    expect(automatic(emptyFeatureSettings())).toBe(false);
+  });
+
+  it('lets a fresh true replace a cached false, and a fresh false a cached true', () => {
+    expect(automatic(mergeFeatureSettings(tenant(false), tenant(true)))).toBe(true);
+    expect(automatic(mergeFeatureSettings(tenant(true), tenant(false)))).toBe(false);
+    expect(automatic(mergeFeatureSettings(tenant(true), tenant(null)))).toBe(false);
+  });
+
+  it('never carries a cached true into a fresh answer that omits or garbles it', () => {
+    for (const fresh of [{ photo_upload: true }, { geo_tagging: 2 }, { geo_tagging: 'true' }]) {
+      const merged = mergeFeatureSettings(tenant(true), normalizeFeatureSettings({ attendance_action: fresh }));
+      expect(automatic(merged)).toBe(false);
+    }
+  });
+
+  it('ignores a stale auto_attendance or numeric level persisted by an older build', () => {
+    const cached = JSON.parse(JSON.stringify({
+      ...tenant(false),
+      attendance_action: { ...tenant(false).attendance_action, auto_attendance: true, geo_tagging_level: 2 },
+    }));
+    expect(automatic(cached)).toBe(false);
+    expect(automatic({ attendance_action: { auto_attendance: true, geo_tagging: '2', geo_tagging_level: 2 } })).toBe(false);
+    expect(automatic(mergeFeatureSettings(cached, tenant(true)))).toBe(true);
+  });
+
+  it('keeps an explicit answer through JSON cache hydration, as during an outage', () => {
+    expect(automatic(JSON.parse(JSON.stringify(tenant(true))))).toBe(true);
+    expect(automatic(JSON.parse(JSON.stringify(tenant(false))))).toBe(false);
+  });
+
+  it('reads the response the backend team shared', () => {
+    const shared = {
+      attendance_action: {
+        offline_attendance: true, photo_upload: true, restrict_location: true,
+        unrestricted_checkout_location: true, employee_shift: true, geo_tagging: false,
+        employee_checkin_break: true, attendance_request: true, attendance_history: true,
+      },
+      loan_application: true, expense_claim: true, leave_request: true,
+      employee_records: true, complaints: true, employee_resignation: false,
+    };
+    expect(hasRecognizedFeatureSettings(shared)).toBe(true);
+    expect(automatic(normalizeFeatureSettings(shared))).toBe(false);
+    expect(automatic(normalizeFeatureSettings({
+      ...shared, attendance_action: { ...shared.attendance_action, geo_tagging: true },
+    }))).toBe(true);
   });
 });
 
@@ -254,32 +292,6 @@ describe('normalizeBoolean', () => {
   it('treats explicit backend null as disabled, distinct from an omitted value', () => {
     expect(normalizeBoolean(null)).toBe(false);
     expect(normalizeBoolean(undefined)).toBeNull();
-  });
-});
-
-describe('geoTaggingLevel', () => {
-  it('reads the select label into the 0/1/2 level the app already uses', () => {
-    expect(geoTaggingLevel('Enable geotagging for all attendance actions')).toBe(2);
-    expect(geoTaggingLevel('Warnings only')).toBe(1);
-    expect(geoTaggingLevel('Disabled')).toBe(0);
-  });
-
-  it('returns null for a sentence it does not recognise', () => {
-    // So callers fall back to the per-employee value rather than guessing.
-    expect(geoTaggingLevel('something new')).toBeNull();
-    expect(geoTaggingLevel(undefined)).toBeNull();
-  });
-
-  it('keeps the raw string available alongside the level', () => {
-    const s = normalizeFeatureSettings(FULL_RESPONSE);
-
-    expect(getFeatureValue(s, 'attendance_action.geo_tagging')).toBe(
-      'Enable geotagging for all attendance actions',
-    );
-    expect(getFeatureValue(s, 'attendance_action.geo_tagging_level')).toBe(2);
-    expect(
-      getFeatureValue(s, 'attendance_action.offline_attendance_version'),
-    ).toBe('1');
   });
 });
 
@@ -557,13 +569,8 @@ describe('withFeatureGate', () => {
 });
 
 /**
- * The payload the backend sends today.
- *
- * `geo_tagging` used to be the ERPNext select label and is now the 0/1/2 enum,
- * and `auto_attendance` is new. Both forms of `geo_tagging` have to keep working
- * — tenants upgrade at their own pace — and the enum has to be read as a value
- * rather than as "no answer", or an administrator turning geotagging off would
- * have no effect at all.
+ * The payload the backend sends today: `geo_tagging` is the tenant's boolean
+ * automatic-attendance switch, and there is no separate `auto_attendance`.
  */
 describe('the current capability payload', () => {
   const CURRENT = {
@@ -574,11 +581,10 @@ describe('the current capability payload', () => {
       restrict_location: true,
       unrestricted_checkout_location: true,
       employee_shift: false,
-      geo_tagging: 2,
+      geo_tagging: true,
       employee_checkin_break: false,
       attendance_request: true,
       attendance_history: true,
-      auto_attendance: true,
     },
     loan_application: true,
     expense_claim: true,
@@ -587,35 +593,16 @@ describe('the current capability payload', () => {
     complaints: true,
   };
 
-  it('reads every boolean, including auto_attendance and expense_claim', () => {
+  it('reads every boolean, including geo_tagging and expense_claim', () => {
     const s = normalizeFeatureSettings(CURRENT);
 
-    expect(s.attendance_action.auto_attendance).toBe(true);
+    expect(s.attendance_action.geo_tagging).toBe(true);
     expect(s.attendance_action.offline_attendance).toBe(false);
     expect(s.attendance_action.photo_upload).toBe(true);
     expect(s.attendance_action.employee_shift).toBe(false);
     expect(s.expense_claim).toBe(true);
     expect(s.complaints).toBe(true);
     expect(s.loan_application).toBe(true);
-  });
-
-  it('reads the geotagging enum', () => {
-    expect(normalizeFeatureSettings(CURRENT).attendance_action.geo_tagging_level)
-      .toBe(2);
-  });
-
-  // The regression this parsing was added for. `geo_tagging: 0` is "disabled",
-  // and it used to normalise to null — indistinguishable from a server that
-  // never sent the field, which is how an administrator turning it off had no
-  // effect at all.
-  it('reads geo_tagging: 0 as disabled, not as unknown', () => {
-    const s = normalizeFeatureSettings({
-      ...CURRENT,
-      attendance_action: { ...CURRENT.attendance_action, geo_tagging: 0 },
-    });
-
-    expect(s.attendance_action.geo_tagging_level).toBe(0);
-    expect(s.attendance_action.geo_tagging_level).not.toBeNull();
   });
 
   it('gates the Expense claim route on the new flag', () => {
@@ -646,13 +633,13 @@ describe('the current capability payload', () => {
     expect(isRouteEnabled(s, 'Auto attendance')).toBe(true);
 
     const off = normalizeFeatureSettings({
-      attendance_action: { auto_attendance: false },
+      attendance_action: { geo_tagging: false },
     });
     expect(isRouteEnabled(off, 'Auto attendance')).toBe(false);
   });
 
   /**
-   * `auto_attendance: false` means "take it out of the menu".
+   * `geo_tagging: false` means "take it out of the menu".
    *
    * There are four places the option can appear, and they all filter through
    * `isRouteEnabled`, so one ROUTE_FEATURES entry covers them — but "covers
@@ -662,13 +649,16 @@ describe('the current capability payload', () => {
    */
   describe('hides the option everywhere it is offered', () => {
     const off = normalizeFeatureSettings({
-      attendance_action: { auto_attendance: false },
+      attendance_action: { geo_tagging: false },
     });
 
     const autoTile = (item) => item.nav === 'Auto attendance';
     const autoOption = (option) => option.url === 'Auto attendance';
 
-    const expenseOff = normalizeFeatureSettings({ expense_claim: false });
+    const expenseOff = normalizeFeatureSettings({
+      expense_claim: false,
+      attendance_action: { geo_tagging: true },
+    });
     const expenseTile = (item) => item.nav === 'Expense claim';
     const expenseOption = (option) => option.url === 'Expense claim';
 
@@ -745,51 +735,11 @@ describe('the current capability payload', () => {
     });
   });
 
-  // A tenant that has not upgraded sends no such key, and must keep the screen.
-  it('leaves Auto attendance available when the server does not mention it', () => {
+  // Background location is never on by default: no answer, no screen.
+  it('hides Auto attendance when the server does not mention geo_tagging', () => {
     expect(isRouteEnabled(normalizeFeatureSettings({}), 'Auto attendance')).toBe(
-      true,
+      false,
     );
-  });
-});
-
-describe('geoTaggingLevel accepts the enum', () => {
-  it.each([
-    [0, 0],
-    [1, 1],
-    [2, 2],
-    ['0', 0],
-    ['1', 1],
-    ['2', 2],
-  ])('reads %p as level %p', (input, level) => {
-    expect(geoTaggingLevel(input)).toBe(level);
-  });
-
-  it('still reads the legacy labels', () => {
-    expect(geoTaggingLevel('Enable geotagging for all attendance actions')).toBe(2);
-    expect(geoTaggingLevel('Warnings only')).toBe(1);
-    expect(geoTaggingLevel('Disabled')).toBe(0);
-  });
-
-  // Level 0 is a real answer; everything below is genuinely "no answer", and
-  // must not collapse into 0.
-  it.each([3, -1, 1.5, NaN, '', '  ', 'something new', true, undefined, {}])(
-    'reports %p as unknown',
-    (input) => {
-      expect(geoTaggingLevel(input)).toBeNull();
-    },
-  );
-
-  it.each([false, null])('reads the tenant disabled value %p as level 0', input => {
-    expect(geoTaggingLevel(input)).toBe(0);
-    const settings = normalizeFeatureSettings({ attendance_action: { geo_tagging: input } });
-    expect(getFeatureValue(settings, 'attendance_action.geo_tagging_level')).toBe(0);
-    expect(getFeatureValue(settings, 'attendance_action.geo_tagging')).toBe('0');
-  });
-
-  // A sentence that merely starts with a digit is prose, not an enum.
-  it('does not read a number out of the middle of a label', () => {
-    expect(geoTaggingLevel('2 warnings issued')).toBe(1);
   });
 });
 
@@ -841,19 +791,6 @@ describe('confirmed explicit-null capability contract', () => {
     } }));
     expect(updated.attendance_action.offline_attendance_version).toBe('2');
     expect(updated._explicitNullFields).toBeUndefined();
-  });
-
-  it('replaces a cached tenant geo level with explicit disabled values but retains it for missing/malformed data', () => {
-    const previous = normalizeFeatureSettings({ attendance_action: { geo_tagging: 2 } });
-    for (const value of [false, null, 0]) {
-      const merged = mergeFeatureSettings(previous, normalizeFeatureSettings({ attendance_action: { geo_tagging: value } }));
-      expect(merged.attendance_action.geo_tagging_level).toBe(0);
-      expect(merged.attendance_action.geo_tagging).toBe('0');
-    }
-    for (const value of [undefined, true, 'unexpected', {}]) {
-      const merged = mergeFeatureSettings(previous, normalizeFeatureSettings({ attendance_action: { geo_tagging: value } }));
-      expect(merged.attendance_action.geo_tagging_level).toBe(2);
-    }
   });
 
   it('keeps null revocation through reducer hydration and rejects an older response', () => {

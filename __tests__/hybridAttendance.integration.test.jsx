@@ -29,7 +29,9 @@ import { getServerOffset, resetServerClockCache } from "../utils/serverClock";
 import { captureAttendanceQueueScope } from "../services/offline/attendanceQueueProvenance";
 import { applySessionOwner, readSession, reconcileSessionFromServer, SESSION_OWNER_KEY, SESSION_STATE_KEY } from "../utils/attendanceSessionState";
 import { assertAttendanceQueueScope } from "../services/offline/attendanceQueueProvenance";
-import { loginQueueEmployee, TEST_TENANT } from "../test-utils/attendanceScope";
+import {
+  automaticAttendanceSettings, enableAutomaticAttendance, loginQueueEmployee, TEST_TENANT,
+} from "../test-utils/attendanceScope";
 
 jest.mock("expo-sqlite", () => require("../test-utils/expoSqliteMock"));
 jest.mock("react-native-toast-message", () => ({ show: jest.fn() }));
@@ -99,6 +101,8 @@ const mount = () => render(<Provider store={store}><Harness /></Provider>);
 beforeEach(async () => {
   __resetAll(); resetDatabaseHandle(); resetSyncService(); resetOfflineCapability(); resetServerClockCache(); await AsyncStorage.clear();
   await loginQueueEmployee(employeeId);
+  // The services read the app store; the hook below reads the test store.
+  enableAutomaticAttendance(employeeId);
   scope = await captureAttendanceQueueScope(employeeId);
   await applySessionOwner(employeeId, { tenantKey: TEST_TENANT });
   await AsyncStorage.multiSet([["restrict_location", "0"], ["unrestricted_checkout_location", "0"], ["photo", "0"]]);
@@ -119,7 +123,8 @@ beforeEach(async () => {
   apiClient.put.mockResolvedValue({ data: { message: "OK" } });
   store = configureStore({ reducer: RootReducer, preloadedState: {
     userAuth: { isLoggedIn: true }, user: { baseUrl: TEST_TENANT, userDetails: { employeeCode: employeeId } },
-    autoAttendance: { geotagging: 2, userEnabled: true, syncRequestId: 0 },
+    featureSettings: automaticAttendanceSettings(employeeId),
+    autoAttendance: { geotagging: 2, syncRequestId: 0 },
   } });
 });
 afterEach(async () => { await cleanup(); jest.restoreAllMocks(); });

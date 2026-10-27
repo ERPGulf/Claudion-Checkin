@@ -12,6 +12,10 @@ import {
   captureAttendanceQueueScope,
   createAttendanceScopeChangedError,
 } from "./attendanceQueueProvenance";
+import { describeHttpFailure, isoTime, logAttendanceDiagnostic } from "./attendanceDiagnostics";
+import { getNetworkState } from "./NetworkListener";
+
+const LOG_PREFIX = "[AttendanceUpload]";
 
 /**
  * Uploading a queued punch.
@@ -205,20 +209,48 @@ export const pushCheckin = async (row, { syncScope = null } = {}) => {
   if (!record.employee) throw new Error("Queued record has no employee");
   if (!record.timestamp) throw new Error("Queued record has no timestamp");
 
-  const { data } = await apiClient.post(
-    `${baseUrl}/api/method/${OFFLINE_CHECKIN_METHOD}`,
-    { logs: [record] },
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      attendanceSyncScope: syncScope,
-      timeout: 20000,
-    },
-  );
+  const endpoint = `${baseUrl}/api/method/${OFFLINE_CHECKIN_METHOD}`;
+  const startedAt = Date.now();
+  logAttendanceDiagnostic(LOG_PREFIX, `#${row.id} sending`, {
+    method: "POST", endpoint, queueRowId: row.id,
+    queueState: { status: row.status, attemptCount: row.attemptCount, retryCount: row.retryCount },
+    network: getNetworkState?.() ?? null, startedAt: isoTime(startedAt), payload: { logs: [record] },
+  });
 
-  return interpretPushResponse(data);
+  let response;
+  try {
+    response = await apiClient.post(
+      endpoint,
+      { logs: [record] },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        attendanceSyncScope: syncScope,
+        timeout: 20000,
+      },
+    );
+  } catch (error) {
+    logAttendanceDiagnostic(LOG_PREFIX, `#${row.id} failed`, {
+      durationMs: Date.now() - startedAt, ...describeHttpFailure(error),
+    });
+    throw error;
+  }
+
+  const outcome = interpretPushResponse(response.data);
+  const body = unwrap(response.data);
+  logAttendanceDiagnostic(LOG_PREFIX, `#${row.id} HTTP ${response.status}`, {
+    status: response.status, durationMs: Date.now() - startedAt, body: response.data,
+    backendReturned: {
+      status: body?.status ?? null,
+      inserted: Array.isArray(body?.inserted) ? body.inserted : null,
+      failed: Array.isArray(body?.failed) ? body.failed : null,
+    },
+    interpretedAs: { result: outcome.result, serverCheckinId: outcome.serverCheckinId ?? null,
+      failureClass: outcome.failureClass ?? null, message: outcome.message ?? null },
+  });
+  return outcome;
 };
 
 export default {

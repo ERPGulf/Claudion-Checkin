@@ -7,7 +7,7 @@ import Toast from 'react-native-toast-message';
 import useAttendanceAction from '../hooks/useAttendanceAction';
 import RootReducer from '../redux/RootReducer';
 import { settingsReceived } from '../redux/Slices/FeatureSettingsSlice';
-import { employeePolicyRequested, employeePolicyReceived, setAutoAttendanceUserEnabled } from '../redux/Slices/AutoAttendanceSlice';
+import { autoAttendanceMonitoringChanged, employeePolicyRequested, employeePolicyReceived } from '../redux/Slices/AutoAttendanceSlice';
 import { buildSettingsScope, normalizeFeatureSettings } from '../utils/featureSettings';
 import { getTodayBreaks, employeeBreak } from '../services/api/attendance.service';
 import { performManualAttendanceTransition } from '../services/offline/ManualAttendanceService';
@@ -60,16 +60,41 @@ beforeEach(async () => {
 });
 afterEach(() => { cleanup(); jest.useRealTimers(); });
 
-it('removes the automatic checkout promise after tenant geo denial while keeping manual checkout available', async () => {
+const receiveEmployeeMode = (mode) => {
   const receipt = { scope, generation: attendanceScope.generation, revision: 1 };
   store.dispatch(employeePolicyRequested(receipt));
-  store.dispatch(employeePolicyReceived({ ...receipt, accountId: attendanceScope.accountId, mode: 2 }));
-  store.dispatch(setAutoAttendanceUserEnabled(true));
-  update({ auto_attendance: true, geo_tagging: 2 });
+  store.dispatch(employeePolicyReceived({ ...receipt, accountId: attendanceScope.accountId, mode }));
+};
+
+it('promises an automatic checkout only once monitoring is established, not merely configured', async () => {
+  receiveEmployeeMode(2);
+  update({ geo_tagging: true });
+  mount();
+  await waitFor(() => expect(hook.restrictionLoaded).toBe(true));
+  expect(hook.autoActionsEnabled).toBe(false);
+  act(() => { store.dispatch(autoAttendanceMonitoringChanged({ scope, state: 'permission' })); });
+  expect(hook.autoActionsEnabled).toBe(false);
+  act(() => { store.dispatch(autoAttendanceMonitoringChanged({ scope, state: 'active' })); });
+  expect(hook.autoActionsEnabled).toBe(true);
+});
+
+it('never promises an automatic checkout to a warnings-only employee, even with an active monitoring report', async () => {
+  receiveEmployeeMode(1);
+  store.dispatch(autoAttendanceMonitoringChanged({ scope, state: 'active' }));
+  update({ geo_tagging: true });
+  mount();
+  await waitFor(() => expect(hook.restrictionLoaded).toBe(true));
+  expect(hook.autoActionsEnabled).toBe(false);
+});
+
+it('removes the automatic checkout promise after tenant geo denial while keeping manual checkout available', async () => {
+  receiveEmployeeMode(2);
+  store.dispatch(autoAttendanceMonitoringChanged({ scope, state: 'active' }));
+  update({ geo_tagging: true });
   mount();
   await waitFor(() => expect(hook.restrictionLoaded).toBe(true));
   expect(hook.autoActionsEnabled).toBe(true);
-  act(() => { update({ auto_attendance: true, geo_tagging: 0 }); });
+  act(() => { update({ geo_tagging: false }); });
   expect(hook.autoActionsEnabled).toBe(false);
   await act(async () => { await hook.handlePrimaryAction(); });
   expect(performManualAttendanceTransition).toHaveBeenCalled();

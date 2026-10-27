@@ -24,6 +24,7 @@ let mockRootState;
 jest.mock('../redux/Store', () => ({ store: { getState: () => mockRootState } }));
 
 const tenant = 'https://alpha.example.test';
+const AUTO = 'attendance_action.geo_tagging';
 const scope = buildSettingsScope(tenant, 'EMP-SYNTHETIC');
 const wireFlag = (path, value) => path.startsWith('attendance_action.')
   ? { attendance_action: { [path.split('.')[1]]: value } }
@@ -44,19 +45,27 @@ beforeEach(async () => {
 });
 
 describe('every Boolean capability at the execution boundary', () => {
-  it.each([false, 0, null])('synchronously rejects tenant geo %p received after an automatic ownership read', async geo => {
-    install({ attendance_action: { auto_attendance: true, geo_tagging: 2 } });
-    const owner = await assertCapability('attendance_action.auto_attendance');
-    install({ attendance_action: { auto_attendance: true, geo_tagging: geo } });
-    expect(() => assertCapabilityCurrent('attendance_action.auto_attendance', owner))
-      .toThrow(expect.objectContaining({ code: 'FEATURE_DISABLED', feature: 'attendance_action.auto_attendance' }));
-    await expect(assertCapability('attendance_action.auto_attendance')).rejects.toMatchObject({ code: 'FEATURE_DISABLED' });
+  it.each([false, 0, 2, null])('synchronously rejects tenant geo %p received after an automatic ownership read', async geo => {
+    install({ attendance_action: { geo_tagging: true } });
+    const owner = await assertCapability(AUTO);
+    install({ attendance_action: { geo_tagging: geo } });
+    expect(() => assertCapabilityCurrent(AUTO, owner))
+      .toThrow(expect.objectContaining({ code: 'FEATURE_DISABLED', feature: AUTO }));
+    await expect(assertCapability(AUTO)).rejects.toMatchObject({ code: 'FEATURE_DISABLED' });
+  });
+
+  it('ignores a retired auto_attendance flag: only tenant geo true authorizes automatic punches', async () => {
+    install({ attendance_action: { auto_attendance: true } });
+    await expect(assertCapability(AUTO)).rejects.toMatchObject({ code: 'FEATURE_DISABLED' });
+    install({ attendance_action: { geo_tagging: true, auto_attendance: false } });
+    await expect(assertCapability(AUTO)).resolves.toMatchObject({ scope });
   });
 
   it('checks authentication generation again at the final synchronous boundary', async () => {
-    const owner = await assertCapability('attendance_action.auto_attendance');
+    install({ attendance_action: { geo_tagging: true } });
+    const owner = await assertCapability(AUTO);
     invalidateAuthSession();
-    expect(() => assertCapabilityCurrent('attendance_action.auto_attendance', owner))
+    expect(() => assertCapabilityCurrent(AUTO, owner))
       .toThrow(expect.objectContaining({ code: 'CAPABILITY_SCOPE_CHANGED' }));
   });
 

@@ -5,9 +5,11 @@ import { selectIsLoggedIn } from "../redux/Slices/AuthSlice";
 import { selectEmployeeCode } from "../redux/Slices/UserSlice";
 import {
   selectFeatureSettingsFetchedAt,
+  selectFeatureSettingsHealth,
 } from "../redux/Slices/FeatureSettingsSlice";
 import useFeatureSettings from "../hooks/useFeatureSettings";
 import { SETTINGS_STALE_AFTER_MS } from "../utils/featureSettings";
+import { addReconnectListener } from "../services/offline/NetworkListener";
 
 /**
  * How long a cached answer is good for before a foreground is worth a request.
@@ -39,6 +41,7 @@ export { SETTINGS_STALE_AFTER_MS } from "../utils/featureSettings";
  *     store (persisted by redux-persist)
  *            ↓
  *     foreground, if older than SETTINGS_STALE_AFTER_MS → refresh
+ *     reconnect, unless the last answer is fresh → refresh
  *
  * The app is never blocked on this. The navigator renders immediately off
  * whatever is in the persisted store — the previous session's answer on a
@@ -55,14 +58,15 @@ export default function FeatureSettingsBootstrap() {
   const isLoggedIn = useSelector(selectIsLoggedIn);
   const employeeCode = useSelector(selectEmployeeCode);
   const lastFetchedAt = useSelector(selectFeatureSettingsFetchedAt);
+  const health = useSelector(selectFeatureSettingsHealth);
 
   const { refresh } = useFeatureSettings();
 
   // Read in the AppState handler without making it a dependency, so the
   // subscription is attached once per session rather than re-attached on every
   // fetch.
-  const stateRef = useRef({ lastFetchedAt, refresh, isLoggedIn });
-  stateRef.current = { lastFetchedAt, refresh, isLoggedIn };
+  const stateRef = useRef({ lastFetchedAt, health, refresh, isLoggedIn });
+  stateRef.current = { lastFetchedAt, health, refresh, isLoggedIn };
 
   /* ---------------------------------------------------------------------
    * Scope changes: a different backend or a different employee.
@@ -110,6 +114,22 @@ export default function FeatureSettingsBootstrap() {
     });
 
     return () => subscription.remove();
+  }, [isLoggedIn]);
+
+  /* ---------------------------------------------------------------------
+   * Reconnect: a launch or refresh that failed offline leaves the last answer
+   * stale until the next foreground, and automatic attendance and its
+   * onboarding wait on a fresh one.
+   * ------------------------------------------------------------------- */
+  useEffect(() => {
+    if (!isLoggedIn) return undefined;
+
+    return addReconnectListener(() => {
+      const current = stateRef.current;
+      if (current.isLoggedIn && (current.health === "stale" || current.health === "unavailable")) {
+        current.refresh();
+      }
+    });
   }, [isLoggedIn]);
 
   return null;

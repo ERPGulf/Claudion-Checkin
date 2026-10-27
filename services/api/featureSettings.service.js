@@ -17,9 +17,8 @@ import { normalizeFeatureSettings, hasRecognizedFeatureSettings } from "../../ut
  * to catch: a transport failure, an expired session or a malformed body all come
  * back as `{ error }`, and the store decides what to do about it.
  *
- * Nothing here is logged. The response describes what an employee is allowed to
- * see, and the request carries their bearer token — neither belongs in a log
- * that ships to a device console.
+ * Development builds log the response body (never the token) so the raw API
+ * answer can be checked from Metro; release builds log nothing.
  */
 export const getFeatureSettings = async ({ context, capabilityScope } = {}) => {
   try {
@@ -31,6 +30,9 @@ export const getFeatureSettings = async ({ context, capabilityScope } = {}) => {
       headers: buildHeaders(token),
       ...(capabilityScope ? { capabilityScope } : {}),
     });
+    if (__DEV__) {
+      console.log("[featureSettings] employee_checkin_setting response", JSON.stringify(response.data, null, 2));
+    }
 
     // Normalize at the transport boundary. An empty or malformed success is a
     // failed refresh, so it cannot erase the last valid explicit restrictions.
@@ -39,6 +41,9 @@ export const getFeatureSettings = async ({ context, capabilityScope } = {}) => {
     }
     return { message: normalizeFeatureSettings(response.data) };
   } catch (error) {
+    if (__DEV__) {
+      console.log("[featureSettings] employee_checkin_setting failed", error?.response?.status ?? null, error?.message);
+    }
     return {
       error: parseError(error, "Unable to load feature settings."),
     };

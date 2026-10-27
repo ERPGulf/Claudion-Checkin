@@ -159,10 +159,9 @@ describe("API Client (Interceptors + Token Refresh)", () => {
           "https://example.com/api/method/employee_app.gauth.create_refresh_token",
         )
         .reply(401, {
-          data: JSON.stringify({
-            exc_type: "PermissionError",
-            _error_message: "No permission for User",
-          }),
+          // The backend's relay of Frappe's answer for an unknown or revoked
+          // refresh token.
+          data: JSON.stringify({ exc_type: "DoesNotExistError" }),
         });
 
       await expect(apiClient.get("data")).rejects.toThrow(
@@ -192,10 +191,9 @@ describe("API Client (Interceptors + Token Refresh)", () => {
           "https://example.com/api/method/employee_app.gauth.create_refresh_token",
         )
         .reply(401, {
-          data: JSON.stringify({
-            exc_type: "PermissionError",
-            _error_message: "No permission for User",
-          }),
+          // The backend's relay of Frappe's answer for an unknown or revoked
+          // refresh token.
+          data: JSON.stringify({ exc_type: "DoesNotExistError" }),
         });
     };
 

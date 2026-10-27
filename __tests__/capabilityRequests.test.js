@@ -44,7 +44,7 @@ it('distinguishes optional history from essential private session-status reads',
 
 it.each([true, 1, 'true', '1'])('guards automatic punches represented as %s', auto => {
   for (const data of [{ auto }, JSON.stringify({ auto }), new URLSearchParams({ auto })]) {
-    expect(capabilityForRequest(request('employee_app.attendance_api.add_log_based_on_employee_field', { data }))).toBe('attendance_action.auto_attendance');
+    expect(capabilityForRequest(request('employee_app.attendance_api.add_log_based_on_employee_field', { data }))).toBe('attendance_action.geo_tagging');
   }
 });
 

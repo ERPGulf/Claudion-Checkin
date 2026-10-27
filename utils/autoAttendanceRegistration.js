@@ -87,12 +87,12 @@ export const reconcileAutoAttendanceRegistration = (scope, config) => {
     await assertAttendanceQueueScope(scope);
     const assertCurrent = () => {
       assertCapabilityCurrent(ATTENDANCE_FEATURES.AUTO_ATTENDANCE, scope);
-      return assertEmployeeAutoAttendancePolicyCurrent(scope, { action: "monitor" });
+      return assertEmployeeAutoAttendancePolicyCurrent(scope);
     };
     const assertAllowed = async () => {
       await assertCapability(ATTENDANCE_FEATURES.AUTO_ATTENDANCE,
         { baseUrl: scope.tenantKey, employeeCode: scope.employeeId, generation: scope.generation });
-      await assertEmployeeAutoAttendancePolicy(scope, { action: "monitor" });
+      await assertEmployeeAutoAttendancePolicy(scope);
       return assertCurrent();
     };
     try { await assertAllowed(); } catch {

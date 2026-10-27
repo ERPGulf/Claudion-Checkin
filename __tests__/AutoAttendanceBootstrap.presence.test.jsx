@@ -124,7 +124,6 @@ import RootReducer from "../redux/RootReducer";
 import {
   GEOTAGGING,
   requestAutoAttendanceSync,
-  setAutoAttendanceUserEnabled,
 } from "../redux/Slices/AutoAttendanceSlice";
 import {
   autoCheckInOut,
@@ -149,6 +148,7 @@ import {
 } from "../services/employeeAutoAttendancePolicy";
 import { settingsReceived } from "../redux/Slices/FeatureSettingsSlice";
 import { buildSettingsScope, normalizeFeatureSettings } from "../utils/featureSettings";
+import { automaticAttendanceSettings } from "../test-utils/attendanceScope";
 
 const EMPLOYEE_CODE = "HR-EMP-00011";
 
@@ -158,7 +158,8 @@ const buildStore = (geotagging = GEOTAGGING.ALL_ACTIONS) => {
     preloadedState: {
       userAuth: { isLoggedIn: true, token: "tok" },
       user: { baseUrl: "https://fixture.example.test", userDetails: { employeeCode: EMPLOYEE_CODE } },
-      autoAttendance: { geotagging, userEnabled: true },
+      featureSettings: automaticAttendanceSettings(EMPLOYEE_CODE, "https://fixture.example.test"),
+      autoAttendance: { geotagging },
     },
     middleware: (getDefault) => getDefault({ serializableCheck: false }),
   });
@@ -178,7 +179,7 @@ describe("AutoAttendanceBootstrap presence reconciliation", () => {
 
   const receiveTenantGeo = value => store.dispatch(settingsReceived({
     scope: buildSettingsScope("https://fixture.example.test", EMPLOYEE_CODE),
-    settings: normalizeFeatureSettings({ attendance_action: { geo_tagging: value, auto_attendance: true } }),
+    settings: normalizeFeatureSettings({ attendance_action: { geo_tagging: value } }),
   }));
 
   const mountBootstrap = async (geotagging = GEOTAGGING.ALL_ACTIONS) => {
@@ -223,7 +224,7 @@ describe("AutoAttendanceBootstrap presence reconciliation", () => {
     ]);
   });
 
-  it.each([false, 0, null])("tenant geo %s prevents employee mode 2 legacy monitoring on login", async value => {
+  it.each([false, 0, 2, null])("tenant geo %p prevents employee mode 2 legacy monitoring on login", async value => {
     store = buildStore();
     const scope = await captureAttendanceQueueScope(EMPLOYEE_CODE);
     await receiveEmployeeAutoAttendancePolicy({ geotagging: 2 }, beginEmployeeAutoAttendancePolicyReception(scope));
@@ -241,7 +242,7 @@ describe("AutoAttendanceBootstrap presence reconciliation", () => {
     getOfficeLocation.mockImplementationOnce(() => new Promise(resolve => { releaseOffice = resolve; }));
     await mountBootstrap();
     await waitFor(() => expect(releaseOffice).toBeDefined());
-    await act(async () => { receiveTenantGeo(0); });
+    await act(async () => { receiveTenantGeo(false); });
     await act(async () => { releaseOffice(OFFICE_INSIDE); });
     await flushStartup();
     expect(startGeofence).not.toHaveBeenCalled();
@@ -256,7 +257,7 @@ describe("AutoAttendanceBootstrap presence reconciliation", () => {
     }));
     await mountBootstrap();
     await waitFor(() => expect(releaseStart).toBeDefined());
-    await act(async () => { receiveTenantGeo(0); });
+    await act(async () => { receiveTenantGeo(false); });
     await act(async () => { releaseStart(); });
     await flushStartup();
     expect(mockIsMonitoring).toBe(false);
@@ -298,14 +299,19 @@ describe("AutoAttendanceBootstrap presence reconciliation", () => {
     expect(autoCheckInOut).not.toHaveBeenCalled();
   });
 
-  it("keeps monitoring stopped when the user opts out during native registration", async () => {
+  it("keeps monitoring stopped when the employer disables it during native registration", async () => {
     let releaseStart;
     startGeofence.mockImplementationOnce(() => new Promise(resolve => {
       releaseStart = () => { mockIsMonitoring = true; resolve(); };
     }));
     await mountBootstrap();
     await waitFor(() => expect(releaseStart).toBeDefined());
-    await act(async () => { store.dispatch(setAutoAttendanceUserEnabled(false)); });
+    await act(async () => {
+      store.dispatch(settingsReceived({
+        scope: buildSettingsScope("https://fixture.example.test", EMPLOYEE_CODE),
+        settings: normalizeFeatureSettings({ attendance_action: { geo_tagging: false } }),
+      }));
+    });
     await act(async () => { releaseStart(); });
     await flushStartup();
     expect(mockIsMonitoring).toBe(false);
@@ -430,14 +436,25 @@ describe("AutoAttendanceBootstrap presence reconciliation", () => {
     expect(mockNativeLastEvent.timestamp).toBe(enteredAt);
   });
 
-  it("never logs under the warnings-only policy", async () => {
+  it("never monitors or logs under the warnings-only policy", async () => {
     fetchEmployeeData.mockResolvedValue({
       geotagging: GEOTAGGING.WARNINGS_ONLY,
     });
-
-    await mountBootstrap(GEOTAGGING.WARNINGS_ONLY);
+    store = buildStore(GEOTAGGING.WARNINGS_ONLY);
+    const scope = await captureAttendanceQueueScope(EMPLOYEE_CODE);
+    await receiveEmployeeAutoAttendancePolicy(
+      { geotagging: GEOTAGGING.WARNINGS_ONLY },
+      beginEmployeeAutoAttendancePolicyReception(scope),
+    );
+    render(
+      <Provider store={store}>
+        <AutoAttendanceBootstrap />
+      </Provider>,
+    );
     await flushStartup();
 
+    expect(startGeofence).not.toHaveBeenCalled();
+    expect(listeners.onGeofenceExit).toHaveLength(0);
     expect(autoCheckInOut).not.toHaveBeenCalled();
     expect((await readSession()).status).toBe(SESSION_STATUS.CHECKED_OUT);
     // Still not a transition, so the mark stays put here too.

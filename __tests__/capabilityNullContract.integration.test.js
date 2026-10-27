@@ -265,7 +265,7 @@ const operations = [
   ['attendance request fetch upload', 'attendance_action.attendance_request', () => attendance.uploadAttendanceAttachment(file, 'DOC-SYNTHETIC')],
   ['break read', 'attendance_action.employee_checkin_break', () => attendance.getTodayBreaks(employee, '2026-10-21')],
   ['break mutation', 'attendance_action.employee_checkin_break', () => attendance.employeeBreak({ employeeCode: employee, type: 'IN' })],
-  ['automatic attendance mutation', 'attendance_action.auto_attendance', () => attendance.autoCheckInOut({ employeeCode: employee, type: 'IN' })],
+  ['automatic attendance mutation', 'attendance_action.geo_tagging', () => attendance.autoCheckInOut({ employeeCode: employee, type: 'IN' })],
   ['photo upload', 'attendance_action.photo_upload', () => userFileUpload(file, 'CHECKIN-SYNTHETIC')],
   ['photo association', 'attendance_action.photo_upload', () => putUserFile(employee)],
 ];

@@ -13,6 +13,9 @@ jest.mock("../services/offline/AttendanceVerification", () => ({
 }));
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import MockAdapter from "axios-mock-adapter";
+import apiClient from "../services/api/apiClient";
+import { syncPendingAttendance, resetSyncService } from "../services/offline/AttendanceSyncService";
 import * as Native from "../modules/expo-auto-attendance";
 import * as Events from "../services/offline/AutoAttendanceEventRepository";
 import { drainAutoAttendanceEvents, ingestPendingNativeEvents, verifyAutoAttendanceEvent } from "../services/offline/AutoAttendanceEventProcessor";
@@ -53,6 +56,7 @@ const receiveMode = async mode => receiveEmployeeAutoAttendancePolicy({ geotaggi
 
 beforeEach(async () => {
   store.dispatch(settingsInvalidated());
+  receiveAutomaticAvailability(true);
   __resetAll(); resetDatabaseHandle(); resetOfflineCapability();
   await AsyncStorage.clear();
   await loginQueueEmployee(employeeId);
@@ -73,17 +77,14 @@ beforeEach(async () => {
   await receiveMode(2);
 });
 
+// The tenant's automatic-attendance switch, `attendance_action.geo_tagging`.
 const receiveAutomaticAvailability = value => store.dispatch(settingsReceived({
   scope: buildSettingsScope(TEST_TENANT, employeeId),
-  settings: normalizeFeatureSettings({ attendance_action: { auto_attendance: value } }),
-}));
-const receiveGeo = value => store.dispatch(settingsReceived({
-  scope: buildSettingsScope(TEST_TENANT, employeeId),
-  settings: normalizeFeatureSettings({ attendance_action: { auto_attendance: true, geo_tagging: value } }),
+  settings: normalizeFeatureSettings({ attendance_action: { geo_tagging: value } }),
 }));
 
-it.each(["ENTER", "EXIT"])("retains a background %s receipt without a new punch under tenant geo 0 / employee mode 2", async transition => {
-  receiveGeo(0);
+it.each(["ENTER", "EXIT"])("retains a background %s receipt without a new punch under tenant geo_tagging false / employee mode 2", async transition => {
+  receiveAutomaticAvailability(false);
   const source = event(`tenant-geo-${transition}`, 1, transition);
   journal = [source];
   await drain();
@@ -92,9 +93,9 @@ it.each(["ENTER", "EXIT"])("retains a background %s receipt without a new punch 
   expect(await Events.findEvent(source.eventId)).toMatchObject({ status: "pending", reason: "capability-disabled" });
 });
 
-it("rechecks tenant geo 0 received during a pending event server-clock request", async () => {
+it("rechecks tenant geo_tagging false received during a pending event server-clock request", async () => {
   resolveServerTimestampAt.mockImplementationOnce(async at => {
-    receiveGeo(0);
+    receiveAutomaticAvailability(false);
     return wallClock(at);
   });
   journal = [event("tenant-geo-clock", 1)];
@@ -108,10 +109,10 @@ it("rechecks tenant geo 0 received during a pending event server-clock request",
 it("does not adopt another tenant's geo authorization for an event pending during tenant switching", async () => {
   const nextTenant = "https://next-synthetic.example.test";
   resolveServerTimestampAt.mockImplementationOnce(async at => {
-    receiveGeo(0);
+    receiveAutomaticAvailability(false);
     await loginQueueEmployee(employeeId, nextTenant);
     store.dispatch(settingsReceived({ scope: buildSettingsScope(nextTenant, employeeId),
-      settings: normalizeFeatureSettings({ attendance_action: { auto_attendance: true, geo_tagging: 2 } }) }));
+      settings: normalizeFeatureSettings({ attendance_action: { geo_tagging: true } }) }));
     const nextScope = await captureAttendanceQueueScope(employeeId);
     await receiveEmployeeAutoAttendancePolicy({ geotagging: 2 }, beginEmployeeAutoAttendancePolicyReception(nextScope));
     return wallClock(at);
@@ -128,7 +129,7 @@ it("recovers an accepted source event after tenant geo is disabled", async () =>
   const source = event("accepted-before-tenant-geo", 1);
   await enqueue({ employeeId, tenantKey: TEST_TENANT, attendanceType: "auto", action: "checkin",
     timestamp: wallClock(source.timestamp), sourceEventId: source.eventId });
-  receiveGeo(0);
+  receiveAutomaticAvailability(false);
   journal = [source];
   await drain();
   expect(autoCheckInOut).not.toHaveBeenCalled();
@@ -254,6 +255,35 @@ it("online OUT remains behind an earlier queued IN when the app reopens", async 
   journal = [event("exit", 2, "EXIT")]; await drain();
   expect(autoCheckInOut).not.toHaveBeenCalled();
   expect((await listAll()).sort((a, b) => a.id - b.id).map(row => row.action)).toEqual(["checkin", "checkout"]);
+});
+
+it("online ENTER then offline EXIT: the check-out is kept locally and delivered exactly once", async () => {
+  journal = [event("enter", 1)]; await drain();
+  expect(await Events.findEvent("enter")).toMatchObject({ status: "handled" });
+  expect(autoCheckInOut.mock.calls.map(([input]) => input.type)).toEqual(["IN"]);
+
+  fetchShouldAttemptRequest.mockResolvedValue(false);
+  journal = [event("exit", 2, "EXIT")]; await drain();
+  expect(journal).toEqual([]);
+  expect(await readSession()).toMatchObject({ status: "CHECKED_OUT", closedBy: "AUTO" });
+  const [queued] = await listAll();
+  expect(queued).toMatchObject({ action: "checkout", sourceEventId: "exit", status: "pending" });
+  // Saved at the crossing (device clock, local wall time), not at upload.
+  expect(new Date(queued.timestamp.replace(" ", "T")).getTime()).toBe(Math.floor((started + 2000) / 1000) * 1000);
+
+  fetchShouldAttemptRequest.mockResolvedValue(true);
+  resetSyncService();
+  const http = new MockAdapter(apiClient);
+  http.onPost(/add_offline_employee_checkins/).reply(200, { message: { inserted: ["SERVER-OUT"], failed: [] } });
+  try {
+    await syncPendingAttendance({ employeeId, wakeAllPending: true });
+    await syncPendingAttendance({ employeeId, wakeAllPending: true });
+    expect(http.history.post).toHaveLength(1);
+    expect((await listAll())[0]).toMatchObject({ status: "synced", serverCheckinId: "SERVER-OUT", acceptanceConfirmed: 1 });
+    expect(autoCheckInOut).toHaveBeenCalledTimes(1);
+  } finally {
+    http.restore(); resetSyncService();
+  }
 });
 
 it("does not submit an orphan OUT after the queued IN was rejected", async () => {

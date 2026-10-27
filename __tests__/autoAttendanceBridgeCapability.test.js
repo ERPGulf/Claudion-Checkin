@@ -23,20 +23,18 @@ const native = requireOptionalNativeModule();
 const employeeCode = "EMP-SYNTHETIC";
 const office = { identifier: "office-main", latitude: 25.28, longitude: 51.52, radius: 100,
   tenantKey: TEST_TENANT, employeeId: employeeCode, geotagging: 2, registrationId: "synthetic-registration" };
+// The tenant's automatic-attendance switch, `attendance_action.geo_tagging`.
 const receive = value => store.dispatch(settingsReceived({
   scope: buildSettingsScope(TEST_TENANT, employeeCode),
-  settings: normalizeFeatureSettings({ attendance_action: { auto_attendance: value } }),
+  settings: normalizeFeatureSettings({ attendance_action: { geo_tagging: value } }),
 }));
 const receiveMode = async mode => receiveEmployeeAutoAttendancePolicy({ geotagging: mode },
   beginEmployeeAutoAttendancePolicyReception(await captureAttendanceQueueScope(employeeCode)));
-const receiveGeo = value => store.dispatch(settingsReceived({
-  scope: buildSettingsScope(TEST_TENANT, employeeCode),
-  settings: normalizeFeatureSettings({ attendance_action: { auto_attendance: true, geo_tagging: value } }),
-}));
 
 beforeEach(async () => {
   await AsyncStorage.clear(); await loginQueueEmployee(employeeCode);
   store.dispatch(settingsInvalidated());
+  receive(true);
   jest.clearAllMocks();
   native.startGeofence.mockResolvedValue(undefined);
   native.stopGeofence.mockResolvedValue(undefined);
@@ -66,7 +64,7 @@ it("removes monitoring if a denial arrives while the native operation is pending
 });
 
 it.each([false, 0, null])("refuses direct monitoring with tenant geo %s and employee mode 2", async value => {
-  receiveGeo(value);
+  receive(value);
   await expect(startGeofence(office)).rejects.toMatchObject({ code: "FEATURE_DISABLED" });
   expect(native.startGeofence).not.toHaveBeenCalled();
 });
@@ -75,7 +73,7 @@ it("rechecks tenant geo after the awaited employee authorization before native d
   const authorize = employeePolicy.assertEmployeeAutoAttendancePolicy;
   jest.spyOn(employeePolicy, "assertEmployeeAutoAttendancePolicy").mockImplementationOnce(async (...args) => {
     const policy = await authorize(...args);
-    receiveGeo(0);
+    receive(false);
     return policy;
   });
   await expect(startGeofence(office)).rejects.toMatchObject({ code: "FEATURE_DISABLED" });
@@ -83,13 +81,13 @@ it("rechecks tenant geo after the awaited employee authorization before native d
 });
 
 it("removes a pending native registration when tenant geo is disabled", async () => {
-  native.startGeofence.mockImplementationOnce(async () => receiveGeo(0));
+  native.startGeofence.mockImplementationOnce(async () => receive(false));
   await expect(startGeofence(office)).rejects.toMatchObject({ code: "FEATURE_DISABLED" });
   expect(native.stopGeofence).toHaveBeenCalledTimes(1);
 });
 
 it("stops an initial-presence retry after tenant geo is disabled", async () => {
-  native.retryInitialPresence.mockImplementationOnce(async () => receiveGeo(0));
+  native.retryInitialPresence.mockImplementationOnce(async () => receive(false));
   await expect(retryInitialPresence()).rejects.toMatchObject({ code: "FEATURE_DISABLED" });
   expect(native.stopGeofence).toHaveBeenCalledTimes(1);
 });
@@ -106,16 +104,15 @@ it("rejects direct monitoring under employee mode 0", async () => {
   expect(native.startGeofence).not.toHaveBeenCalled();
 });
 
-it("allows warnings-only monitoring under independently received employee mode 1", async () => {
+it("refuses monitoring for warnings-only employee mode 1", async () => {
   await receiveMode(1);
-  await startGeofence({ ...office, geotagging: 1 });
-  expect(native.startGeofence).toHaveBeenCalledWith(expect.objectContaining({ geotagging: 1 }));
+  await expect(startGeofence({ ...office, geotagging: 1 })).rejects.toMatchObject({ code: "EMPLOYEE_AUTO_ATTENDANCE_DISABLED" });
+  expect(native.startGeofence).not.toHaveBeenCalled();
 });
 
 it.each([0, 1])("removes a pending mode 2 native registration after employee mode changes to %s", async mode => {
   native.startGeofence.mockImplementationOnce(async () => receiveMode(mode));
-  await expect(startGeofence(office)).rejects.toMatchObject({ code: mode === 0
-    ? "EMPLOYEE_AUTO_ATTENDANCE_DISABLED" : "EMPLOYEE_AUTO_ATTENDANCE_POLICY_CHANGED" });
+  await expect(startGeofence(office)).rejects.toMatchObject({ code: "EMPLOYEE_AUTO_ATTENDANCE_DISABLED" });
   expect(native.stopGeofence).toHaveBeenCalledTimes(1);
 });
 
