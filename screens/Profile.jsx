@@ -25,6 +25,7 @@ import ActionButton from "../components/common/ActionButton";
 import AppearanceSetting from "../components/settings/AppearanceSetting";
 import OfflineSyncSetting from "../components/settings/OfflineSyncSetting";
 import AttendanceRecoverySetting from "../components/settings/AttendanceRecoverySetting";
+import AttendanceSyncTestSetting from "../components/settings/AttendanceSyncTestSetting";
 import FeatureSettingsStatus from "../components/settings/FeatureSettingsStatus";
 import CrashlyticsTestSetting from "../components/settings/CrashlyticsTestSetting";
 // TEMPORARY: New Home Experience experiment — remove with the feature.
@@ -563,6 +564,7 @@ function Profile() {
 
         <OfflineSyncSetting />
         <AttendanceRecoverySetting />
+        <AttendanceSyncTestSetting />
 
         {/* Renders nothing unless the feature-settings fetch has failed. */}
         <FeatureSettingsStatus />

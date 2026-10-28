@@ -56,13 +56,13 @@ Without a verified backend idempotency contract, the client cannot guarantee bot
 
 ## Incident records and validation
 
-The reported incident is evidence for regression scenarios only: record **#1**, EXIT at **2026-10-27 09:59:46**, `needs_review`; record **#2**, ENTER at **2026-10-27 10:05:21**, held behind #1; employee **HR-EMP-00052**. This change does not reset their markers, remove them, resend them, reassign their tenant or alter production history. Any recovery must start with an authorized, read-only comparison against exact original server records.
+The reported incident supplied regression scenarios: record **#1**, EXIT at **2026-10-27 09:59:46**, `needs_review`; record **#2**, ENTER at **2026-10-27 10:05:21**, held behind #1; employee **HR-EMP-00052**. The implementation did not reset or resend these records. Subsequently, the user explicitly requested deletion of unsynced Simulator records: those two local rows were backed up and removed, retaining all 16 synchronized rows and the native event ledger. That local cleanup did not resolve or change their backend outcomes.
 
 Automated coverage uses synthetic tenants/credentials, mocked HTTP and an in-memory SQLite fixture. See `instanceAvailability`, automatic event/ambiguous-dispatch suites, queue/sync suites and `attendanceRecovery` tests for coverage of the availability gate, uncertainty boundary and UI. Do not treat those tests as evidence of live tenant compatibility or native-device background execution.
 
 Recovery coverage includes light/dark rendering, preflight outage and unsupported-endpoint UI through the real mocked coordinator, persisted outage copy after remount, source-order dependency descriptions, historical manual recovery, and evidence-gated cancellation labels. The final delivery report records executed suite counts separately from live-device validation.
 
-No dedicated authorized staging instance/employee was supplied. Live firewall simulator tests, backend compatibility checks and physical-device validation therefore remain **unexecuted**. Use a disposable authorized test employee for this checklist; preserve existing attendance and queues:
+No dedicated staging instance/employee was supplied. Live firewall tests, broader backend compatibility checks and physical-device validation remain **unexecuted**. The later authorized real-network offline Simulator test is documented below. Use a disposable authorized test employee for the remaining checklist; preserve existing attendance and queues:
 
 1. Confirm the server-time GET contract, authentication refresh, and that repeated reads create no attendance records for each supported tenant, including custom ports.
 2. Establish a confirmed ENTER; keep network transport connected and block only the configured test instance. Deliver EXIT and inspect native receipt, SQLite persistence and diagnostic logs. Expect failed health GET, no attendance POST, empty attendance dispatch marker and retained pending work.
@@ -94,11 +94,47 @@ No dedicated authorized staging instance/employee was supplied. Live firewall si
 
 No backend code, native geofence source, new dependency, independent queue, or global polling system was added.
 
+## Profile test data controls
+
+Profile includes **Offline attendance API test** in development and `preview` builds. Each tap creates one complete historical IN/OUT pair for the authenticated tenant and employee:
+
+- **Add chronological pair** appends a newer random pair and inserts IN before OUT.
+- **Add non-chronological pair** prepends an older random pair and deliberately inserts OUT before IN. The normal worker still orders these historical test rows by timestamp, so it sends IN before OUT.
+
+The first pair starts approximately seven days ago. Later pairs use random gaps of 30–300 seconds and durations of 60–900 seconds. Timestamps use the current tenant's cached server clock; future timestamps are refused. The two rows and reciprocal pairing links commit in one SQL statement, so workers cannot claim half a pair. Existing rows are never reset or rewritten.
+
+These are **real queued attendance records** for use with a test account. Normal availability checks, policy gates, ordering blockers and background synchronization apply; no separate upload endpoint or worker is used. Profile's existing recovery controls show their outcomes. Adding fixtures does not change the live attendance session or fabricate native geofence receipts. The service also enforces the build restriction and current tenant/employee permissions when called outside the UI.
+
+Implementation: `components/settings/AttendanceSyncTestSetting.jsx`, `hooks/useAttendanceSyncTest.js`, `services/offline/AttendanceSyncTestService.js`, and repository helpers `readSyncTestRange` / `enqueueSyncTestPair`. The `syncTest` payload metadata stays local and is excluded by the existing offline API payload builder.
+
 ## Executed validation
 
-- Full Jest suite: **130 suites passed; 2,929 tests passed; 13 existing TODOs; zero failed assertions**. Command: `npm test -- --runInBand --watchman=false --silent --forceExit --json --outputFile=/private/tmp/claudion-attendance-final-jest.json`. Jest remained open after reporting results without forced shutdown, so the final full run used `--forceExit`; open-handle cleanup was not established by these checks.
-- iOS and Android Metro production exports passed using `CI=1 node node_modules/expo/bin/cli export --platform ios --platform android --output-dir /private/tmp/claudion-attendance-final-export --no-bytecode --max-workers 2`. These are JavaScript bundle checks, not native builds or device execution.
+- Full Jest suite after the Profile test controls: **131 suites passed; 2,943 tests passed; 13 existing TODOs; zero failed assertions**. Command: `npm test -- --runInBand --watchman=false --silent --forceExit --json --outputFile=/private/tmp/claudion-profile-attendance-test-jest.json`. Jest remained open after reporting results without forced shutdown, so the full run used `--forceExit`; open-handle cleanup was not established by these checks.
+- iOS and Android Metro production exports passed using `CI=1 node node_modules/expo/bin/cli export --platform ios --platform android --output-dir /private/tmp/claudion-profile-attendance-test-export --no-bytecode --max-workers 2`. These are JavaScript bundle checks, not native builds.
 - `git diff --check` passed. No commit, push or deployment was performed.
 - Mocked integration covers blocked-instance ENTER/EXIT, online ENTER followed by blocked EXIT, same-Wi-Fi recovery, multiple sessions across worker/database-handle restart, source/time preservation, cross-tenant clock isolation, and commit/lost-response verification without repost. Native capture/replay and policy/manual regressions remain covered by the existing mocked suites.
-- Live firewall testing, deployed endpoint side effects/compatibility, physical iPhone/Android background delivery, and native builds remain unexecuted. No application SQLite database or production attendance record was accessed or modified during validation.
+- During the mocked implementation validation, no application SQLite database or production attendance record was accessed or modified. The separately authorized live Simulator test below created one real IN/OUT pair. Live firewall testing, broader deployed endpoint side effects/compatibility, physical iPhone/Android background delivery, and native builds remain unexecuted.
+
+## Authorized offline Simulator test — 2026-10-28
+
+The user explicitly approved resetting the stale local session, creating and synchronizing **one real IN/OUT pair** on the current Rowad account, and temporarily disconnecting the Mac's Wi-Fi with automatic restoration. The test used the running iPhone 17 Simulator (iOS 26.5), employee `HR-EMP-00052`, and the existing AL-Rowad Clinic geofence (100 m, automatic mode 2). No Profile fixtures or fabricated native events were used.
+
+SQLite was backed up before the reset. After Wi-Fi was disconnected, the stale session was closed locally through `reconcileSessionFromServer({ activeStartedAt: null })` as test setup, with its Redux mirror updated. This setup call did not read server status or submit a checkout. `simctl location` established an outside baseline approximately 1.1 km north of the location; the native `retryInitialPresence` method completed the previously unfinished outside-state observation. Interpolated simulated movement then crossed into and out of the real registered region.
+
+| Check | Observed result |
+| --- | --- |
+| Actual disconnected transport | Wi-Fi off at 07:12:24 UTC; the app reported `type: none`, `isConnected: false`, `isInternetReachable: false`, and request admission false. |
+| Native ENTER while offline | Event sequence 8 at 07:13:29.214 UTC; durable session became `CHECKED_IN` with origin `AUTO`; queue row **19**, IN at server wall-clock `2026-10-28 10:13:28`. |
+| Native EXIT while offline | Event sequence 9 at 07:13:41.734 UTC; durable session became `CHECKED_OUT`, closed by `AUTO`; queue row **20**, OUT at `2026-10-28 10:13:41`. |
+| Offline persistence and pairing | Both rows were `pending`, linked reciprocally; each native receipt was handled with `queued: true`. Both `onlineAttemptAt` and queue `uploadAttemptAt` were null; upload attempt counts were zero. |
+| Reconnection without relaunch | Wi-Fi restored at 07:13:46 UTC, but NetInfo continued reporting `none` for the entire 120-second observation. Both rows stayed pending with zero upload attempts. A separate authenticated server-time GET returned HTTP 200 while NetInfo still said offline. This part of the test **did not pass**. |
+| Automatic startup recovery | After app relaunch outside the region, NetInfo reported Wi-Fi. The existing worker sent row 19 before row 20, with one upload attempt each; both became `synced`, `acceptanceConfirmed: 1`. No manual Sync now or direct attendance submission was invoked. |
+| Backend confirmation | Read-only `verifyQueuedAttendance` matched employee, original timestamp and direction to IN **EMP-CKIN-10-2026-000028** and OUT **EMP-CKIN-10-2026-000029**. |
+| Preservation and final state | All columns of the previous 16 queue rows and 7 native ledger rows matched the backup. Final counts: 18 synchronized queue rows, 9 handled native events, zero unsynced rows, empty native pending journal, SQLite integrity `ok`; session checked out and Mac Wi-Fi restored. |
+
+The installed NetInfo README documents missed iOS Simulator network-change notifications after host Wi-Fi reconnect (`node_modules/@react-native-community/netinfo/README.md`, “Issues with the iOS simulator”). Its installed native `RNCNetInfo.mm:getCurrentState` returns the watcher's cached state, and `RNCConnectionStateWatcher.m` updates that state on reachability callbacks. `NetworkListener.fetchShouldAttemptRequest` calls `NetInfo.fetch`; the worker correctly declined uploads while that state remained `none`. The independent successful GET establishes that actual server reachability and the Simulator's connectivity report diverged.
+
+This proves native foreground offline capture, durable pairing, restart persistence and ordered live queue delivery on this Simulator. It does **not** establish seamless reconnection on a physical phone, background/locked/terminated delivery, Android behavior, or a production firewall outage. Validate transport restoration on a physical iPhone before attributing this Simulator notification failure to device behavior or changing the transport gate.
+
+Local evidence and the before-test SQLite backup are in `/private/tmp/claudion-offline-boundary-koDmyq`; final app/queue evidence is in `/private/tmp/claudion-offline-boundary-pKT8wR`, and read-only server matches are in `/private/tmp/claudion-offline-boundary-p5nYIo`. Temporary test automation lived outside the repository. No runtime source code was changed for this live test; no commit, push or deployment was performed.
 

@@ -178,7 +178,7 @@ export const registerQueueDrainHandler = (handler) => {
   };
 };
 
-const requestQueueDrain = (context) => {
+export const requestQueueDrain = (context) => {
   if (!queueDrainHandler) return;
 
   try {

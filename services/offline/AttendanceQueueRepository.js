@@ -341,6 +341,54 @@ export const beginDirectAttendanceReceipt = async ({
     ...(!row ? { reason: "earlier-attendance-unconfirmed" } : {}) };
 };
 
+/** Historical test fixtures use timestamp FIFO, without inventing native event provenance. */
+export const readSyncTestRange = async ({ tenantKey, employeeId }) => {
+  const database = await getDatabase();
+  return database.getFirstAsync(
+    `SELECT MIN(timestamp) AS earliest, MAX(timestamp) AS latest FROM ${QUEUE_TABLE}
+      WHERE tenantKey = ? AND employeeId = ? AND json_valid(payload)
+        AND json_extract(payload, '$.syncTest.batchId') IS NOT NULL;`,
+    [tenantKey, employeeId],
+  );
+};
+
+/**
+ * Insert a complete historical fixture in one statement, with both pair links
+ * already present before a concurrent worker can claim either row. Explicit
+ * IDs respect sqlite_sequence as well as MAX(id), so removed IDs are not reused.
+ * This seeds test history; it does not transition the employee's live session.
+ */
+export const enqueueSyncTestPair = async ({ tenantKey, employeeId, employeeDocname,
+  checkinTime, checkoutTime, reverse, sessionId, payload, location, assertCurrent, now = Date.now() }) => {
+  if (!tenantKey || !employeeId || !sessionId || typeof assertCurrent !== "function" ||
+    !checkinTime || !checkoutTime || checkinTime >= checkoutTime) throw new Error("Invalid attendance test pair.");
+  const database = await getDatabase();
+  const entries = reverse
+    ? [QUEUE_ACTION.CHECKOUT, checkoutTime, QUEUE_ACTION.CHECKIN, checkinTime]
+    : [QUEUE_ACTION.CHECKIN, checkinTime, QUEUE_ACTION.CHECKOUT, checkoutTime];
+  assertCurrent();
+  await database.runAsync(
+    `WITH next_id AS MATERIALIZED (
+       SELECT MAX(COALESCE((SELECT MAX(id) FROM ${QUEUE_TABLE}), 0),
+         COALESCE((SELECT seq FROM sqlite_sequence WHERE name = '${QUEUE_TABLE}'), 0)) + 1 AS value
+     ), pair(action, timestamp, position) AS (VALUES (?, ?, 0), (?, ?, 1))
+     INSERT INTO ${QUEUE_TABLE}
+       (id, employeeId, employeeDocname, tenantKey, attendanceType, action, timestamp,
+        latitude, longitude, address, deviceId, payload, status, retryCount, nextAttemptAt,
+        pairedAttendanceId, sessionId, createdAt, updatedAt)
+     SELECT n.value + p.position, ?, ?, ?, ?, p.action, p.timestamp,
+       ?, ?, ?, 'MobileAPP', ?, 'pending', 0, 0, n.value + 1 - p.position, ?, ?, ?
+       FROM next_id n CROSS JOIN pair p ORDER BY p.position;`,
+    [...entries, employeeId, employeeDocname ?? null, tenantKey, ATTENDANCE_TYPE.AUTO,
+      location?.latitude ?? null, location?.longitude ?? null, location?.name ?? null,
+      JSON.stringify(payload), sessionId, now, now],
+  );
+  return hydrateAll(await database.getAllAsync(
+    `SELECT * FROM ${QUEUE_TABLE} WHERE tenantKey = ? AND employeeId = ? AND sessionId = ? ORDER BY id;`,
+    [tenantKey, employeeId, sessionId],
+  ));
+};
+
 /** Durable handoff recovery is keyed by native identity, never a new clock offset. */
 export const findBySourceEventId = async ({ sourceEventId, tenantKey, employeeId }) => {
   if (!sourceEventId || !tenantKey || !employeeId) return null;
