@@ -73,11 +73,13 @@ const initialState = {
   // Native monitoring as the bootstrap last left it, for one account:
   // { scope, state: 'active' | 'unavailable' | 'permission' }.
   monitoring: null,
-  // Per account (settings scope, tenant::employee): the location permission
-  // state the employee last declined in, so onboarding does not ask again until
-  // that state changes. Survives sign-out (see REVERT_ALL); keyed, so it never
-  // reaches another account.
-  declinedLocationAccess: {},
+  // Per account (settings scope, tenant::employee): the employee answered the
+  // location explanation (Continue or Not now), so onboarding never opens it by
+  // itself again; the Automatic attendance screen offers it on request. Survives
+  // sign-out (see REVERT_ALL); keyed, so it never reaches another account.
+  // Forgotten when the account stops being eligible (AutoAttendanceOnboarding),
+  // so becoming eligible again is evaluated afresh.
+  locationOnboarding: {},
   // Bumped to ask AutoAttendanceBootstrap — the single owner of geofence
   // registration — to re-run its startup sequence. Location access granted
   // in-app arrives after the bootstrap's own attempt, which bailed at the
@@ -91,7 +93,7 @@ export const AutoAttendanceSlice = createSlice({
   initialState,
   extraReducers: (builder) => builder.addCase("REVERT_ALL", (state) => ({
     ...initialState,
-    declinedLocationAccess: state.declinedLocationAccess ?? {},
+    locationOnboarding: state.locationOnboarding ?? {},
   })),
   reducers: {
     employeePolicyRequested: (state, action) => {
@@ -133,10 +135,12 @@ export const AutoAttendanceSlice = createSlice({
     autoAttendanceMonitoringChanged: (state, action) => {
       state.monitoring = action.payload;
     },
-    locationAccessDeclined: (state, action) => {
-      const { scope, key } = action.payload;
-      if (!state.declinedLocationAccess) state.declinedLocationAccess = {};
-      state.declinedLocationAccess[scope] = key;
+    locationOnboardingAnswered: (state, action) => {
+      if (!state.locationOnboarding) state.locationOnboarding = {};
+      state.locationOnboarding[action.payload.scope] = true;
+    },
+    locationOnboardingReset: (state, action) => {
+      delete state.locationOnboarding?.[action.payload.scope];
     },
     // Coerced rather than incremented directly: persisted state written before
     // this field existed rehydrates without it, and undefined + 1 is NaN.
@@ -152,7 +156,8 @@ export const {
   employeePolicyRestored,
   setAutoAttendanceGeotagging,
   autoAttendanceMonitoringChanged,
-  locationAccessDeclined,
+  locationOnboardingAnswered,
+  locationOnboardingReset,
   requestAutoAttendanceSync,
 } = AutoAttendanceSlice.actions;
 
@@ -166,8 +171,8 @@ export const selectAutoAttendanceScope = (state) =>
 export const selectAutoAttendanceTenantEnabled = (state) =>
   isFeatureEnabled(selectFeatureSettings(state), ATTENDANCE_FEATURES.AUTO_ATTENDANCE);
 
-export const selectAutoAttendanceDeclinedLocationAccess = (state) =>
-  state.autoAttendance?.declinedLocationAccess?.[selectAutoAttendanceScope(state)] ?? null;
+export const selectLocationOnboardingAnswered = (state) =>
+  !!state.autoAttendance?.locationOnboarding?.[selectAutoAttendanceScope(state)];
 
 export const selectAutoAttendanceGeotagging = (state) => {
   const policy = state.autoAttendance?.employeePolicy;

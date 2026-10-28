@@ -7,7 +7,7 @@ import { getPreciseDistance } from 'geolib';
 import {
   GEOTAGGING,
   GEOTAGGING_LABELS,
-  locationAccessDeclined,
+  locationOnboardingAnswered,
   requestAutoAttendanceSync,
   selectAutoAttendanceAllowed,
   selectAutoAttendanceConfigured,
@@ -46,7 +46,6 @@ import {
   WARNING_CODES,
   askForLocationAccess,
   describeAutoAttendanceStatus,
-  locationAccessKey,
   parseGeofenceInput,
   readDevicePosition,
   readLocationAccess,
@@ -380,12 +379,9 @@ export default function useAutoAttendance() {
       const access = await askForLocationAccess({ fromTap: true });
       await assertMonitoringAllowed(scope);
       setPermissionGranted(access.granted);
-      if (!access.granted) {
-        if (access.asked) {
-          dispatch(locationAccessDeclined({ scope: settingsScope, key: locationAccessKey(access) }));
-        }
-        return;
-      }
+      // Answered here, so sign-in onboarding does not explain it again.
+      if (access.asked) dispatch(locationOnboardingAnswered({ scope: settingsScope }));
+      if (!access.granted) return;
 
       // The bootstrap's own run checked permission before it was granted.
       dispatch(requestAutoAttendanceSync());

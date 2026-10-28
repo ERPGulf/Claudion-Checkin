@@ -46,6 +46,7 @@ import { automaticAttendanceSettings, loginQueueEmployee, TEST_TENANT } from '..
 import { autoAttendanceMonitoringChanged } from '../redux/Slices/AutoAttendanceSlice';
 import { settingsReceived } from '../redux/Slices/FeatureSettingsSlice';
 import { buildSettingsScope, normalizeFeatureSettings } from '../utils/featureSettings';
+import { setLocationAccessExplainer } from '../utils/autoAttendance';
 import { captureAttendanceQueueScope } from '../services/offline/attendanceQueueProvenance';
 import { beginEmployeeAutoAttendancePolicyReception, receiveEmployeeAutoAttendancePolicy } from '../services/employeeAutoAttendancePolicy';
 
@@ -62,9 +63,14 @@ const receiveTenantGeo = value => mockStore.dispatch(settingsReceived({
   settings: normalizeFeatureSettings({ attendance_action: { geo_tagging: value } }),
 }));
 const mount = () => render(<Provider store={mockStore}><Harness /></Provider>);
-// Answers the explanation shown before any system prompt.
-const continueDisclosure = () => jest.spyOn(Alert, 'alert').mockImplementation((_, __, buttons) =>
-  buttons?.find(button => button.text === 'Continue')?.onPress());
+// Answers Continue on the explanation shown before any system prompt.
+let unregisterExplainer = () => {};
+const continueDisclosure = () => {
+  const explain = jest.fn((_, proceed) => proceed());
+  unregisterExplainer = setLocationAccessExplainer(explain);
+  return explain;
+};
+afterEach(() => unregisterExplainer());
 
 beforeEach(async () => {
   jest.clearAllMocks();
@@ -147,7 +153,8 @@ describe('location permission recovery', () => {
   });
 
   it('does not send the employee to Settings straight after they decline the prompt', async () => {
-    const alert = continueDisclosure();
+    const explain = continueDisclosure();
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     Location.getBackgroundPermissionsAsync.mockResolvedValue({ status: 'undetermined', canAskAgain: true });
     Location.requestBackgroundPermissionsAsync.mockResolvedValue(DENIED);
     const screen = mountPermission();
@@ -155,10 +162,11 @@ describe('location permission recovery', () => {
     await act(async () => { fireEvent.press(screen.getByText('Grant')); });
 
     await waitFor(() => expect(Location.requestBackgroundPermissionsAsync).toHaveBeenCalled());
-    expect(alert.mock.calls.some(([title]) => title === 'Location permission required')).toBe(false);
-    // Recorded, so sign-in onboarding does not ask again in the same state.
-    expect(mockStore.getState().autoAttendance.declinedLocationAccess[buildSettingsScope(TEST_TENANT, 'EMP-001')])
-      .toBe('granted/undetermined/true');
+    expect(explain).toHaveBeenCalledTimes(1);
+    expect(alert).not.toHaveBeenCalled();
+    // Recorded, so sign-in onboarding does not explain it again.
+    await waitFor(() => expect(mockStore.getState().autoAttendance
+      .locationOnboarding[buildSettingsScope(TEST_TENANT, 'EMP-001')]).toBe(true));
   });
 
   it('re-reads permission when the app returns from Settings', async () => {

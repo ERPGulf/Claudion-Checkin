@@ -2,39 +2,50 @@ import { useEffect, useState } from "react";
 import { AppState } from "react-native";
 import { useDispatch, useSelector } from "react-redux";
 import { selectIsLoggedIn } from "../redux/Slices/AuthSlice";
-import { selectFeatureSettingsFetchedAt } from "../redux/Slices/FeatureSettingsSlice";
 import {
-  locationAccessDeclined,
+  selectFeatureSettingsFetchedAt,
+  selectFeatureSettingsScope,
+} from "../redux/Slices/FeatureSettingsSlice";
+import {
+  locationOnboardingAnswered,
+  locationOnboardingReset,
   requestAutoAttendanceSync,
   selectAutoAttendanceConfigured,
-  selectAutoAttendanceDeclinedLocationAccess,
   selectAutoAttendanceScope,
+  selectLocationOnboardingAnswered,
 } from "../redux/Slices/AutoAttendanceSlice";
 import { isAvailable } from "../modules/expo-auto-attendance";
-import { askForLocationAccess, locationAccessKey } from "../utils/autoAttendance";
+import { askForLocationAccess } from "../utils/autoAttendance";
+import LocationAccessExplainer from "./AutoAttendance/LocationAccessExplainer";
 
 /**
- * Asks for the location access automatic attendance needs, once the employer
- * has enabled it for this employee.
+ * Explains, once per account, the location access automatic attendance needs,
+ * after the employer has enabled it for this employee — and hosts that
+ * explanation for the Automatic attendance screen too.
  *
- * Only on settings and employee policy received since launch — a persisted
- * answer may have been withdrawn, and this asks for background location — and
- * only in the foreground, so a background (geofence) launch never prompts. The
- * OS permission state decides every time: granted or no longer askable shows
- * nothing, and a state the employee declined in is not asked about again until
- * it changes. The Automatic attendance screen retries on request.
+ * Only on settings and employee policy received for this account since launch
+ * — a persisted answer may have been withdrawn, and this asks for background
+ * location — and only in the foreground, so a background (geofence) launch
+ * never prompts. The OS permission state decides every time: granted or no
+ * longer askable shows nothing. Once the employee answers (Continue or Not
+ * now), it does not open by itself again; the Automatic attendance screen shows
+ * the status and retries on request. A fresh answer that makes the account
+ * ineligible forgets that, so becoming eligible again is evaluated afresh.
  */
 export default function AutoAttendanceOnboarding() {
   const dispatch = useDispatch();
   const [startedAt] = useState(Date.now);
   const [appState, setAppState] = useState(AppState.currentState);
   const scope = useSelector(selectAutoAttendanceScope);
-  const declined = useSelector(selectAutoAttendanceDeclinedLocationAccess);
-  const due = useSelector((state) => {
+  const answered = useSelector(selectLocationOnboardingAnswered);
+  const configured = useSelector((state) =>
+    selectIsLoggedIn(state) && selectAutoAttendanceConfigured(state));
+  const verified = useSelector((state) => {
     const policy = state.autoAttendance?.employeePolicy;
-    return selectIsLoggedIn(state) && selectAutoAttendanceConfigured(state) &&
+    return !!scope && selectFeatureSettingsScope(state) === scope &&
       (selectFeatureSettingsFetchedAt(state) ?? 0) >= startedAt &&
-      policy?.source === "response" && (policy.receivedAt ?? 0) >= startedAt;
+      policy?.source === "response" && policy.scope === scope &&
+      (policy.receivedAt ?? 0) >= startedAt;
   });
 
   useEffect(() => {
@@ -43,16 +54,20 @@ export default function AutoAttendanceOnboarding() {
   }, []);
 
   useEffect(() => {
-    if (!due || !scope || appState !== "active" || !isAvailable()) return;
-    askForLocationAccess({ unless: (access) => locationAccessKey(access) === declined })
+    if (verified && !configured && answered) dispatch(locationOnboardingReset({ scope }));
+  }, [verified, configured, answered, scope, dispatch]);
+
+  useEffect(() => {
+    if (!verified || !configured || answered || appState !== "active" || !isAvailable()) return;
+    askForLocationAccess()
       .then((access) => {
         if (!access.asked) return;
+        dispatch(locationOnboardingAnswered({ scope }));
         // The bootstraps checked before permission existed; have them register now.
         if (access.granted) dispatch(requestAutoAttendanceSync());
-        else dispatch(locationAccessDeclined({ scope, key: locationAccessKey(access) }));
       })
       .catch((error) => console.log("[AutoAttendance] Onboarding failed:", error?.message));
-  }, [due, scope, declined, appState, dispatch]);
+  }, [verified, configured, answered, scope, appState, dispatch]);
 
-  return null;
+  return <LocationAccessExplainer />;
 }

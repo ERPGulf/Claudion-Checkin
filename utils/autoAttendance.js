@@ -166,10 +166,6 @@ export const readLocationAccess = async () => {
   };
 };
 
-/** Identifies an OS permission state, so a decline is honoured only until it changes. */
-export const locationAccessKey = (access) =>
-  `${access.foreground}/${access.background}/${access.precise}`;
-
 /**
  * Foreground first, then background — the order both platforms require — and
  * only the steps still missing. Returns the state read back from the OS:
@@ -188,29 +184,72 @@ export const requestLocationAccess = async () => {
   return access;
 };
 
-// Android 11+ grants background location only on the app's settings page,
-// which the system opens itself; Android 9 and below has no separate step.
-const ALWAYS_STEP = Platform.OS === 'ios'
-  ? 'allow location access with Precise Location on, then choose "Change to Always Allow"'
-  : Platform.Version >= 30
-    ? 'allow precise location; Android then opens this app\'s location settings, where you choose "Allow all the time"'
-    : Platform.Version >= 29
-      ? 'allow precise location, then choose "Allow all the time"'
-      : 'allow precise location';
+/**
+ * The system steps `requestLocationAccess` still has to take, in its order, with
+ * what to choose at each. Android 9 and below grants background location with
+ * foreground, so it has no step of its own; Android 11+ grants it only on the
+ * app's settings page, which the system opens itself.
+ */
+export const describeLocationAccessSteps = (access) => {
+  const ios = Platform.OS === 'ios';
+  const version = Number(Platform.Version);
+  const steps = [];
+  if (access.foreground !== 'granted' || !access.precise) {
+    steps.push({
+      key: 'precise',
+      icon: 'locate-outline',
+      title: 'Precise location',
+      description: "So the app knows when you're at your workplace.",
+      hint: ios
+        ? 'Choose "Allow While Using App" with Precise on.'
+        : 'Choose "Precise" and "While using the app".',
+    });
+  }
+  if (access.background !== 'granted' && (ios || version >= 29)) {
+    steps.push({
+      key: 'background',
+      icon: 'time-outline',
+      title: 'Background location',
+      description: 'So attendance works while the app is closed.',
+      hint: ios
+        ? 'Choose "Change to Always Allow".'
+        : version >= 30
+          ? 'Android opens this app\'s location settings. Choose "Allow all the time".'
+          : 'Choose "Allow all the time".',
+    });
+  }
+  return steps;
+};
 
-/** The prominent disclosure, shown before any system prompt. Resolves whether to continue. */
-const explainLocationAccess = () => new Promise((resolve) => {
-  Alert.alert(
-    'Automatic attendance',
-    'Your employer has turned on automatic attendance. It uses your location to detect when you arrive at or leave your assigned work locations, including when the app is not open.' +
-      `\n\nWhen asked, ${ALWAYS_STEP}.`,
-    [
-      { text: 'Not now', style: 'cancel', onPress: () => resolve(false) },
-      { text: 'Continue', onPress: () => resolve(true) },
-    ],
-    { cancelable: false, onDismiss: () => resolve(false) },
-  );
-});
+// The in-app explanation, registered by components/AutoAttendance/LocationAccessExplainer
+// so this module stays free of React.
+let explainer = null;
+
+/**
+ * Registers the explanation shown before any system prompt.
+ * `explain(access, proceed, { mode, preview })` shows it and, on Continue, runs
+ * `proceed` — the system prompts — resolving with the access read back
+ * afterwards; false for Not now; null when it could not be shown. Returns the
+ * unregister function.
+ */
+export const setLocationAccessExplainer = (explain) => {
+  explainer = explain;
+  return () => {
+    if (explainer === explain) explainer = null;
+  };
+};
+
+/**
+ * Development and preview builds: shows the explanation for a geotagging mode
+ * as if no access had been given, whatever the account's configuration, and
+ * asks for and records nothing. Null when a real explanation is already open.
+ */
+export const previewLocationAccessExplanation = (mode) =>
+  explainer?.(
+    { foreground: 'undetermined', background: 'undetermined', precise: false },
+    async () => false,
+    { mode, preview: true },
+  ) ?? Promise.resolve(null);
 
 // Only from a tap: the system will no longer ask, so Settings is the one way in.
 const offerLocationSettings = () => {
@@ -231,21 +270,22 @@ let locationAccessFlow = null;
 /**
  * Explains, then asks for whatever is missing — one flow at a time, so a second
  * caller (a re-render, a refresh, the screen's button) joins the first instead
- * of stacking dialogs. `fromTap` also offers Settings once the system will no
- * longer ask; `unless` skips a state the employee already declined. `asked`:
- * whether the employee answered anything in this flow.
+ * of stacking explanations or dialogs. `fromTap` also offers Settings once the
+ * system will no longer ask. `asked`: whether the employee answered the
+ * explanation in this flow.
  */
-export const askForLocationAccess = ({ fromTap = false, unless } = {}) => {
+export const askForLocationAccess = ({ fromTap = false } = {}) => {
   if (!locationAccessFlow) {
     locationAccessFlow = (async () => {
       const access = await readLocationAccess();
-      if (access.granted || unless?.(access)) return { ...access, asked: false };
+      if (access.granted) return { ...access, asked: false };
       if (access.blocked) {
         if (fromTap) offerLocationSettings();
         return { ...access, asked: false };
       }
-      if (!(await explainLocationAccess())) return { ...access, asked: true };
-      return { ...(await requestLocationAccess()), asked: true };
+      const answer = await explainer?.(access, requestLocationAccess);
+      if (answer == null) return { ...access, asked: false };
+      return { ...(answer || access), asked: true };
     })().finally(() => { locationAccessFlow = null; });
   }
   return locationAccessFlow;

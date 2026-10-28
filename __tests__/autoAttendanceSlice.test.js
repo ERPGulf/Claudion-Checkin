@@ -1,15 +1,16 @@
 import reducer, {
-  locationAccessDeclined,
+  locationOnboardingAnswered,
+  locationOnboardingReset,
   normalizeGeotagging,
   requestAutoAttendanceSync,
   selectAutoAttendanceAllowed,
   selectAutoAttendanceConfigured,
-  selectAutoAttendanceDeclinedLocationAccess,
   selectAutoAttendanceFullActions,
   selectAutoAttendanceGeotagging,
   selectAutoAttendanceMonitoring,
   selectAutoAttendanceOperational,
   selectAutoAttendanceSyncRequestId,
+  selectLocationOnboardingAnswered,
   setAutoAttendanceGeotagging,
 } from "../redux/Slices/AutoAttendanceSlice";
 import { normalizeFeatureSettings } from "../utils/featureSettings";
@@ -44,10 +45,10 @@ describe("AutoAttendanceSlice", () => {
     expect(selectAutoAttendanceFullActions(wrap({ geotagging: 2 }))).toBe(true);
   });
 
-  it("REVERT_ALL resets to disabled, keeping only per-account declined permission states", () => {
-    const declinedLocationAccess = { [SCOPE]: "denied/denied/false" };
+  it("REVERT_ALL resets to disabled, keeping only per-account onboarding answers", () => {
+    const locationOnboarding = { [SCOPE]: true };
     const state = reducer(
-      { geotagging: 2, syncRequestId: 3, monitoring: { scope: SCOPE, state: "active" }, declinedLocationAccess },
+      { geotagging: 2, syncRequestId: 3, monitoring: { scope: SCOPE, state: "active" }, locationOnboarding },
       { type: "REVERT_ALL" },
     );
     expect(state).toEqual({
@@ -57,7 +58,7 @@ describe("AutoAttendanceSlice", () => {
       policyRequest: null,
       policySequence: 0,
       monitoring: null,
-      declinedLocationAccess,
+      locationOnboarding,
       syncRequestId: 0,
     });
   });
@@ -123,15 +124,31 @@ describe("AutoAttendanceSlice", () => {
       )).toBe(false);
     });
 
-    it("remembers a declined permission state per account, through sign-out", () => {
-      const declined = reducer(undefined, locationAccessDeclined({ scope: SCOPE, key: "denied/denied/false" }));
-      const afterSignOut = reducer(declined, { type: "REVERT_ALL" });
-      expect(selectAutoAttendanceDeclinedLocationAccess(signedIn({ autoAttendance: afterSignOut })))
-        .toBe("denied/denied/false");
+    it("remembers an answered location explanation per account, through sign-out", () => {
+      const answered = reducer(undefined, locationOnboardingAnswered({ scope: SCOPE }));
+      const afterSignOut = reducer(answered, { type: "REVERT_ALL" });
+      expect(selectLocationOnboardingAnswered(signedIn({ autoAttendance: afterSignOut }))).toBe(true);
 
-      const otherAccount = signedIn({ autoAttendance: afterSignOut });
-      otherAccount.user = { baseUrl: TENANT, userDetails: { employeeCode: "HR-EMP-00002" } };
-      expect(selectAutoAttendanceDeclinedLocationAccess(otherAccount)).toBeNull();
+      const otherEmployee = signedIn({ autoAttendance: afterSignOut });
+      otherEmployee.user = { baseUrl: TENANT, userDetails: { employeeCode: "HR-EMP-00002" } };
+      expect(selectLocationOnboardingAnswered(otherEmployee)).toBe(false);
+
+      const otherTenant = signedIn({ autoAttendance: afterSignOut });
+      otherTenant.user = { baseUrl: "https://other.example.com", userDetails: { employeeCode: EMPLOYEE } };
+      expect(selectLocationOnboardingAnswered(otherTenant)).toBe(false);
+    });
+
+    it("forgets the answer for one account only, and tolerates state persisted before the record", () => {
+      const both = reducer(
+        reducer(undefined, locationOnboardingAnswered({ scope: SCOPE })),
+        locationOnboardingAnswered({ scope: OTHER_SCOPE }),
+      );
+      expect(reducer(both, locationOnboardingReset({ scope: SCOPE })).locationOnboarding).toEqual({ [OTHER_SCOPE]: true });
+
+      const persisted = { geotagging: 2, syncRequestId: 0 };
+      expect(reducer(persisted, locationOnboardingReset({ scope: SCOPE }))).toEqual(persisted);
+      expect(reducer(persisted, locationOnboardingAnswered({ scope: SCOPE })).locationOnboarding).toEqual({ [SCOPE]: true });
+      expect(selectLocationOnboardingAnswered(signedIn({ autoAttendance: persisted }))).toBe(false);
     });
   });
 

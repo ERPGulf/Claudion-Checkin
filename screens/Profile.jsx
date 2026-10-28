@@ -28,6 +28,7 @@ import AttendanceRecoverySetting from "../components/settings/AttendanceRecovery
 import AttendanceSyncTestSetting from "../components/settings/AttendanceSyncTestSetting";
 import FeatureSettingsStatus from "../components/settings/FeatureSettingsStatus";
 import CrashlyticsTestSetting from "../components/settings/CrashlyticsTestSetting";
+import LocationOnboardingTestSetting from "../components/settings/LocationOnboardingTestSetting";
 // TEMPORARY: New Home Experience experiment — remove with the feature.
 import HomeExperienceSetting from "../components/experimental/HomeExperienceSetting";
 import user from "../assets/images/user.png";
@@ -565,6 +566,8 @@ function Profile() {
         <OfflineSyncSetting />
         <AttendanceRecoverySetting />
         <AttendanceSyncTestSetting />
+        {/* Renders nothing outside development and preview builds. */}
+        <LocationOnboardingTestSetting />
 
         {/* Renders nothing unless the feature-settings fetch has failed. */}
         <FeatureSettingsStatus />
