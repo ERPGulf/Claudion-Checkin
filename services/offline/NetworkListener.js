@@ -44,6 +44,7 @@ let currentState = {
 };
 
 let unsubscribe = null;
+let networkRevision = 0;
 const reconnectListeners = new Set();
 const changeListeners = new Set();
 
@@ -80,6 +81,9 @@ export const isOnline = () => isStateOnline(currentState);
  * punch behaving oddly, and worth nothing as an input to a decision.
  */
 export const getNetworkState = () => ({ ...currentState });
+
+/** Availability caches must expire on transport handovers, even when online stays true. */
+export const getNetworkRevision = () => networkRevision;
 
 /** Refreshes the cached state from NetInfo, keeping the last one on failure. */
 const refreshState = async () => {
@@ -179,6 +183,10 @@ export const startNetworkListener = () => {
   unsubscribe = NetInfo.addEventListener((state) => {
     const wasOnline = isStateOnline(currentState);
 
+    // Every native network notification can represent a new route/interface.
+    // Reconnect/UI callbacks below deliberately keep their existing edge rules.
+    networkRevision += 1;
+
     currentState = {
       isConnected: !!state?.isConnected,
       isInternetReachable: state?.isInternetReachable ?? null,
@@ -212,6 +220,7 @@ export const stopNetworkListener = () => {
 /** Test seam — resets the module's view of the world. */
 export const resetNetworkListener = () => {
   stopNetworkListener();
+  networkRevision += 1;
   reconnectListeners.clear();
   changeListeners.clear();
   currentState = {
@@ -227,6 +236,7 @@ export default {
   fetchIsOnline,
   fetchShouldAttemptRequest,
   getNetworkState,
+  getNetworkRevision,
   isOnline,
   isStateOnline,
   resetNetworkListener,

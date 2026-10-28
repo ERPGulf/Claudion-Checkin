@@ -27,6 +27,10 @@
  */
 jest.mock("expo-sqlite", () => require("../test-utils/expoSqliteMock"));
 jest.mock("expo-location", () => ({}));
+jest.mock("../services/offline/InstanceAvailabilityService", () => ({
+  checkInstanceAvailability: jest.fn(async () => ({ status: "available" })),
+  invalidateInstanceAvailability: jest.fn(),
+}));
 
 jest.mock("../services/offline/AttendanceApi", () => ({
   __esModule: true,

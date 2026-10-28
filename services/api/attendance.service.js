@@ -3,6 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Location from "expo-location";
 import { format } from "date-fns";
 import apiClient from "./apiClient";
+import { invalidateInstanceAvailability } from "../offline/InstanceAvailabilityService";
 import { cleanBaseUrl } from "./utils";
 import {
   getAuthContext,
@@ -87,14 +88,18 @@ export const getServerTime = async ({ syncScope } = {}) => {
  */
 export const resolveServerTimestampAt = async (occurredAt, nowMs = Date.now(), options = {}) => {
   const lookupStartedAt = Date.now();
-  const serverNow = await getServerTime(options);
+  const clock = options.serverClock;
+  const hasObservedClock = typeof clock?.serverTime === "string" &&
+    !!parseServerWallClock(clock.serverTime) && Number.isFinite(clock.observedAt);
+  const serverNow = hasObservedClock ? clock.serverTime : await getServerTime(options);
+  if (options.syncScope) await assertAttendanceQueueScope(options.syncScope);
   const occurredAtMs = toTimestampMs(occurredAt);
 
   if (!occurredAtMs) return serverNow;
 
-  // The returned server clock was observed after this lookup, not at dispatch.
-  // Include elapsed lookup time so a slow request cannot move the punch forward.
-  const ageMs = nowMs + (Date.now() - lookupStartedAt) - occurredAtMs;
+  // A reused health clock keeps its original observation time. Otherwise include
+  // lookup duration so a slow response cannot move the event's timestamp forward.
+  const ageMs = (hasObservedClock ? clock.observedAt : nowMs + (Date.now() - lookupStartedAt)) - occurredAtMs;
   if (!Number.isFinite(ageMs) || ageMs <= 0) return serverNow;
 
   const serverWallClock = parseServerWallClock(serverNow);
@@ -446,9 +451,11 @@ export const autoCheckInOut = async ({
   office = null,
   occurredAt = null,
   timestamp: preparedTimestamp,
+  serverClock,
   syncScope,
 }) => {
   const logPrefix = "[attendance.service/autoCheckInOut]";
+  let dispatched = false;
   try {
     if (syncScope) await assertAttendanceQueueScope(syncScope);
     if (!employeeCode) throw new Error("Employee ID is required");
@@ -464,7 +471,7 @@ export const autoCheckInOut = async ({
     const capabilityScope = await assertCapability(ATTENDANCE_FEATURES.AUTO_ATTENDANCE, { baseUrl, employeeCode });
     await assertEmployeeAutoAttendancePolicy(syncScope);
 
-    const timestamp = preparedTimestamp ?? await resolveServerTimestampAt(occurredAt, Date.now(), { syncScope });
+    const timestamp = preparedTimestamp ?? await resolveServerTimestampAt(occurredAt, Date.now(), { syncScope, serverClock });
     if (syncScope) await assertAttendanceQueueScope(syncScope);
 
     const payload = {
@@ -494,6 +501,7 @@ export const autoCheckInOut = async ({
     await assertEmployeeAutoAttendancePolicy(syncScope);
     assertCapabilityCurrent(ATTENDANCE_FEATURES.AUTO_ATTENDANCE, capabilityScope);
     assertEmployeeAutoAttendancePolicyCurrent(syncScope);
+    dispatched = true;
     const response = await apiClient.post(
       `${baseUrl}/api/method/employee_app.attendance_api.add_log_based_on_employee_field`,
       payload,
@@ -520,6 +528,7 @@ export const autoCheckInOut = async ({
       location: office,
     };
   } catch (error) {
+    if (dispatched) invalidateInstanceAvailability();
     console.log(`${logPrefix} Failed`, { code: error?.code, httpStatus: error?.response?.status });
     // Same rule as userCheckIn: only a bug in our own code is reported.
     if (isProgrammingError(error)) {

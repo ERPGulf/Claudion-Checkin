@@ -16,6 +16,7 @@ import { enqueue, findById } from "../services/offline/AttendanceQueueRepository
 import { syncPendingAttendance, resetSyncService } from "../services/offline/AttendanceSyncService";
 import { resetDatabaseHandle } from "../services/offline/AttendanceDatabase";
 import { resetOfflineCapability } from "../services/offline/offlineCapability";
+import { invalidateInstanceAvailability } from "../services/offline/InstanceAvailabilityService";
 import { loginQueueEmployee, TEST_TENANT } from "../test-utils/attendanceScope";
 
 const { __resetAll } = require("../test-utils/expoSqliteMock");
@@ -28,6 +29,7 @@ let http;
 
 beforeEach(async () => {
   __resetAll(); resetDatabaseHandle(); resetSyncService(); resetOfflineCapability();
+  invalidateInstanceAvailability();
   await clearTokens(); await AsyncStorage.clear(); await loginQueueEmployee(employeeId);
   await saveTokens("synthetic-access", "synthetic-refresh");
   store.dispatch(settingsInvalidated());
@@ -38,6 +40,8 @@ beforeEach(async () => {
     } }),
   }));
   http = new MockAdapter(apiClient);
+  http.onGet(`${TEST_TENANT}/api/method/employee_app.attendance_api.get_server_time`)
+    .reply(200, { message: { server_time: "2026-10-27 09:00:00" } });
 });
 afterEach(() => { http.restore(); store.dispatch(settingsInvalidated()); resetSyncService(); });
 

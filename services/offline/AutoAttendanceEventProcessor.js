@@ -8,6 +8,7 @@ import { assertAttendanceQueueScope } from "./attendanceQueueProvenance";
 import { captureAttendanceQueueScope } from "./attendanceQueueProvenance";
 import { readAttendanceConfig } from "./attendanceConfigCache";
 import { fetchShouldAttemptRequest, isOnline } from "./NetworkListener";
+import { checkInstanceAvailability } from "./InstanceAvailabilityService";
 import { autoCheckInOut, getAttendanceStatus, resolveServerTimestampAt } from "../api/attendance.service";
 import { formatOfflineTimestamp, normalizeAttendanceStatusClock } from "../../utils/serverClock";
 import { normalizeCustomIn, toTimestampMs } from "../../utils/attendanceSession";
@@ -24,6 +25,17 @@ import {
 const { PENDING, PROCESSING, HANDLED, NEEDS_REVIEW } = Events.AUTO_EVENT_STATUS;
 let processor = Promise.resolve();
 const claimOwner = `auto-attendance:${Date.now()}:${Math.random()}`;
+const TRANSIENT_AVAILABILITY = new Set(["device_offline", "instance_unreachable", "server_unavailable"]);
+
+const availabilityRefusal = availability => ({
+  allowed: false,
+  reason: ["stale_result", "cancelled"].includes(availability.status) ? "scope-changed" : `instance-${availability.status.replace(/_/g, "-")}`,
+  availability,
+  message: availability.status === "authentication_required" ? "Your organization requires authentication before automatic attendance can continue."
+    : availability.status === "endpoint_unsupported" ? "Your organization's server does not support the attendance connection check."
+    : "Your organization's server connection could not be verified.",
+  location: null,
+});
 
 const automaticCapabilityRefusal = async (scope) => {
   try {
@@ -162,7 +174,7 @@ const runTransition = (row, scope, execute) => performSessionTransition({
   }, execute,
 });
 
-const processRow = async (input, scope, config) => {
+const processRow = async (input, scope, config, verifiedDispatch = null) => {
   let row = await Events.claimEvent(input.eventId, { ownerId: claimOwner });
   if (!row) return { stop: true };
   const invalid = validateEvent(row.event, scope);
@@ -206,7 +218,11 @@ const processRow = async (input, scope, config) => {
     return { result };
   }
   if (row.onlineAttemptAt) {
-    const verification = await verifyQueuedAttendance({ tenantKey: row.tenantKey, employeeId: row.employeeId,
+    // Evidence can be reused only inside this same scoped drain, after claiming
+    // the unchanged dispatch and timestamp that the history GET just verified.
+    const verification = verifiedDispatch?.onlineAttemptAt === row.onlineAttemptAt &&
+      verifiedDispatch?.punchTimestamp === row.punchTimestamp ? verifiedDispatch.verification
+      : await verifyQueuedAttendance({ tenantKey: row.tenantKey, employeeId: row.employeeId,
       employeeDocname: config.employeeDocname, timestamp: row.punchTimestamp,
       action: row.transition === "ENTER" ? "checkin" : "checkout" }, { syncScope: scope });
     await assertAttendanceQueueScope(scope);
@@ -250,11 +266,24 @@ const processRow = async (input, scope, config) => {
         sourceParentEventId = session.sourceEventId;
       }
     }
+    // Health is checked before dispatch intent, including when a previous safe
+    // attempt already froze this receipt's timestamp. Failed health GETs cannot
+    // have inserted attendance and may safely enter the existing outbox.
+    let availability = null;
+    if (!forceQueue) {
+      availability = await checkInstanceAvailability({ syncScope: scope });
+      await assertAttendanceQueueScope(scope);
+      if (availability.status !== "available") {
+        if (TRANSIENT_AVAILABILITY.has(availability.status)) forceQueue = true;
+        else return availabilityRefusal(availability);
+      }
+    }
     let timestamp = row.punchTimestamp;
     if (!timestamp) {
-      if (await fetchShouldAttemptRequest()) {
+      if (availability?.status === "available") {
         try {
-          timestamp = await resolveServerTimestampAt(row.occurredAt, Date.now(), { syncScope: scope });
+          timestamp = await resolveServerTimestampAt(row.occurredAt, Date.now(), { syncScope: scope,
+            serverClock: { serverTime: availability.serverTime, observedAt: availability.observedAt } });
         } catch {
           await assertAttendanceQueueScope(scope);
           forceQueue = true;
@@ -318,6 +347,31 @@ const processRow = async (input, scope, config) => {
   return { result, stop: true };
 };
 
+/** Retry only the read that can settle an uncertain dispatch; never POST it. */
+const recheckReviewEvents = async (scope, config) => {
+  const verifiedDispatches = new Map();
+  if (!await fetchShouldAttemptRequest()) return verifiedDispatches;
+  for (const input of await Events.listReviewEventsForVerification(scope)) {
+    await assertAttendanceQueueScope(scope);
+    if (validateEvent(input.event, scope)) continue;
+    const row = await Events.claimEvent(input.eventId, { ownerId: claimOwner, allowReview: true });
+    if (!row) continue;
+    const verification = await verifyQueuedAttendance({ tenantKey: row.tenantKey, employeeId: row.employeeId,
+      employeeDocname: config.employeeDocname, timestamp: row.punchTimestamp,
+      action: row.transition === "ENTER" ? "checkin" : "checkout" }, { syncScope: scope });
+    await assertAttendanceQueueScope(scope);
+    await updateOwned(row.eventId, { status: verification.verified ? PENDING : NEEDS_REVIEW,
+      reason: verification.verified ? "server-record-verified" : verification.reason,
+      outcome: { ...row.outcome, lastVerifiedAt: Date.now() } });
+    if (verification.verified) verifiedDispatches.set(row.eventId, {
+      onlineAttemptAt: row.onlineAttemptAt, punchTimestamp: row.punchTimestamp, verification,
+    });
+    notifyQueueChanged();
+    if (verification.reason === "server-unavailable") break;
+  }
+  return verifiedDispatches;
+};
+
 /** Runs outside the session lock; never dispatches new attendance or steals a live claim. */
 export const reconcileUncertainAutoAttendance = ({ scope }) => {
   const task = processor.then(async () => {
@@ -373,11 +427,12 @@ export const drainAutoAttendanceEvents = ({ scope, onTransition } = {}) => {
     if (!await restoreVerifiedOwner(scope)) return { processed: 0, reason: "session-owner-unverified" };
     const config = await readAttendanceConfig();
     if (config?.tenantKey !== scope.tenantKey || config?.employeeId !== scope.employeeId) return { processed: 0, reason: "configuration-unavailable" };
+    const verifiedDispatches = await recheckReviewEvents(scope, config);
     let processed = 0;
     for (const row of await Events.listPendingEvents(scope)) {
       await assertAttendanceQueueScope(scope);
       if (await Events.hasEarlierUnresolvedEvent(row)) break;
-      const { result, stop } = await processRow(row, scope, config);
+      const { result, stop } = await processRow(row, scope, config, verifiedDispatches.get(row.eventId));
       await assertAttendanceQueueScope(scope);
       if (result && onTransition) await onTransition(result, row.event);
       if (stop) break;

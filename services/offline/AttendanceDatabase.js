@@ -42,6 +42,8 @@ export const AUTO_EVENT_TABLE = "auto_attendance_events";
  *              Preserved for audit, excluded from every unresolved count.
  *   NEEDS_REVIEW → acceptance is uncertain; retained, never automatically
  *              retried. Exact positive server verification can reconcile it.
+ *   CANCELLED → a direct attempt was positively refused before insertion and
+ *              offline admission was not granted. Retained, never uploaded.
  */
 export const QUEUE_STATUS = {
   PENDING: "pending",
@@ -51,6 +53,7 @@ export const QUEUE_STATUS = {
   REJECTED: "rejected",
   RESOLVED: "resolved",
   NEEDS_REVIEW: "needs_review",
+  CANCELLED: "cancelled",
 };
 
 /**

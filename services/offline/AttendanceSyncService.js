@@ -23,6 +23,7 @@ import {
   listUncertainUploadClaims,
   recordServerVerification,
   recordVerificationIssue,
+  REVIEW_RECHECK_ISSUES,
   wakeBlocked,
   wakePending,
 } from "./AttendanceQueueRepository";
@@ -37,6 +38,7 @@ import { fetchShouldAttemptRequest } from "./NetworkListener";
 import { ATTENDANCE_SCOPE_CHANGED, assertAttendanceQueueScope, captureAttendanceQueueScope } from "./attendanceQueueProvenance";
 import { verifyQueuedAttendance } from "./AttendanceVerification";
 import { isoTime, logAttendanceDiagnostic } from "./attendanceDiagnostics";
+import { checkInstanceAvailability, invalidateInstanceAvailability } from "./InstanceAvailabilityService";
 
 /**
  * Draining the queue.
@@ -98,7 +100,7 @@ const notifySync = (event) => {
     try {
       listener(event);
     } catch (error) {
-      console.log(`${LOG_PREFIX} Sync listener failed:`, error?.message);
+      logAttendanceDiagnostic(LOG_PREFIX, "Sync listener failed", { code: error?.code, message: error?.message });
     }
   });
 };
@@ -114,10 +116,11 @@ const ROW_OUTCOME = {
   SCOPE_CHANGED: "scope-changed",
   NEEDS_REVIEW: "needs_review",
   CLAIM_CHANGED: "claim-changed",
+  INSTANCE_UNAVAILABLE: "instance-unavailable",
 };
 
 /** Outcomes that mean the rest of this run is pointless. */
-const HALTS_RUN = new Set([ROW_OUTCOME.OFFLINE, ROW_OUTCOME.BLOCKED, ROW_OUTCOME.SCOPE_CHANGED, ROW_OUTCOME.NEEDS_REVIEW, ROW_OUTCOME.CLAIM_CHANGED]);
+const HALTS_RUN = new Set([ROW_OUTCOME.OFFLINE, ROW_OUTCOME.BLOCKED, ROW_OUTCOME.SCOPE_CHANGED, ROW_OUTCOME.NEEDS_REVIEW, ROW_OUTCOME.CLAIM_CHANGED, ROW_OUTCOME.INSTANCE_UNAVAILABLE]);
 
 // Development diagnostics only: what each settled state means for the queue.
 const QUEUE_LOG = "[AttendanceQueue]";
@@ -130,7 +133,7 @@ const retryEligibility = (row) => {
     ? `Due ${due}. A request was already dispatched, so the next claim verifies server history and never re-sends.`
     : `Due ${due}; will be uploaded.`;
   if (row?.status === "blocked") return `Blocked ladder, next ${due}; woken early on launch, reconnect or token refresh.`;
-  if (row?.status === "needs_review") return ["upload-outcome-unverified", "server-unavailable"].includes(row.verificationIssue)
+  if (row?.status === "needs_review") return !row.verificationIssue || REVIEW_RECHECK_ISSUES.includes(row.verificationIssue)
     ? "Never re-sent; server history is re-checked automatically on later runs."
     : `Never re-sent and not re-checked automatically (verificationIssue=${row.verificationIssue ?? "null"}); only Check server record re-checks it.`;
   return "Final; no further attempts.";
@@ -141,6 +144,7 @@ const HALT_WHY = {
   [ROW_OUTCOME.NEEDS_REVIEW]: "Every later row for this employee is held behind a needs_review row and is not attempted.",
   [ROW_OUTCOME.SCOPE_CHANGED]: "The account or tenant changed.",
   [ROW_OUTCOME.CLAIM_CHANGED]: "Another runtime took the claim.",
+  [ROW_OUTCOME.INSTANCE_UNAVAILABLE]: "The tenant instance could not be reached before submission; this row remains safely retryable.",
 };
 
 const attachConfirmedPhoto = async (row, serverCheckinId, syncScope, report = {}) => {
@@ -161,7 +165,8 @@ const settleDuplicate = async (row, syncScope, message, response, report) => {
       await attachConfirmedPhoto(row, verification.evidence.name, syncScope, report);
       return ROW_OUTCOME.DUPLICATE;
     }
-    await markNeedsReview({ id: row.id, claimOwner: row.claimOwner, error: message, serverResponse: response, duplicate: true });
+    await markNeedsReview({ id: row.id, claimOwner: row.claimOwner, error: message, serverResponse: response,
+      duplicate: true, verificationIssue: verification.reason || "upload-outcome-unverified" });
     return ROW_OUTCOME.NEEDS_REVIEW;
   } catch (error) {
     if (error?.code === QUEUE_CLAIM_CHANGED) return ROW_OUTCOME.CLAIM_CHANGED;
@@ -215,21 +220,63 @@ const syncRow = async (row, syncScope, report) => {
         return ROW_OUTCOME.OFFLINE;
       }
       await markNeedsReview({ id: row.id, claimOwner: row.claimOwner,
-        error: "Previous attendance upload could not be confirmed by exact server history." });
+        error: "Previous attendance upload could not be confirmed by exact server history.",
+        verificationIssue: verification.reason || "upload-outcome-unverified" });
       return ROW_OUTCOME.NEEDS_REVIEW;
     }
+
+    // A connected interface does not establish that this tenant is reachable.
+    // Check the existing read-only clock endpoint before recording dispatch
+    // intent. A blocked firewall probe therefore cannot turn an unsent punch
+    // into an uncertain POST, and the original row/time remains retryable.
+    const availability = await checkInstanceAvailability({ syncScope });
+    await assertAttendanceQueueScope(syncScope);
+    await renewAttendanceClaim({ id: row.id, claimOwner: row.claimOwner });
+    if (["stale_result", "cancelled"].includes(availability.status)) {
+      await releaseClaim({ id: row.id, claimOwner: row.claimOwner });
+      return ROW_OUTCOME.SCOPE_CHANGED;
+    }
+    if (availability.status !== "available") {
+      report.instanceStatus = availability.status;
+      const now = Date.now();
+      const retryAfterMs = Number.isFinite(availability.retryAfterMs) && availability.retryAfterMs > 0
+        ? availability.retryAfterMs : 0;
+      const retry = { now, retryAfterMs,
+        serverResponse: retryAfterMs > 0 ? { instanceAvailability: {
+          status: availability.status, retryAfterAt: now + retryAfterMs,
+        } } : null };
+      if (["authentication_required", "endpoint_unsupported", "configuration_error"].includes(availability.status)) {
+        await markBlocked({ id: row.id, claimOwner: row.claimOwner,
+          failureClass: availability.status === "authentication_required" ? FAILURE_CLASS.AUTH : FAILURE_CLASS.CONFIGURATION,
+          error: availability.status, ...retry });
+        return ROW_OUTCOME.BLOCKED;
+      }
+      await markRetry({ id: row.id, claimOwner: row.claimOwner, error: availability.status, ...retry });
+      return ROW_OUTCOME.INSTANCE_UNAVAILABLE;
+    }
+    await assertAttendanceQueueScope(syncScope);
     await beginAttendanceUpload({ id: row.id, claimOwner: row.claimOwner });
     logAttendanceDiagnostic(QUEUE_LOG, `#${row.id} syncing → uploading`, {
       reason: "uploadAttemptAt recorded before the POST. From here a failure without proof of the outcome is settled only by server history.",
       attemptCount: row.attemptCount, retryCount: row.retryCount,
     });
     dispatched = true;
-    const outcome = await pushCheckin(row, { syncScope });
+    let outcome;
+    try {
+      outcome = await pushCheckin(row, { syncScope });
+    } catch (error) {
+      // A successful probe is only a recent observation. The POST can fail
+      // independently; invalidate the observation without clearing dispatch.
+      invalidateInstanceAvailability();
+      throw error;
+    }
+    if (![PUSH_RESULT.INSERTED, PUSH_RESULT.DUPLICATE].includes(outcome.result)) invalidateInstanceAvailability();
     await renewAttendanceClaim({ id: row.id, claimOwner: row.claimOwner });
 
     if (outcome.result === PUSH_RESULT.INSERTED) {
       if (typeof outcome.serverCheckinId !== "string" || !outcome.serverCheckinId.trim()) {
-        await markNeedsReview({ id: row.id, claimOwner: row.claimOwner, error: "The server did not return an attendance reference.", serverResponse: outcome.response });
+        await markNeedsReview({ id: row.id, claimOwner: row.claimOwner, error: "The server did not return an attendance reference.",
+          serverResponse: outcome.response, verificationIssue: "unrecognized-server-response" });
         return ROW_OUTCOME.NEEDS_REVIEW;
       }
       await markSynced({
@@ -241,7 +288,7 @@ const syncRow = async (row, syncScope, report) => {
       // Proof the endpoint is there and answering, which is what turns offline
       // attendance back on after a deploy — nobody has to tell the app.
       if (await assertAttendanceQueueScope(syncScope).then(() => true, () => false)) markOfflineSyncSupported();
-      console.log(`${LOG_PREFIX} Synced #${row.id}`, outcome.serverCheckinId);
+      logAttendanceDiagnostic(LOG_PREFIX, `Synced #${row.id}`, { serverCheckinId: outcome.serverCheckinId });
 
       // The row is already committed as synced before this runs, and
       // `uploadQueuedPhoto` never throws — a missing attachment must not undo an
@@ -256,7 +303,8 @@ const syncRow = async (row, syncScope, report) => {
     }
 
     if (outcome.result === "needs_review") {
-      await markNeedsReview({ id: row.id, claimOwner: row.claimOwner, error: outcome.message, serverResponse: outcome.response });
+      await markNeedsReview({ id: row.id, claimOwner: row.claimOwner, error: outcome.message,
+        serverResponse: outcome.response, verificationIssue: "unrecognized-server-response" });
       return ROW_OUTCOME.NEEDS_REVIEW;
     }
 
@@ -267,11 +315,9 @@ const syncRow = async (row, syncScope, report) => {
         error: outcome.message,
         serverResponse: outcome.response,
       });
-      console.log(
-        `${LOG_PREFIX} Rejected #${row.id} (${outcome.failureClass}):`,
-        outcome.message,
-        cascaded ? `— cascaded to ${cascaded} paired row(s)` : "",
-      );
+      logAttendanceDiagnostic(LOG_PREFIX, `Rejected #${row.id}`, {
+        failureClass: outcome.failureClass, message: outcome.message, cascaded,
+      });
       return ROW_OUTCOME.REJECTED;
     }
 
@@ -288,10 +334,7 @@ const syncRow = async (row, syncScope, report) => {
       error: outcome.message,
       serverResponse: outcome.response,
     });
-    console.log(
-      `${LOG_PREFIX} Blocked #${row.id} (${outcome.failureClass}); next attempt`,
-      new Date(nextAttemptAt).toISOString(),
-    );
+    logAttendanceDiagnostic(LOG_PREFIX, `Blocked #${row.id}`, { failureClass: outcome.failureClass, nextAttemptAt });
     return ROW_OUTCOME.BLOCKED;
   } catch (error) {
     if (error?.code === QUEUE_CLAIM_CHANGED) return ROW_OUTCOME.CLAIM_CHANGED;
@@ -319,11 +362,7 @@ const syncRow = async (row, syncScope, report) => {
         error: message,
         serverResponse: error?.response?.data ?? null,
       });
-      console.log(
-        `${LOG_PREFIX} Rejected #${row.id} (${status ?? "no status"}):`,
-        message,
-        cascaded ? `— cascaded to ${cascaded} paired row(s)` : "",
-      );
+      logAttendanceDiagnostic(LOG_PREFIX, `Rejected #${row.id}`, { status, message, cascaded });
       return ROW_OUTCOME.REJECTED;
     }
 
@@ -338,10 +377,7 @@ const syncRow = async (row, syncScope, report) => {
         error: message,
         serverResponse: error?.response?.data ?? null,
       });
-      console.log(
-        `${LOG_PREFIX} Blocked #${row.id} (${status ?? "no status"}):`,
-        message,
-      );
+      logAttendanceDiagnostic(LOG_PREFIX, `Blocked #${row.id}`, { status, failureClass, message });
       return ROW_OUTCOME.BLOCKED;
     }
 
@@ -354,9 +390,7 @@ const syncRow = async (row, syncScope, report) => {
         failureClass: FAILURE_CLASS.UNKNOWN,
         error: `Still unreachable after ${MAX_RETRIES} attempts: ${message}`,
       });
-      console.log(
-        `${LOG_PREFIX} Retry cap on #${row.id}; moving to the slow schedule`,
-      );
+      logAttendanceDiagnostic(LOG_PREFIX, `Retry cap on #${row.id}`, { nextSchedule: "blocked" });
       return ROW_OUTCOME.BLOCKED;
     }
 
@@ -364,10 +398,7 @@ const syncRow = async (row, syncScope, report) => {
       id: row.id, claimOwner: row.claimOwner,
       error: message,
     });
-    console.log(
-      `${LOG_PREFIX} Retry ${retryCount}/${MAX_RETRIES} for #${row.id} at`,
-      new Date(nextAttemptAt).toISOString(),
-    );
+    logAttendanceDiagnostic(LOG_PREFIX, `Retry for #${row.id}`, { retryCount, maxRetries: MAX_RETRIES, nextAttemptAt });
 
     // A transport failure means the network went away mid-drain. Nothing after
     // this row will fare better, so the caller stops rather than burning the
@@ -400,6 +431,7 @@ const verifyInterruptedUploads = async (scope, syncScope, summary) => {
     logAttendanceDiagnostic(QUEUE_LOG, `#${row.id} needs_review → ${verification.verified ? "synced" : "needs_review"} (automatic re-check)`, {
       reason: verification.verified ? `Verified as ${verification.evidence.name}` : verification.reason,
     });
+    if (!verification.verified && verification.reason === "server-unavailable") break;
   }
 };
 
@@ -424,7 +456,7 @@ const logRun = async (summary, employeeId) => {
     head = await peekNextRow({ employeeId });
   } catch (error) {
     // Diagnostics must never be able to fail a drain.
-    console.log(`${LOG_PREFIX} Head read failed:`, error?.message);
+    logAttendanceDiagnostic(LOG_PREFIX, "Head read failed", { code: error?.code, message: error?.message });
   }
 
   // An empty queue on a one-minute heartbeat has nothing to report and would
@@ -442,7 +474,7 @@ const logRun = async (summary, employeeId) => {
 
   if (!head && !changed) return;
 
-  console.log(`${LOG_PREFIX} Run (${summary.trigger})`, {
+  logAttendanceDiagnostic(LOG_PREFIX, `Run (${summary.trigger})`, {
     ran: summary.ran,
     reason: summary.reason ?? null,
     scope: employeeId ?? "all",
@@ -566,9 +598,7 @@ export const syncPendingAttendance = async ({
         failureClass: wakeFailureClass,
       });
       if (summary.woken) {
-        console.log(
-          `${LOG_PREFIX} Woke ${summary.woken} blocked row(s) for ${trigger}`,
-        );
+        logAttendanceDiagnostic(LOG_PREFIX, "Woke blocked rows", { trigger, count: summary.woken });
       }
 
       // Pending rows get the same treatment, for a reason the blocked ladder
@@ -579,9 +609,7 @@ export const syncPendingAttendance = async ({
       await assertAttendanceQueueScope(syncScope);
       summary.wokenPending = await wakePending({ ...scope, force: wakeAllPending });
       if (summary.wokenPending) {
-        console.log(
-          `${LOG_PREFIX} Made ${summary.wokenPending} pending row(s) due for ${trigger}`,
-        );
+        logAttendanceDiagnostic(LOG_PREFIX, "Made pending rows due", { trigger, count: summary.wokenPending });
       }
 
       // `shouldAttemptRequest`, NOT `isOnline`. The drain has no user waiting
@@ -662,10 +690,12 @@ export const syncPendingAttendance = async ({
         // continuing would spend one pointless request per queued punch.
         if (HALTS_RUN.has(outcome)) {
           summary.reason =
-            outcome === ROW_OUTCOME.CLAIM_CHANGED ? "claim-changed" :
+            outcome === ROW_OUTCOME.INSTANCE_UNAVAILABLE ? report.instanceStatus :
+              outcome === ROW_OUTCOME.CLAIM_CHANGED ? "claim-changed" :
               outcome === ROW_OUTCOME.SCOPE_CHANGED ? "scope-changed" :
               outcome === ROW_OUTCOME.OFFLINE ? "connection-lost" :
                 outcome === ROW_OUTCOME.NEEDS_REVIEW ? "needs-review" : "blocked";
+          if (report.instanceStatus) summary.instanceStatus = report.instanceStatus;
           logAttendanceDiagnostic(LOG_PREFIX, `run stopped at #${row.id}: ${summary.reason}`, { why: HALT_WHY[outcome] });
           break;
         }
@@ -676,7 +706,7 @@ export const syncPendingAttendance = async ({
           const held = await explainUnclaimable(scope);
           if (held.length) logAttendanceDiagnostic(QUEUE_LOG, `${held.length} due row(s) not claimed`, held);
         } catch (error) {
-          console.log(`${QUEUE_LOG} Unclaimed-row diagnostics failed:`, error?.message);
+          logAttendanceDiagnostic(QUEUE_LOG, "Unclaimed-row diagnostics failed", { code: error?.code, message: error?.message });
         }
       }
 
@@ -684,7 +714,7 @@ export const syncPendingAttendance = async ({
       try {
         await purgeSynced({ olderThanMs: SYNCED_RETENTION_MS });
       } catch (error) {
-        console.log(`${LOG_PREFIX} Purge failed:`, error?.message);
+        logAttendanceDiagnostic(LOG_PREFIX, "Purge failed", { code: error?.code, message: error?.message });
       }
 
       const counts = await countRecoveryByScope(scope);
@@ -705,7 +735,7 @@ export const syncPendingAttendance = async ({
 
       return summary;
     } catch (error) {
-      console.log(`${LOG_PREFIX} Run aborted:`, error?.message);
+      logAttendanceDiagnostic(LOG_PREFIX, "Run aborted", { code: error?.code, message: error?.message });
       summary.reason = error?.code === ATTENDANCE_SCOPE_CHANGED ? "scope-changed" : "sync-error";
       return summary;
     } finally {

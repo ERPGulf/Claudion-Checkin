@@ -579,7 +579,7 @@ describe("AutoAttendanceBootstrap geofence transitions", () => {
       expect(presentLocalNotification).toHaveBeenLastCalledWith(
         expect.objectContaining({
           title: "Checked out offline",
-          body: expect.stringContaining("will sync when you're back online"),
+          body: expect.stringContaining("Check Attendance recovery for synchronization status"),
           data: expect.objectContaining({ pendingSync: true }),
         }),
       );

@@ -6,6 +6,10 @@
  */
 jest.mock("expo-sqlite", () => require("../test-utils/expoSqliteMock"));
 jest.mock("expo-location", () => ({}));
+jest.mock("../services/offline/InstanceAvailabilityService", () => ({
+  checkInstanceAvailability: jest.fn(async () => ({ status: "available" })),
+  invalidateInstanceAvailability: jest.fn(),
+}));
 
 jest.mock("../services/offline/NetworkListener", () => {
   // `fetchShouldAttemptRequest` tracks `fetchIsOnline` by default so the
@@ -39,6 +43,7 @@ import {
   resetDatabaseHandle,
 } from "../services/offline/AttendanceDatabase";
 import { listAll } from "../services/offline/AttendanceQueueRepository";
+import * as QueueRepository from "../services/offline/AttendanceQueueRepository";
 import {
   registerQueueDrainHandler,
   shouldQueueFailure,
@@ -51,6 +56,7 @@ import {
   fetchShouldAttemptRequest,
 } from "../services/offline/NetworkListener";
 import { evaluateOfflineAttendance } from "../services/offline/offlineAttendanceGate";
+import { checkInstanceAvailability } from "../services/offline/InstanceAvailabilityService";
 import { NO_CONFIG_MESSAGE } from "../services/offline/attendanceConfigCache";
 import {
   MANUAL_OFFLINE_MESSAGE,
@@ -123,10 +129,79 @@ beforeEach(async () => {
   // restore it: unless a test says otherwise, "can I attempt?" tracks "am I
   // online?" and the two agree.
   fetchShouldAttemptRequest.mockImplementation(() => fetchIsOnline());
+  checkInstanceAvailability.mockImplementation(async () => ({ status: "available", serverTime: "2026-10-27 09:00:00", observedAt: Date.now() }));
   evaluateOfflineAttendance.mockResolvedValue(acceptedGate);
   resetOfflineCapability();
   assertEmployeeAutoAttendancePolicy.mockResolvedValue({ mode: 2 });
   assertEmployeeAutoAttendancePolicyCurrent.mockReturnValue({ mode: 2 });
+});
+
+it("queues an automatic punch before invoking the legacy callback when the instance is unreachable", async () => {
+  checkInstanceAvailability.mockResolvedValue({ status: "instance_unreachable", failureCategory: "timeout" });
+  const online = jest.fn();
+  const result = await submitAutoAttendance({ type: "IN", employeeCode: "TDI0167", online });
+  expect(result).toMatchObject({ allowed: true, queued: true, availability: { status: "instance_unreachable" } });
+  expect(online).not.toHaveBeenCalled();
+  expect((await listAll())[0]).toMatchObject({ status: "pending", uploadAttemptAt: null });
+});
+
+it("retains an authentication requirement without presenting it as an offline punch", async () => {
+  checkInstanceAvailability.mockResolvedValue({ status: "authentication_required", httpStatus: 403 });
+  const online = jest.fn();
+  expect(await submitAutoAttendance({ type: "IN", employeeCode: "TDI0167", online }))
+    .toMatchObject({ allowed: false, queued: false, reason: "instance-authentication-required" });
+  expect(online).not.toHaveBeenCalled();
+  expect(await listAll()).toEqual([]);
+});
+
+it("queues behind older work inserted between the initial ordering read and atomic direct receipt insertion", async () => {
+  const begin = QueueRepository.beginDirectAttendanceReceipt;
+  const insertion = jest.spyOn(QueueRepository, "beginDirectAttendanceReceipt").mockImplementationOnce(async options => {
+    await QueueRepository.enqueue({ tenantKey: TEST_TENANT, employeeId: "TDI0167", attendanceType: "auto",
+      action: "checkout", timestamp: "2026-10-27 08:00:00" });
+    return begin(options);
+  });
+  const online = jest.fn();
+  try {
+    expect(await submitAutoAttendance({ type: "IN", employeeCode: "TDI0167", online }))
+      .toMatchObject({ allowed: true, queued: true, row: { timestamp: "2026-10-27 09:00:00" } });
+    expect(online).not.toHaveBeenCalled();
+    expect((await listAll()).every(row => row.status === "pending" && row.uploadAttemptAt === null)).toBe(true);
+    expect(await listAll()).toHaveLength(2);
+  } finally {
+    insertion.mockRestore();
+  }
+});
+
+it("refuses a legacy POST when its direct receipt ownership expired before the callback", async () => {
+  const begin = QueueRepository.beginDirectAttendanceReceipt;
+  const now = Date.now();
+  const clock = jest.spyOn(Date, "now").mockReturnValue(now);
+  const insertion = jest.spyOn(QueueRepository, "beginDirectAttendanceReceipt").mockImplementationOnce(async options => {
+    const receipt = await begin(options);
+    clock.mockReturnValue(now + 120001);
+    return receipt;
+  });
+  const online = jest.fn();
+  try {
+    expect(await submitAutoAttendance({ type: "IN", employeeCode: "TDI0167", online }))
+      .toMatchObject({ allowed: false, queued: false, reason: "attendance-claim-changed" });
+    expect(online).not.toHaveBeenCalled();
+    expect((await listAll())[0]).toMatchObject({ status: "syncing", uploadAttemptAt: now });
+  } finally {
+    insertion.mockRestore(); clock.mockRestore();
+  }
+});
+
+it("does not interpret an old cancelled source without no-insert evidence as a safe retry", async () => {
+  const scope = await captureAttendanceQueueScope("TDI0167");
+  const { row } = await QueueRepository.enqueue({ tenantKey: TEST_TENANT, employeeId: "TDI0167", attendanceType: "auto",
+    action: "checkin", timestamp: "2026-10-27 09:00:00", sourceEventId: "legacy-cancelled" });
+  await (await getDatabase()).runAsync("UPDATE attendance_queue SET status = 'cancelled' WHERE id = ?;", [row.id]);
+  const online = jest.fn();
+  expect(await submitAutoAttendance({ type: "IN", employeeCode: "TDI0167", online, sourceScope: scope, sourceEventId: "legacy-cancelled" }))
+    .toMatchObject({ allowed: false, reason: "source-event-needs-review" });
+  expect(online).not.toHaveBeenCalled();
 });
 
 describe("authoritative capability enforcement at automatic admission", () => {
@@ -433,10 +508,10 @@ describe("when the reachability probe is wrong but the connection works", () => 
     expect(online).toHaveBeenCalledTimes(1);
     expect(result.allowed).toBe(true);
     expect(result.queued).toBeUndefined();
-    expect(await listAll()).toHaveLength(0);
+    expect((await listAll())[0]).toMatchObject({ status: "synced", acceptanceConfirmed: 1, serverCheckinId: "EMP-CKIN-0001" });
   });
 
-  it("queues only once that call has actually failed", async () => {
+  it("retains an uncertain dispatched failure without queuing it for another POST", async () => {
     const online = jest.fn().mockResolvedValue(networkFailure());
 
     const result = await submitQueueable({
@@ -446,13 +521,11 @@ describe("when the reachability probe is wrong but the connection works", () => 
     });
 
     expect(online).toHaveBeenCalledTimes(1);
-    expect(result.queued).toBe(true);
-    expect(await listAll()).toHaveLength(1);
+    expect(result).toMatchObject({ allowed: false, queued: false, reason: "online-outcome-unconfirmed" });
+    expect((await listAll())[0]).toMatchObject({ status: "needs_review", uploadAttemptAt: expect.any(Number) });
   });
 
-  it("surfaces a policy refusal rather than queueing behind it", async () => {
-    // Out of radius is the server having an opinion, and it stands whatever the
-    // probe thinks.
+  it("retains an unstructured callback refusal for review without interpreting its text as no-insert proof", async () => {
     const online = jest.fn().mockResolvedValue({
       allowed: false,
       message: "You are 400m away from nearest location (Doha HQ).",
@@ -465,8 +538,8 @@ describe("when the reachability probe is wrong but the connection works", () => 
     });
 
     expect(result.allowed).toBe(false);
-    expect(result.message).toMatch(/400m away/);
-    expect(await listAll()).toHaveLength(0);
+    expect(result.reason).toBe("online-outcome-unconfirmed");
+    expect((await listAll())[0]).toMatchObject({ status: "needs_review", error: expect.stringMatching(/400m away/) });
   });
 });
 
@@ -489,7 +562,7 @@ describe("when there is no transport at all", () => {
 });
 
 describe("when online", () => {
-  it("uses the real call and queues nothing on success", async () => {
+  it("uses the real call and confirms its durable receipt on success", async () => {
     const online = jest.fn().mockResolvedValue({
       allowed: true,
       name: "EMP-CKIN-1",
@@ -505,12 +578,12 @@ describe("when online", () => {
     expect(online).toHaveBeenCalled();
     expect(result.name).toBe("EMP-CKIN-1");
     expect(result.queued).toBeUndefined();
-    expect(await listAll()).toHaveLength(0);
+    expect((await listAll())[0]).toMatchObject({ status: "synced", acceptanceConfirmed: 1, serverCheckinId: "EMP-CKIN-1" });
   });
 
   // The difference between "you are 300m away" and "the request timed out" is
   // the whole reason userCheckIn now carries its original error.
-  it("surfaces a policy refusal instead of queueing it", async () => {
+  it("does not treat an unstructured returned refusal as safe authorization for another POST", async () => {
     const online = jest.fn().mockResolvedValue({
       allowed: false,
       message: "You are 300m away from nearest location (Doha HQ).",
@@ -523,11 +596,11 @@ describe("when online", () => {
     });
 
     expect(result.allowed).toBe(false);
-    expect(result.message).toMatch(/300m away/);
-    expect(await listAll()).toHaveLength(0);
+    expect(result.reason).toBe("online-outcome-unconfirmed");
+    expect((await listAll())[0]).toMatchObject({ status: "needs_review", error: expect.stringMatching(/300m away/) });
   });
 
-  it("queues when the real call fails on the network", async () => {
+  it("keeps network-failed dispatch evidence for verification instead of another upload", async () => {
     const online = jest.fn().mockResolvedValue(networkFailure());
 
     const result = await submitQueueable({
@@ -536,14 +609,13 @@ describe("when online", () => {
       online,
     });
 
-    expect(result.allowed).toBe(true);
-    expect(result.queued).toBe(true);
+    expect(result).toMatchObject({ allowed: false, queued: false, reason: "online-outcome-unconfirmed" });
 
     const [row] = await listAll();
-    expect(row.status).toBe(QUEUE_STATUS.PENDING);
+    expect(row).toMatchObject({ status: QUEUE_STATUS.NEEDS_REVIEW, uploadAttemptAt: expect.any(Number) });
   });
 
-  it("queues when the real call throws a transport error", async () => {
+  it("retains a thrown transport failure without clearing its dispatch evidence", async () => {
     const online = jest
       .fn()
       .mockRejectedValue(
@@ -558,8 +630,8 @@ describe("when online", () => {
       online,
     });
 
-    expect(result.queued).toBe(true);
-    expect(await listAll()).toHaveLength(1);
+    expect(result).toMatchObject({ allowed: false, queued: false, reason: "online-outcome-unconfirmed" });
+    expect((await listAll())[0]).toMatchObject({ status: "needs_review", uploadAttemptAt: expect.any(Number) });
   });
 
   // A 403 is auth-blocked, not a refusal of the punch — it may well resolve on
@@ -582,7 +654,7 @@ describe("when online", () => {
 
   // No HTTP status means our own code failed, not the server. Swallowing that
   // into a queue would tell the employee "saved" when nothing was recorded.
-  it("surfaces a local error instead of silently queueing it", async () => {
+  it("retains a callback exception when its dispatch phase is unknown instead of silently queueing it", async () => {
     const online = jest
       .fn()
       .mockRejectedValue(new Error("Location permission denied"));
@@ -594,8 +666,8 @@ describe("when online", () => {
     });
 
     expect(result.allowed).toBe(false);
-    expect(result.message).toMatch(/permission denied/i);
-    expect(await listAll()).toHaveLength(0);
+    expect(result.reason).toBe("online-outcome-unconfirmed");
+    expect((await listAll())[0]).toMatchObject({ status: "needs_review", error: expect.stringMatching(/permission denied/i) });
   });
 });
 
@@ -870,7 +942,7 @@ describe("forceQueue", () => {
     });
 
     expect(online).toHaveBeenCalledTimes(1);
-    expect(await listAll()).toHaveLength(0);
+    expect((await listAll())[0]).toMatchObject({ status: "synced", acceptanceConfirmed: 1, serverCheckinId: "X" });
   });
 
   // Ordering is not worth losing a real crossing over. The OS will not deliver
@@ -1010,10 +1082,11 @@ describe("asking for a drain after queueing", () => {
 
   // A refusal on its merits proves nothing about the queue's chances, and the
   // punch itself never reached the queue.
-  it("does not ask when the server refused the punch on its merits", async () => {
+  it("does not ask for another upload when the server positively refused the punch on its merits", async () => {
     const online = jest.fn().mockResolvedValue({
       allowed: false,
-      message: "You are not within your office location.",
+      message: "Employee is inactive.",
+      error: { response: { status: 417, data: { message: "Employee is inactive." } } },
     });
 
     await submitQueueable({ type: "IN", employeeCode: "TDI0167", online });

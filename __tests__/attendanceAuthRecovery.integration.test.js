@@ -49,6 +49,7 @@ import {
   syncPendingAttendance,
 } from "../services/offline/AttendanceSyncService";
 import { resetServerClockCache } from "../utils/serverClock";
+import { invalidateInstanceAvailability } from "../services/offline/InstanceAvailabilityService";
 import {
   applySessionOwner,
   readSession,
@@ -123,8 +124,15 @@ beforeEach(async () => {
   resetDatabaseHandle();
   resetSyncService();
   resetServerClockCache();
+  invalidateInstanceAvailability();
+  apiClient.get.mockImplementation(async url => {
+    if (url.endsWith("get_server_time")) return { data: { message: { server_time: "2026-09-01 12:40:00" } } };
+    throw new Error("Unexpected synthetic GET endpoint");
+  });
   await AsyncStorage.clear();
 });
+
+afterEach(() => { invalidateInstanceAvailability(); });
 
 /**
  * Enough cached configuration for the offline gate to accept a punch. The
@@ -477,7 +485,7 @@ describe("an automatic IN cannot overtake an undelivered punch", () => {
     expect(online).toHaveBeenCalledTimes(1);
     expect(result.name).toBe("EMP-CKIN-DIRECT");
     expect(result.queued).toBeUndefined();
-    expect(await listAll()).toHaveLength(0);
+    expect((await listAll())[0]).toMatchObject({ status: "synced", acceptanceConfirmed: 1, serverCheckinId: "EMP-CKIN-DIRECT" });
   });
 
   // Ordering is not worth losing a crossing over. If the queue cannot take the
@@ -489,6 +497,6 @@ describe("an automatic IN cannot overtake an undelivered punch", () => {
 
     expect(online).toHaveBeenCalledTimes(1);
     expect(result.allowed).toBe(true);
-    expect(await listAll()).toHaveLength(0);
+    expect((await listAll())[0]).toMatchObject({ status: "synced", acceptanceConfirmed: 1, serverCheckinId: "EMP-CKIN-DIRECT" });
   });
 });

@@ -26,6 +26,10 @@
  */
 jest.mock("expo-sqlite", () => require("../test-utils/expoSqliteMock"));
 jest.mock("expo-location", () => ({}));
+jest.mock("../services/offline/InstanceAvailabilityService", () => ({
+  checkInstanceAvailability: jest.fn(async () => ({ status: "available" })),
+  invalidateInstanceAvailability: jest.fn(),
+}));
 
 jest.mock("../services/offline/AttendanceApi", () => ({
   __esModule: true,
@@ -305,19 +309,20 @@ describe("what support can see", () => {
     // the run returned before touching the radio, which is what makes a
     // one-minute heartbeat affordable. The head row is still reported, which is
     // the whole point: a frozen queue must not look like an empty one.
-    expect(runLine[1]).toMatchObject({
+    const details = JSON.parse(runLine[0].slice(runLine[0].indexOf("\n") + 1));
+    expect(details).toMatchObject({
       ran: false,
       reason: "nothing-due",
       scope: EMPLOYEE,
     });
-    expect(runLine[1].head).toMatchObject({
+    expect(details.head).toMatchObject({
       id: row.id,
       status: QUEUE_STATUS.PENDING,
       attempts: 1,
       punchedAt: "2026-09-02 05:13:00",
     });
     // A real due time, so "waiting" and "never attempted" read differently.
-    expect(runLine[1].head.nextAttemptAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect(details.head.nextAttemptAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
 
   it("says nothing at all when the queue is empty", async () => {
@@ -382,11 +387,28 @@ describe("what support can see", () => {
     log.mockRestore();
 
     expect(summary.reason).toBe("offline");
-    expect(runLine[1]).toMatchObject({ ran: false, reason: "offline" });
-    expect(runLine[1].head).toMatchObject({
+    const details = JSON.parse(runLine[0].slice(runLine[0].indexOf("\n") + 1));
+    expect(details).toMatchObject({ ran: false, reason: "offline" });
+    expect(details.head).toMatchObject({
       id: row.id,
       attempts: 0,
       nextAttemptAt: "due",
     });
+  });
+
+  it("does not print detailed queue failures in release builds", async () => {
+    const { row } = await enqueue(punch());
+    await markRetry({ id: row.id, error: "synthetic-private-server-detail" });
+    const log = jest.spyOn(console, "log").mockImplementation(() => {});
+    const wasDevelopment = global.__DEV__;
+    try {
+      global.__DEV__ = false;
+      await syncPendingAttendance({ trigger: "interval", employeeId: EMPLOYEE });
+      expect(log.mock.calls.some(args => args.some(value => String(value).includes("synthetic-private-server-detail")))).toBe(false);
+      expect(log.mock.calls.some(([message]) => String(message).includes("Run (interval)"))).toBe(false);
+    } finally {
+      global.__DEV__ = wasDevelopment;
+      log.mockRestore();
+    }
   });
 });

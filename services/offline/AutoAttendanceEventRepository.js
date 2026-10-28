@@ -206,6 +206,24 @@ export const listReviewEvents = async ({ tenantKey, employeeId } = {}) => {
 
 export const countReviewEvents = async (scope) => (await listReviewEvents(scope)).length;
 
+/** Bounded history-only retries for attributable receipts with dispatch evidence. */
+export const listReviewEventsForVerification = async ({ tenantKey, employeeId }, {
+  now = Date.now(), retryAfterMs = 60000, limit = 5,
+} = {}) => {
+  if (!tenantKey || !employeeId) return [];
+  const database = await getDatabase();
+  const lastVerifiedSql = "COALESCE(CASE WHEN json_valid(outcome) THEN json_extract(outcome, '$.lastVerifiedAt') END, updatedAt)";
+  const rows = await database.getAllAsync(
+    `SELECT * FROM ${AUTO_EVENT_TABLE} WHERE tenantKey = ? AND employeeId = ?
+      AND status = ? AND onlineAttemptAt IS NOT NULL
+      AND (${lastVerifiedSql} <= ? OR ${lastVerifiedSql} > ?)
+      ORDER BY ${lastVerifiedSql},
+        COALESCE(sequence, -1), receivedAt, eventId LIMIT ?;`,
+    [tenantKey, employeeId, AUTO_EVENT_STATUS.NEEDS_REVIEW, now - retryAfterMs, now + retryAfterMs, Math.min(Math.max(limit, 1), 5)],
+  );
+  return rows.map(hydrate);
+};
+
 /** Seconds-resolution backend timestamps cannot identify two distinct same-type inputs. */
 export const findPunchTimestampCollision = async (row, timestamp) => {
   const database = await getDatabase();

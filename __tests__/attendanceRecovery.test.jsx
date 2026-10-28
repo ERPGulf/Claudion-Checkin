@@ -39,11 +39,13 @@ import * as session from "../utils/attendanceSessionState";
 import { enableAutomaticAttendance, loginQueueEmployee, TEST_TENANT } from "../test-utils/attendanceScope";
 import { ingestNativeEvent } from "../services/offline/AutoAttendanceEventRepository";
 import { beginEmployeeAutoAttendancePolicyReception, receiveEmployeeAutoAttendancePolicy } from "../services/employeeAutoAttendancePolicy";
+import { invalidateInstanceAvailability, SERVER_TIME_METHOD } from "../services/offline/InstanceAvailabilityService";
 
 const EMPLOYEE = "EMP-001";
 const OTHER_TENANT = "https://another.example.com";
 const URL = `${TEST_TENANT}/api/method/employee_app.attendance_api.add_offline_employee_checkins`;
 const HISTORY_URL = `${TEST_TENANT}/api/method/${ATTENDANCE_HISTORY_METHOD}`;
+const HEALTH_URL = `${TEST_TENANT}/api/method/${SERVER_TIME_METHOD}`;
 const serverPunch = (overrides = {}) => ({ name: "EXISTING-1", employee: "HR-EMP-00001",
   time: "2026-07-01 09:04:00", log_type: "IN", ...overrides });
 const { __resetAll } = require("../test-utils/expoSqliteMock");
@@ -62,6 +64,7 @@ beforeEach(async () => {
   jest.restoreAllMocks();
   stopBackgroundSync();
   resetSyncService();
+  invalidateInstanceAvailability();
   __resetAll();
   resetDatabaseHandle();
   await clearTokens();
@@ -75,6 +78,7 @@ beforeEach(async () => {
   http = new MockAdapter(apiClient);
   http.onPost(URL).reply(200, accepted("CHECKIN-1"));
   http.onGet(HISTORY_URL).reply(200, { message: [] });
+  http.onGet(HEALTH_URL).reply(200, { message: { server_time: "2026-07-01 10:00:00" } });
 });
 
 afterEach(() => { http.restore(); stopBackgroundSync(); });
@@ -227,6 +231,48 @@ it("shows blocked records and their retry details", async () => {
   expect(ui.getByText("Waiting to retry: 1")).toBeTruthy();
   expect(ui.getByText(/Sign in again if needed/)).toBeTruthy();
   expect(ui.getByText("Saved status: blocked · Transient retries: 0")).toBeTruthy();
+});
+
+it.each([false, true])("shows a review dependency instead of promising newer attendance will upload (dark=%s)", async dark => {
+  mockDark = dark;
+  const earlier = await seed();
+  const claim = await repository.claimNextPending();
+  await repository.markNeedsReview({ id: earlier.row.id, claimOwner: claim.claimOwner, error: "PRIVATE_DIAGNOSTIC" });
+  const newer = await seed({ action: "checkout", timestamp: "2026-07-01 18:12:00" });
+  const ui = await mountedWithCount(1);
+  expect(ui.getByText("Blocked by earlier attendance: 1")).toBeTruthy();
+  await act(async () => fireEvent.press(ui.getByLabelText("View attendance records")));
+  expect(ui.getByText("Blocked by earlier attendance")).toHaveStyle({ color: require("../constants")[dark ? "DARK_COLORS" : "COLORS"].warningText });
+  expect(ui.getByText(/A previous attendance record needs attention before newer records can sync\. This record remains saved/)).toBeTruthy();
+  expect(ui.getByText("Needs review")).toBeTruthy();
+  expect(ui.queryByText("PRIVATE_DIAGNOSTIC")).toBeNull();
+  expect((await repository.findById(newer.row.id)).uploadAttemptAt).toBeNull();
+});
+
+it("shows unavailable-server preflight as saved retryable work without an upload attempt", async () => {
+  const { row } = await seed();
+  http.onGet(HEALTH_URL).networkError();
+  const ui = await mountedWithCount(1);
+  await pressSync(ui);
+  expect(ui.getByText("Server unavailable")).toBeTruthy();
+  expect(ui.getByText("Unable to connect to your company's server. Your attendance is saved and will be retried when synchronization runs.")).toBeTruthy();
+  expect(ui.getByText(/Unable to connect to your company's server\. Saved attendance/)).toBeTruthy();
+  expect(http.history.post).toHaveLength(0);
+  expect(await repository.findById(row.id)).toMatchObject({ status: "pending", uploadAttemptAt: null, error: "instance_unreachable" });
+  ui.unmount();
+  const remounted = await mountedWithCount(1);
+  await act(async () => fireEvent.press(remounted.getByLabelText("View attendance records")));
+  expect(remounted.getByText("Server unavailable")).toBeTruthy();
+});
+
+it("shows a failed health endpoint as compatibility work rather than device offline", async () => {
+  await seed();
+  http.onGet(HEALTH_URL).reply(404, {});
+  const ui = await mountedWithCount(1);
+  await pressSync(ui);
+  expect(ui.getByText("Server compatibility needs attention")).toBeTruthy();
+  expect(ui.queryByText("Saved offline")).toBeNull();
+  expect(http.history.post).toHaveLength(0);
 });
 
 it("keeps an unresolved review visible in the banner even when ordinary sync alerts are suppressed", async () => {
@@ -408,7 +454,8 @@ it("keeps a transient failure saved, halts before checkout, exits loading and ca
   http.onPost(URL).networkError();
   const ui = await mountedWithCount(2);
   await pressSync(ui);
-  expect(ui.getByText("Could not reach the server. This attendance is still saved on this device.")).toBeTruthy();
+  expect(ui.getByText("Checking server outcome")).toBeTruthy();
+  expect(ui.getByText(/Only server verification is retried; this attendance will not be resent automatically/)).toBeTruthy();
   expect(ui.getByLabelText("Sync now")).not.toBeDisabled();
   expect(http.history.post).toHaveLength(1);
   expect((await repository.listAll()).every(row => row.status === "pending")).toBe(true);
@@ -432,7 +479,7 @@ it("renders success, duplicate, rejection and retry distinctly without exposing 
   });
   const ui = await mountedWithCount(4);
   await pressSync(ui);
-  expect(ui.getByText("2 synced · 1 waiting to retry · 1 needs attention")).toBeTruthy();
+  expect(ui.getByText("2 synced · 1 waiting · 1 needs attention")).toBeTruthy();
   expect(ui.getByText("Needs attention")).toBeTruthy();
   expect(ui.getByText("Verified on server")).toBeTruthy();
   expect(ui.queryAllByText(/SECRET_DIAGNOSTIC/)).toHaveLength(0);

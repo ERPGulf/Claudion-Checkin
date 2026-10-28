@@ -6,6 +6,9 @@ import {
   claimNextPending, countUnconfirmedAttendanceDependencies, enqueue, findById,
   markRejected, markSynced, releaseStuckSyncing, renewAttendanceClaim,
   beginAttendanceUpload, markRetry, markBlocked, markNeedsReview, releaseClaim, countOutstandingByScope,
+  listUncertainUploadClaims,
+  wakeBlocked, wakePending,
+  recordVerificationIssue,
 } from "../services/offline/AttendanceQueueRepository";
 
 const { __resetAll } = require("../test-utils/expoSqliteMock");
@@ -44,6 +47,69 @@ it("an expired dispatched upload is held for positive verification instead of re
   expect(await releaseStuckSyncing(2500, scope)).toBe(1);
   expect(await findById(row.id)).toMatchObject({ status: "needs_review", uploadAttemptAt: 1500 });
   expect(await claimNextPending(2500, { ...scope, ownerId: "runtime-b" })).toBeNull();
+});
+
+it("new review outcomes save their reason and respect a bounded history recheck interval", async () => {
+  const { row } = await enqueue(punch());
+  await claimNextPending(1000, { ...scope, ownerId: "runtime-a" });
+  await beginAttendanceUpload({ id: row.id, claimOwner: "runtime-a", now: 1500 });
+  await markNeedsReview({ id: row.id, claimOwner: "runtime-a", now: 2000,
+    error: "Unconfirmed response", verificationIssue: "unrecognized-server-response" });
+  expect(await findById(row.id)).toMatchObject({ status: "needs_review", uploadAttemptAt: 1500,
+    verificationIssue: "unrecognized-server-response", verificationCheckedAt: 2000 });
+  expect(await listUncertainUploadClaims(scope, 61999)).toEqual([]);
+  expect((await listUncertainUploadClaims(scope, 62000)).map(item => item.id)).toEqual([row.id]);
+  expect(await claimNextPending(62000, scope)).toBeNull();
+});
+
+it("legacy empty review reasons receive scoped read-only rechecks without becoming POST eligible", async () => {
+  const originals = [];
+  for (let minute = 0; minute < 4; minute += 1) {
+    const result = await enqueue(punch({ timestamp: `2026-10-14 09:0${minute}:00`,
+      ...(minute === 3 ? { tenantKey: "https://other.example.com" } : {}) }));
+    originals.push(result.row);
+  }
+  const db = await getDatabase();
+  await db.runAsync("UPDATE attendance_queue SET status = 'needs_review', failureClass = 'verification-required';");
+  await db.runAsync("UPDATE attendance_queue SET verificationIssue = '' WHERE id = ?;", [originals[1].id]);
+  await db.runAsync("UPDATE attendance_queue SET verificationIssue = 'company-needs-review' WHERE id = ?;", [originals[2].id]);
+  const listed = await listUncertainUploadClaims(scope, 100000);
+  expect(listed.map(row => row.id)).toEqual([originals[0].id, originals[1].id]);
+  expect(await findById(originals[0].id)).toMatchObject({ status: "needs_review", tenantKey: scope.tenantKey,
+    timestamp: originals[0].timestamp, payload: originals[0].payload, uploadAttemptAt: null });
+  expect(await claimNextPending(100000, scope)).toBeNull();
+});
+
+it("rotates the bounded review checks so old inconclusive records do not starve uninspected records", async () => {
+  const ids = [];
+  for (let minute = 0; minute < 7; minute += 1) {
+    ids.push((await enqueue(punch({ timestamp: `2026-10-14 09:0${minute}:00` }))).row.id);
+  }
+  await (await getDatabase()).runAsync("UPDATE attendance_queue SET status = 'needs_review', failureClass = 'verification-required';");
+  const first = await listUncertainUploadClaims(scope, 100000);
+  expect(first.map(row => row.id)).toEqual(ids.slice(0, 5));
+  for (const row of first) await recordVerificationIssue({ row, reason: "no-exact-match-in-visible-history", now: 100000 });
+  const next = await listUncertainUploadClaims(scope, 160000);
+  expect(next.map(row => row.id)).toEqual([ids[5], ids[6], ...ids.slice(0, 3)]);
+  expect(await claimNextPending(160000, scope)).toBeNull();
+});
+
+it.each([
+  ["pending", markRetry, wakePending],
+  ["blocked", markBlocked, wakeBlocked],
+])("respects persisted preflight Retry-After for %s rows through automatic and forced wakeups", async (status, write, wake) => {
+  const { row } = await enqueue(punch());
+  await claimNextPending(1000, { ...scope, ownerId: "runtime-a" });
+  const retryAfterAt = 602000;
+  await write({ id: row.id, claimOwner: "runtime-a", now: 2000, retryAfterMs: 600000,
+    error: "server_unavailable", serverResponse: { instanceAvailability: { status: "server_unavailable", retryAfterAt } } });
+  expect(await findById(row.id)).toMatchObject({ status, uploadAttemptAt: null, nextAttemptAt: retryAfterAt });
+  expect(await wake({ ...scope, now: 3000 })).toBe(0);
+  expect(await wake({ ...scope, now: 3000, force: true })).toBe(0);
+  expect(await claimNextPending(3000, scope)).toBeNull();
+  await wake({ ...scope, now: retryAfterAt, force: true });
+  expect(await claimNextPending(retryAfterAt, scope)).toMatchObject({ id: row.id, uploadAttemptAt: null,
+    timestamp: row.timestamp, payload: row.payload });
 });
 
 it("a migrated syncing row without owner cannot prove no upload occurred", async () => {

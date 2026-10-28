@@ -164,9 +164,13 @@ export const SYNC_STATUS = {
   RESOLVED: 'resolved',
   DUPLICATE: 'duplicate',
   NEEDS_REVIEW: 'needs-review',
+  CANCELLED: 'cancelled',
 };
 
 const SYNC_STATUS_DESCRIPTIONS = {
+  [SYNC_STATUS.CANCELLED]: {
+    label: 'Not submitted', tone: 'warning', icon: 'close-circle-outline',
+  },
   [SYNC_STATUS.NEEDS_REVIEW]: {
     label: 'Needs review', tone: 'warning', icon: 'help-circle-outline',
   },
@@ -225,6 +229,8 @@ export function describeSyncStatus(syncStatus) {
  * checking why a punch they made twice only appears once.
  */
 export function resolveQueueSyncStatus(row) {
+  if (row?.status === 'cancelled') return row.verificationIssue === 'known-not-inserted'
+    ? SYNC_STATUS.CANCELLED : SYNC_STATUS.NEEDS_REVIEW;
   if (row?.status === 'needs_review') return SYNC_STATUS.NEEDS_REVIEW;
   if (row?.status === 'synced') {
     return row.duplicate ? SYNC_STATUS.DUPLICATE : SYNC_STATUS.SYNCED;

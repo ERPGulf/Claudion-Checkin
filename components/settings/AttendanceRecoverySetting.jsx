@@ -3,16 +3,16 @@ import { FlatList, Text, View } from "react-native";
 import { SPACING, TYPO } from "../../constants";
 import useAppTheme from "../../hooks/useAppTheme";
 import useAttendanceRecovery from "../../hooks/useAttendanceRecovery";
-import { canVerifyRecoveryRow, describeRecoveryRow, summarizeRecoveryRows } from "../../utils/attendanceRecovery";
+import { blockedByEarlierAttendance, canVerifyRecoveryRow, describeAutomaticRecoveryEvent, describeRecoveryRow, summarizeRecoveryRows } from "../../utils/attendanceRecovery";
 import { formatLogDate, formatLogTime, parseLogTime } from "../../utils/attendanceHistory";
 import ActionButton from "../common/ActionButton";
 import BottomSheet from "../common/BottomSheet";
 import Card from "../common/Card";
 import SectionHeader from "../common/SectionHeader";
 
-export function RecoveryRecord({ row, onVerify, disabled, checking }) {
+export function RecoveryRecord({ row, onVerify, disabled, checking, context }) {
   const { colors } = useAppTheme();
-  const result = describeRecoveryRow(row);
+  const result = describeRecoveryRow(row, context);
   const date = parseLogTime(row.timestamp);
   return (
     <View style={{ paddingVertical: SPACING.md, borderBottomWidth: 1, borderBottomColor: colors.cardBorder }}>
@@ -27,7 +27,7 @@ export function RecoveryRecord({ row, onVerify, disabled, checking }) {
       </Text>
       <Text style={{ ...TYPO.caption, color: colors.textSecondary }}>Attempts recorded since update: {row.attemptCount ?? 0}</Text>
       <Text style={{ ...TYPO.caption, color: colors.textSecondary }}>
-        Last upload attempt: {row.lastAttemptAt ? `${formatLogDate(new Date(row.lastAttemptAt))} · ${formatLogTime(new Date(row.lastAttemptAt))}` : "Not recorded by this app version"}
+        Last sync attempt: {row.lastAttemptAt ? `${formatLogDate(new Date(row.lastAttemptAt))} · ${formatLogTime(new Date(row.lastAttemptAt))}` : "Not recorded by this app version"}
       </Text>
       {!!onVerify && canVerifyRecoveryRow(row) && <ActionButton
         label={checking ? "Checking server…" : "Check server record"} variant="outline"
@@ -41,6 +41,8 @@ export default function AttendanceRecoverySetting() {
   const recovery = useAttendanceRecovery();
   if (!recovery.isLoggedIn) return null;
   const { counts, loading, error, busy, rows, automaticEvents = [] } = recovery;
+  const context = { rows, deviceOnline: recovery.deviceOnline };
+  const heldByEarlier = rows.filter(row => blockedByEarlierAttendance(row, rows)).length;
   const automaticReview = automaticEvents.filter(event => event.status === "needs_review").length;
   const automaticPending = automaticEvents.length - automaticReview;
   const pending = counts?.recoverableCount ?? 0;
@@ -57,6 +59,8 @@ export default function AttendanceRecoverySetting() {
         {!!counts?.blockedCount && <Text style={{ ...TYPO.subhead, color: colors.textSecondary }}>Waiting to retry: {counts.blockedCount}</Text>}
         {!!counts?.rejectedCount && <Text style={{ ...TYPO.subhead, color: colors.warningText }}>Needs attention: {counts.rejectedCount}</Text>}
         {!!counts?.reviewCount && <Text style={{ ...TYPO.subhead, color: colors.warningText }}>Needs review: {counts.reviewCount}</Text>}
+        {!!heldByEarlier && <Text style={{ ...TYPO.subhead, color: colors.warningText }}>Blocked by earlier attendance: {heldByEarlier}</Text>}
+        {!!heldByEarlier && <Text style={{ ...TYPO.caption, color: colors.textSecondary }}>A previous attendance record needs attention before newer records can sync.</Text>}
         {!!counts?.unknownTenantCount && <Text style={{ ...TYPO.subhead, color: colors.warningText }}>Cannot verify company: {counts.unknownTenantCount}</Text>}
         {!!counts?.unknownTenantCount && <Text style={{ ...TYPO.caption, color: colors.textSecondary }}>These older records are kept on this device. Ask your administrator to verify their company before recovery.</Text>}
         {!!automaticEvents.length && <Text style={{ ...TYPO.subhead, color: colors.warningText }}>Automatic events: {automaticPending} waiting · {automaticReview} need review</Text>}
@@ -68,20 +72,23 @@ export default function AttendanceRecoverySetting() {
         {!error && (pending + syncing + attention + automaticPending > 0 || rows.length > 0) && <ActionButton label="View attendance records" variant="outline" onPress={recovery.open} style={{ marginTop: SPACING.sm }} />}
       </Card>
       <BottomSheet visible={recovery.visible} onClose={recovery.close} title="Attendance recovery"
-        subtitle={error ? "Saved attendance could not be read." : summarizeRecoveryRows(rows)}>
+        subtitle={error ? "Saved attendance could not be read." : summarizeRecoveryRows(rows, context)}>
         <View style={{ paddingHorizontal: SPACING.lg, flexShrink: 1 }}>
           {!!recovery.notice && <Text style={{ ...TYPO.body, color: colors.warningText }}>{recovery.notice}</Text>}
-          {automaticEvents.map(event => <View key={event.eventId} style={{ paddingVertical: SPACING.md }}>
-            <Text style={{ ...TYPO.headline, color: colors.textPrimary }}>Automatic {event.transition === "EXIT" ? "exit" : event.transition === "ENTER" ? "entry" : "transition"} · {event.status === "needs_review" ? "Needs review" : "Waiting"}</Text>
-            <Text style={{ ...TYPO.subhead, color: colors.textSecondary }}>{event.occurredAt ? `${formatLogDate(new Date(event.occurredAt))} · ${formatLogTime(new Date(event.occurredAt))}` : "Original time unavailable"}</Text>
-            <Text style={{ ...TYPO.caption, color: colors.textSecondary }}>{event.onlineAttemptAt ? "A server request may have completed. An exact server record must be verified before recovery." : "This transition has not been accepted as attendance. Its original data remains saved."}</Text>
-            {event.status === "needs_review" && !!event.onlineAttemptAt && !!event.tenantKey && !!event.employeeId && <ActionButton
-              label="Check automatic server record" variant="outline" disabled={busy || recovery.checkingId != null}
-              onPress={() => recovery.verifyAutomatic(event.eventId)} style={{ marginTop: SPACING.sm }} />}
-          </View>)}
+          {automaticEvents.map(event => {
+            const description = describeAutomaticRecoveryEvent(event, { events: automaticEvents, deviceOnline: recovery.deviceOnline });
+            return <View key={event.eventId} style={{ paddingVertical: SPACING.md }}>
+              <Text style={{ ...TYPO.headline, color: colors.textPrimary }}>Automatic {event.transition === "EXIT" ? "exit" : event.transition === "ENTER" ? "entry" : "transition"} · {description.label}</Text>
+              <Text style={{ ...TYPO.subhead, color: colors.textSecondary }}>{event.occurredAt ? `${formatLogDate(new Date(event.occurredAt))} · ${formatLogTime(new Date(event.occurredAt))}` : "Original time unavailable"}</Text>
+              <Text style={{ ...TYPO.caption, color: colors.textSecondary }}>{description.explanation}</Text>
+              {event.status === "needs_review" && !!event.onlineAttemptAt && !!event.tenantKey && !!event.employeeId && <ActionButton
+                label="Check automatic server record" variant="outline" disabled={busy || recovery.checkingId != null}
+                onPress={() => recovery.verifyAutomatic(event.eventId)} style={{ marginTop: SPACING.sm }} />}
+            </View>;
+          })}
           {error ? <Text style={{ ...TYPO.body, color: colors.errorText }}>{error}</Text> :
             <FlatList data={rows} keyExtractor={row => String(row.id)} renderItem={({ item }) => <RecoveryRecord row={item}
-              onVerify={recovery.verify} disabled={busy || recovery.checkingId != null} checking={recovery.checkingId === item.id} />}
+              onVerify={recovery.verify} disabled={busy || recovery.checkingId != null} checking={recovery.checkingId === item.id} context={context} />}
               ListEmptyComponent={<Text style={{ ...TYPO.body, color: colors.textSecondary }}>{automaticEvents.length ? "Saved automatic transitions appear above." : "No saved attendance records for this account. Missing records may require administrator investigation."}</Text>} />}
         </View>
       </BottomSheet>

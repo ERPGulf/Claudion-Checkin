@@ -14,19 +14,28 @@ import {
   countOutstandingByScope,
   countUnconfirmedNativePunches,
   countUnconfirmedAttendanceDependencies,
+  beginDirectAttendanceReceipt,
   enqueue,
   findBySourceEventId,
   listForHistory,
   listUnresolved,
   markResolved,
   pairWithOpenCheckin,
+  markSynced,
+  markNeedsReview,
+  renewAttendanceClaim,
+  settleDirectAttendanceNoInsert,
+  QUEUE_CLAIM_CHANGED,
 } from "./AttendanceQueueRepository";
+import { resolveServerTimestampAt } from "../api/attendance.service";
 import {
   clearAttendanceConfig,
   readAttendanceConfig,
 } from "./attendanceConfigCache";
 import { classifyAttendanceError, FAILURE_KIND } from "./attendanceErrors";
 import { fetchShouldAttemptRequest, isOnline } from "./NetworkListener";
+import { checkInstanceAvailability, invalidateInstanceAvailability } from "./InstanceAvailabilityService";
+import { logAttendanceDiagnostic } from "./attendanceDiagnostics";
 import { evaluateOfflineAttendance } from "./offlineAttendanceGate";
 import {
   clearOfflineCapability,
@@ -93,10 +102,11 @@ const checkAutomaticCapability = async (employeeCode, sourceScope, { queueing = 
  *      │
  *      no
  *      │
- *      └─> online? ──yes──> run the real API ──ok──────> done, nothing queued
+ *      └─> instance available? ──yes──> persist dispatch, run the real API
  *             │                    │
- *             │                    └─ failed ─┬─ transport/5xx ──> queue it
- *             │                               └─ policy/validation > surface it
+ *             │                    ├─ confirmed ──> settle receipt
+ *             │                    ├─ uncertain ──> retain for GET-only verification
+ *             │                    └─ proven no-insert ──> queue only with offline admission
  *             no
  *             │
  *             └──> offline gate ─┬─ refused ──> surface the error
@@ -247,7 +257,8 @@ const queueAttendance = async ({
   strictOrdering = false,
 }) => {
   const config = gate?.config ?? (await readAttendanceConfig());
-  const timestamp = suppliedTimestamp ?? await formatOfflineTimestamp(occurredAt ?? Date.now());
+  const timestamp = suppliedTimestamp ?? await formatOfflineTimestamp(occurredAt ?? Date.now(),
+    sourceScope?.tenantKey ? { tenantKey: sourceScope.tenantKey } : {});
   let tenantKey = null;
   try {
     await assertAttendanceQueueScope(sourceScope);
@@ -355,8 +366,8 @@ const queueAttendance = async ({
     }
   }
 
-  console.log(
-    `${LOG_PREFIX} ${inserted ? "Queued" : "Already queued"} ${type}`,
+  logAttendanceDiagnostic(
+    LOG_PREFIX, `${inserted ? "Queued" : "Already queued"} ${type}`,
     { employeeCode, timestamp, attendanceType, id: row?.id },
   );
 
@@ -379,8 +390,8 @@ const queueAttendance = async ({
     location: gate?.location ?? null,
     message:
       type === "IN"
-        ? "Checked in offline — this will sync when you're back online."
-        : "Checked out offline — this will sync when you're back online.",
+        ? "Checked in offline — saved on this device. Check Attendance recovery for synchronization status."
+        : "Checked out offline — saved on this device. Check Attendance recovery for synchronization status.",
   };
 };
 
@@ -545,12 +556,22 @@ export const submitAttendance = async ({
     const existing = await findBySourceEventId({
       sourceEventId, tenantKey: sourceScope.tenantKey, employeeId: employeeCode,
     });
+    await assertAttendanceQueueScope(sourceScope);
     if (existing) {
+      if (existing.payload?.directOnline && existing.uploadAttemptAt &&
+        !(existing.status === QUEUE_STATUS.SYNCED && existing.acceptanceConfirmed)) {
+        return { allowed: false, queued: false, reason: "online-outcome-unconfirmed", row: existing, sourceEventId, location: null,
+          message: "Automatic attendance is retained for server verification before retry." };
+      }
       if ([QUEUE_STATUS.PENDING, QUEUE_STATUS.SYNCING, QUEUE_STATUS.BLOCKED].includes(existing.status)) {
         return { allowed: true, queued: true, alreadyQueued: true, row: existing, sourceEventId, name: null, location: null };
       }
       if (existing.status === QUEUE_STATUS.SYNCED && existing.acceptanceConfirmed) {
         return { allowed: true, queued: false, alreadyQueued: true, row: existing, sourceEventId, name: existing.serverCheckinId, location: null };
+      }
+      if (existing.status === QUEUE_STATUS.CANCELLED && existing.verificationIssue === "known-not-inserted") {
+        return { allowed: false, queued: false, reason: "attendance-not-submitted", row: existing, sourceEventId, location: null,
+          message: "This automatic attendance attempt was not submitted." };
       }
       return { allowed: false, reason: "source-event-needs-review", row: existing, sourceEventId, location: null };
     }
@@ -563,8 +584,10 @@ export const submitAttendance = async ({
 
   // Enforce both IN and OUT order at the submission seam, so an online EXIT
   // cannot bypass an earlier queued ENTER. Unknown legacy rows remain blockers.
-  if (strictOrdering && await countOutstandingByScope(sourceScope) > 0) {
+  let orderingRequiresQueue = false;
+  if (sourceScope?.tenantKey && await countOutstandingByScope(sourceScope) > 0) {
     forceQueue = true;
+    orderingRequiresQueue = true;
   }
 
   // "Is there a transport?", NOT "does NetInfo think the internet is reachable?".
@@ -577,9 +600,9 @@ export const submitAttendance = async ({
   // employee was told "checked in offline" on a working connection, and the
   // client saw a pending record on a phone that was plainly online.
   //
-  // So the queue is now reached only two ways: no transport at all (aeroplane
-  // mode, no signal), or the real call was attempted and failed transiently.
-  // Never on the strength of a probe alone.
+  // No transport skips the health request. A connected device also checks the
+  // selected instance before recording dispatch intent; a failed health GET may
+  // safely queue, while an uncertain attendance POST must only be verified.
   //
   // The cost is that a genuinely dead-but-connected network — real captive
   // portal wifi — now waits out the request instead of queueing immediately.
@@ -589,6 +612,29 @@ export const submitAttendance = async ({
   // answer would decide this on seconds-old information.
   const connected = await fetchShouldAttemptRequest();
   const canGoOnline = connected && typeof online === "function";
+  let instanceUnavailable = null;
+  let serverClock = null;
+  let directReceipt = null;
+  let knownDirectRefusal = null;
+  let preparedOnlineTimestamp = timestamp;
+
+  const preflightOnline = async () => {
+    const availability = await checkInstanceAvailability({ syncScope: sourceScope });
+    if (sourceScope) await assertAttendanceQueueScope(sourceScope);
+    if (availability.status === "available") {
+      serverClock = { serverTime: availability.serverTime, observedAt: availability.observedAt };
+      return null;
+    }
+    instanceUnavailable = availability;
+    if (["device_offline", "instance_unreachable", "server_unavailable"].includes(availability.status)) {
+      return { done: false };
+    }
+    return { done: true, result: { allowed: false, queued: false, availability,
+      reason: ["stale_result", "cancelled"].includes(availability.status) ? "scope-changed" : `instance-${availability.status.replace(/_/g, "-")}`,
+      message: availability.status === "authentication_required" ? "Your organization requires authentication before automatic attendance can continue."
+        : availability.status === "endpoint_unsupported" ? "Your organization's server does not support the attendance connection check."
+        : "Your organization's server connection could not be verified.", location: null } };
+  };
 
   const retainUncertainOnlineAttempt = async (failure) => {
     if (!strictOrdering) return null;
@@ -605,14 +651,48 @@ export const submitAttendance = async ({
       message: "Automatic attendance is retained for server verification before retry." };
   };
 
+  const settleKnownDirectRefusal = async ({ queueForDelivery = false } = {}) => {
+    if (!directReceipt || !knownDirectRefusal) return null;
+    const row = await settleDirectAttendanceNoInsert({ id: directReceipt.id, claimOwner: directReceipt.claimOwner,
+      queueForDelivery, ...knownDirectRefusal,
+      ...(queueForDelivery ? { assertCurrent: () => assertAutomaticCapabilityCurrent(sourceScope, { queueing: true }) } : {}) });
+    notifyQueueChanged();
+    return row;
+  };
+
+  const retainLegacyDirectFailure = async (failure, { beforeDispatch = false } = {}) => {
+    if (!directReceipt) return null;
+    if (!beforeDispatch) invalidateInstanceAvailability();
+    const classified = classifyAttendanceError(failure?.error);
+    const localRefusal = failure?.error?.code === "FEATURE_DISABLED" ||
+      failure?.error?.code?.startsWith("EMPLOYEE_AUTO_ATTENDANCE");
+    const knownRefusal = classified.kind === FAILURE_KIND.BLOCKED && classified.status >= 400 && classified.status < 500 &&
+      [FAILURE_CLASS.AUTH, FAILURE_CLASS.CONFIGURATION, FAILURE_CLASS.ENDPOINT_MISSING].includes(classified.failureClass);
+    if (beforeDispatch || localRefusal || knownRefusal || classified.kind === FAILURE_KIND.REJECTED) {
+      knownDirectRefusal = { failureClass: classified.failureClass ?? FAILURE_CLASS.CONFIGURATION,
+        error: failure?.message ?? classified.message, serverResponse: failure?.error?.response?.data ?? null };
+      if (knownRefusal && !beforeDispatch && !localRefusal) return { done: false };
+      await settleKnownDirectRefusal();
+      return { done: true, result: { ...failure, allowed: false, queued: false } };
+    }
+    await markNeedsReview({ id: directReceipt.id, claimOwner: directReceipt.claimOwner,
+      error: failure?.message || "The automatic attendance request was dispatched without a confirmed outcome.",
+      serverResponse: failure?.error?.response?.data ?? null });
+    notifyQueueChanged();
+    requestQueueDrain({ employeeId: employeeCode, reason: "online-outcome-unconfirmed" });
+    return { done: true, result: { ...failure, allowed: false, queued: false, queueRowId: directReceipt.id,
+      reason: "online-outcome-unconfirmed", message: "Automatic attendance is retained for server verification before retry." } };
+  };
+
   /**
    * One online attempt.
    *
-   * `{ done: true }` means the caller should return `result` — the server had an
-   * opinion and it stands. `{ done: false }` means the failure was transient and
-   * the punch should be queued.
+   * `{ done: true }` returns the confirmed, refused or uncertain result.
+   * `{ done: false }` requires offline admission for work known to be unsent.
    */
   const attemptOnline = async () => {
+    let heartbeat = null;
+    let invoked = false;
     const localCapabilityRefusal = async (failure) => {
       const employeeRefusal = failure?.error?.code?.startsWith("EMPLOYEE_AUTO_ATTENDANCE");
       if (failure?.error?.code !== "FEATURE_DISABLED" && !employeeRefusal) return null;
@@ -628,9 +708,52 @@ export const submitAttendance = async ({
       const refusal = await checkAutomaticCapability(employeeCode, sourceScope);
       if (refusal) return { done: true, result: refusal };
       assertAutomaticCapabilityCurrent(sourceScope);
-      const result = await online();
+      const preflight = await preflightOnline();
+      if (preflight) return preflight;
+      assertAutomaticCapabilityCurrent(sourceScope);
+      if (!strictOrdering) {
+        await assertAttendanceQueueScope(sourceScope);
+        preparedOnlineTimestamp = timestamp ?? await resolveServerTimestampAt(occurredAt ?? Date.now(), Date.now(), {
+          syncScope: sourceScope, serverClock,
+        });
+        const config = await readAttendanceConfig();
+        await assertAttendanceQueueScope(sourceScope);
+        assertAutomaticCapabilityCurrent(sourceScope);
+        const directOwner = `direct:${Date.now()}:${Math.random()}`;
+        const acceptance = await beginDirectAttendanceReceipt({ employeeId: employeeCode, tenantKey: sourceScope.tenantKey,
+          employeeDocname: config?.tenantKey === sourceScope.tenantKey && config?.employeeId === employeeCode
+            ? config.employeeDocname ?? null : null,
+          action: logTypeToAction(type), timestamp: preparedOnlineTimestamp, deviceId: DEVICE_ID,
+          payload: { over_time: 0, directOnline: true },
+          sourceEventId,
+          ownerId: directOwner,
+          assertCurrent: () => assertAutomaticCapabilityCurrent(sourceScope) });
+        if (!acceptance.inserted && acceptance.reason === "earlier-attendance-unconfirmed") {
+          orderingRequiresQueue = true;
+          forceQueue = true;
+          return { done: false };
+        }
+        if (!acceptance.inserted) return { done: true, result: { allowed: false, queued: false,
+          reason: acceptance.reason ?? "earlier-attendance-unconfirmed", location: null,
+          message: "Earlier saved attendance needs server confirmation before this action." } };
+        directReceipt = { ...acceptance.row, claimOwner: directOwner };
+        heartbeat = setInterval(() => {
+          renewAttendanceClaim({ id: directReceipt.id, claimOwner: directReceipt.claimOwner }).catch(() => {});
+        }, 30000);
+        directReceipt = await renewAttendanceClaim({ id: directReceipt.id, claimOwner: directOwner });
+        await assertAttendanceQueueScope(sourceScope);
+        assertAutomaticCapabilityCurrent(sourceScope);
+      }
+      invoked = true;
+      const result = await online({ serverClock, timestamp: preparedOnlineTimestamp });
+      if (sourceScope) await assertAttendanceQueueScope(sourceScope);
 
-      if (result?.allowed) {
+      if (result?.allowed && (!directReceipt || (typeof result.name === "string" && !!result.name.trim()))) {
+        if (directReceipt) {
+          await markSynced({ id: directReceipt.id, claimOwner: directReceipt.claimOwner,
+            serverCheckinId: result.name, acceptanceConfirmed: true });
+          notifyQueueChanged();
+        }
         // The strongest possible evidence that the server is up and this token
         // works: a punch just landed on it. Anything already queued should go
         // now rather than waiting for its own backoff to elapse — this is the
@@ -640,6 +763,9 @@ export const submitAttendance = async ({
         return { done: true, result };
       }
 
+      const directFailure = await retainLegacyDirectFailure(result ?? { allowed: false, location: null });
+      if (directFailure) return directFailure;
+
       const localRefusal = await localCapabilityRefusal(result);
       if (localRefusal) return { done: true, result: localRefusal };
 
@@ -648,6 +774,7 @@ export const submitAttendance = async ({
         // payload. Surfacing it is the correct behaviour, online or not.
         return { done: true, result };
       }
+      invalidateInstanceAvailability();
       const uncertain = await retainUncertainOnlineAttempt(result);
       if (uncertain) return { done: true, result: uncertain };
 
@@ -658,6 +785,12 @@ export const submitAttendance = async ({
       return { done: false };
     } catch (error) {
       const { message } = classifyAttendanceError(error);
+      if (directReceipt && error?.code === QUEUE_CLAIM_CHANGED) {
+        return { done: true, result: { allowed: false, queued: false, reason: "attendance-claim-changed", error, location: null,
+          message: "This saved attendance request is being handled by another synchronization attempt." } };
+      }
+      const directFailure = await retainLegacyDirectFailure({ allowed: false, message, error, location: null }, { beforeDispatch: !invoked });
+      if (directFailure) return directFailure;
       const localRefusal = await localCapabilityRefusal({ allowed: false, message, error, location: null });
       if (localRefusal) return { done: true, result: localRefusal };
 
@@ -665,11 +798,14 @@ export const submitAttendance = async ({
       if (!shouldQueueFailure({ error })) {
         return { done: true, result: { allowed: false, message, error, location: null } };
       }
+      invalidateInstanceAvailability();
       const uncertain = await retainUncertainOnlineAttempt({ error });
       if (uncertain) return { done: true, result: uncertain };
 
       console.log(`${LOG_PREFIX} Online attempt threw, queueing:`, message);
       return { done: false };
+    } finally {
+      if (heartbeat) clearInterval(heartbeat);
     }
   };
 
@@ -681,18 +817,19 @@ export const submitAttendance = async ({
   /**
    * What to do when the queue will not take a punch that `forceQueue` sent here.
    *
-   * `forceQueue` chose the queue for ordering, not because the punch could not
-   * be sent — the connection is fine. If the queue then refuses it (no offline
-   * endpoint on this server, no cached rules), returning that refusal would
-   * throw away a real crossing the OS will not deliver again. Losing attendance
-   * is worse than the ordering risk we were avoiding, so fall back to sending
-   * it. Ordinary punches are unaffected: they have already had their online
-   * attempt by this point.
+   * Older callers can request the queue even after an earlier dependency has
+   * settled. If admission refuses, a direct attempt is allowed only when no
+   * unresolved ordering dependency or earlier direct dispatch remains. Native
+   * journal inputs retain their strict-ordering refusal behavior.
    */
   const refuseOrFallBack = async (refusal) => {
+    if (knownDirectRefusal) {
+      await settleKnownDirectRefusal();
+      return refusal;
+    }
     // New native inputs remain durably retained for retry when admission fails.
     // The legacy forceQueue fallback is preserved for older callers/binaries.
-    if (strictOrdering || !forceQueue || !canGoOnline) return refusal;
+    if (strictOrdering || orderingRequiresQueue || !forceQueue || !canGoOnline) return refusal;
 
     console.log(
       `${LOG_PREFIX} Queue refused a forced ${type} (${refusal.reason}); sending it rather than losing it`,
@@ -738,11 +875,17 @@ export const submitAttendance = async ({
   // refuse every automatic check-out. This is not a hole a user can reach: it
   // applies solely to punches originating from a native geofence callback, never
   // to anything a person can tap.
-  const gate = await evaluateOfflineAttendance({
-    type,
-    enforceRadius: attendanceType !== ATTENDANCE_TYPE.AUTO,
-    ...(skipPosition ? { skipPosition: true } : {}),
-  });
+  let gate;
+  try {
+    gate = await evaluateOfflineAttendance({
+      type,
+      enforceRadius: attendanceType !== ATTENDANCE_TYPE.AUTO,
+      ...(skipPosition ? { skipPosition: true } : {}),
+    });
+  } catch (error) {
+    if (knownDirectRefusal) await settleKnownDirectRefusal();
+    throw error;
+  }
 
   if (!gate.allowed) {
     console.log(`${LOG_PREFIX} Offline ${type} refused:`, gate.reason);
@@ -752,6 +895,30 @@ export const submitAttendance = async ({
       reason: gate.reason,
       location: null,
     });
+  }
+
+  if (knownDirectRefusal) {
+    await assertAttendanceQueueScope(sourceScope);
+    const refusal = await checkAutomaticCapability(employeeCode, sourceScope, { queueing: true });
+    if (refusal) return refuseOrFallBack(refusal);
+    if (gate.config?.tenantKey !== sourceScope.tenantKey || gate.config?.employeeId !== employeeCode) {
+      return refuseOrFallBack({ allowed: false, reason: "config-scope-mismatch", location: null,
+        message: "Attendance rules must be refreshed for this account." });
+    }
+    let row;
+    try {
+      row = await settleKnownDirectRefusal({ queueForDelivery: true });
+    } catch (error) {
+      if (!error?.code?.startsWith("EMPLOYEE_AUTO_ATTENDANCE") &&
+        !["FEATURE_DISABLED", "CAPABILITY_SCOPE_CHANGED", "ATTENDANCE_SYNC_SCOPE_CHANGED"].includes(error?.code)) throw error;
+      await settleKnownDirectRefusal();
+      return { allowed: false, queued: false, reason: error.code === "FEATURE_DISABLED" ? "admin-disabled"
+        : error.code.startsWith("EMPLOYEE_AUTO_ATTENDANCE") ? "employee-policy-disabled" : "scope-changed",
+      message: "Automatic attendance was not submitted because your attendance policy or account changed.", location: null };
+    }
+    requestQueueDrain({ employeeId: employeeCode, action: logTypeToAction(type) });
+    return { allowed: true, queued: true, row, location: gate.location ?? null,
+      message: "Automatic attendance is saved on this device and waiting for server confirmation." };
   }
 
   return queueAttendance({
@@ -764,9 +931,9 @@ export const submitAttendance = async ({
     sourceScope,
     sourceEventId,
     sourceParentEventId,
-    timestamp,
+    timestamp: preparedOnlineTimestamp,
     strictOrdering,
-  });
+  }).then(result => instanceUnavailable ? { ...result, availability: instanceUnavailable } : result);
 };
 
 /**

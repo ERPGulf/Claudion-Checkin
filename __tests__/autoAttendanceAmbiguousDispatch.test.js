@@ -1,6 +1,9 @@
 /** @jest-environment jsdom */
 jest.mock("expo-sqlite", () => require("../test-utils/expoSqliteMock"));
 jest.mock("expo-location", () => ({}));
+jest.mock("../services/offline/InstanceAvailabilityService", () => ({
+  checkInstanceAvailability: jest.fn(), invalidateInstanceAvailability: jest.fn(),
+}));
 jest.mock("../modules/expo-auto-attendance", () => ({
   OFFICE_GEOFENCE_IDENTIFIER: "office-main",
   getPendingEvents: jest.fn(() => []), acknowledgeEvent: jest.fn(() => true),
@@ -24,6 +27,7 @@ import { syncPendingAttendance, resetSyncService } from "../services/offline/Att
 import { resetOfflineCapability, setOfflineQueueingAllowed } from "../services/offline/offlineCapability";
 import { readSession } from "../utils/attendanceSessionState";
 import { createRegistrationId } from "../utils/autoAttendanceRegistration";
+import { checkInstanceAvailability } from "../services/offline/InstanceAvailabilityService";
 import { enableAutomaticAttendance, loginQueueEmployee, TEST_TENANT } from "../test-utils/attendanceScope";
 import { beginEmployeeAutoAttendancePolicyReception, receiveEmployeeAutoAttendancePolicy } from "../services/employeeAutoAttendancePolicy";
 
@@ -41,6 +45,8 @@ const nativeEnter = eventId => {
 };
 beforeEach(async () => {
   __resetAll(); resetDatabaseHandle(); resetSyncService(); resetOfflineCapability();
+  checkInstanceAvailability.mockImplementation(async () => ({ status: "available",
+    serverTime: "2026-10-14 09:00:00", observedAt: Date.now() }));
   await clearTokens(); await AsyncStorage.clear();
   await loginQueueEmployee(employeeId); await saveTokens("synthetic-access", "synthetic-refresh");
   enableAutomaticAttendance(employeeId);
@@ -114,6 +120,7 @@ it("a confirmed no-insert refusal remains safely retryable when offline admissio
 });
 
 it("a pre-dispatch server-clock failure still queues the native event without an attendance POST", async () => {
+  checkInstanceAvailability.mockResolvedValue({ status: "instance_unreachable" });
   http.onGet(`${TEST_TENANT}/api/method/employee_app.attendance_api.get_server_time`).networkError();
   const event = nativeEnter("pre-dispatch-enter");
   await ingestNativeEvent(event);

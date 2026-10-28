@@ -313,13 +313,14 @@ describe("M0 current-behaviour characterization", () => {
     await mountBootstrap();
     await emit("ENTER");
 
-    const { sourceScope } = submitAutoAttendance.mock.calls[0][0];
+    const { sourceScope, sourceEventId, occurredAt } = submitAutoAttendance.mock.calls[0][0];
     expect(sourceScope).toMatchObject({
       tenantKey: TENANT_A,
       employeeId: EMPLOYEE_A,
       authenticated: true,
     });
     expect(sourceScope).not.toHaveProperty("accessToken");
+    expect(sourceEventId).toBe(`legacy-live:${JSON.stringify([TENANT_A, EMPLOYEE_A, "IN", occurredAt])}`);
     expect(autoCheckInOut).toHaveBeenCalledWith(expect.objectContaining({ syncScope: sourceScope }));
   });
 

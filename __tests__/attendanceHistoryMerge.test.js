@@ -41,6 +41,8 @@ describe('resolveQueueSyncStatus', () => {
     ['blocked', { status: 'blocked' }, SYNC_STATUS.NEEDS_ADMIN],
     ['rejected', { status: 'rejected' }, SYNC_STATUS.NEEDS_CORRECTION],
     ['resolved', { status: 'resolved' }, SYNC_STATUS.RESOLVED],
+    ['cancelled with no-insert evidence', { status: 'cancelled', verificationIssue: 'known-not-inserted' }, SYNC_STATUS.CANCELLED],
+    ['historical cancelled', { status: 'cancelled' }, SYNC_STATUS.NEEDS_REVIEW],
     ['synced', { status: 'synced', duplicate: false }, SYNC_STATUS.SYNCED],
   ])('maps a %s row', (_label, row, expected) => {
     expect(resolveQueueSyncStatus(row)).toBe(expected);
@@ -68,6 +70,7 @@ describe('describeSyncStatus', () => {
     [SYNC_STATUS.NEEDS_ADMIN, 'Waiting for administrator', 'warning'],
     [SYNC_STATUS.NEEDS_CORRECTION, 'Needs correction', 'error'],
     [SYNC_STATUS.RESOLVED, 'Correction submitted', 'neutral'],
+    [SYNC_STATUS.CANCELLED, 'Not submitted', 'warning'],
     [SYNC_STATUS.DUPLICATE, 'Already synced', 'info'],
   ])('describes %s as "%s" in the %s tone', (status, label, tone) => {
     expect(describeSyncStatus(status)).toMatchObject({ label, tone });

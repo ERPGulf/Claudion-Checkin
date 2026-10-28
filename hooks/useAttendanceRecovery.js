@@ -12,6 +12,7 @@ import { addSyncListener, isSyncing } from "../services/offline/AttendanceSyncSe
 import { syncNow } from "../services/offline/BackgroundSyncManager";
 import { assertAttendanceQueueScope, captureAttendanceQueueScope, normalizeAttendanceTenantKey } from "../services/offline/attendanceQueueProvenance";
 import { reconcileAttendanceRow } from "../services/offline/AttendanceVerification";
+import { addNetworkChangeListener, isOnline } from "../services/offline/NetworkListener";
 
 const READ_ERROR = "Could not read saved attendance. Please try again.";
 
@@ -34,6 +35,7 @@ export default function useAttendanceRecovery() {
   const [visible, setVisible] = useState(false);
   const [notice, setNotice] = useState(null);
   const [checkingId, setCheckingId] = useState(null);
+  const [deviceOnline, setDeviceOnline] = useState(isOnline);
   const current = () => mounted.current && identityRef.current === identity;
 
   const read = useCallback(async () => {
@@ -82,8 +84,10 @@ export default function useAttendanceRecovery() {
     const unsubscribeSync = addSyncListener(() => {
       if (current()) { setBackgroundBusy(isSyncing()); refresh(); }
     });
+    setDeviceOnline(isOnline());
+    const unsubscribeNetwork = addNetworkChangeListener(online => { if (current()) setDeviceOnline(online); });
     const appState = AppState.addEventListener("change", next => { if (next === "active") refresh(); });
-    return () => { mounted.current = false; sequence.current += 1; unsubscribeQueue(); unsubscribeSync(); appState.remove(); };
+    return () => { mounted.current = false; sequence.current += 1; unsubscribeQueue(); unsubscribeSync(); unsubscribeNetwork(); appState.remove(); };
   }, [identity, refresh]);
 
   const sync = useCallback(async () => {
@@ -107,6 +111,8 @@ export default function useAttendanceRecovery() {
       runRecords.current = (result?.records ?? []).map(report => ({ ...before.rows.find(row => row.id === report.id), ...report, tenantKey: scope.tenantKey }));
       if (["scope-changed", "another-session-syncing"].includes(result?.reason)) setNotice("Sync stopped because your account/session changed. Saved attendance has not been discarded.");
       else if (result?.reason === "sync-error") setNotice("Could not finish synchronization. Check the saved records below before trying again.");
+      else if (result?.reason === "device_offline") setNotice("Attendance remains saved on this device. Synchronization can resume when your connection and company server are available.");
+      else if (["instance_unreachable", "server_unavailable"].includes(result?.reason)) setNotice("Unable to connect to your company's server. Saved attendance will be retried when synchronization runs.");
     } catch {
       if (current()) setNotice("Could not finish synchronization. Your account may have changed, or saved attendance could not be read.");
     } finally {
@@ -156,7 +162,7 @@ export default function useAttendanceRecovery() {
       pressed.current = false;
     }
   };
-  return { ...safeState, isLoggedIn, busy: busy || backgroundBusy, visible: visible && state.identity === identity && isLoggedIn,
+  return { ...safeState, isLoggedIn, deviceOnline, busy: busy || backgroundBusy, visible: visible && state.identity === identity && isLoggedIn,
     notice, checkingId, verify, verifyAutomatic, sync, refresh,
     retryAutomatic: () => { dispatch(requestAutoAttendanceSync()); setVisible(true); refresh(); },
     open: () => { setVisible(true); refresh(); }, close: () => setVisible(false) };

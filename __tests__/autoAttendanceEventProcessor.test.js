@@ -7,6 +7,9 @@ jest.mock("../services/api/attendance.service", () => ({
   autoCheckInOut: jest.fn(), getAttendanceStatus: jest.fn(), resolveServerTimestampAt: jest.fn(),
 }));
 jest.mock("../services/offline/NetworkListener", () => ({ fetchShouldAttemptRequest: jest.fn(), isOnline: jest.fn(() => true) }));
+jest.mock("../services/offline/InstanceAvailabilityService", () => ({
+  checkInstanceAvailability: jest.fn(), invalidateInstanceAvailability: jest.fn(),
+}));
 jest.mock("../services/offline/offlineAttendanceGate", () => ({ evaluateOfflineAttendance: jest.fn() }));
 jest.mock("../services/offline/AttendanceVerification", () => ({
   ...jest.requireActual("../services/offline/AttendanceVerification"), verifyQueuedAttendance: jest.fn(),
@@ -24,6 +27,7 @@ import { resetDatabaseHandle, getDatabase } from "../services/offline/Attendance
 import { enqueue, listAll } from "../services/offline/AttendanceQueueRepository";
 import { autoCheckInOut, getAttendanceStatus, resolveServerTimestampAt } from "../services/api/attendance.service";
 import { fetchShouldAttemptRequest } from "../services/offline/NetworkListener";
+import { checkInstanceAvailability } from "../services/offline/InstanceAvailabilityService";
 import { evaluateOfflineAttendance } from "../services/offline/offlineAttendanceGate";
 import { verifyQueuedAttendance } from "../services/offline/AttendanceVerification";
 import { resetOfflineCapability } from "../services/offline/offlineCapability";
@@ -69,6 +73,9 @@ beforeEach(async () => {
   Native.getPendingEvents.mockImplementation(() => [...journal]);
   Native.acknowledgeEvent.mockImplementation(id => { journal = journal.filter(item => item.eventId !== id); return true; });
   fetchShouldAttemptRequest.mockResolvedValue(true);
+  checkInstanceAvailability.mockImplementation(async () => await fetchShouldAttemptRequest()
+    ? { status: "available", serverTime: wallClock(Date.now()), observedAt: Date.now() }
+    : { status: "device_offline" });
   resolveServerTimestampAt.mockImplementation(async at => wallClock(at));
   autoCheckInOut.mockResolvedValue({ allowed: true, name: "SERVER-1" });
   getAttendanceStatus.mockResolvedValue({ custom_in: 0 });
@@ -245,6 +252,53 @@ it("retains and queues offline ENTER/EXIT in order without native overwrite", as
   expect((await listAll()).sort((a, b) => a.id - b.id).map(row => [row.action, row.sourceEventId])).toEqual([["checkin", "enter"], ["checkout", "exit"]]);
   expect(journal).toEqual([]);
   expect((await readSession()).status).toBe("CHECKED_OUT");
+});
+
+it("queues both firewall-blocked crossings without online or upload dispatch evidence", async () => {
+  checkInstanceAvailability.mockResolvedValue({ status: "instance_unreachable", failureCategory: "timeout" });
+  journal = [event("firewall-enter", 1), event("firewall-exit", 2, "EXIT")];
+  await drain();
+  expect(autoCheckInOut).not.toHaveBeenCalled();
+  expect(resolveServerTimestampAt).not.toHaveBeenCalled();
+  expect((await listAll()).sort((a, b) => a.id - b.id).map(row => [row.action, row.uploadAttemptAt]))
+    .toEqual([["checkin", null], ["checkout", null]]);
+  expect(await Events.findEvent("firewall-enter")).toMatchObject({ status: "handled", onlineAttemptAt: null, outcome: { queued: true } });
+  expect(await Events.findEvent("firewall-exit")).toMatchObject({ status: "handled", onlineAttemptAt: null, outcome: { queued: true } });
+  expect(await readSession()).toMatchObject({ status: "CHECKED_OUT", closedBy: "AUTO" });
+});
+
+it("checks the instance again before dispatch when a prior safe attempt froze the timestamp", async () => {
+  const source = event("frozen", 1);
+  await Events.ingestNativeEvent(source);
+  await Events.updateEvent(source.eventId, { punchTimestamp: wallClock(source.timestamp) });
+  checkInstanceAvailability.mockResolvedValue({ status: "instance_unreachable" });
+  await drain();
+  expect(autoCheckInOut).not.toHaveBeenCalled();
+  expect((await listAll())[0]).toMatchObject({ timestamp: wallClock(source.timestamp), uploadAttemptAt: null });
+  expect(await Events.findEvent(source.eventId)).toMatchObject({ onlineAttemptAt: null, status: "handled" });
+});
+
+it("retains an explicit authentication refusal without an attendance dispatch marker", async () => {
+  checkInstanceAvailability.mockResolvedValue({ status: "authentication_required", httpStatus: 403 });
+  journal = [event("auth-required", 1)];
+  await drain();
+  expect(autoCheckInOut).not.toHaveBeenCalled();
+  expect(await listAll()).toEqual([]);
+  expect(await Events.findEvent("auth-required")).toMatchObject({ status: "pending",
+    reason: "instance-authentication-required", onlineAttemptAt: null });
+});
+
+it("does not dispatch or enqueue into a new account when ownership changes during the health read", async () => {
+  checkInstanceAvailability.mockImplementationOnce(async () => {
+    await loginQueueEmployee("EMP-OTHER");
+    return { status: "available", serverTime: wallClock(Date.now()), observedAt: Date.now() };
+  });
+  journal = [event("health-scope-change", 1)];
+  await expect(drain()).rejects.toMatchObject({ code: "ATTENDANCE_SYNC_SCOPE_CHANGED" });
+  expect(autoCheckInOut).not.toHaveBeenCalled();
+  expect(await listAll()).toEqual([]);
+  expect(await Events.findEvent("health-scope-change")).toMatchObject({ tenantKey: TEST_TENANT,
+    employeeId, status: "processing", onlineAttemptAt: null });
 });
 
 it("online OUT remains behind an earlier queued IN when the app reopens", async () => {
@@ -448,6 +502,59 @@ it("review verification needs positive history evidence and never sends attendan
   expect((await verifyAutoAttendanceEvent({ eventId: "uncertain", employeeId })).verified).toBe(true);
   expect((await Events.findEvent("uncertain")).status).toBe("pending");
   expect(autoCheckInOut).not.toHaveBeenCalled();
+});
+
+it("automatically rechecks review receipts with bounded history reads and never resends their POST", async () => {
+  await Events.ingestNativeEvent(event("review-retry", 1));
+  await Events.updateEvent("review-retry", { status: "needs_review", onlineAttemptAt: started,
+    punchTimestamp: wallClock(started + 1000), reason: "server-unavailable" }, { now: Date.now() - 61000 });
+  verifyQueuedAttendance.mockResolvedValue({ verified: false, reason: "server-unavailable" });
+  await drain();
+  expect(verifyQueuedAttendance).toHaveBeenCalledTimes(1);
+  expect(await Events.findEvent("review-retry")).toMatchObject({ status: "needs_review", onlineAttemptAt: started,
+    outcome: { lastVerifiedAt: expect.any(Number) } });
+  await drain();
+  expect(verifyQueuedAttendance).toHaveBeenCalledTimes(1);
+  const now = Date.now();
+  const clock = jest.spyOn(Date, "now").mockReturnValue(now + 61000);
+  verifyQueuedAttendance.mockResolvedValue({ verified: true, evidence: { name: "REVIEW-FOUND" } });
+  try {
+    await drain();
+    expect(verifyQueuedAttendance).toHaveBeenCalledTimes(2);
+    expect(await Events.findEvent("review-retry")).toMatchObject({ status: "handled", onlineAttemptAt: started,
+      outcome: { serverConfirmed: true } });
+    expect(await readSession()).toMatchObject({ status: "CHECKED_IN" });
+    expect(autoCheckInOut).not.toHaveBeenCalled();
+    expect(await listAll()).toEqual([]);
+  } finally {
+    clock.mockRestore();
+  }
+});
+
+it("does not strand review verification behind a check time left in the future by a clock correction", async () => {
+  await Events.ingestNativeEvent(event("review-clock", 1));
+  await Events.updateEvent("review-clock", { status: "needs_review", onlineAttemptAt: started,
+    punchTimestamp: wallClock(started + 1000), reason: "server-unavailable" }, { now: Date.now() + 600000 });
+  verifyQueuedAttendance.mockResolvedValue({ verified: true, evidence: { name: "FOUND-AFTER-CLOCK-CHANGE" } });
+  await drain();
+  expect(verifyQueuedAttendance).toHaveBeenCalledTimes(1);
+  expect(autoCheckInOut).not.toHaveBeenCalled();
+  expect(await Events.findEvent("review-clock")).toMatchObject({ status: "handled", outcome: { serverConfirmed: true } });
+});
+
+it("bounds a review pass to five receipts and keeps later receipts for another pass", async () => {
+  for (let sequence = 1; sequence <= 6; sequence += 1) {
+    const source = event(`review-batch-${sequence}`, sequence);
+    await Events.ingestNativeEvent(source);
+    await Events.updateEvent(source.eventId, { status: "needs_review", onlineAttemptAt: started,
+      punchTimestamp: wallClock(source.timestamp), reason: "no-exact-match-in-visible-history" }, { now: Date.now() - 61000 });
+  }
+  await drain();
+  expect(verifyQueuedAttendance).toHaveBeenCalledTimes(5);
+  expect(autoCheckInOut).not.toHaveBeenCalled();
+  expect((await Events.listReviewEvents(scope))).toHaveLength(6);
+  await drain();
+  expect(verifyQueuedAttendance).toHaveBeenCalledTimes(6);
 });
 
 it("invalid registration fingerprints are retained for review without attendance", async () => {

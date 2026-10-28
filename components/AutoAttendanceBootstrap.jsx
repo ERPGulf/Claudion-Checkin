@@ -264,6 +264,10 @@ function LegacyAutoAttendanceBootstrap() {
         // native evidence and high-water mark intact for review.
         if (!sourceScope) return;
         await assertAttendanceQueueScope(sourceScope);
+        // Older native modules lack journal IDs. A live callback with a proven
+        // owner still has a stable original time/type, so repeated delivery can
+        // recover the same local receipt after a response was lost.
+        const sourceEventId = `legacy-live:${JSON.stringify([sourceScope.tenantKey, sourceScope.employeeId, type, occurredAt])}`;
         const policy = await getEmployeeAutoAttendancePolicy(sourceScope);
         // Warnings-only observations are handled without creating attendance.
         // Disabled/unknown policies retain the event instead of authorizing it.
@@ -318,13 +322,16 @@ function LegacyAutoAttendanceBootstrap() {
               occurredAt,
               forceQueue,
               sourceScope,
-              online: async () => {
+              sourceEventId,
+              online: async ({ serverClock, timestamp } = {}) => {
                 await assertPunchAllowed();
                 return autoCheckInOut({
                   employeeCode: code,
                   type,
                   office: officeRef.current,
                   occurredAt,
+                  serverClock,
+                  timestamp,
                   syncScope: sourceScope,
                 });
               },
@@ -381,7 +388,7 @@ function LegacyAutoAttendanceBootstrap() {
           presentLocalNotification({
             title: outcome.queued ? "Checked out offline" : "Checked out",
             body: outcome.queued
-              ? `${where}, so you've been checked out on this device. It will sync when you're back online.`
+              ? `${where}, so you've been checked out on this device. Check Attendance recovery for synchronization status.`
               : `${where}, so ${startedManually ? "your check-in was closed" : "you've been checked out"} automatically.`,
             data: {
               type: "auto-checkout",

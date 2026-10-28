@@ -12,6 +12,11 @@ jest.mock("expo-sqlite", () => require("../test-utils/expoSqliteMock"));
 // suites use.
 jest.mock("expo-location", () => ({}));
 
+jest.mock("../services/offline/InstanceAvailabilityService", () => ({
+  checkInstanceAvailability: jest.fn(async () => ({ status: "available" })),
+  invalidateInstanceAvailability: jest.fn(),
+}));
+
 jest.mock("../services/offline/AttendanceApi", () => ({
   __esModule: true,
   PUSH_RESULT: {
@@ -74,6 +79,7 @@ import { PUSH_RESULT, pushCheckin } from "../services/offline/AttendanceApi";
 import { fetchIsOnline } from "../services/offline/NetworkListener";
 import { uploadQueuedPhoto } from "../services/offline/attendancePhotoUpload";
 import { verifyQueuedAttendance } from "../services/offline/AttendanceVerification";
+import { checkInstanceAvailability, invalidateInstanceAvailability } from "../services/offline/InstanceAvailabilityService";
 
 const { __resetAll } = require("../test-utils/expoSqliteMock");
 
@@ -105,6 +111,7 @@ beforeEach(async () => {
   resetSyncService();
   jest.clearAllMocks();
   fetchIsOnline.mockResolvedValue(true);
+  checkInstanceAvailability.mockReset().mockResolvedValue({ status: "available" });
   uploadQueuedPhoto.mockResolvedValue({ uploaded: true });
 });
 
@@ -199,6 +206,84 @@ describe("duplicate handling", () => {
 });
 
 describe("retry rules", () => {
+  it.each(["device_offline", "instance_unreachable", "server_unavailable"])(
+    "retains an unsent row and its OUT during a %s preflight failure, then uploads the original FIFO on recovery", async status => {
+      const { row: original } = await enqueue(punch());
+      await enqueue(punch({ action: QUEUE_ACTION.CHECKOUT, timestamp: "2026-07-28 17:00:00" }));
+      checkInstanceAvailability.mockResolvedValueOnce({ status });
+
+      const failed = await syncPendingAttendance();
+      expect(failed.reason).toBe(status);
+      expect(pushCheckin).not.toHaveBeenCalled();
+      expect(await findById(original.id)).toMatchObject({
+        status: "pending", uploadAttemptAt: null, error: status, retryCount: 1,
+        timestamp: original.timestamp, payload: original.payload,
+      });
+      expect((await listAll()).every(row => row.uploadAttemptAt === null)).toBe(true);
+
+      pushCheckin.mockResolvedValue(inserted());
+      const recovered = await syncPendingAttendance({ wakeAllPending: true });
+      expect(recovered.synced).toBe(2);
+      expect(pushCheckin.mock.calls.map(([row]) => row.timestamp))
+        .toEqual(["2026-07-28 09:00:00", "2026-07-28 17:00:00"]);
+    },
+  );
+
+  it.each([
+    ["authentication_required", FAILURE_CLASS.AUTH],
+    ["endpoint_unsupported", FAILURE_CLASS.CONFIGURATION],
+    ["configuration_error", FAILURE_CLASS.CONFIGURATION],
+  ])("blocks an explicit %s preflight result without marking attendance dispatched", async (status, failureClass) => {
+    await enqueue(punch());
+    checkInstanceAvailability.mockResolvedValueOnce({ status });
+    const summary = await syncPendingAttendance();
+    expect(summary).toMatchObject({ blocked: 1, reason: "blocked", instanceStatus: status });
+    expect((await listAll())[0]).toMatchObject({ status: "blocked", failureClass, error: status, uploadAttemptAt: null });
+    expect(pushCheckin).not.toHaveBeenCalled();
+  });
+
+  it("persists a health Retry-After and does not bypass it through Sync now", async () => {
+    await enqueue(punch());
+    checkInstanceAvailability.mockResolvedValueOnce({ status: "server_unavailable", retryAfterMs: 10 * 60 * 1000 });
+    await syncPendingAttendance();
+    const saved = (await listAll())[0];
+    expect(saved).toMatchObject({ status: "pending", uploadAttemptAt: null,
+      serverResponse: { instanceAvailability: { status: "server_unavailable", retryAfterAt: saved.nextAttemptAt } } });
+    await syncPendingAttendance({ wakeAllBlocked: true, wakeAllPending: true });
+    expect(checkInstanceAvailability).toHaveBeenCalledTimes(1);
+    expect(pushCheckin).not.toHaveBeenCalled();
+  });
+
+  it.each(["stale_result", "cancelled"])("releases an unsent claim after a %s preflight result", async status => {
+    await enqueue(punch());
+    checkInstanceAvailability.mockResolvedValueOnce({ status });
+    expect(await syncPendingAttendance()).toMatchObject({ reason: "scope-changed" });
+    expect((await listAll())[0]).toMatchObject({ status: "pending", uploadAttemptAt: null, claimOwner: null });
+    expect(pushCheckin).not.toHaveBeenCalled();
+  });
+
+  it("does not dispatch after another runtime takes the claim during preflight", async () => {
+    const { row } = await enqueue(punch());
+    checkInstanceAvailability.mockImplementationOnce(async () => {
+      await (await getDatabase()).runAsync("UPDATE attendance_queue SET claimOwner = ? WHERE id = ?;", ["other-runtime", row.id]);
+      return { status: "available" };
+    });
+    expect(await syncPendingAttendance()).toMatchObject({ reason: "claim-changed" });
+    expect(pushCheckin).not.toHaveBeenCalled();
+    expect(await findById(row.id)).toMatchObject({ status: "syncing", claimOwner: "other-runtime", uploadAttemptAt: null });
+  });
+
+  it("does not dispatch after employee scope changes while the preflight is in flight", async () => {
+    await enqueue(punch());
+    checkInstanceAvailability.mockImplementationOnce(async () => {
+      await loginQueueEmployee("OTHER-EMPLOYEE");
+      return { status: "available" };
+    });
+    expect(await syncPendingAttendance()).toMatchObject({ reason: "scope-changed" });
+    expect(pushCheckin).not.toHaveBeenCalled();
+    expect((await listAll())[0]).toMatchObject({ status: "pending", uploadAttemptAt: null, claimOwner: null });
+  });
+
   it("verifies a timed-out upload before a later drain can resend it", async () => {
     await enqueue(punch());
     pushCheckin.mockRejectedValueOnce(networkError());
@@ -207,6 +292,8 @@ describe("retry rules", () => {
     expect(pushCheckin).toHaveBeenCalledTimes(1);
     expect(summary.synced).toBe(1);
     expect((await listAll())[0]).toMatchObject({ acceptanceConfirmed: 1, serverCheckinId: "VERIFIED-CHECKIN" });
+    expect(checkInstanceAvailability).toHaveBeenCalledTimes(1);
+    expect(invalidateInstanceAvailability).toHaveBeenCalledTimes(1);
   });
 
   it("history transport failure retries verification without another attendance POST", async () => {
@@ -229,6 +316,29 @@ describe("retry rules", () => {
     await syncPendingAttendance({ wakeAllPending: true });
     expect(pushCheckin).toHaveBeenCalledTimes(1);
     expect((await listAll()).map(row => row.status).sort()).toEqual(["needs_review", "pending"]);
+  });
+
+  it("periodically rechecks inconclusive review evidence and releases its OUT only after positive proof", async () => {
+    const { row: checkin } = await enqueue(punch());
+    await enqueue(punch({ action: "checkout", timestamp: "2026-07-28 18:00:00" }));
+    pushCheckin.mockRejectedValueOnce(networkError()).mockResolvedValue(inserted());
+    await syncPendingAttendance();
+    verifyQueuedAttendance.mockResolvedValueOnce({ verified: false, reason: "no-exact-match-in-visible-history" });
+    await syncPendingAttendance({ wakeAllPending: true });
+    expect(await findById(checkin.id)).toMatchObject({ status: "needs_review",
+      verificationIssue: "no-exact-match-in-visible-history" });
+    const review = await findById(checkin.id);
+
+    await syncPendingAttendance();
+    expect(verifyQueuedAttendance).toHaveBeenCalledTimes(1);
+    expect(pushCheckin).toHaveBeenCalledTimes(1);
+    await (await getDatabase()).runAsync("UPDATE attendance_queue SET verificationCheckedAt = ? WHERE id = ?;",
+      [Date.now() - 60001, checkin.id]);
+    const recovered = await syncPendingAttendance();
+    expect(recovered.synced).toBe(2);
+    expect(pushCheckin.mock.calls.map(([row]) => row.action)).toEqual(["checkin", "checkout"]);
+    expect(await findById(checkin.id)).toMatchObject({ status: "synced", uploadAttemptAt: review.uploadAttemptAt,
+      timestamp: checkin.timestamp, acceptanceConfirmed: 1 });
   });
 
   it("retries a transport failure and arms the backoff", async () => {

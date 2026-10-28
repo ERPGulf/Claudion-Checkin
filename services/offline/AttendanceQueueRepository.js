@@ -1,6 +1,7 @@
 // src/services/offline/AttendanceQueueRepository.js
 import {
   AWAITING_SERVER_STATUSES,
+  ATTENDANCE_TYPE,
   FAILURE_CLASS,
   QUEUE_ACTION,
   QUEUE_STATUS,
@@ -88,6 +89,19 @@ export const blockedDelayFor = (blockedCount) =>
     Math.min(Math.max(blockedCount, 0), BLOCKED_DELAYS_MS.length - 1)
   ];
 
+// Review recovery is a bounded, read-only history check. It never makes an
+// uncertain upload eligible for another POST, including older rows that did
+// not record a reason when they entered review.
+export const REVIEW_RECHECK_INTERVAL_MS = 60 * 1000;
+const REVIEW_RECHECK_ROWS_PER_RUN = 5;
+export const REVIEW_RECHECK_ISSUES = [
+  "upload-outcome-unverified",
+  "server-unavailable",
+  "no-exact-match-in-visible-history",
+  "unrecognized-server-response",
+  "multiple-server-records",
+];
+
 const parseJson = (value, fallback = null) => {
   if (typeof value !== "string" || !value) return fallback;
   try {
@@ -113,6 +127,15 @@ const hydrate = (row) => {
 const hydrateAll = (rows) => (Array.isArray(rows) ? rows.map(hydrate) : []);
 
 const placeholdersFor = (values) => values.map(() => "?").join(", ");
+
+const retryAfterDelay = (value) => Number.isFinite(value) && value > 0 ? value : 0;
+
+// Preflight Retry-After is app-owned metadata on a never-dispatched row. It
+// must survive both the clock-skew repair and an explicit Sync now action.
+const PREFLIGHT_RETRY_AFTER_SQL = `COALESCE(CASE
+  WHEN uploadAttemptAt IS NULL AND json_valid(serverResponse)
+    THEN json_extract(serverResponse, '$.instanceAvailability.retryAfterAt')
+  END, 0) <= ?`;
 
 // An unresolved older row that holds `candidate` back; shared with explainUnclaimable.
 const OLDER_DEPENDENCY_SQL = `older.employeeId = candidate.employeeId
@@ -254,6 +277,70 @@ export const enqueue = async ({
   return { row: hydrate(row), inserted };
 };
 
+/**
+ * A legacy direct automatic POST needs durable dispatch evidence too. Insert
+ * it already owned and dispatched in one statement: exposing a pending row
+ * before a second UPDATE would allow another runtime to upload it first.
+ * This receipt records online intent, not admission to offline attendance.
+ */
+export const beginDirectAttendanceReceipt = async ({
+  employeeId,
+  employeeDocname = null,
+  tenantKey,
+  action,
+  timestamp,
+  latitude = null,
+  longitude = null,
+  accuracy = null,
+  address = null,
+  deviceId = null,
+  payload = {},
+  sessionId = null,
+  sourceEventId = null,
+  ownerId = `direct:${Date.now()}:${Math.random()}`,
+  leaseMs = QUEUE_CLAIM_LEASE_MS,
+  assertCurrent,
+  now = Date.now(),
+}) => {
+  if (!employeeId || !tenantKey) throw new Error("Direct attendance receipt requires employee and tenant scope.");
+  if (typeof timestamp !== "string" || !timestamp.trim()) throw new Error("Direct attendance receipt requires its exact POST timestamp.");
+  if (![QUEUE_ACTION.CHECKIN, QUEUE_ACTION.CHECKOUT].includes(action)) throw new Error("Direct attendance receipt requires a valid action.");
+  if (!ownerId) throw new Error("Direct attendance receipt requires a claim owner.");
+  if (typeof assertCurrent !== "function") throw new Error("Direct attendance receipt requires a current authorization check.");
+  const database = await getDatabase();
+  assertCurrent();
+  const result = await database.runAsync(
+    `INSERT INTO ${QUEUE_TABLE}
+       (employeeId, employeeDocname, tenantKey, attendanceType, action, timestamp,
+        latitude, longitude, accuracy, address, deviceId, payload,
+        status, retryCount, nextAttemptAt, sessionId, sourceEventId, createdAt, updatedAt,
+        claimOwner, claimExpiresAt, uploadAttemptAt, lastAttemptAt, attemptCount)
+     SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?, ?, ?, ?, 1
+      WHERE NOT EXISTS (
+        SELECT 1 FROM ${QUEUE_TABLE} AS older
+         WHERE older.employeeId = ? AND (older.tenantKey = ? OR older.tenantKey IS NULL)
+           AND (older.status IN ('pending', 'syncing', 'needs_review')
+             OR (older.status = 'synced' AND older.acceptanceConfirmed <> 1)
+             OR (older.status = 'blocked' AND IFNULL(older.failureClass, '') <> 'endpoint-missing'))
+      )
+     ON CONFLICT DO NOTHING;`,
+    [employeeId, employeeDocname, tenantKey, ATTENDANCE_TYPE.AUTO, action, timestamp,
+      latitude, longitude, accuracy, address, deviceId, JSON.stringify(payload ?? {}),
+      QUEUE_STATUS.SYNCING, sessionId, sourceEventId, now, now,
+      ownerId, now + leaseMs, now, now, employeeId, tenantKey],
+  );
+  const sourceRow = sourceEventId ? await database.getFirstAsync(
+    `SELECT * FROM ${QUEUE_TABLE} WHERE tenantKey = ? AND employeeId = ? AND sourceEventId = ? LIMIT 1;`,
+    [tenantKey, employeeId, sourceEventId],
+  ) : null;
+  const row = sourceRow ?? await database.getFirstAsync(
+    `SELECT * FROM ${QUEUE_TABLE} WHERE tenantKey = ? AND employeeId = ? AND timestamp = ? AND action = ? LIMIT 1;`,
+    [tenantKey, employeeId, timestamp, action],
+  );
+  return { row: hydrate(row), inserted: result?.changes > 0,
+    ...(!row ? { reason: "earlier-attendance-unconfirmed" } : {}) };
+};
+
 /** Durable handoff recovery is keyed by native identity, never a new clock offset. */
 export const findBySourceEventId = async ({ sourceEventId, tenantKey, employeeId }) => {
   if (!sourceEventId || !tenantKey || !employeeId) return null;
@@ -304,6 +391,36 @@ const claimPredicate = (claimOwner, now) => claimOwner == null
 const requireClaimWrite = (result, claimOwner) => {
   if (claimOwner != null && !result?.changes) throw claimChanged();
   return result;
+};
+
+/**
+ * Only a positive no-insert refusal may clear a direct dispatch marker. The
+ * caller separately checks offline admission before opting into delivery;
+ * otherwise the refused intent remains visible as a terminal receipt.
+ */
+export const settleDirectAttendanceNoInsert = async ({
+  id, claimOwner, queueForDelivery = false, failureClass = FAILURE_CLASS.UNKNOWN,
+  error = null, serverResponse = null, assertCurrent, now = Date.now(),
+}) => {
+  if (!claimOwner) throw claimChanged();
+  const database = await getDatabase();
+  const claim = claimPredicate(claimOwner, now);
+  const deliver = queueForDelivery === true;
+  if (deliver) {
+    if (typeof assertCurrent !== "function") throw new Error("Direct attendance delivery requires a current authorization check.");
+    assertCurrent();
+  }
+  const result = await database.runAsync(
+    `UPDATE ${QUEUE_TABLE} SET status = ?, failureClass = ?, error = ?, serverResponse = ?,
+       uploadAttemptAt = NULL, claimOwner = NULL, claimExpiresAt = NULL, nextAttemptAt = 0,
+       verificationIssue = ?, verificationCheckedAt = ?, updatedAt = ?
+      WHERE id = ?${claim.sql};`,
+    [deliver ? QUEUE_STATUS.PENDING : QUEUE_STATUS.CANCELLED, failureClass, error,
+      serverResponse ? JSON.stringify(serverResponse) : null,
+      deliver ? null : "known-not-inserted", deliver ? null : now, now, id, ...claim.params],
+  );
+  requireClaimWrite(result, claimOwner);
+  return findById(id);
 };
 
 export const renewAttendanceClaim = async ({ id, claimOwner, now = Date.now(), leaseMs = QUEUE_CLAIM_LEASE_MS, beginUpload = false }) => {
@@ -541,16 +658,19 @@ export const markSynced = async ({
 };
 
 /** A server answer that cannot prove acceptance must not silently complete. */
-export const markNeedsReview = async ({ id, claimOwner = null, error, serverResponse = null, duplicate = false, now = Date.now() }) => {
+export const markNeedsReview = async ({ id, claimOwner = null, error, serverResponse = null, duplicate = false,
+  verificationIssue = "upload-outcome-unverified", now = Date.now() }) => {
   const database = await getDatabase();
   const claim = claimPredicate(claimOwner, now);
   const result = await database.runAsync(
     `UPDATE ${QUEUE_TABLE} SET status = ?, failureClass = 'verification-required',
        error = ?, serverResponse = ?, duplicate = ?, duplicateMessage = ?,
-       nextAttemptAt = 0, updatedAt = ?, claimOwner = NULL, claimExpiresAt = NULL
+       nextAttemptAt = 0, updatedAt = ?, verificationIssue = ?, verificationCheckedAt = ?,
+       claimOwner = NULL, claimExpiresAt = NULL
        WHERE id = ? AND status = ?${claim.sql};`,
     [QUEUE_STATUS.NEEDS_REVIEW, error, serverResponse ? JSON.stringify(serverResponse) : null,
-      duplicate ? 1 : 0, duplicate ? error : null, now, id, QUEUE_STATUS.SYNCING, ...claim.params],
+      duplicate ? 1 : 0, duplicate ? error : null, now,
+      verificationIssue || "upload-outcome-unverified", now, id, QUEUE_STATUS.SYNCING, ...claim.params],
   );
   requireClaimWrite(result, claimOwner);
 };
@@ -592,6 +712,7 @@ export const markRetry = async ({
   claimOwner = null,
   error = null,
   serverResponse = null,
+  retryAfterMs = 0,
   now = Date.now(),
 }) => {
   const database = await getDatabase();
@@ -603,7 +724,7 @@ export const markRetry = async ({
   );
 
   const retryCount = (Number(current?.retryCount) || 0) + 1;
-  const nextAttemptAt = now + retryDelayFor(retryCount - 1);
+  const nextAttemptAt = now + Math.max(retryDelayFor(retryCount - 1), retryAfterDelay(retryAfterMs));
 
   const result = await database.runAsync(
     `UPDATE ${QUEUE_TABLE}
@@ -656,6 +777,7 @@ export const markBlocked = async ({
   failureClass = FAILURE_CLASS.UNKNOWN,
   error = null,
   serverResponse = null,
+  retryAfterMs = 0,
   now = Date.now(),
 }) => {
   const database = await getDatabase();
@@ -673,7 +795,7 @@ export const markBlocked = async ({
   const elapsed = now - blockedSince;
   const step = BLOCKED_DELAYS_MS.findIndex((delay) => elapsed < delay);
   const nextAttemptAt =
-    now + blockedDelayFor(step === -1 ? BLOCKED_DELAYS_MS.length - 1 : step);
+    now + Math.max(blockedDelayFor(step === -1 ? BLOCKED_DELAYS_MS.length - 1 : step), retryAfterDelay(retryAfterMs));
 
   const result = await database.runAsync(
     `UPDATE ${QUEUE_TABLE}
@@ -836,8 +958,8 @@ export const wakeBlocked = async ({
 } = {}) => {
   const database = await getDatabase();
 
-  const conditions = ["status = ?"];
-  const params = [QUEUE_STATUS.BLOCKED];
+  const conditions = ["status = ?", PREFLIGHT_RETRY_AFTER_SQL];
+  const params = [QUEUE_STATUS.BLOCKED, now];
 
   if (!force) {
     conditions.push("nextAttemptAt <= ?");
@@ -909,8 +1031,8 @@ export const wakePending = async ({
   const database = await getDatabase();
 
   const threshold = force ? now : now + maxDelayMs;
-  const conditions = ["status = ?", "nextAttemptAt > ?"];
-  const params = [QUEUE_STATUS.PENDING, threshold];
+  const conditions = ["status = ?", "nextAttemptAt > ?", PREFLIGHT_RETRY_AFTER_SQL];
+  const params = [QUEUE_STATUS.PENDING, threshold, now];
   if (employeeId) {
     conditions.push("employeeId = ?");
     params.push(employeeId);
@@ -985,10 +1107,11 @@ export const listUncertainUploadClaims = async ({ tenantKey, employeeId }, now =
   return hydrateAll(await database.getAllAsync(
     `SELECT * FROM ${QUEUE_TABLE} WHERE tenantKey = ? AND employeeId = ?
       AND status = 'needs_review' AND failureClass = 'verification-required'
-      AND verificationIssue IN ('upload-outcome-unverified', 'server-unavailable')
+      AND (verificationIssue IS NULL OR verificationIssue = ''
+        OR verificationIssue IN (${placeholdersFor(REVIEW_RECHECK_ISSUES)}))
       AND (verificationCheckedAt IS NULL OR verificationCheckedAt <= ?)
-      ORDER BY timestamp, id LIMIT 50;`,
-    [tenantKey, employeeId, now - 60000],
+      ORDER BY COALESCE(verificationCheckedAt, 0), timestamp, id LIMIT ${REVIEW_RECHECK_ROWS_PER_RUN};`,
+    [tenantKey, employeeId, ...REVIEW_RECHECK_ISSUES, now - REVIEW_RECHECK_INTERVAL_MS],
   ));
 };
 
@@ -1080,6 +1203,7 @@ export const listForHistory = async ({
     QUEUE_STATUS.RESOLVED,
     QUEUE_STATUS.SYNCED,
     QUEUE_STATUS.NEEDS_REVIEW,
+    QUEUE_STATUS.CANCELLED,
   ],
   limit = 200,
 } = {}) => {
@@ -1252,6 +1376,7 @@ export const countByStatus = async (employeeId = null) => {
     [QUEUE_STATUS.REJECTED]: 0,
     [QUEUE_STATUS.RESOLVED]: 0,
     [QUEUE_STATUS.NEEDS_REVIEW]: 0,
+    [QUEUE_STATUS.CANCELLED]: 0,
     total: 0,
   };
 
@@ -1268,6 +1393,7 @@ export const countByStatus = async (employeeId = null) => {
   counts.rejectedCount = counts[QUEUE_STATUS.REJECTED];
   counts.resolvedCount = counts[QUEUE_STATUS.RESOLVED];
   counts.reviewCount = counts[QUEUE_STATUS.NEEDS_REVIEW];
+  counts.cancelledCount = counts[QUEUE_STATUS.CANCELLED];
 
   counts.unresolvedCount =
     counts.pendingCount +
@@ -1374,6 +1500,7 @@ export const countRecoveryByScope = async ({ employeeId, tenantKey }) => {
       `SELECT COUNT(*) AS total FROM ${QUEUE_TABLE}
         WHERE employeeId = ? AND tenantKey = ?
           AND status NOT IN ('pending', 'syncing', 'blocked', 'rejected')
+          AND NOT (status = 'cancelled' AND IFNULL(verificationIssue, '') = 'known-not-inserted')
           AND (verificationIssue IS NOT NULL OR (verifiedAt IS NULL
             AND (status <> 'synced' OR acceptanceConfirmed = 0)));`,
       [employeeId, tenantKey],
@@ -1450,6 +1577,8 @@ export default {
   countRecoveryByScope,
   listRecoveryRows,
   enqueue,
+  beginDirectAttendanceReceipt,
+  settleDirectAttendanceNoInsert,
   findById,
   findBySourceEventId,
   findDuplicate,

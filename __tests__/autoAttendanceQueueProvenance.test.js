@@ -53,6 +53,7 @@ import {
 } from "../services/offline/attendanceQueueProvenance";
 import { CONFIG_KEY } from "../services/offline/attendanceConfigCache";
 import { resetOfflineCapability } from "../services/offline/offlineCapability";
+import { invalidateInstanceAvailability } from "../services/offline/InstanceAvailabilityService";
 import {
   fetchShouldAttemptRequest,
   isOnline,
@@ -146,6 +147,7 @@ beforeEach(async () => {
   resetSyncService();
   resetServerClockCache();
   resetOfflineCapability();
+  invalidateInstanceAvailability();
   registerQueueDrainHandler(null);
   await AsyncStorage.clear();
   jest.spyOn(Date, "now").mockReturnValue(NOW);
@@ -159,6 +161,7 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
+  invalidateInstanceAvailability();
   registerQueueDrainHandler(null);
   resetSyncService();
   jest.restoreAllMocks();
@@ -245,7 +248,7 @@ describe("M0 current behaviour: replay attribution and the NULL-tenant stall (A)
     expect(claimed.id).toBe(result.row.id);
   });
 
-  it("retains legacy accepted NULL-tenant evidence while a current-owner online EXIT closes its restored session [M0-A3]", async () => {
+  it("retains an attributable EXIT behind legacy unknown-company evidence without overtaking its IN [M0-A3]", async () => {
     const legacy = await enqueue({ employeeId: EMPLOYEE_A, tenantKey: null,
       attendanceType: "auto", action: "checkin", timestamp: "2026-10-09 08:00:00" });
     const checkin = await performSessionTransition({
@@ -262,7 +265,8 @@ describe("M0 current behaviour: replay attribution and the NULL-tenant stall (A)
       data: { message: { name: "M0-ONLINE-OUT" } },
     });
     const sourceScope = await captureAttendanceQueueScope(EMPLOYEE_A);
-    // Bootstrap's forceQueue rule applies to IN only, so live OUT has false.
+    // The submission boundary also protects OUT when the legacy bootstrap did
+    // not explicitly request queueing.
     const checkout = await performSessionTransition({
       type: "OUT",
       origin: SESSION_ORIGIN.AUTO,
@@ -277,22 +281,17 @@ describe("M0 current behaviour: replay attribution and the NULL-tenant stall (A)
     });
     expect(checkout).toMatchObject({
       status: TRANSITION_RESULT.COMPLETED,
-      queued: false,
-      serverConfirmed: true,
+      queued: true,
+      serverConfirmed: false,
     });
     expect((await readSession()).status).toBe(SESSION_STATUS.CHECKED_OUT);
-    expect(apiClient.post).toHaveBeenCalledTimes(1);
-    expect(apiClient.post.mock.calls[0][0]).toBe(
-      `${TENANT_A}/api/method/${ONLINE_METHOD}`,
-    );
-    expect(apiClient.post.mock.calls[0][1]).toMatchObject({
-      log_type: "OUT",
-      auto: true,
-    });
-    expect((await listAll())[0]).toMatchObject({
+    expect(apiClient.post).not.toHaveBeenCalled();
+    expect((await listAll()).find(row => row.id === legacy.row.id)).toMatchObject({
       tenantKey: null,
       status: QUEUE_STATUS.PENDING,
     });
+    expect((await listAll()).find(row => row.action === "checkout")).toMatchObject({ tenantKey: TENANT_A, action: "checkout",
+      status: "pending", uploadAttemptAt: null });
   });
 });
 
@@ -536,8 +535,9 @@ describe("M0 current behaviour: queue ordering and duplicate protection (G)", ()
     });
     // The actual verifier needs positive employee/type/timestamp/name evidence;
     // the original sync unit suite substitutes an always-verified helper.
-    apiClient.get.mockResolvedValue({
-      data: {
+    apiClient.get.mockImplementation(async url => url.endsWith("get_server_time") ? {
+      data: { message: { server_time: "2026-10-09 12:00:00" } },
+    } : { data: {
         message: [
           {
             name: "M0-VERIFIED-DUPLICATE",
@@ -574,7 +574,9 @@ describe("M0 current behaviour: queue ordering and duplicate protection (G)", ()
         },
       },
     });
-    apiClient.get.mockResolvedValue({ data: { message: [] } });
+    apiClient.get.mockImplementation(async url => url.endsWith("get_server_time")
+      ? { data: { message: { server_time: "2026-10-09 12:00:00" } } }
+      : { data: { message: [] } });
     const summary = await syncPendingAttendance({ employeeId: EMPLOYEE_A });
     expect(summary.duplicates).toBe(0);
     expect(summary.needsReview).toBe(1);

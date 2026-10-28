@@ -31,18 +31,19 @@ export const equivalentServerPunch = (row, record) => {
     canonicalAttendanceTime(record.time) === time && record.log_type === type;
 };
 
-/** Development diagnostics: which match criterion each returned record fails. */
-const compareForDiagnostics = (row, record) => {
+/** Bounded diagnostics describe matching without logging employee history. */
+const summarizeMatches = (row, records) => {
   const expectedTime = canonicalAttendanceTime(row?.timestamp);
   const expectedType = row?.action === "checkin" ? "IN" : row?.action === "checkout" ? "OUT" : null;
-  const mismatches = [];
-  if (!(typeof record?.name === "string" && record.name.trim())) mismatches.push("name missing");
-  if (record?.employee !== (row?.employeeDocname || row?.employeeId)) mismatches.push("employee differs");
-  if (canonicalAttendanceTime(record?.time) !== expectedTime) mismatches.push("time differs");
-  if (record?.log_type !== expectedType) mismatches.push("log_type differs");
-  return { name: record?.name ?? null, employee: record?.employee ?? null, time: record?.time ?? null,
-    canonicalTime: canonicalAttendanceTime(record?.time), log_type: record?.log_type ?? null,
-    device_id: record?.device_id ?? null, matches: equivalentServerPunch(row, record), mismatches };
+  const summary = { exact: 0, missingName: 0, differentEmployee: 0, differentTime: 0, differentAction: 0 };
+  records.forEach(record => {
+    if (!(typeof record?.name === "string" && record.name.trim())) summary.missingName += 1;
+    if (record?.employee !== (row?.employeeDocname || row?.employeeId)) summary.differentEmployee += 1;
+    if (canonicalAttendanceTime(record?.time) !== expectedTime) summary.differentTime += 1;
+    if (record?.log_type !== expectedType) summary.differentAction += 1;
+    if (equivalentServerPunch(row, record)) summary.exact += 1;
+  });
+  return summary;
 };
 
 const verificationResult = (row, result) => {
@@ -84,9 +85,10 @@ export const verifyQueuedAttendance = async (row, { syncScope, maxPages = 25 } =
       });
       data = response.data;
       logAttendanceDiagnostic(LOG_PREFIX, `#${row.id} page ${page} HTTP ${response.status}`, {
-        params, durationMs: Date.now() - startedAt, body: data,
+        page, durationMs: Date.now() - startedAt,
         recordCount: Array.isArray(data?.message) ? data.message.length : null,
-        comparison: Array.isArray(data?.message) ? data.message.map(record => compareForDiagnostics(row, record)) : null,
+        matches: Array.isArray(data?.message) ? summarizeMatches(row, data.message) : null,
+        hasException: !!(data?.exc || data?.exception || data?.error),
       });
     } catch (error) {
       logAttendanceDiagnostic(LOG_PREFIX, `#${row.id} page ${page} failed`, {

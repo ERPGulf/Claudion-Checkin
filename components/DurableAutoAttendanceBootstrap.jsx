@@ -62,7 +62,7 @@ export default function DurableAutoAttendanceBootstrap() {
       });
       if (result.status === TRANSITION_RESULT.COMPLETED && result.session.closedBy === "AUTO") {
         await presentLocalNotification({ title: result.queued ? "Checked out offline" : "Checked out",
-          body: result.queued ? "Your automatic checkout is saved on this device and will synchronize when online."
+          body: result.queued ? "Your automatic checkout is saved on this device. Check Attendance recovery for synchronization status."
             : "Your check-in was closed automatically after leaving the office.",
           data: { type: "auto-checkout", pendingSync: result.queued } });
       }
