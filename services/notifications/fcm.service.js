@@ -25,6 +25,7 @@ import { getNotifications } from "../api/notification.service";
 import { setUnreadCount } from "../../redux/Slices/notificationSlice";
 import { navigateSafely } from "../../navigation/rootNavigation";
 import { getSanitizedTopics, getTopicSyncPlan } from "../../utils/fcmTopics";
+import { describeHttpFailure } from "../../utils/httpDiagnostics";
 
 const FCM_TOKEN_KEY = "fcm_token";
 const FCM_LAST_MESSAGE_AT_KEY = "fcm_last_message_at";
@@ -121,12 +122,7 @@ const getAuthorizationStatusLabel = (status) => {
 };
 
 const formatTokenForLogs = (token) => {
-  if (!token || typeof token !== "string") {
-    return "null";
-  }
-
-  const prefixLength = Math.min(token.length, 20);
-  return `${token.slice(0, prefixLength)}... (${token.length} chars)`;
+  return typeof token === "string" && token ? "[redacted]" : "null";
 };
 
 const logIosPushDiagnostics = async (messagingInstance, authStatus, source) => {
@@ -150,7 +146,7 @@ const logIosPushDiagnostics = async (messagingInstance, authStatus, source) => {
   } catch (error) {
     console.log(
       `[FCM] ${source}: failed to read device registration state`,
-      error?.message,
+      describeHttpFailure(error),
     );
   }
 
@@ -158,7 +154,7 @@ const logIosPushDiagnostics = async (messagingInstance, authStatus, source) => {
     const apnsToken = await getAPNSToken(messagingInstance);
     console.log(`[FCM] ${source}: APNS token =`, formatTokenForLogs(apnsToken));
   } catch (error) {
-    console.log(`[FCM] ${source}: failed to read APNS token`, error?.message);
+    console.log(`[FCM] ${source}: failed to read APNS token`, describeHttpFailure(error));
   }
 };
 
@@ -191,7 +187,7 @@ const ensureIosDeviceRegisteredForRemoteMessages = async (
   } catch (error) {
     console.log(
       `[FCM] ${source}: registerDeviceForRemoteMessages failed`,
-      error?.message,
+      describeHttpFailure(error),
     );
     return false;
   }
@@ -302,31 +298,20 @@ const logNotificationPayload = (source, remoteMessage) => {
   const messageData = getMessageData(remoteMessage);
 
   try {
-    console.log(
-      `[FCM] ${source}: messageId`,
-      remoteMessage?.messageId || "n/a",
-    );
-    console.log(`[FCM] ${source}: from`, remoteMessage?.from || "n/a");
-    console.log(`[FCM] ${source}: data`, JSON.stringify(messageData));
-    console.log(
-      `[FCM] ${source}: notification`,
-      JSON.stringify(remoteMessage?.notification || {}),
-    );
+    console.log(`[FCM] ${source}: payload received`, {
+      dataFieldCount: Object.keys(messageData).length,
+      hasNotification: !!remoteMessage?.notification,
+    });
   } catch {
     // Logging should never interrupt notification handling.
   }
 };
 
 const logNotificationReceived = (source, remoteMessage) => {
-  const messageType = getMessageType(remoteMessage);
-
   try {
     console.log("[FCM] new notification received", {
       source,
-      title: getMessageTitle(remoteMessage),
-      body: getMessageBody(remoteMessage),
-      routeName: getTargetRoute(remoteMessage),
-      type: messageType || "n/a",
+      hasNotification: !!remoteMessage?.notification,
     });
   } catch {
     // Logging should never interrupt notification handling.
@@ -431,23 +416,24 @@ const syncTopicsFromBackend = async (messagingInstance, topics) => {
   const { topicsToSubscribe, topicsToUnsubscribe, syncedTopics } =
     getTopicSyncPlan(currentTopics, nextTopics);
 
-  console.log("[FCM] syncTopicsFromBackend: next topics", nextTopics);
-  console.log("[FCM] syncTopicsFromBackend: current topics", currentTopics);
+  console.log("[FCM] syncTopicsFromBackend: topic counts", {
+    next: nextTopics.length, current: currentTopics.length,
+  });
 
-  console.log("[FCM] topics to subscribe:", topicsToSubscribe);
-  console.log("[FCM] topics to unsubscribe:", topicsToUnsubscribe);
+  console.log("[FCM] topic changes:", {
+    subscribe: topicsToSubscribe.length, unsubscribe: topicsToUnsubscribe.length,
+  });
 
   await Promise.all(
     topicsToUnsubscribe.map(async (topic) => {
       try {
         await unsubscribeFromTopic(messagingInstance, topic);
-        console.log("[FCM] unsubscribed from topic:", topic);
+        console.log("[FCM] unsubscribed from topic");
       } catch (err) {
         // Ignore per-topic unsubscription failures to keep bootstrap resilient.
         console.log(
           "[FCM] failed to unsubscribe from topic:",
-          topic,
-          err?.message,
+          describeHttpFailure(err),
         );
       }
     }),
@@ -457,10 +443,10 @@ const syncTopicsFromBackend = async (messagingInstance, topics) => {
     topicsToSubscribe.map(async (topic) => {
       try {
         await subscribeToTopic(messagingInstance, topic);
-        console.log("[FCM] subscribed to topic:", topic);
+        console.log("[FCM] subscribed to topic");
       } catch (err) {
         // Ignore per-topic subscription failures to keep bootstrap resilient.
-        console.log("[FCM] failed to subscribe to topic:", topic, err?.message);
+        console.log("[FCM] failed to subscribe to topic:", describeHttpFailure(err));
       }
     }),
   );
@@ -511,9 +497,9 @@ const syncTokenToBackend = async (token) => {
 
   try {
     console.log("[FCM] sending token to server:", {
-      token: token ? `${token}` : "null",
+      token: formatTokenForLogs(token),
       platform: Platform.OS,
-      employeeId: employeeId || "n/a",
+      hasEmployee: !!employeeId,
     });
 
     const response = await plainAxios.post(registrationUrl, body.toString(), {
@@ -525,7 +511,6 @@ const syncTokenToBackend = async (token) => {
     });
 
     console.log("[FCM] token sync status:", response?.status);
-    console.log("[FCM] POST API response:", response?.data);
 
     let topicData = extractTopicSyncData(response?.data);
 
@@ -539,14 +524,13 @@ const syncTokenToBackend = async (token) => {
         timeout: 10000,
       });
 
-      console.log("[FCM] GET topics response:", topicsResponse?.data);
+      console.log("[FCM] GET topics status:", topicsResponse?.status);
       topicData = extractTopicSyncData(topicsResponse?.data);
     } else {
       console.log("[FCM] using topics from POST response");
     }
 
-    console.log("[FCM] topics from server:", topicData?.topics);
-    console.log("[FCM] topicData before sync:", topicData);
+    console.log("[FCM] topics from server:", { count: topicData?.topics?.length || 0 });
 
     const messagingInstance = await getMessagingInstanceWithRetry();
 
@@ -565,9 +549,7 @@ const syncTokenToBackend = async (token) => {
 
     return topicData?.topics || null;
   } catch (error) {
-    console.log("[FCM] token sync failed:", error?.message);
-    console.log("[FCM] token sync error status:", error?.response?.status);
-    console.log("[FCM] token sync error data:", error?.response?.data);
+    console.log("[FCM] token sync failed:", describeHttpFailure(error));
     // Keep FCM bootstrap resilient even when registration API is unavailable.
     return null;
   }
@@ -581,7 +563,7 @@ const persistFcmToken = async (token) => {
 
   console.log(
     "[FCM] persistFcmToken: storing token",
-    token.substring(0, 20) + "...",
+    formatTokenForLogs(token),
   );
 
   const previousToken = await AsyncStorage.getItem(FCM_TOKEN_KEY);
@@ -669,7 +651,7 @@ export const requestFcmPermission = async () => {
   } catch (error) {
     console.log(
       "[FCM] requestFcmPermission: permission request failed",
-      error?.message,
+      describeHttpFailure(error),
     );
     return false;
   }
@@ -765,11 +747,11 @@ export const initializeFcm = async ({
     const token = await getToken(messagingInstance);
     console.log(
       "[FCM] initializeFcm: token received",
-      token ? token.substring(0, 20) + "..." : "null",
+      formatTokenForLogs(token),
     );
     await persistFcmToken(token);
   } catch (error) {
-    console.log("[FCM] initializeFcm: token fetch failed", error?.message);
+    console.log("[FCM] initializeFcm: token fetch failed", describeHttpFailure(error));
     // Do not block app startup if token retrieval fails.
   }
 
@@ -897,7 +879,7 @@ export const syncFcmTokenAfterLogin = async () => {
   const token = await AsyncStorage.getItem(FCM_TOKEN_KEY);
   console.log(
     "[FCM] syncFcmTokenAfterLogin: token from AsyncStorage",
-    token ? token.substring(0, 20) + "..." : "null",
+    formatTokenForLogs(token),
   );
 
   if (!token) {
@@ -975,26 +957,8 @@ export const fetchTopicsFromServer = async () => {
       "[FCM] fetchTopicsFromServer: response status =",
       response?.status,
     );
-    console.log(
-      "[FCM] fetchTopicsFromServer: response headers =",
-      response?.headers,
-    );
-    console.log(
-      "[FCM] fetchTopicsFromServer: response data =",
-      JSON.stringify(response?.data),
-    );
 
     const topicData = extractTopicSyncData(response?.data);
-    console.log(
-      "[FCM] fetchTopicsFromServer: extracted topicData =",
-      JSON.stringify(topicData),
-    );
-    console.log(
-      "[FCM] fetchTopicsFromServer: topics array =",
-      Array.isArray(topicData?.topics)
-        ? JSON.stringify(topicData.topics)
-        : "not an array",
-    );
     console.log(
       "[FCM] fetchTopicsFromServer: topics count =",
       topicData?.topics?.length || 0,
@@ -1072,21 +1036,7 @@ export const fetchTopicsFromServer = async () => {
       totalDuration,
       "ms",
     );
-    console.log("[FCM] fetchTopicsFromServer: error message =", error?.message);
-    console.log("[FCM] fetchTopicsFromServer: error code =", error?.code);
-    console.log(
-      "[FCM] fetchTopicsFromServer: error status =",
-      error?.response?.status,
-    );
-    console.log(
-      "[FCM] fetchTopicsFromServer: error response data =",
-      JSON.stringify(error?.response?.data),
-    );
-    console.log(
-      "[FCM] fetchTopicsFromServer: error config url =",
-      error?.config?.url,
-    );
-    console.log("[FCM] fetchTopicsFromServer: error stack =", error?.stack);
+    console.log("[FCM] fetchTopicsFromServer: failed", describeHttpFailure(error));
     return null;
   }
 };

@@ -9,6 +9,7 @@ import {
   assertAttendanceQueueScope,
   assertAttendanceSessionCurrent,
   createAttendanceScopeChangedError,
+  normalizeAttendanceTenantKey,
 } from "../offline/attendanceQueueProvenance";
 import { activateAuthSession, getAuthSessionGeneration, invalidateAuthSession } from "../../utils/authSessionGuard";
 import { assertCapabilityRequest, getCapabilitySnapshot } from "../capabilityPolicy";
@@ -20,15 +21,7 @@ let memoryAccessToken = null;
 let memoryRefreshToken = null;
 
 const maskToken = (token) => {
-  if (!token || typeof token !== "string") {
-    return token ?? null;
-  }
-
-  if (token.length <= 10) {
-    return `${token.slice(0, 3)}...${token.slice(-2)}`;
-  }
-
-  return `${token.slice(0, 6)}...${token.slice(-4)}`;
+  return typeof token === "string" && token ? "[redacted]" : null;
 };
 
 const parseJsonString = (value) => {
@@ -517,13 +510,34 @@ export const refreshAccessToken = async () => {
 // ----------------------
 // REQUEST INTERCEPTOR
 // ----------------------
+const requestTargetsTenant = (config, baseUrl) => {
+  const tenant = baseUrl ? normalizeAttendanceTenantKey(baseUrl)?.replace(/\/+$/, "") : null;
+  if (!tenant) return false;
+  try {
+    // Include Axios' effective baseURL/allowAbsoluteUrls rules, not just url.
+    const destination = new URL(apiClient.getUri(config), tenant);
+    if (destination.username || destination.password) return false;
+    const target = normalizeAttendanceTenantKey(`${destination.origin}${destination.pathname}`);
+    return target === tenant || target?.startsWith(`${tenant}/`) === true;
+  } catch {
+    return false;
+  }
+};
+
 apiClient.interceptors.request.use(async (config) => {
+  // Keep retries tied to the session that authorized the original request.
+  config.authSessionGeneration ??= getAuthSessionGeneration();
+  const assertCurrentSession = () => {
+    if (config.authSessionGeneration !== getAuthSessionGeneration()) throw createAttendanceScopeChangedError();
+  };
+  assertCurrentSession();
   if (config.attendanceSyncScope) {
     const current = await assertAttendanceQueueScope(config.attendanceSyncScope);
     assertAttendanceSessionCurrent(config.attendanceSyncScope);
     config.headers.Authorization = `Bearer ${current.accessToken}`;
     // Keep scope on the config for retries after token refresh.
     if (!config.url?.startsWith(`${current.tenantKey}/api/`)) throw createAttendanceScopeChangedError();
+    if (!requestTargetsTenant(config, current.tenantKey)) throw createAttendanceScopeChangedError();
     await assertCapabilityRequest(config);
     return config;
   }
@@ -544,13 +558,22 @@ apiClient.interceptors.request.use(async (config) => {
     config.baseURL = `${cleanBaseUrl(baseUrl)}/api`;
   }
 
-  if (access) {
+  // Absolute URLs remain supported, but the active tenant's bearer must never
+  // be attached to another origin (or another tenant path on the same origin).
+  const targetsTenant = requestTargetsTenant(config, baseUrl);
+  config.skipSessionAuth = !targetsTenant;
+  if (!targetsTenant) {
+    config.headers.delete?.("Authorization");
+    delete config.headers.Authorization;
+    delete config.headers.authorization;
+  } else if (access) {
     config.headers.Authorization = `Bearer ${access}`;
   }
 
   // Also runs on 401 retries, immediately before transport. Existing attendance
   // outbox delivery has no admission flag; its tenant scope is checked above.
   await assertCapabilityRequest(config);
+  assertCurrentSession();
   return config;
 });
 
@@ -567,11 +590,14 @@ apiClient.interceptors.response.use(
   async (error) => {
     const original = error.config;
     if (!original) return Promise.reject(error);
+    if (original.authSessionGeneration !== undefined && original.authSessionGeneration !== getAuthSessionGeneration()) {
+      return Promise.reject(createAttendanceScopeChangedError());
+    }
     if (original.capabilityScope) await getCapabilitySnapshot(original.capabilityScope);
     if (original.attendanceSyncScope) await assertAttendanceQueueScope(original.attendanceSyncScope);
 
     // Skip refresh logic for generateToken()
-    if (original.headers?.["x-skip-auth"] === "true") {
+    if (original.skipSessionAuth || original.headers?.["x-skip-auth"] === "true") {
       return Promise.reject(error);
     }
 
@@ -643,19 +669,19 @@ apiClient.interceptors.response.use(
 
       isRefreshing = true;
 
-      refreshPromise = new Promise(async (resolve, reject) => {
+      refreshPromise = (async () => {
         try {
           const newToken = await refreshAccessToken();
           processQueue(null, newToken);
-          resolve(newToken);
+          return newToken;
         } catch (err) {
           processQueue(err, null);
-          reject(err);
+          throw err;
         } finally {
           isRefreshing = false;
           refreshPromise = null;
         }
-      });
+      })();
 
       const newToken = await refreshPromise;
 

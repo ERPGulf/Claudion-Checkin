@@ -11,6 +11,7 @@ import {
   MISSING_EMPLOYEE_MESSAGE,
 } from "./authHelper";
 import { parseError } from "./errorHelper";
+import { describeHttpFailure } from "../../utils/httpDiagnostics";
 import {
   normalizeCustomIn,
   toTimestampMs,
@@ -124,7 +125,7 @@ export const getOfficeLocation = async (employeeCode, { syncScope, onAssignedGeo
     if (syncScope.employeeId !== employeeCode) throw createAttendanceScopeChangedError();
   }
 
-  console.log(`${logPrefix} Start`, { employeeCode });
+  console.log(`${logPrefix} Start`);
 
   const rawBaseUrl = await AsyncStorage.getItem("baseUrl");
   const baseUrl = cleanBaseUrl(rawBaseUrl);
@@ -147,10 +148,6 @@ export const getOfficeLocation = async (employeeCode, { syncScope, onAssignedGeo
   });
   if (syncScope) await assertAttendanceQueueScope(syncScope);
 
-  console.log(
-    `${logPrefix} RAW EMPLOYEE RESPONSE`,
-    JSON.stringify(data, null, 2),
-  );
 
   const employee = data?.message || {};
   // Receive employee mode before GPS/permissions or other policy work can fail.
@@ -188,8 +185,6 @@ export const getOfficeLocation = async (employeeCode, { syncScope, onAssignedGeo
   // refresh during GPS must not label an old inside-radius result as new proof.
   onAssignedGeometry?.(JSON.stringify(locations));
 
-  console.log(`${logPrefix} Employee API response`, employee);
-
   console.log(`${logPrefix} Restriction settings`, {
     restrict_location: restrictLocation,
     unrestricted_checkout_location: unrestrictedCheckoutLocation,
@@ -213,16 +208,13 @@ export const getOfficeLocation = async (employeeCode, { syncScope, onAssignedGeo
   ]);
   if (syncScope) await assertAttendanceQueueScope(syncScope);
 
-  console.log(`${logPrefix} Employee locations`, locations);
   console.log(`${logPrefix} Locations fetched`, {
     totalLocations: locations.length,
   });
 
   // Instead of throwing immediately, return null safely
   if (!locations.length) {
-    console.warn(`${logPrefix} No reporting locations configured`, {
-      employeeCode,
-    });
+    console.warn(`${logPrefix} No reporting locations configured`);
     return null;
   }
 
@@ -241,10 +233,6 @@ export const getOfficeLocation = async (employeeCode, { syncScope, onAssignedGeo
   const userLat = gps.coords.latitude;
   const userLng = gps.coords.longitude;
 
-  console.log(`${logPrefix} Current GPS`, {
-    latitude: userLat,
-    longitude: userLng,
-  });
 
   // The distance arithmetic lives in utils/attendanceLocations.js so the offline
   // gate can run exactly the same rules against the cached configuration. Two
@@ -253,34 +241,27 @@ export const getOfficeLocation = async (employeeCode, { syncScope, onAssignedGeo
   const candidates = scoreLocations(
     { latitude: userLat, longitude: userLng },
     locations,
-    ({ index, locationName }) =>
+    ({ index }) =>
       console.warn(`${logPrefix} Invalid coordinates for location`, {
         index,
-        locationName,
       }),
   );
 
   candidates.forEach((candidate, index) =>
     console.log(`${logPrefix} Candidate distance`, {
       index,
-      locationName: candidate.locationName,
-      source: candidate.source,
-      distance: candidate.distance,
-      radius: candidate.radius,
       withinRadius: candidate.withinRadius,
     }),
   );
 
   if (!candidates.length) {
-    console.warn(`${logPrefix} No valid nearest location found`, {
-      employeeCode,
-    });
+    console.warn(`${logPrefix} No valid nearest location found`);
     return null;
   }
 
   const nearest = pickNearest(candidates);
 
-  console.log(`${logPrefix} Nearest location resolved`, nearest);
+  console.log(`${logPrefix} Nearest location resolved`, { withinRadius: nearest?.withinRadius });
   return nearest;
 };
 
@@ -878,7 +859,7 @@ export const employeeBreak = async ({ employeeCode, type, reason, syncScope }) =
       await assertAttendanceQueueScope(syncScope);
       if (error?.code === "ATTENDANCE_SYNC_SCOPE_CHANGED") throw error;
     }
-    console.log("Break error:", error?.response?.data || error.message);
+    console.log("Break error:", describeHttpFailure(error));
 
     return {
       allowed: false,
@@ -1007,7 +988,7 @@ export const uploadAttendanceAttachment = async (file, docname, { capabilityScop
 
     const result = await response.json();
 
-    console.log("📤 ATTENDANCE FILE RESPONSE:", result);
+    console.log("Attendance file response:", { httpStatus: response.status });
 
     if (!response.ok || result?.exc || result?._server_messages) {
       return {
@@ -1017,7 +998,7 @@ export const uploadAttendanceAttachment = async (file, docname, { capabilityScop
 
     return { success: true, data: result };
   } catch (error) {
-    console.log("❌ FILE UPLOAD ERROR:", error);
+    console.log("File upload failed:", describeHttpFailure(error));
 
     return {
       error: error.message || "Upload failed",

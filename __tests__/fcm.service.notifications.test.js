@@ -34,6 +34,7 @@ const mockGetInitialNotification = jest.fn();
 let handleNotificationOpen;
 let initializeFcm;
 let fetchTopicsFromServer;
+let syncFcmTokenAfterLogin;
 
 const loadFcmService = () => {
   jest.resetModules();
@@ -137,6 +138,7 @@ const loadFcmService = () => {
     handleNotificationOpen,
     initializeFcm,
     fetchTopicsFromServer,
+    syncFcmTokenAfterLogin,
   } = require("../services/notifications/fcm.service"));
 };
 
@@ -196,6 +198,51 @@ describe("FCM notification metadata handling", () => {
     });
 
     loadFcmService();
+  });
+
+  it("keeps tokens and notification content out of diagnostics while delivering the original payload", async () => {
+    const token = "private-synthetic-device-token";
+    const apns = "private-synthetic-apns-token";
+    const title = "Private synthetic notification title";
+    const body = "Private synthetic employee message";
+    mockGetItem.mockImplementation(async key => ({
+      baseUrl: "https://example.test", access_token: "private-synthetic-access",
+      employee_id: "private-synthetic-employee",
+      fcm_token: token,
+    }[key] || null));
+    mockGetToken.mockResolvedValue(token);
+    mockGetAPNSToken.mockResolvedValue(apns);
+    mockPlainAxiosPost.mockResolvedValue({ status: 200, data: { message: { topics: [], token } } });
+    const output = jest.spyOn(console, "log").mockImplementation(() => {});
+    let teardown;
+    try {
+      const callback = jest.fn();
+      teardown = await initializeFcm({ dispatch: jest.fn(), onForegroundNotification: callback });
+      await syncFcmTokenAfterLogin();
+      await foregroundMessageHandler({ notification: { title, body }, data: { private: body } });
+      expect(callback).toHaveBeenCalledWith(expect.objectContaining({ title, body }));
+      const logs = JSON.stringify(output.mock.calls);
+      for (const secret of [token, token.slice(0, 20), apns, title, body, "private-synthetic-employee"]) {
+        expect(logs).not.toContain(secret);
+      }
+      expect(mockPlainAxiosPost.mock.calls[0][1]).toContain(encodeURIComponent(token));
+    } finally { teardown?.(); output.mockRestore(); }
+  });
+
+  it("logs status and code without error text or response payloads", async () => {
+    mockGetItem.mockImplementation(async key => ({ baseUrl: "https://example.test", access_token: "test-access" }[key] || null));
+    const secret = "private-synthetic-server-echo";
+    mockPlainAxiosGet.mockRejectedValueOnce(Object.assign(new Error(secret), {
+      code: "ERR_BAD_RESPONSE", response: { status: 503, data: { token: secret }, headers: { cookie: secret } },
+    }));
+    const output = jest.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      await expect(fetchTopicsFromServer()).resolves.toBeNull();
+      const logs = JSON.stringify(output.mock.calls);
+      expect(logs).not.toContain(secret);
+      expect(logs).toContain("503");
+      expect(logs).toContain("ERR_BAD_RESPONSE");
+    } finally { output.mockRestore(); }
   });
 
   it("passes metadata data through the foreground callback", async () => {

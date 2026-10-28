@@ -11,6 +11,7 @@ import { refreshAccessToken } from "../services/api/apiClient";
 import { plainAxios } from "../services/api/apiClient";
 import { registerSessionCleanupHandler } from "../services/api/apiClient";
 import * as utils from "../services/api/utils";
+import { invalidateAuthSession } from "../utils/authSessionGuard";
 
 // mock base URL utilities
 jest.spyOn(utils, "cleanBaseUrl").mockImplementation((url) => url.trim());
@@ -58,6 +59,8 @@ describe("API Client (Interceptors + Token Refresh)", () => {
         expect(logs).not.toContain(refreshValue);
         expect(logs).not.toContain(password);
         expect(logs).not.toContain("refresh_token=");
+        expect(logs).not.toContain(refreshValue.slice(0, 6));
+        expect(logs).not.toContain("synthetic-new-access".slice(0, 6));
       } finally { output.mockRestore(); }
     });
     it("adds baseURL for relative paths", async () => {
@@ -74,6 +77,64 @@ describe("API Client (Interceptors + Token Refresh)", () => {
       const res = await apiClient.get("https://google.com/test");
 
       expect(res.data.ok).toBe(true);
+    });
+
+    it.each(["https://another.example.test/api/user", "https://example.com.evil.test/api/user", "//another.example.test/api/user"])("does not send session credentials or refresh them for foreign URL %s", async (url) => {
+      mock.onGet(url).reply(config => {
+        expect(config.headers.Authorization).toBeUndefined();
+        expect(config.headers.authorization).toBeUndefined();
+        return [401, {}];
+      });
+      await expect(apiClient.get(url, { headers: { authorization: "Bearer synthetic-private" } })).rejects.toMatchObject({ response: { status: 401 } });
+      expect(refreshMock.history.post).toHaveLength(0);
+    });
+
+    it("keeps tenant paths and custom ports isolated without changing the URL", async () => {
+      await AsyncStorage.setItem("baseUrl", "https://example.com:9443/company-a");
+      const allowed = "https://example.com:9443/company-a/api/user";
+      const foreign = "https://example.com:9443/company-b/api/user";
+      mock.onGet(allowed).reply(config => {
+        expect(config.headers.Authorization).toBe("Bearer token-123");
+        return [200, {}];
+      });
+      mock.onGet(foreign).reply(config => {
+        expect(config.headers.Authorization).toBeUndefined();
+        return [200, {}];
+      });
+      await apiClient.get(allowed);
+      await apiClient.get(foreign);
+    });
+
+    it("does not send credentials when Axios combines an absolute URL with a foreign baseURL", async () => {
+      const url = "https://example.com/api/user";
+      mock.onGet(url).reply(config => {
+        expect(config.headers.Authorization).toBeUndefined();
+        return [200, {}];
+      });
+      await apiClient.get(url, { baseURL: "https://another.example.test/api", allowAbsoluteUrls: false });
+    });
+
+    it("does not dispatch a request when the session changes during context reads", async () => {
+      let release;
+      let reading;
+      const started = new Promise(resolve => { reading = resolve; });
+      const originalRead = AsyncStorage.getItem.getMockImplementation();
+      AsyncStorage.getItem.mockImplementation(key => {
+        if (key === "baseUrl") {
+          reading();
+          return new Promise(resolve => { release = resolve; });
+        }
+        return originalRead(key);
+      });
+      try {
+        const pending = apiClient.get("test");
+        const rejected = expect(pending).rejects.toMatchObject({ code: "ATTENDANCE_SYNC_SCOPE_CHANGED" });
+        await started;
+        invalidateAuthSession();
+        release("https://example.com");
+        await rejected;
+        expect(mock.history.get).toHaveLength(0);
+      } finally { AsyncStorage.getItem.mockImplementation(originalRead); }
     });
 
     it("adds Authorization header when token exists", async () => {

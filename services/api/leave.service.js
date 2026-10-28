@@ -6,6 +6,7 @@ import {
   MISSING_EMPLOYEE_MESSAGE,
 } from "./authHelper";
 import { parseError } from "./errorHelper";
+import { describeHttpFailure } from "../../utils/httpDiagnostics";
 import { assertCapability } from "../capabilityPolicy";
 
 export const createLeaveApplication = async (leaveData, { capabilityScope: expected } = {}) => {
@@ -138,7 +139,7 @@ export const uploadLeaveAttachment = async (file, docname, { capabilityScope: ex
 
     const result = await response.json();
 
-    console.log(" LEAVE UPLOAD RESPONSE:", result);
+    console.log("Leave upload response:", { httpStatus: response.status });
 
     if (!response.ok || result?.exc || result?._server_messages) {
       return {
@@ -148,7 +149,7 @@ export const uploadLeaveAttachment = async (file, docname, { capabilityScope: ex
 
     return { message: result };
   } catch (error) {
-    console.log("❌ LEAVE UPLOAD ERROR:", error);
+    console.log("Leave upload failed:", describeHttpFailure(error));
 
     return {
       error: error.message || "Upload failed",

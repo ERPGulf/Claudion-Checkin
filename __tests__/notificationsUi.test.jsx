@@ -73,6 +73,7 @@ import {
   markNotificationAsRead,
 } from '../services/api/notification.service';
 import { COLORS, DARK_COLORS } from '../constants';
+import { activateAuthSession, getAuthSessionGeneration, invalidateAuthSession } from '../utils/authSessionGuard';
 /* eslint-enable import/first */
 
 const flatten = style => StyleSheet.flatten(style) || {};
@@ -134,6 +135,7 @@ function renderNotificationsHook() {
 }
 
 beforeEach(() => {
+  activateAuthSession(getAuthSessionGeneration());
   mockScheme = 'light';
   jest.clearAllMocks();
   AsyncStorage.getItem.mockImplementation(key =>
@@ -462,7 +464,7 @@ describe('useNotifications', () => {
 
     await waitFor(() => expect(result.current.loading).toBe(false));
 
-    expect(getNotifications).toHaveBeenCalledWith('HR-EMP-0001');
+    expect(getNotifications).toHaveBeenCalledWith('HR-EMP-0001', { throwOnError: true });
     expect(result.current.total).toBe(2);
   });
 
@@ -545,6 +547,79 @@ describe('useNotifications', () => {
     // Same action the classic screen dispatches.
     store.dispatch(decrementUnreadCount());
     expect(store.getState().notification.unreadCount).toBe(2);
+  });
+});
+
+describe('notification refresh outcomes', () => {
+  it('replaces saved notifications with a genuinely empty server inbox', async () => {
+    const { result } = renderNotificationsHook();
+    await waitFor(() => expect(result.current.total).toBe(2));
+    getNotifications.mockResolvedValueOnce([]);
+
+    await act(async () => { await result.current.refresh(); });
+
+    expect(result.current.list).toEqual([]);
+    expect(result.current.error).toBe(false);
+    expect(result.current.unreadCount).toBe(0);
+  });
+
+  it('retains saved notifications on a failed refresh and reports the error', async () => {
+    const { result } = renderNotificationsHook();
+    await waitFor(() => expect(result.current.total).toBe(2));
+    getNotifications.mockRejectedValueOnce(new Error('synthetic network outage'));
+
+    await act(async () => { await result.current.refresh(); });
+
+    expect(result.current.list).toEqual(LIST);
+    expect(result.current.error).toBe(true);
+    expect(result.current.refreshing).toBe(false);
+  });
+
+  it('does not replace a newer refresh with an older response', async () => {
+    const { result } = renderNotificationsHook();
+    await waitFor(() => expect(result.current.total).toBe(2));
+    let resolveOld;
+    let resolveNew;
+    getNotifications
+      .mockImplementationOnce(() => new Promise(resolve => { resolveOld = resolve; }))
+      .mockImplementationOnce(() => new Promise(resolve => { resolveNew = resolve; }));
+    let oldRefresh;
+    let newRefresh;
+    act(() => { oldRefresh = result.current.refresh(); });
+    await waitFor(() => expect(resolveOld).toBeDefined());
+    act(() => { newRefresh = result.current.refresh(); });
+    await waitFor(() => expect(resolveNew).toBeDefined());
+
+    await act(async () => { resolveNew([]); await newRefresh; });
+    await act(async () => { resolveOld(LIST); await oldRefresh; });
+
+    expect(result.current.list).toEqual([]);
+    expect(result.current.error).toBe(false);
+  });
+
+  it('discards notifications resolved after the authentication generation changed', async () => {
+    let resolveLoad;
+    getNotifications.mockImplementationOnce(() => new Promise(resolve => { resolveLoad = resolve; }));
+    const { result } = renderNotificationsHook();
+    await waitFor(() => expect(resolveLoad).toBeDefined());
+    invalidateAuthSession();
+
+    await act(async () => { resolveLoad(LIST); });
+
+    expect(result.current.list).toEqual([]);
+    expect(result.current.error).toBe(false);
+  });
+
+  it.each(['light', 'dark'])('distinguishes initial failure from an empty inbox and retries in %s mode', async scheme => {
+    mockScheme = scheme;
+    getNotifications.mockRejectedValueOnce(new Error('synthetic network outage'));
+    const screen = renderScreen();
+    await waitFor(() => expect(screen.getByText('Unable to load notifications')).toBeTruthy());
+    expect(screen.queryByText('No notifications yet')).toBeNull();
+
+    fireEvent.press(screen.getByRole('button', { name: 'Try again' }));
+    await waitFor(() => expect(screen.getByText(UNREAD.title)).toBeTruthy());
+    expect(screen.queryByText('Unable to load notifications')).toBeNull();
   });
 });
 

@@ -126,7 +126,11 @@ export default function DurableAutoAttendanceBootstrap() {
       AppState.addEventListener("change", state => { if (state === "active") run({ refresh: true }); }),
     ];
     const reconnect = addReconnectListener(() => { run({ refresh: true }); });
-    const retry = setInterval(() => { run(); }, 60000);
+    const retry = setInterval(() => {
+      // Native callbacks and launch still replay while backgrounded. Avoid
+      // unrelated periodic journal/policy work during those short OS wakes.
+      if (AppState.currentState === "active") run();
+    }, 60000);
     run({ refresh: true });
     return () => {
       cancelled = true;

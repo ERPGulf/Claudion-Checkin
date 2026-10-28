@@ -636,6 +636,34 @@ describe('DetailRow', () => {
  * ShortcutDetailsModern
  * ================================================================== */
 
+describe('record load failures', () => {
+  afterEach(() => { mockNewHomeEnabled = true; });
+  it.each(['light', 'dark'])('shows an error and accessible retry separately from no records in %s mode', scheme => {
+    mockScheme = scheme;
+    mockNewHomeEnabled = true;
+    const retry = jest.fn();
+    const screen = render(<ShortcutDetails title="Synthetic record" data={{}} loading={false} error onRetry={retry} />);
+
+    expect(screen.getByText('Unable to load records')).toBeTruthy();
+    expect(screen.queryByText('No records available')).toBeNull();
+    fireEvent.press(screen.getByRole('button', { name: 'Try again' }));
+    expect(retry).toHaveBeenCalledTimes(1);
+    const palette = scheme === 'dark' ? DARK_COLORS : COLORS;
+    expect(stylesIn(screen.UNSAFE_root).some(style => style.backgroundColor === palette.surfaceSecondary)).toBe(true);
+  });
+
+  it('offers the same recovery in the classic variant without changing successful data rendering', () => {
+    mockScheme = 'light';
+    mockNewHomeEnabled = false;
+    const retry = jest.fn();
+    const screen = render(<ShortcutDetails title="Synthetic record" data={{}} loading={false} error onRetry={retry} />);
+    expect(screen.getByText('Unable to load records')).toBeTruthy();
+    expect(screen.queryByText('No records available')).toBeNull();
+    fireEvent.press(screen.getByRole('button', { name: 'Try again' }));
+    expect(retry).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('ShortcutDetailsModern', () => {
   beforeEach(() => {
     mockScheme = 'light';

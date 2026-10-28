@@ -7,10 +7,8 @@ import { AccessibilityInfo } from 'react-native';
  *
  * Any screen that animates on mount should gate on this and jump straight to the
  * finished state instead — for some people motion is not decoration, it is
- * nausea. The app had no animation that needed it until the welcome screen's
- * entrance; every other <Animated> use in the codebase is either driven by a
- * gesture the user is actively making (<PressableScale>, <BottomSheet>) or a
- * loading pulse, neither of which the setting is aimed at.
+ * nausea. Decorative loops and loading pulses also use this setting, keeping
+ * their static content visible when animation is disabled.
  *
  * Reads the current value once and then listens, because the user can flip the
  * setting while the app is open.

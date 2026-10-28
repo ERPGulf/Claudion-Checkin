@@ -9,12 +9,12 @@ const Shortcut1 = () => {
     (state) => state.user?.userDetails?.employeeCode
   );
 
-  const { data, title, loading } = useShortcutData(
+  const { data, title, loading, error, retry } = useShortcutData(
     employeeCode,
     getShortcut1
   );
 
-  return <ShortcutDetails title={title} data={data} loading={loading} />;
+  return <ShortcutDetails title={title} data={data} loading={loading} error={error} onRetry={retry} />;
 };
 
 export default Shortcut1;

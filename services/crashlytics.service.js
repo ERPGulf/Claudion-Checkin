@@ -24,6 +24,7 @@ import { describeRunningUpdate } from "../utils/otaUpdate";
 
 const MAX_VALUE_LENGTH = 100;
 const MAX_LOG_LENGTH = 500;
+const MAX_RECENT_REPORTS = 128;
 
 /** The Crashlytics instance; `undefined` until initialised, `null` when unavailable. */
 let crashlytics;
@@ -33,8 +34,9 @@ let api = null;
 let userGeneration = 0;
 let currentScreen = null;
 /**
- * Non-fatals already reported this session. Crashlytics keeps only the latest
- * eight per session, so a failure repeated by a retry loop would evict the rest.
+ * Recent distinct non-fatals. Crashlytics keeps only the latest eight per
+ * session, so suppress retry-loop duplicates without retaining every distinct
+ * diagnostic message for the entire lifetime of a long-running process.
  */
 const reported = new Set();
 
@@ -235,6 +237,9 @@ export const recordNonFatalError = (error, context = {}) => {
     [context.feature, context.action].filter(Boolean).join(".") || normalized.name;
   const key = `${label}|${normalized.message}`;
   if (reported.has(key)) return;
+  if (reported.size >= MAX_RECENT_REPORTS) {
+    reported.delete(reported.values().next().value);
+  }
   reported.add(key);
 
   record(normalized, label, context);

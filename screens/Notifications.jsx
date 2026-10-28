@@ -7,6 +7,7 @@ import useModernScreenHeader from "../hooks/useModernScreenHeader";
 import useNotifications from "../hooks/useNotifications";
 import Card from "../components/common/Card";
 import EmptyState from "../components/common/EmptyState";
+import StatusBanner from "../components/common/StatusBanner";
 import SearchBar, { SearchCount } from "../components/common/SearchBar";
 import {
   NotificationDateHeader,
@@ -53,6 +54,7 @@ function Notifications() {
     selected,
     loading,
     refreshing,
+    error,
     searchQuery,
     setSearchQuery,
     refresh,
@@ -192,6 +194,22 @@ function Notifications() {
       return <NotificationSkeleton />;
     }
 
+    if (error && total === 0) {
+      return (
+        <View style={GUTTER}>
+          <Card>
+            <EmptyState
+              icon="cloud-offline-outline"
+              title="Unable to load notifications"
+              description="Please check your connection and try again."
+              actionLabel="Try again"
+              onActionPress={refresh}
+            />
+          </Card>
+        </View>
+      );
+    }
+
     // A query that matched nothing is not an empty inbox — the notifications are
     // still there, the words just didn't land. Offering "clear search" rather
     // than "we'll notify you" is the difference.
@@ -222,7 +240,7 @@ function Notifications() {
         </Card>
       </View>
     );
-  }, [isSearching, loading, setSearchQuery]);
+  }, [error, total, isSearching, loading, refresh, setSearchQuery]);
 
   return (
     <SafeAreaView
@@ -237,7 +255,20 @@ function Notifications() {
         // The day you're reading stays named at the top of the window.
         stickySectionHeadersEnabled
         contentContainerStyle={LIST_CONTENT}
-        ListHeaderComponent={listHeader}
+        ListHeaderComponent={
+          <>
+            {listHeader}
+            {error && total > 0 && (
+              <View style={GUTTER}>
+                <StatusBanner
+                  tone="warning"
+                  title="Couldn't refresh notifications"
+                  message="Showing saved notifications. Pull down to try again."
+                />
+              </View>
+            )}
+          </>
+        }
         ListEmptyComponent={listEmpty}
         keyboardShouldPersistTaps="handled"
         // Dragging the list puts the keyboard away, which is what you want the

@@ -330,6 +330,50 @@ it("live callbacks transfer from the journal and update the shared UI session", 
   expect((await findEvent("live-enter")).outcome.queued).toBe(true);
 });
 
+it("pauses periodic replay in background while preserving native capture and foreground recovery", async () => {
+  const previousState = AppState.currentState;
+  const intervals = jest.spyOn(global, "setInterval");
+  let view;
+  try {
+    AppState.currentState = "active";
+    view = mount();
+    await waitFor(() => expect(selectAutoAttendanceMonitoring(store.getState())).toBe("active"));
+    const retry = intervals.mock.calls.filter(([, delay]) => delay === 60000).pop()[0];
+    Native.getPendingEvents.mockClear();
+
+    for (const state of ["background", "inactive"]) {
+      AppState.currentState = state;
+      await act(async () => { retry(); });
+    }
+    expect(Native.getPendingEvents).not.toHaveBeenCalled();
+
+    AppState.currentState = "background";
+    await act(async () => {
+      mockJournal = [event("background-native-enter", "ENTER", 1)];
+      mockListeners.enter.forEach(listener => listener(mockJournal[0]));
+    });
+    await waitFor(async () => expect(await listAll()).toHaveLength(1));
+    expect((await findEvent("background-native-enter")).outcome.queued).toBe(true);
+    await waitFor(() => expect(store.getState().attendance.checkin).toBe(true));
+
+    AppState.currentState = "active";
+    Native.getPendingEvents.mockClear();
+    await act(async () => {
+      AppState.addEventListener.mock.calls.filter(([type]) => type === "change").pop()[1]("active");
+    });
+    await waitFor(() => expect(Native.getPendingEvents).toHaveBeenCalled());
+    await waitFor(() => expect(selectAutoAttendanceMonitoring(store.getState())).toBe("active"));
+
+    Native.getPendingEvents.mockClear();
+    await act(async () => { retry(); });
+    await waitFor(() => expect(Native.getPendingEvents).toHaveBeenCalled());
+  } finally {
+    view?.unmount();
+    AppState.currentState = previousState;
+    intervals.mockRestore();
+  }
+});
+
 it("logout stops monitoring and leaves captured receipts isolated", async () => {
   mount(); await waitFor(() => expect(Native.startGeofence).toHaveBeenCalled());
   await act(async () => {

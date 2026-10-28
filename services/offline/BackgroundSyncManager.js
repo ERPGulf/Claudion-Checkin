@@ -231,6 +231,10 @@ export const startBackgroundSync = ({
   );
 
   intervalId = setInterval(() => {
+    // JavaScript can remain runnable during a native wake or another background
+    // task. Those explicit triggers still drain; a periodic heartbeat is only
+    // useful while the employee has the app open.
+    if (AppState.currentState !== "active") return;
     runConfigRefresh("interval");
     runSync("interval");
   }, SYNC_INTERVAL_MS);

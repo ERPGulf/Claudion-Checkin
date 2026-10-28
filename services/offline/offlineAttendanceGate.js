@@ -32,11 +32,17 @@ const FIX_TIMEOUT_MS = 12000;
 /** A fix older than this is not evidence of where you are standing now. */
 const STALE_FIX_MS = 2 * 60 * 1000;
 
-const withTimeout = (promise, ms) =>
-  Promise.race([
-    promise,
-    new Promise((resolve) => setTimeout(() => resolve(null), ms)),
-  ]);
+const withTimeout = async (promise, ms) => {
+  let timer;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((resolve) => { timer = setTimeout(() => resolve(null), ms); }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+};
 
 /**
  * A position fix, without the wait.

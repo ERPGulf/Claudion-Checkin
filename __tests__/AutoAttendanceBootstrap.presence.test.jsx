@@ -557,7 +557,7 @@ describe("AutoAttendanceBootstrap presence reconciliation", () => {
     });
 
     it("continues once the queued punch has drained", async () => {
-      mockAwaitingServerCount = 1;
+      mockQueueCounts = { awaitingServerCount: 1, mayAffectServerCount: 1 };
       // The drain lands: the server now knows about the check-out, and says the
       // session is closed. A fresh check-in is a real new session, not a
       // duplicate.

@@ -75,7 +75,7 @@ const WAVE_SCALE = [0.94, 1];
  *
  * Purely decorative: no touch target, and hidden from screen readers.
  */
-function AccentHalo({ intensity = 0.2, color, wave = false, waveDelay = 0 }) {
+function AccentHalo({ intensity = 0.2, color, wave = false, waveDelay = 0, active = true }) {
   const { colors } = useAppTheme();
   const reduceMotion = useReducedMotion();
 
@@ -87,10 +87,10 @@ function AccentHalo({ intensity = 0.2, color, wave = false, waveDelay = 0 }) {
 
   /* ---------- The wave ---------- */
   /* Core Animated on the native driver, like every other animation in the app —
-     opacity and transform are both native-drivable, so the whole loop runs off
-     the JS thread and keeps costing nothing while it is on screen. */
+     opacity and transform are both native-drivable. The owning screen pauses
+     decorative work while it is hidden or the app is inactive. */
   const breathe = useRef(new Animated.Value(1)).current;
-  const animate = wave && !reduceMotion;
+  const animate = active && wave && !reduceMotion;
 
   useEffect(() => {
     if (!animate) return undefined;

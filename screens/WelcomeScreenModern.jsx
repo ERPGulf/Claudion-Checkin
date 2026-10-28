@@ -1,5 +1,6 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
+  AppState,
   Animated,
   Easing,
   ScrollView,
@@ -10,6 +11,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { BlurView } from "expo-blur";
+import { useIsFocused } from "@react-navigation/native";
 import { BUILD_TAG, SPACING, TYPO } from "../constants";
 import useAppTheme from "../hooks/useAppTheme";
 import useReducedMotion from "../hooks/useReducedMotion";
@@ -84,6 +86,15 @@ function WelcomeScreenModern() {
   const { colors, isDark } = useAppTheme();
   const { width } = useWindowDimensions();
   const reduceMotion = useReducedMotion();
+  const isFocused = useIsFocused();
+  const [appActive, setAppActive] = useState(() => AppState.currentState === "active");
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", state => {
+      setAppActive(state === "active");
+    });
+    return () => subscription.remove();
+  }, []);
 
   // The mark is the page's anchor, so it scales with the viewport instead of
   // crowding a 320dp screen at a fixed width. There is no panel padding to pay
@@ -142,7 +153,7 @@ function WelcomeScreenModern() {
       {/* Outside the SafeAreaView on purpose: the atmosphere runs under the
           status bar and the gesture bar, because a background that stops at the
           safe area is a panel, not a background. */}
-      <ShimmerField />
+      <ShimmerField active={isFocused && appActive} />
 
       {/* ---------- Blur: the layer between the motion and the content ------- */}
       {/* Sits over <ShimmerField> and under everything readable, so the field's

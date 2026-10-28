@@ -106,7 +106,7 @@ it("treats only engine errors from our own code as bugs", () => {
   expect(isProgrammingError(undefined)).toBe(false);
 });
 
-it("records a non-fatal once per session, named after its call site", () => {
+it("suppresses recent duplicate non-fatals, named after their call site", () => {
   const service = loadService();
   service.initializeCrashReporting();
   const error = new TypeError("Cannot read property 'x' of undefined");
@@ -121,6 +121,41 @@ it("records a non-fatal once per session, named after its call site", () => {
     instance,
     "non-fatal TypeError feature=attendance action=manual_punch type=IN",
   );
+});
+
+it("bounds recent fingerprints to 128 distinct errors and evicts the oldest", () => {
+  const service = loadService();
+  service.initializeCrashReporting();
+  const context = { feature: "synthetic", action: "programming_error" };
+  const error = index => new TypeError(`Synthetic programming error ${index}`);
+
+  service.recordNonFatalError(error(0), context);
+  for (let index = 1; index < 128; index += 1) {
+    service.recordNonFatalError(error(index), context);
+  }
+  expect(api.recordError).toHaveBeenCalledTimes(128);
+
+  // At capacity, both the oldest and newest remembered errors still suppress
+  // duplicates. A duplicate does not allocate another fingerprint slot.
+  service.recordNonFatalError(error(0), context);
+  service.recordNonFatalError(error(127), context);
+  expect(api.recordError).toHaveBeenCalledTimes(128);
+
+  service.recordNonFatalError(error(128), context);
+  service.recordNonFatalError(error(128), context);
+  expect(api.recordError).toHaveBeenCalledTimes(129);
+
+  // Once 128 distinct later errors have been seen, the original fingerprint
+  // is forgotten and can be reported again rather than retained forever.
+  service.recordNonFatalError(error(0), context);
+  expect(api.recordError).toHaveBeenCalledTimes(130);
+  expect(api.recordError).toHaveBeenLastCalledWith(
+    instance, expect.objectContaining({ message: "Synthetic programming error 0" }),
+    "synthetic.programming_error",
+  );
+  service.recordNonFatalError(error(0), context);
+  service.recordNonFatalError(error(128), context);
+  expect(api.recordError).toHaveBeenCalledTimes(130);
 });
 
 it("sends only short primitive attribute values", () => {

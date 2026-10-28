@@ -6,6 +6,7 @@ import {
 } from "./authHelper";
 import { getServerTime } from "./attendance.service";
 import { assertCapability } from "../capabilityPolicy";
+import { describeHttpFailure } from "../../utils/httpDiagnostics";
 
 /**
  * CREATE COMPLAINT
@@ -114,15 +115,15 @@ export const uploadComplaintAttachment = async (file, docname, { capabilityScope
     }
 
     if (!response.ok) {
-      console.log("❌ UPLOAD FAILED:", result);
+      console.log("Complaint upload failed:", { httpStatus: response.status });
       throw new Error(result?.message || "Upload failed");
     }
 
-    console.log("✅ COMPLAINT UPLOAD RESPONSE:", result);
+    console.log("Complaint upload response:", { httpStatus: response.status });
 
     return result;
   } catch (error) {
-    console.log("❌ COMPLAINT UPLOAD ERROR:", error);
+    console.log("Complaint upload failed:", describeHttpFailure(error));
     throw error;
   }
 };

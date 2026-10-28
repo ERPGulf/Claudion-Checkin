@@ -3,6 +3,7 @@ import React, { useEffect, useRef } from 'react';
 import { Animated } from 'react-native';
 import { RADIUS } from '../../constants';
 import useAppTheme from '../../hooks/useAppTheme';
+import useReducedMotion from '../../hooks/useReducedMotion';
 
 /** One half-cycle of the pulse. */
 const PULSE_MS = 700;
@@ -12,8 +13,8 @@ const PULSE_RANGE = [1, 0.45];
 
 /**
  * The app's loading pulse: a plain opacity loop on the core Animated API — no
- * worklets, no gradient library — running on the native driver, so it costs
- * nothing while a request is in flight.
+ * worklets, no gradient library — with opacity driven natively. Reduced motion
+ * keeps the placeholders at their full opacity without scheduling a loop.
  *
  * Extracted because this exact loop was written out in full by every skeleton in
  * the app (attendance history, expense claims, document details, and now
@@ -24,8 +25,14 @@ const PULSE_RANGE = [1, 0.45];
  */
 export function useSkeletonPulse() {
   const pulse = useRef(new Animated.Value(0)).current;
+  const reduceMotion = useReducedMotion();
 
   useEffect(() => {
+    if (reduceMotion) {
+      pulse.setValue(0);
+      return undefined;
+    }
+
     const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(pulse, {
@@ -42,7 +49,7 @@ export function useSkeletonPulse() {
     );
     loop.start();
     return () => loop.stop();
-  }, [pulse]);
+  }, [pulse, reduceMotion]);
 
   return pulse.interpolate({ inputRange: [0, 1], outputRange: PULSE_RANGE });
 }

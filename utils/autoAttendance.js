@@ -100,12 +100,13 @@ export const resolveOfficeName = async (latitude, longitude) => {
 // getCurrentPositionAsync can wait forever on an emulator with no simulated
 // fix — race it against a timeout, then fall back to the last known position.
 export const readDevicePosition = async () => {
+  let timer;
   try {
     return await Promise.race([
       Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Timed out waiting for a GPS fix')), 8000),
-      ),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error('Timed out waiting for a GPS fix')), 8000);
+      }),
     ]);
   } catch (error) {
     console.log(
@@ -113,6 +114,8 @@ export const readDevicePosition = async () => {
       error?.message,
     );
     return Location.getLastKnownPositionAsync({ maxAge: 600000 });
+  } finally {
+    clearTimeout(timer);
   }
 };
 

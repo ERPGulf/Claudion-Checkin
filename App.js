@@ -7,7 +7,8 @@ import { useState, useEffect, useRef } from "react";
 import * as Font from "expo-font";
 import * as SplashScreen from "expo-splash-screen";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { queryClient } from "./services/queryClient";
 import { useDispatch, useSelector } from "react-redux";
 // Hosts the <Toast> instance with a safe-area-derived offset; `Toast.show()`
 // still comes from the library import above.
@@ -50,7 +51,6 @@ installMobileAuthCrypto();
 function cacheFonts(fonts) {
   return fonts.map((font) => Font.loadAsync(font));
 }
-const queryClient = new QueryClient();
 registerBackgroundMessageHandler();
 // Forced logout (session expiry) reuses the same teardown as manual logout: the
 // FCM registration and the cached attendance rules.

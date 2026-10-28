@@ -33,8 +33,11 @@ export const fetchEmployeeData = async (employeeCode, { syncScope } = {}) => {
       },
       timeout: 10000,
     });
-    // Development only: the full answer, for checking the employee's policy from Metro.
-    if (__DEV__) console.log("[employee] get_employee_data response", JSON.stringify(data, null, 2));
+    if (__DEV__) console.log("[employee] get_employee_data response", {
+      received: !!data?.message,
+      locationsCount: Array.isArray(data?.message?.employee_locations)
+        ? data.message.employee_locations.length : 0,
+    });
     await receiveEmployeeAutoAttendancePolicy(data.message, reception);
 
     return data.message;

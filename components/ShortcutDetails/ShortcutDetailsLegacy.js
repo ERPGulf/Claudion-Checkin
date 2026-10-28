@@ -10,6 +10,7 @@ import {
 import Entypo from "@expo/vector-icons/Entypo";
 import { useNavigation } from "@react-navigation/native";
 import { COLORS, SIZES } from "../../constants";
+import EmptyState from "../common/EmptyState";
 
 const formatLabel = (key = "") =>
   key
@@ -17,7 +18,7 @@ const formatLabel = (key = "") =>
     .replace(/_/g, " ")
     .replace(/\b\w/g, (char) => char.toUpperCase());
 
-const ShortcutDetails = ({ title, data, loading }) => {
+const ShortcutDetails = ({ title, data, loading, error = false, onRetry }) => {
   const navigation = useNavigation();
 
   useLayoutEffect(() => {
@@ -44,6 +45,20 @@ const ShortcutDetails = ({ title, data, loading }) => {
       <View className="flex-1 justify-center items-center">
         <ActivityIndicator size="large" color={COLORS.primary} />
         <Text className="mt-2 text-gray-500">Loading details...</Text>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View className="flex-1 justify-center items-center" accessibilityLiveRegion="polite">
+        <EmptyState
+          icon="cloud-offline-outline"
+          title="Unable to load records"
+          description="Please check your connection and try again."
+          actionLabel="Try again"
+          onActionPress={onRetry}
+        />
       </View>
     );
   }

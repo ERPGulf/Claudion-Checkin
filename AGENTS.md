@@ -26,7 +26,7 @@ Run from the repository root; use npm and `package-lock.json`.
 | `npm run lint` / `npm run lint:fix` | Invoke ESLint or automatic fixes. |
 | `npm run eas:build:preview` | EAS preview builds for both platforms; requires EAS CLI/account and committed changes. |
 
-No ESLint/Prettier configuration, typecheck script, `tsconfig.json`, or CI workflow is checked in. TypeScript's installed dependency does not establish a typecheck. Lint scripts currently lack configuration. Use `--watchman=false` when Jest cannot use Watchman. EAS update/submit scripts publish remotely; see [README.md](README.md) for release commands.
+ESLint's checked-in `.eslintrc.cjs` runs correctness and hook checks; existing hook-dependency warnings remain for review. No Prettier configuration, typecheck script, `tsconfig.json`, or CI workflow is checked in. TypeScript's installed dependency does not establish a typecheck. Use `--watchman=false` when Jest cannot use Watchman. EAS update/submit scripts publish remotely; see [README.md](README.md) for release commands.
 
 ## Coding & API Contracts
 

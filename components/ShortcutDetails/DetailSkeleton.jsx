@@ -1,8 +1,9 @@
 /* eslint-disable react/prop-types */
-import React, { useEffect, useRef } from 'react';
+import React from 'react';
 import { Animated, View } from 'react-native';
 import { RADIUS, SPACING } from '../../constants';
 import useAppTheme from '../../hooks/useAppTheme';
+import { useSkeletonPulse } from '../common/Skeleton';
 
 /**
  * Loading placeholder shaped like the real detail page — a hero block, then a
@@ -10,36 +11,12 @@ import useAppTheme from '../../hooks/useAppTheme';
  * the document arrives.
  *
  * Replaces a centred spinner on an otherwise blank screen. The pulse is a plain
- * opacity loop on the core Animated API running on the native driver, so it
- * costs nothing while the request is in flight.
+ * opacity loop on the core Animated API, using the shared native-driver pulse
+ * and reduced-motion preference.
  */
 function DetailSkeleton({ rows = 5 }) {
   const { colors } = useAppTheme();
-  const pulse = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulse, {
-          toValue: 1,
-          duration: 700,
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulse, {
-          toValue: 0,
-          duration: 700,
-          useNativeDriver: true,
-        }),
-      ]),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [pulse]);
-
-  const opacity = pulse.interpolate({
-    inputRange: [0, 1],
-    outputRange: [1, 0.45],
-  });
+  const opacity = useSkeletonPulse();
 
   const block = (width, height, extra) => (
     <Animated.View

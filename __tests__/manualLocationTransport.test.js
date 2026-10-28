@@ -8,7 +8,8 @@ import { setBaseUrl } from '../redux/Slices/UserSlice';
 import { buildSettingsScope, normalizeFeatureSettings } from '../utils/featureSettings';
 import { activateAuthSession, invalidateAuthSession } from '../utils/authSessionGuard';
 import apiClient, { clearTokens, plainAxios, saveTokens } from '../services/api/apiClient';
-import { userCheckIn } from '../services/api/attendance.service';
+import { getOfficeLocation, userCheckIn } from '../services/api/attendance.service';
+import { fetchEmployeeData } from '../services/api/employee.service';
 
 let mockStore;
 jest.mock('../redux/Store', () => ({ store: {
@@ -86,6 +87,22 @@ afterEach(() => {
   refresh.restore();
   jest.restoreAllMocks();
   jest.clearAllMocks();
+});
+
+it('keeps employee payloads and exact GPS/location data out of diagnostics', async () => {
+  const privateValue = 'Synthetic private employee detail';
+  mock.onGet(employeeUrl).reply(200, { message: {
+    employee_code: employee, employee_name: privateValue, phone: privateValue,
+    restrict_location: 1, unrestricted_checkout_location: 0, geotagging: 2,
+    photo: 0, employee_locations: [office],
+  } });
+  await fetchEmployeeData(employee);
+  const nearest = await getOfficeLocation(employee);
+  expect(nearest).toBeTruthy();
+  const logs = JSON.stringify(console.log.mock.calls);
+  for (const value of [privateValue, office.location, String(office.latitude), String(office.longitude)]) {
+    expect(logs).not.toContain(value);
+  }
 });
 
 it('denies a retry when a new tenant restriction requires location evidence that the first punch did not need', async () => {

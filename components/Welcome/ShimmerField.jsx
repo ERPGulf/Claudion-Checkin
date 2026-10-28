@@ -91,10 +91,11 @@ const FIELDS = [
  * Purely decorative — no touch target, hidden from screen readers, and completely
  * still under reduce motion.
  */
-function ShimmerField() {
+function ShimmerField({ active = true }) {
   const { isDark } = useAppTheme();
   const { width, height } = useWindowDimensions();
   const reduceMotion = useReducedMotion();
+  const animate = active && !reduceMotion;
 
   const scheme = isDark ? 'dark' : 'light';
 
@@ -103,7 +104,7 @@ function ShimmerField() {
   const drifts = useRef(FIELDS.map(() => new Animated.Value(0.5))).current;
 
   useEffect(() => {
-    if (reduceMotion) {
+    if (!animate) {
       drifts.forEach(value => value.setValue(0.5));
       return undefined;
     }
@@ -129,7 +130,7 @@ function ShimmerField() {
 
     animations.forEach(animation => animation.start());
     return () => animations.forEach(animation => animation.stop());
-  }, [reduceMotion, drifts]);
+  }, [animate, drifts]);
 
   return (
     <Animated.View
@@ -153,7 +154,7 @@ function ShimmerField() {
             style={{
               position: 'absolute',
               ...field.rect,
-              transform: reduceMotion
+              transform: !animate
                 ? undefined
                 : [
                     { translateX: span(width * field.drift.x) },
@@ -169,6 +170,7 @@ function ShimmerField() {
               color={BRAND_MARK_GLOW}
               intensity={field.intensity[scheme]}
               wave
+              active={active}
               waveDelay={field.delay}
             />
           </Animated.View>

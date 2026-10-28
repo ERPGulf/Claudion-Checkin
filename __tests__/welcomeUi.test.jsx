@@ -58,6 +58,7 @@ jest.mock('@expo/vector-icons/Ionicons', () => {
 const mockNavigate = jest.fn();
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: mockNavigate }),
+  useIsFocused: () => true,
 }));
 
 jest.mock('react-native-safe-area-context', () => {

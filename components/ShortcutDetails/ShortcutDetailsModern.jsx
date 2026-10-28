@@ -45,7 +45,7 @@ import {
  *   ┌ "Document information" card ──┐   every other field, one row each
  *     · footer                          muted ERPGulf link
  */
-function ShortcutDetailsModern({ title, data, loading }) {
+function ShortcutDetailsModern({ title, data, loading, error = false, onRetry }) {
   const { colors } = useAppTheme();
   useModernScreenHeader(title || 'Details');
 
@@ -82,6 +82,24 @@ function ShortcutDetailsModern({ title, data, loading }) {
       <SafeAreaView style={page} edges={['bottom', 'left', 'right']}>
         <View style={{ padding: SPACING.lg }}>
           <DetailSkeleton />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (error) {
+    return (
+      <SafeAreaView style={page} edges={['bottom', 'left', 'right']}>
+        <View style={{ padding: SPACING.lg }} accessibilityLiveRegion="polite">
+          <Card>
+            <EmptyState
+              icon="cloud-offline-outline"
+              title="Unable to load records"
+              description="Please check your connection and try again."
+              actionLabel="Try again"
+              onActionPress={onRetry}
+            />
+          </Card>
         </View>
       </SafeAreaView>
     );
