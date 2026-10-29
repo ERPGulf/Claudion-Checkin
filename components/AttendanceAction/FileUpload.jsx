@@ -1,4 +1,6 @@
-import { Text, TouchableOpacity } from 'react-native';
+import { t, useTranslation } from '../../localization';
+import { TouchableOpacity } from 'react-native';
+import Text from '../../localization/LocalizedText';
 import React from 'react';
 import { useSelector } from 'react-redux';
 import { Toast } from 'react-native-toast-message/lib/src/Toast';
@@ -9,6 +11,7 @@ import { SIZES } from '../../constants';
 import { putUserFile, userFileUpload } from '../../services/api';
 
 function FileUpload({ inTarget, isWFH }) {
+  const { language, direction, isRTL } = useTranslation();
   const name = useSelector(selectFileid);
   const handleFileUpload = async result => {
     const fileType = result.type;
@@ -39,8 +42,8 @@ function FileUpload({ inTarget, isWFH }) {
               type: 'success',
               text1:
                 fileType === 'image'
-                  ? '✅ Photo Uploaded'
-                  : '✅ Video Uploaded',
+                  ? t("✅ Photo Uploaded")
+                  : t("✅ Video Uploaded"),
             });
           })
           .catch(() => {
@@ -48,8 +51,8 @@ function FileUpload({ inTarget, isWFH }) {
               type: 'error',
               text1:
                 fileType === 'image'
-                  ? 'Photo Upload Failed'
-                  : 'Video Upload Failed',
+                  ? t("Photo Upload Failed")
+                  : t("Video Upload Failed"),
             });
           });
       })
@@ -58,8 +61,8 @@ function FileUpload({ inTarget, isWFH }) {
           type: 'error',
           text1:
             fileType === 'image'
-              ? 'Photo Upload Failed'
-              : 'Video Upload Failed',
+              ? t("Photo Upload Failed")
+              : t("Video Upload Failed"),
         });
       });
   };
@@ -76,7 +79,7 @@ function FileUpload({ inTarget, isWFH }) {
       await handleFileUpload(result.assets[0]);
     } catch (error) {
       // Handle errors from ImagePicker
-      alert('Error picking image.');
+      alert(t("Error picking image."));
     }
   };
   return (
@@ -88,7 +91,7 @@ function FileUpload({ inTarget, isWFH }) {
       onPress={pickImage}
     >
       <Ionicons name="image" size={SIZES.xxxLarge} color="white" />
-      <Text className="text-xl font-bold text-white">Photo or Video</Text>
+      <Text className="text-xl font-bold text-white">{t("Photo or Video")}</Text>
     </TouchableOpacity>
   );
 }

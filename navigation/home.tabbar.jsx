@@ -1,3 +1,4 @@
+import { useTranslation } from "../localization";
 /* eslint-disable react/prop-types */
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
@@ -132,6 +133,7 @@ function legacyScreenOptions() {
 }
 
 function HomeTabGroup() {
+  const { t, direction } = useTranslation();
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useAppTheme();
   // TEMPORARY: New Home Experience experiment. When removing, delete this line
@@ -162,14 +164,15 @@ function HomeTabGroup() {
     };
 
   return (
-    <TabStack.Navigator screenOptions={() => screenOptions}>
+    <TabStack.Navigator screenOptions={() => ({ ...screenOptions, sceneStyle: { direction } })}>
       {TABS.map(tab => (
         <TabStack.Screen
           key={tab.name}
           name={tab.name}
           component={components[tab.name]}
           options={{
-            tabBarAccessibilityLabel: tab.label,
+            tabBarAccessibilityLabel: t(tab.label),
+            title: t(tab.label),
             tabBarIcon: renderIcon(tab.icon),
           }}
         />

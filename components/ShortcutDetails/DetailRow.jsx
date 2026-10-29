@@ -1,6 +1,8 @@
+import Text from '../../localization/LocalizedText';
+import { useTranslation, getLanguage } from "../../localization";
 /* eslint-disable react/prop-types */
 import React from 'react';
-import { I18nManager, Text, View } from 'react-native';
+import { View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ICON, RADIUS, SPACING, TYPO } from '../../constants';
 import useAppTheme from '../../hooks/useAppTheme';
@@ -27,6 +29,7 @@ const PAD_V = 12;
  * row instead of clipping it.
  */
 function DetailRow({ icon, label, value }) {
+  useTranslation();
   const { colors } = useAppTheme();
 
   return (
@@ -80,7 +83,7 @@ function DetailRow({ icon, label, value }) {
           // with the layout the way `marginStart` does — so under RTL, where the
           // row itself has already reversed, 'right' would push the value back
           // against its own label. Mirror it explicitly.
-          textAlign: I18nManager.isRTL ? 'left' : 'right',
+          textAlign: getLanguage() === 'ar' ? 'left' : 'right',
           includeFontPadding: false,
         }}
       >
@@ -92,6 +95,7 @@ function DetailRow({ icon, label, value }) {
 
 /** Hairline between rows, inset past the chip so it aligns with the labels. */
 export function DetailDivider() {
+  useTranslation();
   const { colors } = useAppTheme();
 
   return (

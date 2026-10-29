@@ -1,3 +1,5 @@
+import { quickAccessLabel } from '../utils/quickAccess';
+import { t, useTranslation, getLanguage } from "../localization";
 import { View, TouchableOpacity } from 'react-native';
 import React, { useLayoutEffect } from 'react';
 import Entypo from '@expo/vector-icons/Entypo';
@@ -19,24 +21,25 @@ import {
  * screens/HomeLegacy.jsx when the experiment ends.
  */
 function SelectQuickAccessLegacy() {
+  const { language } = useTranslation();
   const navigation = useNavigation();
   useLayoutEffect(() => {
     navigation.setOptions({
       headerShadowVisible: false,
       headerShown: true,
-      headerTitle: 'Quick Access',
+      headerTitle: t("Quick Access"),
       headerTitleAlign: 'center',
       headerLeft: () => (
         <TouchableOpacity className="" onPress={() => navigation.goBack()}>
           <Entypo
-            name="chevron-left"
+            name={getLanguage() === 'ar' ? 'chevron-right' : 'chevron-left'}
             size={SIZES.xxxLarge - 5}
             color={COLORS.primary}
           />
         </TouchableOpacity>
       ),
     });
-  }, []);
+  }, [navigation, language]);
   const activeButtons = useSelector(activeButtonsSelector);
   const featureSettings = useSelector(selectFeatureSettings);
   const dispatch = useDispatch();
@@ -44,15 +47,15 @@ function SelectQuickAccessLegacy() {
     {
       id: 1,
       iconName: 'calendar-outline',
-      text1: 'Attendance',
-      text2: 'action',
+      text1: "Attendance",
+      text2: "action",
       url: 'Attendance action',
     },
     {
       id: 2,
       iconName: 'receipt-outline',
-      text1: 'Attendance',
-      text2: 'history',
+      text1: "Attendance",
+      text2: "history",
       url: 'Attendance history',
     },
     // ADD URL WHEN REST IS COMPLETE
@@ -86,8 +89,8 @@ function SelectQuickAccessLegacy() {
     {
       id: 8,
       iconName: 'trail-sign-outline',
-      text1: 'Trip',
-      text2: 'details',
+      text1: "Trip",
+      text2: "details",
       url: 'Trip details',
     },
   ];
@@ -130,8 +133,8 @@ function SelectQuickAccessLegacy() {
           >
             <ButtonItem
               iconName={item.iconName}
-              text1={item.text1}
-              text2={item.text2 || null}
+              text1={quickAccessLabel(item)}
+              text2={null}
             />
           </TouchableOpacity>
         ))}

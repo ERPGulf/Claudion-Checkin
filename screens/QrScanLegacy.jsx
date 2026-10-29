@@ -1,5 +1,7 @@
+import Text from '../localization/LocalizedText';
+import { t, useTranslation, getLanguage } from "../localization";
 // NOSONAR
-import { View, Text, TouchableOpacity, ActivityIndicator } from "react-native";
+import { View, TouchableOpacity, ActivityIndicator } from "react-native";
 import { useEffect, useLayoutEffect, useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import base64 from "base-64";
@@ -36,6 +38,7 @@ import { COLORS, SIZES } from "../constants";
  * Delete this file with the rest of the experiment.
  */
 function QrScanLegacy() {
+  const { language } = useTranslation();
   const navigation = useNavigation();
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
@@ -47,19 +50,19 @@ function QrScanLegacy() {
     navigation.setOptions({
       headerShadowVisible: false,
       headerShown: true,
-      headerTitle: "Scan QR Code",
+      headerTitle: t("Scan QR Code"),
       headerTitleAlign: "center",
       headerLeft: () => (
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Entypo
-            name="chevron-left"
+            name={getLanguage() === 'ar' ? 'chevron-right' : 'chevron-left'}
             size={SIZES.xxxLarge - 5}
             color={COLORS.primary}
           />
         </TouchableOpacity>
       ),
     });
-  }, [navigation]);
+  }, [navigation, language]);
 
   const sanitizeString = (value, defaultValue = "") => {
     if (value === null || value === undefined) {
@@ -188,10 +191,10 @@ function QrScanLegacy() {
         dispatch(setEmployeeCode(cleanedData.employee_code));
         navigation.navigate("login");
       } else {
-        alert("Invalid QR code. Please try again.");
+        alert(t("Invalid QR code. Please try again."));
       }
     } catch (err) {
-      alert("Invalid QR code");
+      alert(t("Invalid QR code"));
     }
   };
   const handleBarCodeScanned = async ({ type, data }) => {
@@ -215,7 +218,7 @@ function QrScanLegacy() {
         await handleQRCodeData(data);
       }
     } catch {
-      alert("No QR-CODE Found");
+      alert(t("No QR-CODE Found"));
     }
   };
   if (!permission || permission.status === "undetermined") {
@@ -228,7 +231,7 @@ function QrScanLegacy() {
   if (!permission.granted) {
     return (
       <SafeAreaView className="flex-1 items-center justify-center px-3 bg-white">
-        <Text>No access to camera</Text>
+        <Text>{t("No access to camera")}</Text>
       </SafeAreaView>
     );
   }
@@ -266,9 +269,7 @@ function QrScanLegacy() {
             onPress={() => setScanned(false)}
           >
             <Ionicons name="scan-outline" size={SIZES.xxxLarge} color="white" />
-            <Text className="text-base font-semibold text-white ml-2">
-              TAP TO SCAN AGAIN
-            </Text>
+            <Text className="text-base font-semibold text-white" style={{ marginStart: 8 }}>{t("TAP TO SCAN AGAIN")}</Text>
           </TouchableOpacity>
         ) : (
           <View className="h-16 justify-center rounded-xl bg-white border-2 items-center mt-4">
@@ -285,9 +286,7 @@ function QrScanLegacy() {
           onPress={pickImage}
         >
           <Ionicons name="image" size={SIZES.xxxLarge} color="white" />
-          <Text className="text-base font-semibold text-white ml-2">
-            SELECT FROM PHOTOS
-          </Text>
+          <Text className="text-base font-semibold text-white" style={{ marginStart: 8 }}>{t("SELECT FROM PHOTOS")}</Text>
         </TouchableOpacity>
       </View>
     </CameraView>

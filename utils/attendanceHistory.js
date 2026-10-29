@@ -1,3 +1,4 @@
+import { formatDate, formatTime, t } from '../localization';
 import { format, isToday, isYesterday } from 'date-fns';
 
 /**
@@ -45,12 +46,12 @@ export function parseLogTime(time) {
 
 /** "05:39 PM". Padded and tabular so a column of times stays aligned. */
 export function formatLogTime(date) {
-  return date ? format(date, 'hh:mm a') : '--:--';
+  return date ? formatTime(date, { hour12: true }) : '--:--';
 }
 
 /** "28 Jul 2026" — spelled month, because 28/07/26 is ambiguous across locales. */
 export function formatLogDate(date) {
-  return date ? format(date, 'd MMM yyyy') : 'Unknown date';
+  return date ? formatDate(date) : t("Unknown date");
 }
 
 /**
@@ -84,10 +85,10 @@ const LOG_TYPE_DESCRIPTIONS = {
 export function describeLogType(logType) {
   const key = typeof logType === 'string' ? logType.trim().toUpperCase() : '';
   const known = LOG_TYPE_DESCRIPTIONS[key];
-  if (known) return known;
+  if (known) return { ...known, label: t(known.label) };
 
   return {
-    label: key ? logType.trim() : 'Unknown',
+    label: key ? logType.trim() : t("Unknown"),
     tone: 'neutral',
     icon: 'help-circle-outline',
   };
@@ -128,17 +129,17 @@ export function describeLogTrigger(auto) {
 
   if (!isAuto) return null;
 
-  return { label: 'Automatic', tone: 'info', icon: 'flash-outline' };
+  return { label: t("Automatic"), tone: 'info', icon: 'flash-outline' };
 }
 
 /** "Today" / "Yesterday" / "28 Jul 2026". */
 export function formatDayTitle(date, now = new Date()) {
-  if (!date) return 'Unknown date';
+  if (!date) return t("Unknown date");
   // isToday/isYesterday compare against the real clock; `now` is threaded
   // through only so tests can pin the boundary.
-  if (isToday(date)) return 'Today';
-  if (isYesterday(date)) return 'Yesterday';
-  return format(date, 'd MMM yyyy');
+  if (isToday(date)) return t("Today");
+  if (isYesterday(date)) return t("Yesterday");
+  return formatDate(date);
 }
 
 // ----------------------
@@ -218,7 +219,8 @@ const SYNC_STATUS_DESCRIPTIONS = {
 /** Chip label, tone and glyph for a sync state, or null for a server record. */
 export function describeSyncStatus(syncStatus) {
   if (!syncStatus) return null;
-  return SYNC_STATUS_DESCRIPTIONS[syncStatus] ?? null;
+  const known = SYNC_STATUS_DESCRIPTIONS[syncStatus];
+  return known ? { ...known, label: t(known.label) } : null;
 }
 
 /**

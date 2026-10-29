@@ -1,8 +1,9 @@
+import { translateMessage, t, useTranslation, getLanguage } from '../../localization';
+import Text from '../../localization/LocalizedText';
 /* eslint-disable react/prop-types */
 import React, { useEffect, useState } from "react";
 import {
   View,
-  Text,
   TouchableOpacity,
   ScrollView,
   Linking,
@@ -55,10 +56,11 @@ const SHORTCUT_CACHE_KEY = "user_shortcuts_cache_v2";
  * Memoized Shortcut Button (prevents re-render)
  * --------------------------------------------------- */
 const ShortcutButton = React.memo(({ shortcut, navigation }) => {
+  useTranslation();
   const handlePress = () => {
     // 🛑 Fallback record → NO navigation
     if (shortcut.isFallback) {
-      alert("No records available");
+      alert(t("No records available"));
       return;
     }
 
@@ -72,7 +74,7 @@ const ShortcutButton = React.memo(({ shortcut, navigation }) => {
   };
 
   return (
-    <TouchableOpacity className="w-16 mr-4" onPress={handlePress}>
+    <TouchableOpacity className="w-16" onPress={handlePress} style={{ marginEnd: 16 }}>
       <View className="items-center mt-3">
         <View className="bg-gray-100 h-14 w-14 justify-center items-center rounded-lg">
           <Ionicons
@@ -84,7 +86,7 @@ const ShortcutButton = React.memo(({ shortcut, navigation }) => {
 
         <View className="mt-1 px-1">
           <Text className="text-xs text-center font-medium text-gray-500">
-            {shortcut.shortcut}
+            {shortcut.isFallback ? translateMessage(shortcut.shortcut) : shortcut.shortcut}
           </Text>
         </View>
       </View>
@@ -167,6 +169,7 @@ export const LEGACY_HR_FEATURES = [
 ];
 
 function LavaMenu() {
+  useTranslation();
   const navigation = useNavigation();
   const [shortcuts, setShortcuts] = useState([]);
   const [loadingShortcuts, setLoadingShortcuts] = useState(true);
@@ -258,7 +261,7 @@ function LavaMenu() {
   return (
     <View className="my-2" style={{ width: "100%" }}>
       {/* -------------------- HEADER -------------------- */}
-      <Text className="text-sm font-semibold mb-2">Menu</Text>
+      <Text className="text-sm font-semibold mb-2">{t("Menu")}</Text>
 
       {/* -------------------- HR SECTION -------------------- */}
       <View>
@@ -267,10 +270,8 @@ function LavaMenu() {
           style={{ backgroundColor: COLORS.primary }}
         >
           <Octicons name="people" size={SIZES.xxLarge + 4} color="#fff" />
-          <Text className="text-lg font-medium text-white">
-            Human Resources
-          </Text>
-          <AntDesign name="right" size={SIZES.xxLarge + 4} color="#fff" />
+          <Text className="text-lg font-medium text-white">{t("Human Resources")}</Text>
+          <AntDesign name={getLanguage() === 'ar' ? 'left' : 'right'} size={SIZES.xxLarge + 4} color="#fff" />
         </View>
 
         <View className="bg-white rounded-b-xl py-3 px-2 mb-4">
@@ -278,9 +279,9 @@ function LavaMenu() {
             {visibleFeatures.map((item, index) => (
               <TouchableOpacity
                 key={index}
-                className="mr-4"
+                className=""
                 onPress={() => navigation.navigate(item.nav)}
-              >
+               style={{ marginEnd: 16 }}>
                 <View className="bg-gray-100 p-2 items-center rounded-lg w-16">
                   <Ionicons
                     name={item.icon}
@@ -288,18 +289,15 @@ function LavaMenu() {
                     color={COLORS.primary}
                   />
                 </View>
-                {item.label.map((t, i) => (
-                  <Text
-                    key={i}
+                <Text
                     className={`text-xs text-center mt-1 ${
                       item.bold
                         ? "font-semibold text-gray-700"
                         : "font-medium text-gray-500"
                     }`}
                   >
-                    {t}
+                    {t(item.nav === 'Auto attendance' ? 'Automatic attendance' : item.nav === 'comingsoon' ? 'Vacation list' : item.nav)}
                   </Text>
-                ))}
               </TouchableOpacity>
             ))}
           </ScrollView>
@@ -318,9 +316,9 @@ function LavaMenu() {
             color="#fff"
           />
           <Text className="text-lg font-medium text-white">
-            {recordsEnabled ? "Your Records In The Company" : "Your Code"}
+            {recordsEnabled ? t("Your Records In The Company") : t("Your Code")}
           </Text>
-          <AntDesign name="right" size={SIZES.xxLarge + 4} color="#fff" />
+          <AntDesign name={getLanguage() === 'ar' ? 'left' : 'right'} size={SIZES.xxLarge + 4} color="#fff" />
         </View>
 
         <View className="flex-row bg-white flex-wrap py-4 px-2 rounded-b-xl">
@@ -333,7 +331,7 @@ function LavaMenu() {
               {loadingShortcuts && shortcuts.length === 0 && (
                 <View className="flex-row px-2">
                   {[1, 2, 3].map((i) => (
-                    <View key={i} className="w-16 mr-4 items-center">
+                    <View key={i} className="w-16 items-center" style={{ marginEnd: 16 }}>
                       <View className="bg-gray-200 h-14 w-14 rounded-lg" />
                       <View className="h-8 mt-1 bg-gray-200 w-14 rounded" />
                     </View>
@@ -354,9 +352,9 @@ function LavaMenu() {
 
           {/* Static QR */}
           <TouchableOpacity
-            className="w-16 mr-4"
+            className="w-16"
             onPress={() => navigation.navigate("My QR Code")}
-          >
+           style={{ marginEnd: 16 }}>
             <View className="items-center mt-3">
               <View className="bg-gray-100 h-14 w-14 items-center justify-center rounded-lg">
                 <Ionicons
@@ -365,9 +363,7 @@ function LavaMenu() {
                   color={COLORS.primary}
                 />
               </View>
-              <Text className="text-xs text-center font-medium text-gray-500 mt-1">
-                My QR
-              </Text>
+              <Text className="text-xs text-center font-medium text-gray-500 mt-1">{t("My QR")}</Text>
             </View>
           </TouchableOpacity>
         </View>
@@ -384,7 +380,7 @@ function LavaMenu() {
           onPress={() => Linking.openURL("https://erpgulf.com")}
           className="flex-row items-center"
         >
-          <Text className="text-lg font-semibold text-white mr-1">
+          <Text className="text-lg font-semibold text-white" style={{ marginEnd: 4 }}>
             ERPGulf.com
           </Text>
           <Ionicons name="open-outline" size={16} color="#fff" />

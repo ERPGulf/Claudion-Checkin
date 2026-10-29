@@ -1,3 +1,4 @@
+import { translateMessage, t, useTranslation } from '../localization';
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, Platform, ToastAndroid } from 'react-native';
 import { useMutation } from '@tanstack/react-query';
@@ -61,6 +62,7 @@ export { PAGE_SIZE } from './useRequestHistory';
  * predicates `handleSubmit` checks and gate nothing.
  */
 export default function useLoanApplication() {
+  useTranslation();
   const [productName, setProductName] = useState('');
   const [amount, setAmount] = useState('');
   const [repaymentAmount, setRepaymentAmount] = useState('');
@@ -79,8 +81,8 @@ export default function useLoanApplication() {
     useAttachmentPicker('loan_application');
 
   const showToast = useCallback(msg => {
-    if (Platform.OS === 'android') ToastAndroid.show(msg, ToastAndroid.SHORT);
-    else Alert.alert('Notice', msg);
+    if (Platform.OS === 'android') ToastAndroid.show(translateMessage(msg), ToastAndroid.SHORT);
+    else Alert.alert(t("Notice"), translateMessage(msg));
   }, []);
 
   const resetForm = useCallback(() => {
@@ -109,7 +111,7 @@ export default function useLoanApplication() {
         // picker empty rather than crashing the screen on `.map()`.
         setLoanProducts(Array.isArray(response) ? response : []);
       } catch {
-        showToast('Unable to load loan products.');
+        showToast(t("Unable to load loan products."));
       } finally {
         setLoadingProducts(false);
       }
@@ -248,9 +250,9 @@ export default function useLoanApplication() {
       resetPagination();
 
       hapticsMessage('success');
-      Alert.alert('Success', 'Loan application submitted successfully.', [
+      Alert.alert(t("Success"), t("Loan application submitted successfully."), [
         {
-          text: 'OK',
+          text: t("OK"),
           onPress: resetForm,
         },
       ]);
@@ -258,7 +260,7 @@ export default function useLoanApplication() {
 
     onError: err => {
       hapticsMessage('error');
-      Alert.alert('Error', err.message || 'Failed to submit loan application.');
+      Alert.alert(t("Error"), translateMessage(err.message || t("Failed to submit loan application.")));
     },
   });
 
@@ -267,35 +269,35 @@ export default function useLoanApplication() {
     const repaymentAmountValue = Number(repaymentAmount);
 
     if (!productName.trim()) {
-      return showToast('Please select loan product.');
+      return showToast(t("Please select loan product."));
     }
 
     if (!amount.trim()) {
-      return showToast('Please enter amount.');
+      return showToast(t("Please enter amount."));
     }
 
     if (Number.isNaN(amountValue) || amountValue <= 0) {
-      return showToast('Please enter a valid amount.');
+      return showToast(t("Please enter a valid amount."));
     }
 
     if (!repaymentAmount.trim()) {
-      return showToast('Please enter repayment amount.');
+      return showToast(t("Please enter repayment amount."));
     }
 
     if (Number.isNaN(repaymentAmountValue) || repaymentAmountValue <= 0) {
-      return showToast('Please enter a valid repayment amount.');
+      return showToast(t("Please enter a valid repayment amount."));
     }
 
     if (!repaymentMethod) {
-      return showToast('Please select repayment method.');
+      return showToast(t("Please select repayment method."));
     }
 
     if (!reason.trim()) {
-      return showToast('Please enter the reason.');
+      return showToast(t("Please enter the reason."));
     }
 
     if (!file1) {
-      return showToast('Please upload File 1.');
+      return showToast(t("Please upload File 1."));
     }
 
     const payload = {

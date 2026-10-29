@@ -1,14 +1,8 @@
+import { translateMessage, t, useTranslation } from '../../localization';
 import React, { useState, useEffect } from "react";
-import {
-  ScrollView,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  Platform,
-  ToastAndroid,
-  Alert,
-  View,
-} from "react-native";
+import { ScrollView, TouchableOpacity, Platform, ToastAndroid, Alert, View } from 'react-native';
+import TextInput from '../../localization/LocalizedTextInput';
+import Text from '../../localization/LocalizedText';
 import * as DocumentPicker from "expo-document-picker";
 import { Ionicons } from "@expo/vector-icons";
 import PropTypes from "prop-types";
@@ -22,6 +16,7 @@ import AttachmentBottomSheet from "../attachment/AttachmentBottomSheet";
 import { useAttachmentPicker } from "../../hooks/useAttachmentPicker";
 
 function LoanApplicationForm({ onSubmit, isLoading, resetSignal }) {
+  useTranslation();
   const [productName, setProductName] = useState("");
   const [amount, setAmount] = useState("");
   const [repaymentAmount, setRepaymentAmount] = useState("");
@@ -62,7 +57,7 @@ function LoanApplicationForm({ onSubmit, isLoading, resetSignal }) {
       setLoanProducts(Array.isArray(response) ? response : []);
     } catch (error) {
       console.log("Loan Products Error:", error);
-      showToast("Unable to load loan products.");
+      showToast(t("Unable to load loan products."));
     } finally {
       setLoadingProducts(false);
     }
@@ -70,9 +65,9 @@ function LoanApplicationForm({ onSubmit, isLoading, resetSignal }) {
 
   const showToast = (msg) => {
     if (Platform.OS === "android") {
-      ToastAndroid.show(msg, ToastAndroid.SHORT);
+      ToastAndroid.show(translateMessage(msg), ToastAndroid.SHORT);
     } else {
-      Alert.alert("Notice", msg);
+      Alert.alert(t("Notice"), translateMessage(msg));
     }
   };
 
@@ -128,35 +123,35 @@ function LoanApplicationForm({ onSubmit, isLoading, resetSignal }) {
     const repaymentAmountValue = Number(repaymentAmount);
 
     if (!productName.trim()) {
-      return showToast("Please select loan product.");
+      return showToast(t("Please select loan product."));
     }
 
     if (!amount.trim()) {
-      return showToast("Please enter amount.");
+      return showToast(t("Please enter amount."));
     }
 
     if (isNaN(amountValue) || amountValue <= 0) {
-      return showToast("Please enter a valid amount.");
+      return showToast(t("Please enter a valid amount."));
     }
 
     if (!repaymentAmount.trim()) {
-      return showToast("Please enter repayment amount.");
+      return showToast(t("Please enter repayment amount."));
     }
 
     if (isNaN(repaymentAmountValue) || repaymentAmountValue <= 0) {
-      return showToast("Please enter a valid repayment amount.");
+      return showToast(t("Please enter a valid repayment amount."));
     }
 
     if (!repaymentMethod) {
-      return showToast("Please select repayment method.");
+      return showToast(t("Please select repayment method."));
     }
 
     if (!reason.trim()) {
-      return showToast("Please enter the reason.");
+      return showToast(t("Please enter the reason."));
     }
 
     if (!file1) {
-      return showToast("Please upload File 1.");
+      return showToast(t("Please upload File 1."));
     }
 
     const payload = {
@@ -173,7 +168,7 @@ function LoanApplicationForm({ onSubmit, isLoading, resetSignal }) {
       await onSubmit?.(payload);
     } catch (error) {
       console.log(error);
-      showToast("Failed to submit loan application.");
+      showToast(t("Failed to submit loan application."));
     }
   };
 
@@ -183,13 +178,11 @@ function LoanApplicationForm({ onSubmit, isLoading, resetSignal }) {
         className="bg-white p-4 rounded-lg shadow"
         keyboardShouldPersistTaps="handled"
       >
-        <Text className="text-xl font-semibold mb-4 text-gray-800">
-          Loan Application
-        </Text>
+        <Text className="text-xl font-semibold mb-4 text-gray-800">{t("Loan Application")}</Text>
 
         {/* Loan Product */}
 
-        <Label text="Loan Product" required />
+        <Label text={t("Loan Product")} required />
 
         <View
           style={{
@@ -209,7 +202,7 @@ function LoanApplicationForm({ onSubmit, isLoading, resetSignal }) {
               color: "#111827",
             }}
           >
-            <Picker.Item label="Select Loan Product" value="" />
+            <Picker.Item label={t("Select Loan Product")} value="" />
 
             {loanProducts.map((item) => (
               <Picker.Item
@@ -222,10 +215,10 @@ function LoanApplicationForm({ onSubmit, isLoading, resetSignal }) {
         </View>
 
         {/* Loan Amount */}
-        <Label text="Loan Amount" required />
+        <Label text={t("Loan Amount")} required />
 
         <TextInput
-          placeholder="Enter amount"
+          placeholder={t("Enter amount")}
           placeholderTextColor="#6B7280"
           value={amount}
           onChangeText={setAmount}
@@ -233,10 +226,10 @@ function LoanApplicationForm({ onSubmit, isLoading, resetSignal }) {
           className="border border-gray-300 rounded p-2 mb-3 bg-gray-50 text-gray-900"
         />
         {/* Repayment Amount */}
-        <Label text="Repayment Amount (per month)" required />
+        <Label text={t("Repayment Amount (per month)")} required />
 
         <TextInput
-          placeholder="Enter repayment amount"
+          placeholder={t("Enter repayment amount")}
           placeholderTextColor="#6B7280"
           value={repaymentAmount}
           onChangeText={setRepaymentAmount}
@@ -245,7 +238,7 @@ function LoanApplicationForm({ onSubmit, isLoading, resetSignal }) {
         />
 
         {/* Repayment Method */}
-        <Label text="Repayment Method" required />
+        <Label text={t("Repayment Method")} required />
 
         <View
           style={{
@@ -265,19 +258,19 @@ function LoanApplicationForm({ onSubmit, isLoading, resetSignal }) {
               color: "#111827",
             }}
           >
-            <Picker.Item label="Select Repayment Method" value="" />
+            <Picker.Item label={t("Select Repayment Method")} value="" />
 
             {LOAN_REPAYMENT_METHODS.map((method) => (
-              <Picker.Item key={method} label={method} value={method} />
+              <Picker.Item key={method} label={translateMessage(method)} value={method} />
             ))}
           </Picker>
         </View>
 
         {/* Reason */}
-        <Label text="Reason" required />
+        <Label text={t("Reason")} required />
 
         <TextInput
-          placeholder="Enter reason"
+          placeholder={t("Enter reason")}
           placeholderTextColor="#6B7280"
           value={reason}
           onChangeText={setReason}
@@ -293,7 +286,7 @@ function LoanApplicationForm({ onSubmit, isLoading, resetSignal }) {
           file={file1}
           onPick={() => openAttachmentPicker("file1")}
           onRemove={() => setFile1(null)}
-          label="Attachment 1"
+          label={t("Attachment 1")}
         />
 
         {/* Attachment 2 */}
@@ -301,11 +294,11 @@ function LoanApplicationForm({ onSubmit, isLoading, resetSignal }) {
           file={file2}
           onPick={() => openAttachmentPicker("file2")}
           onRemove={() => setFile2(null)}
-          label="Attachment 2"
+          label={t("Attachment 2")}
         />
 
         <SubmitButton
-          title="Submit Application"
+          title={t("Submit Application")}
           loading={isLoading}
           onPress={handleSubmit}
         />
@@ -323,12 +316,15 @@ function LoanApplicationForm({ onSubmit, isLoading, resetSignal }) {
 }
 export default LoanApplicationForm;
 
-const Label = ({ text, required, optional }) => (
+const Label = ({ text, required, optional }) => {
+  useTranslation();
+  return (
   <Text className="text-gray-700 mb-1">
     {text} {required && <Text className="text-red-500">*</Text>}
-    {optional && <Text className="text-gray-400">(Optional)</Text>}
+    {optional && <Text className="text-gray-400">{t("(Optional)")}</Text>}
   </Text>
-);
+  );
+};
 
 Label.propTypes = {
   text: PropTypes.string.isRequired,

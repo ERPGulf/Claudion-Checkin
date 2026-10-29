@@ -1,10 +1,9 @@
 /**
  * Text-direction helpers.
  *
- * The app has no i18n layer, but user-supplied strings (employee names,
- * shortcut titles coming from Frappe) are frequently Arabic. These helpers
- * let a single <Text> align itself to the script it actually contains,
- * independently of the app's layout direction.
+ * User-supplied strings (employee names, shortcut titles from Frappe) can use
+ * a different script from the app locale. These helpers return physical text
+ * alignment; LocalizedText converts it to RN's logical alignment at render.
  */
 
 // Hebrew, Arabic, Syriac, Thaana, NKo + Arabic Presentation Forms A/B.

@@ -1,5 +1,7 @@
+import Text from '../../localization/LocalizedText';
+import { useTranslation, getLanguage } from "../../localization";
 import React from 'react';
-import { I18nManager, Text, View } from 'react-native';
+import { View } from 'react-native';
 import { SPACING, TYPO } from '../../constants';
 import useAppTheme from '../../hooks/useAppTheme';
 import ActionButton from '../common/ActionButton';
@@ -9,6 +11,7 @@ import { useMobileLoginFlow } from './MobileLoginContext';
 import { mobileLoginCopy } from './mobileLoginCopy';
 
 export default function OtpStep() {
+  useTranslation();
   const { login } = useMobileLoginFlow();
   const { colors } = useAppTheme();
   const busy = login.isLoading || login.isHydrating;
@@ -43,9 +46,9 @@ export default function OtpStep() {
           disabled={busy}
           returnKeyType="done"
           onSubmitEditing={submit}
-          align={I18nManager.isRTL ? 'right' : 'left'}
+          align="left"
         />
-        {!!passwordFollows && <Text style={{ ...TYPO.caption, color: colors.textMuted, textAlign: I18nManager.isRTL ? 'right' : 'left' }}>{mobileLoginCopy(login.passwordMode ? 'recoveryOtpHint' : 'signupOtpHint')}</Text>}
+        {!!passwordFollows && <Text style={{ ...TYPO.caption, color: colors.textMuted, textAlign: getLanguage() === 'ar' ? 'right' : 'left' }}>{mobileLoginCopy(login.passwordMode ? 'recoveryOtpHint' : 'signupOtpHint')}</Text>}
         <TextAction
           label={mobileLoginCopy(login.resendSeconds > 0 ? 'resendSeconds' : 'resendCode', login.resendSeconds)}
           disabled={resendDisabled}

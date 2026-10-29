@@ -1,5 +1,8 @@
+import { translateMessage, t, useTranslation } from '../../localization';
+import { formatExpenseDate, formatExpenseAmount } from '../../utils/expenseClaims';
 import React from "react";
-import { View, Text } from "react-native";
+import { View } from 'react-native';
+import Text from '../../localization/LocalizedText';
 import Ionicons from "@expo/vector-icons/Ionicons";
 import PropTypes from "prop-types";
 import { COLORS } from "../../constants";
@@ -14,25 +17,10 @@ import { COLORS } from "../../constants";
  */
 
 export default function LoanApplicationCard({ loan }) {
-  const formatDate = (date) => {
-    if (!date) return "-";
+  useTranslation();
+  const formatDate = formatExpenseDate;
 
-    const parsedDate = new Date(date);
-
-    if (isNaN(parsedDate.getTime())) {
-      return date;
-    }
-
-    return parsedDate.toLocaleDateString("en-GB");
-  };
-
-  const formatAmount = (amount) => {
-    if (amount === null || amount === undefined) {
-      return "-";
-    }
-
-    return Number(amount).toLocaleString();
-  };
+  const formatAmount = formatExpenseAmount;
 
   return (
     <View
@@ -55,10 +43,10 @@ export default function LoanApplicationCard({ loan }) {
       <View className="flex-row justify-between items-center mb-3">
         <View className="flex-row items-center flex-1">
           <View
-            className="w-10 h-10 rounded-full items-center justify-center mr-3"
-            style={{
+            className="w-10 h-10 rounded-full items-center justify-center"
+            style={[{
               backgroundColor: "#F3F0FF",
-            }}
+            }, { marginEnd: 12 }]}
           >
             <Ionicons
               name="cash-outline"
@@ -72,7 +60,7 @@ export default function LoanApplicationCard({ loan }) {
               className="text-base font-semibold text-gray-800"
               numberOfLines={1}
             >
-              {loan?.name || "Loan Application"}
+              {loan?.name || t("Loan Application")}
             </Text>
 
             <Text className="text-xs text-gray-500 mt-1">
@@ -101,7 +89,7 @@ export default function LoanApplicationCard({ loan }) {
                   : "#4B5563",
             }}
           >
-            {loan?.status || "-"}
+            {loan?.status ? translateMessage(loan.status) : "-"}
           </Text>
         </View>
       </View>
@@ -109,9 +97,7 @@ export default function LoanApplicationCard({ loan }) {
       {/* Amount */}
 
       <View className="flex-row justify-between py-2 border-b border-gray-100">
-        <Text className="text-sm text-gray-500">
-          Loan Amount
-        </Text>
+        <Text className="text-sm text-gray-500">{t("Loan Amount")}</Text>
 
         <Text className="text-sm font-semibold text-gray-800">
           {formatAmount(loan?.loan_amount)}
@@ -121,9 +107,7 @@ export default function LoanApplicationCard({ loan }) {
       {/* Loan Product */}
 
       <View className="flex-row justify-between py-2 border-b border-gray-100">
-        <Text className="text-sm text-gray-500">
-          Loan Product
-        </Text>
+        <Text className="text-sm text-gray-500">{t("Loan Product")}</Text>
 
         <Text className="text-sm font-medium text-gray-800">
           {loan?.loan_product || "-"}
@@ -133,24 +117,20 @@ export default function LoanApplicationCard({ loan }) {
       {/* Repayment Method */}
 
       <View className="py-2 border-b border-gray-100">
-        <Text className="text-sm text-gray-500">
-          Repayment Method
-        </Text>
+        <Text className="text-sm text-gray-500">{t("Repayment Method")}</Text>
 
         <Text
           className="text-sm font-medium text-gray-800 mt-1"
           numberOfLines={2}
         >
-          {loan?.repayment_method || "-"}
+          {loan?.repayment_method ? translateMessage(loan.repayment_method) : "-"}
         </Text>
       </View>
 
       {/* Repayment Amount */}
 
       <View className="flex-row justify-between py-2 border-b border-gray-100">
-        <Text className="text-sm text-gray-500">
-          Repayment Amount
-        </Text>
+        <Text className="text-sm text-gray-500">{t("Repayment Amount")}</Text>
 
         <Text className="text-sm font-semibold text-gray-800">
           {formatAmount(loan?.repayment_amount)}
@@ -160,9 +140,7 @@ export default function LoanApplicationCard({ loan }) {
       {/* Reason */}
 
       <View className="pt-2">
-        <Text className="text-sm text-gray-500">
-          Reason
-        </Text>
+        <Text className="text-sm text-gray-500">{t("Reason")}</Text>
 
         <Text
           className="text-sm text-gray-700 mt-1"

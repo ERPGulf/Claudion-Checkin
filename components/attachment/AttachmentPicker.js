@@ -1,17 +1,18 @@
+import { t, useTranslation } from '../../localization';
 import React from "react";
-import { View, Text, TouchableOpacity, Image } from "react-native";
+import { View, TouchableOpacity, Image } from 'react-native';
+import Text from '../../localization/LocalizedText';
 
 export default function AttachmentPicker({
   file,
   onPick,
   onRemove,
-  label = "Attach file (optional)",
+  label = t("Attach file (optional)"),
 }) {
+  useTranslation();
   return (
     <View className="mb-3">
-      <Text className="text-sm font-medium text-gray-700 mb-1">
-        Attachment (optional)
-      </Text>
+      <Text className="text-sm font-medium text-gray-700 mb-1">{t("Attachment (optional)")}</Text>
 
       <TouchableOpacity
         onPress={onPick}
@@ -26,7 +27,7 @@ export default function AttachmentPicker({
             file ? "text-green-700 font-semibold" : "text-gray-700"
           }`}
         >
-          {file ? `Attached: ${file.name} ✅` : label}
+          {file ? t("Attached: {{name}} ✅", { name: file.name }) : label}
         </Text>
       </TouchableOpacity>
 
@@ -46,9 +47,11 @@ export default function AttachmentPicker({
 
           <TouchableOpacity
             onPress={onRemove}
-            className="absolute top-2 right-2 bg-red-500 p-1 rounded-full"
-          >
-            <Text className="text-white text-sm font-semibold">X</Text>
+            accessibilityRole="button"
+            accessibilityLabel={t("Remove attachment")}
+            className="absolute top-2 bg-red-500 p-1 rounded-full"
+           style={{ end: 8 }}>
+            <Text className="text-white text-sm font-semibold">×</Text>
           </TouchableOpacity>
         </View>
       )}

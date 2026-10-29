@@ -1,3 +1,4 @@
+import { t, useTranslation } from "../localization";
 import { View, ScrollView } from 'react-native';
 import React from 'react';
 import { useDispatch, useSelector } from 'react-redux';
@@ -14,6 +15,7 @@ import {
 } from '../redux/Slices/QuickAccessSlice';
 import {
   QUICK_ACCESS_OPTIONS,
+  quickAccessLabel,
   availableQuickAccessOptions,
 } from '../utils/quickAccess';
 import { selectFeatureSettings } from '../redux/Slices/FeatureSettingsSlice';
@@ -25,8 +27,9 @@ const COLUMNS = 3;
 export { QUICK_ACCESS_OPTIONS };
 
 function SelectQuickAccess() {
+  useTranslation();
   const { colors } = useAppTheme();
-  useModernScreenHeader('Quick Access');
+  useModernScreenHeader(t("Quick Access"));
 
   const activeButtons = useSelector(activeButtonsSelector);
   const dispatch = useDispatch();
@@ -58,8 +61,8 @@ function SelectQuickAccess() {
         }}
       >
         <SectionHeader
-          title="Available shortcuts"
-          subtitle={`${pinnedCount} of ${options.length} pinned to your Home screen`}
+          title={t("Available shortcuts")}
+          subtitle={t('{{count}} of {{total}} pinned to your Home screen', { count: pinnedCount, total: options.length })}
         />
 
         <Card style={{ paddingHorizontal: SPACING.md, paddingTop: SPACING.lg, paddingBottom: SPACING.xs }}>
@@ -73,7 +76,7 @@ function SelectQuickAccess() {
                 <FeatureTile
                   key={item.iconName}
                   icon={item.iconName}
-                  label={[item.text1, item.text2]}
+                  label={quickAccessLabel(item)}
                   columns={COLUMNS}
                   selected={isPinned}
                   emphasis={isPinned}
@@ -82,7 +85,7 @@ function SelectQuickAccess() {
                   onPress={() => handleClick(item)}
                   accessibilityRole="checkbox"
                   accessibilityState={{ checked: isPinned }}
-                  accessibilityLabel={`${item.text1} ${item.text2 || ''}`.trim()}
+                  accessibilityLabel={quickAccessLabel(item)}
                 />
               );
             })}

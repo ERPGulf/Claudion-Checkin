@@ -1,7 +1,7 @@
+import { t, useTranslation } from '../../localization';
 /* eslint-disable react/prop-types */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  Animated,
+import { Animated,
   Easing,
   Keyboard,
   KeyboardAvoidingView,
@@ -9,10 +9,9 @@ import {
   PanResponder,
   Platform,
   Pressable,
-  Text,
   View,
-  useWindowDimensions,
-} from 'react-native';
+  useWindowDimensions } from 'react-native';
+import Text from '../../localization/LocalizedText';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ICON, RADIUS, SHADOWS, SPACING, TYPO } from '../../constants';
@@ -59,10 +58,11 @@ function BottomSheet({
   onClose,
   title,
   subtitle,
-  closeLabel = 'Close',
+  closeLabel = t("Close"),
   maxHeightRatio = 0.75,
   children,
 }) {
+  const { isRTL, direction } = useTranslation();
   const { colors, isDark } = useAppTheme();
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
@@ -207,7 +207,7 @@ function BottomSheet({
       >
         <Pressable
           onPress={onClose}
-          accessibilityLabel={`${closeLabel} ${title}`}
+          accessibilityLabel={t("Close {{title}}", { title: title || '' })}
           style={{ flex: 1 }}
         />
       </Animated.View>
@@ -220,6 +220,7 @@ function BottomSheet({
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         pointerEvents="box-none"
         style={{
+          direction,
           position: 'absolute',
           top: 0,
           left: 0,
@@ -258,7 +259,7 @@ function BottomSheet({
             <View {...panResponder.panHandlers}>
               <View
                 accessible
-                accessibilityLabel="Swipe down to dismiss"
+                accessibilityLabel={t("Swipe down to dismiss")}
                 style={{
                   alignSelf: 'center',
                   width: 36,

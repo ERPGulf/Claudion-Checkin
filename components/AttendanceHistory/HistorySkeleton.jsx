@@ -1,3 +1,4 @@
+import { t, useTranslation } from '../../localization';
 /* eslint-disable react/prop-types */
 import React from 'react';
 import { Animated, View } from 'react-native';
@@ -15,6 +16,7 @@ import { useSkeletonPulse } from '../common/Skeleton';
  * preference with the other loading placeholders.
  */
 function SkeletonRow({ isFirst, isLast, opacity, colors }) {
+  const { language, direction, isRTL } = useTranslation();
   return (
     <View
       style={{
@@ -80,13 +82,14 @@ function SkeletonRow({ isFirst, isLast, opacity, colors }) {
 }
 
 function HistorySkeleton({ groups = 2, rowsPerGroup = 3 }) {
+  const { language, direction, isRTL } = useTranslation();
   const { colors } = useAppTheme();
   const opacity = useSkeletonPulse();
 
   return (
     <View
       accessible
-      accessibilityLabel="Loading attendance history"
+      accessibilityLabel={t("Loading attendance history")}
       style={{ paddingHorizontal: SPACING.lg }}
     >
       {Array.from({ length: groups }).map((_, groupIndex) => (

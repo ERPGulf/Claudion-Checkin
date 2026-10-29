@@ -1,6 +1,8 @@
+import { useTranslation } from '../../localization';
 /* eslint-disable react/prop-types */
 import React from 'react';
-import { View, Text } from 'react-native';
+import { View } from 'react-native';
+import Text from '../../localization/LocalizedText';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { ICON, RADIUS, SPACING, TYPO } from '../../constants';
 import useAppTheme from '../../hooks/useAppTheme';
@@ -61,6 +63,7 @@ function SettingsRow({
   accessibilityLabel,
   size = 'default',
 }) {
+  const { isRTL } = useTranslation();
   const { colors } = useAppTheme();
   const IconSet = FAMILIES[iconFamily] || Ionicons;
   const { chip, gap, padV } = rowMetrics(size);
@@ -149,7 +152,7 @@ function SettingsRow({
               // body copy. Spelling it out again here would be dead code.
               ...TYPO.subhead,
               color: colors.textMuted,
-              textAlign: 'right',
+              textAlign: isRTL ? 'left' : 'right',
               flexShrink: 1,
               maxWidth: '46%',
               ...centredText,
@@ -161,7 +164,7 @@ function SettingsRow({
 
       {!!onPress && !children && (
         <Ionicons
-          name="chevron-forward"
+          name={isRTL ? 'chevron-back' : 'chevron-forward'}
           size={ICON.md}
           color={colors.textMuted}
           style={{ marginStart: SPACING.xs }}

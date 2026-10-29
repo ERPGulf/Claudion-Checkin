@@ -1,3 +1,4 @@
+import { translateMessage, t, useTranslation } from '../localization';
 import { useCallback, useRef, useState } from 'react';
 import { Alert, Platform } from 'react-native';
 import { useRoute } from '@react-navigation/native';
@@ -75,6 +76,7 @@ export function formatTime(date) {
  * Alerts on both screens, so the classic screen's behaviour is unchanged.
  */
 export default function useAttendanceRequest() {
+  useTranslation();
   const actionGeneration = useRef(getAuthSessionGeneration()).current;
   const employeeCode = useSelector(selectEmployeeCode);
 
@@ -250,22 +252,22 @@ export default function useAttendanceRequest() {
   const handleSubmit = useCallback(async () => {
     try {
       if (!employeeCode) {
-        Alert.alert('Error', 'Employee not found');
+        Alert.alert(t("Error"), t("Employee not found"));
         return;
       }
 
       if (toDate < fromDate) {
-        Alert.alert('Invalid Date', 'To date cannot be before From date.');
+        Alert.alert(t("Invalid Date"), t("To date cannot be before From date."));
         return;
       }
 
       if (timeRangeInvalid(fromDate, toDate, fromTime, toTime)) {
-        Alert.alert('Invalid Time', 'To time must be after From time.');
+        Alert.alert(t("Invalid Time"), t("To time must be after From time."));
         return;
       }
 
       if (!selectedReason) {
-        Alert.alert('Missing Field', 'Please select a reason.');
+        Alert.alert(t("Missing Field"), t("Please select a reason."));
         return;
       }
 
@@ -285,7 +287,7 @@ export default function useAttendanceRequest() {
 
       if (!res.success) {
         hapticsMessage('error');
-        Alert.alert('Error', res.message);
+        Alert.alert(t("Error"), translateMessage(res.message));
         return;
       }
 
@@ -297,8 +299,8 @@ export default function useAttendanceRequest() {
 
         if (uploadRes?.error) {
           Alert.alert(
-            'Warning',
-            'Request created, but attachment upload failed.',
+            t("Warning"),
+            t("Request created, but attachment upload failed."),
           );
         }
       }
@@ -326,7 +328,7 @@ export default function useAttendanceRequest() {
       resetHistoryPage();
 
       hapticsMessage('success');
-      Alert.alert('Success', 'Attendance request submitted!');
+      Alert.alert(t("Success"), t("Attendance request submitted!"));
 
       // Reset
       setAttachment(null);
@@ -337,7 +339,7 @@ export default function useAttendanceRequest() {
       setToTime(new Date());
     } catch (error) {
       hapticsMessage('error');
-      Alert.alert('Error', 'Something went wrong');
+      Alert.alert(t("Error"), t("Something went wrong"));
     } finally {
       setLoading(false);
     }

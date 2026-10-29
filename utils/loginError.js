@@ -1,3 +1,4 @@
+import { t } from "../localization";
 // utils/loginError.js
 //
 // Maps a login failure into a specific, user-actionable message so support can
@@ -34,8 +35,8 @@ export const getLoginErrorMessage = (error) => {
   // 1. Missing / invalid provisioning (no baseUrl, or stale / bad QR data).
   if (SETUP_ERROR_PATTERN.test(message)) {
     return {
-      text1: "Setup expired",
-      text2: 'Please tap "Rescan QR Code" and try again.',
+      text1: t("Setup expired"),
+      text2: t("Please tap \"Rescan QR Code\" and try again."),
     };
   }
 
@@ -45,9 +46,9 @@ export const getLoginErrorMessage = (error) => {
   //    check-your-connection loop.
   if (INCOMPLETE_CREDENTIALS_PATTERN.test(message)) {
     return {
-      text1: "Sign-in incomplete",
+      text1: t("Sign-in incomplete"),
       text2:
-        "The server didn't issue the credentials this app needs. Please contact your administrator.",
+        t("The server didn't issue the credentials this app needs. Please contact your administrator."),
     };
   }
 
@@ -57,27 +58,24 @@ export const getLoginErrorMessage = (error) => {
   const hasResponse = Boolean(error?.response);
   if (!hasResponse || NO_RESPONSE_CODES.has(code) || message === "Network Error") {
     return {
-      text1: "Can't reach the server",
-      text2: "Check your internet and the phone's date & time, then try again.",
+      text1: t("Can't reach the server"),
+      text2: t("Check your internet and the phone's date & time, then try again."),
     };
   }
 
   // 4. Server rejected the credentials.
   if (status === 401) {
     return {
-      text1: "Incorrect password",
-      text2: "Please check your password and try again.",
+      text1: t("Incorrect password"),
+      text2: t("Please check your password and try again."),
     };
   }
 
-  // 5. Any other server-side error → surface the server's own message if any.
-  const serverMessage =
-    error?.response?.data?.message || error?.response?.data?.exception || null;
-
+  // Other server errors use app-owned copy; backend exceptions are not display text.
   return {
-    text1: "Login failed",
+    text1: t("Login failed"),
     text2:
-      serverMessage || `Something went wrong${status ? ` (error ${status})` : ""}.`,
+      status ? t("Something went wrong (error {{status}}). Please try again or contact your administrator.", { status }) : t("Something went wrong. Please try again or contact your administrator."),
   };
 };
 

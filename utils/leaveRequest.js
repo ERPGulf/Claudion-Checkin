@@ -1,3 +1,5 @@
+import { t } from '../localization';
+
 /**
  * Presentation helpers for the Leave Application form.
  *
@@ -69,5 +71,5 @@ export function countLeaveDays(fromDate, toDate) {
 /** "1 day" / "3 days". */
 export function formatLeaveDuration(days) {
   if (days === null || days === undefined) return null;
-  return `${days} ${days === 1 ? 'day' : 'days'}`;
+  return t('{{count}} day', { count: days });
 }

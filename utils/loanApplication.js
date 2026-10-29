@@ -1,3 +1,4 @@
+import { t, formatList } from '../localization';
 import { formatExpenseAmount, formatExpenseDate } from './expenseClaims';
 import { describeRecordStatus } from './records';
 
@@ -59,26 +60,21 @@ export function describeMissingLoanFields({
   file1Missing,
 }) {
   const parts = [
-    productMissing ? 'a loan product' : null,
-    amountMissing ? 'an amount' : amountInvalid ? 'a valid amount' : null,
+    productMissing ? t("a loan product") : null,
+    amountMissing ? t("an amount") : amountInvalid ? t("a valid amount") : null,
     repaymentAmountMissing
-      ? 'a repayment amount'
+      ? t("a repayment amount")
       : repaymentAmountInvalid
-        ? 'a valid repayment amount'
+        ? t("a valid repayment amount")
         : null,
-    repaymentMethodMissing ? 'a repayment method' : null,
-    reasonMissing ? 'a reason' : null,
-    file1Missing ? 'Attachment 1' : null,
+    repaymentMethodMissing ? t("a repayment method") : null,
+    reasonMissing ? t("a reason") : null,
+    file1Missing ? t("Attachment 1") : null,
   ].filter(Boolean);
 
   if (!parts.length) return null;
 
-  const list =
-    parts.length === 1
-      ? parts[0]
-      : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
-
-  return `Add ${list}.`;
+  return t('Add {{fields}}.', { fields: formatList(parts) });
 }
 
 /* -------------------------------------------------------------------------
@@ -104,7 +100,7 @@ export const describeLoanStatus = describeRecordStatus;
  */
 export function describeLoanForA11y(loan) {
   const parts = [
-    loan?.loan_product || 'Loan application',
+    loan?.loan_product || t("Loan application"),
     formatExpenseAmount(loan?.loan_amount),
     formatExpenseDate(loan?.posting_date),
     describeLoanStatus(loan?.status).label,

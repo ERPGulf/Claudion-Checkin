@@ -1,5 +1,6 @@
+import { t, useTranslation } from "../localization";
 import { useEffect, useRef, useState } from 'react';
-import { I18nManager } from 'react-native';
+
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useDispatch } from 'react-redux';
 import { isAuthError } from '@erpgulf/auth-sdk';
@@ -21,7 +22,6 @@ import { isMobileAuthAvailable } from '../utils/mobileAuthCrypto';
 import { MOBILE_AUTH_STEPS as STEPS, initialMobileAuthStep, signupPasswordStep } from '../utils/mobileAuthFlow';
 import { logMobileAuthDebug } from '../utils/mobileAuthDebug';
 
-const copy = (english, arabic) => I18nManager.isRTL ? arabic : english;
 
 // Client-side resend cooldown, independent of the code's own lifetime (often
 // minutes); a code that expires sooner may be resent as soon as it does.
@@ -34,24 +34,24 @@ const passwordChangeUnconfirmed = error =>
 
 /** Rules for a password the employee is choosing, never for one they already have. */
 function newPasswordError(value, confirmation) {
-  if (!value.trim()) return copy("Password can't be only spaces.", 'لا يمكن أن تتكوّن كلمة المرور من مسافات فقط.');
-  if (value.length < MIN_PASSWORD_LENGTH) return copy('Password must be at least 8 characters.', 'يجب أن تتكوّن كلمة المرور من 8 أحرف على الأقل.');
-  if (value !== confirmation) return copy('Passwords do not match.', 'كلمتا المرور غير متطابقتين.');
+  if (!value.trim()) return "Password can't be only spaces.";
+  if (value.length < MIN_PASSWORD_LENGTH) return "Password must be at least 8 characters.";
+  if (value !== confirmation) return "Passwords do not match.";
   return '';
 }
 
 function lookupErrorCopy(error) {
   if (error instanceof ServerLookupConfigurationError) {
-    return copy('Setup is not configured correctly in this app. Please contact support.', 'خدمة الإعداد غير مهيّأة بشكل صحيح في هذا التطبيق. يُرجى التواصل مع الدعم.');
+    return "Setup is not configured correctly in this app. Please contact support.";
   }
   if (!(error instanceof ServerLookupError)) return null;
   switch (error.kind) {
     case 'notFound':
-      return copy("We couldn't find that company code. Check the code and try again.", 'لم نتمكّن من العثور على رمز الشركة. تحقّق من الرمز وحاول مرة أخرى.');
+      return "We couldn't find that company code. Check the code and try again.";
     case 'unavailable':
-      return copy("We couldn't connect to the setup service. Check your internet connection and try again.", 'تعذّر الاتصال بخدمة الإعداد. تحقّق من اتصالك بالإنترنت وحاول مرة أخرى.');
+      return "We couldn't connect to the setup service. Check your internet connection and try again.";
     default:
-      return copy('The setup service returned an invalid response. Please try again or contact support.', 'أعادت خدمة الإعداد استجابة غير صالحة. حاول مرة أخرى أو تواصل مع الدعم.');
+      return "The setup service returned an invalid response. Please try again or contact support.";
   }
 }
 
@@ -62,58 +62,59 @@ const MANUAL_SERVER_FAILURES = new Set(['NETWORK_ERROR', 'TIMEOUT', 'SERVER_ERRO
 function serverAddressIssueCopy(issue) {
   switch (issue) {
     case 'required':
-      return copy('Enter the server address.', 'أدخل عنوان الخادم.');
+      return "Enter the server address.";
     case 'insecure':
-      return copy('The server address must use https.', 'يجب أن يستخدم عنوان الخادم بروتوكول https.');
+      return "The server address must use https.";
     default:
-      return copy("That address doesn't look right. Check it and try again.", 'لا يبدو هذا العنوان صحيحًا. تحقّق منه وحاول مرة أخرى.');
+      return "That address doesn't look right. Check it and try again.";
   }
 }
 
 function authErrorCopy(error, phase) {
   if (phase === 'password' && error.code === 'INVALID_PASSWORD') {
-    return copy("That password can't be used. Try a different one.", 'لا يمكن استخدام كلمة المرور هذه. جرّب كلمة مرور أخرى.');
+    return "That password can't be used. Try a different one.";
   }
   if (phase === 'password' && error.code === 'AUTHENTICATION_FAILED') {
-    return copy("We couldn't change your password. Check the code and try again.", 'تعذّر تغيير كلمة المرور. تحقّق من الرمز وحاول مرة أخرى.');
+    return "We couldn't change your password. Check the code and try again.";
   }
   switch (error.code) {
     case 'INVALID_BASE_URL':
-      return copy('The setup service returned an invalid response. Please try again or contact support.', 'أعادت خدمة الإعداد استجابة غير صالحة. حاول مرة أخرى أو تواصل مع الدعم.');
+      return "The setup service returned an invalid response. Please try again or contact support.";
     case 'INVALID_OR_EXPIRED_OTP':
-      return copy('The OTP is invalid or expired. Check it or request a new code.', 'رمز التحقق غير صحيح أو منتهي الصلاحية. تحقّق منه أو اطلب رمزًا جديدًا.');
+      return "The OTP is invalid or expired. Check it or request a new code.";
     case 'INVALID_PASSWORD':
-      return copy('The password is incorrect. Please try again.', 'كلمة المرور غير صحيحة. يُرجى المحاولة مرة أخرى.');
+      return "The password is incorrect. Please try again.";
     case 'INVALID_MOBILE':
-      return copy('Enter your mobile number.', 'أدخل رقم هاتفك المحمول.');
+      return "Enter your mobile number.";
     case 'UNSUPPORTED_POLICY':
     case 'INVALID_RESPONSE':
-      return copy('Sign-in is not available for this account. Please contact support.', 'تسجيل الدخول غير متاح لهذا الحساب. يُرجى التواصل مع الدعم.');
+      return "Sign-in is not available for this account. Please contact support.";
     case 'INVALID_CLIENT_CONFIG':
     case 'MOBILE_AUTH_UNAVAILABLE':
-      return copy('Mobile sign-in is unavailable in this app build. Please update the app.', 'تسجيل الدخول برقم الهاتف غير متاح في هذا الإصدار. يُرجى تحديث التطبيق.');
+      return "Mobile sign-in is unavailable in this app build. Please update the app.";
     case 'MOBILE_IDENTITY_UNVERIFIED':
-      return copy('Your employee profile could not be verified. Please contact your administrator.', 'تعذّر التحقق من ملف الموظف. يُرجى التواصل مع مسؤول النظام.');
+      return "Your employee profile could not be verified. Please contact your administrator.";
     case 'MOBILE_POLICY_UNAVAILABLE':
-      return copy('Your attendance settings could not be loaded. Please contact your administrator.', 'تعذّر تحميل إعدادات الحضور. يُرجى التواصل مع مسؤول النظام.');
+      return "Your attendance settings could not be loaded. Please contact your administrator.";
     case 'MOBILE_SESSION_INCOMPLETE':
-      return copy('The sign-in service returned an incomplete session. Please contact support.', 'أعادت خدمة تسجيل الدخول جلسة غير مكتملة. يُرجى التواصل مع الدعم.');
+      return "The sign-in service returned an incomplete session. Please contact support.";
     case 'NETWORK_ERROR':
     case 'TIMEOUT':
       return error.retryable
-        ? copy('The server could not be reached. Check your connection and try again.', 'تعذّر الوصول إلى الخادم. تحقّق من اتصالك وحاول مرة أخرى.')
-        : copy('The request could not be confirmed. Check before submitting again; an OTP may already have been used.', 'تعذّر تأكيد الطلب. تحقّق قبل الإرسال مجددًا؛ ربما تم استخدام رمز التحقق.');
+        ? "The server could not be reached. Check your connection and try again."
+        : "The request could not be confirmed. Check before submitting again; an OTP may already have been used.";
     // The SDK's own service credential failed; nothing the employee entered.
     case 'MASTER_TOKEN_FAILED':
     case 'MASTER_TOKEN_REJECTED':
-      return copy('The sign-in service is unavailable right now. Please try again shortly.', 'خدمة تسجيل الدخول غير متاحة حاليًا. يُرجى المحاولة مرة أخرى بعد قليل.');
+      return "The sign-in service is unavailable right now. Please try again shortly.";
     default:
-      return copy('Sign-in was not successful. Check your details or contact support.', 'لم ينجح تسجيل الدخول. تحقّق من بياناتك أو تواصل مع الدعم.');
+      return "Sign-in was not successful. Check your details or contact support.";
   }
 }
 
 /** Company discovery and SDK forms remain separate from the established QR login. */
 export default function useMobileLogin() {
+  useTranslation();
   const dispatch = useDispatch();
   const [backendUrl, setBackendUrl] = useState('');
   const [companyCode, setCompanyCodeState] = useState('');
@@ -235,7 +236,7 @@ export default function useMobileLogin() {
     logMobileAuthDebug('operation.start', {
       operation: pending, step: stepRef.current, backendUrl, mobileNumber, flow, passwordMode,
       credentials: { password, otp, newPassword, confirmPassword }, otpSent, resendSeconds,
-    });
+                                                                           });
     try {
       const result = await task(pending);
       logMobileAuthDebug('operation.result', { operation: pending, current: isCurrent(pending), result });
@@ -244,7 +245,7 @@ export default function useMobileLogin() {
       logMobileAuthDebug('operation.failed', {
         operation: pending, step: stepRef.current, current: isCurrent(pending),
         backendUrl, mobileNumber, error: caught,
-      });
+                                });
       if (!isCurrent(pending)) return;
       const lookupCopy = lookupErrorCopy(caught);
       if (lookupCopy) {
@@ -259,7 +260,7 @@ export default function useMobileLogin() {
         });
         // The rejected credential is cleared so the next attempt starts clean.
         const message = pending.phase === 'manual' && MANUAL_SERVER_FAILURES.has(caught.code)
-          ? copy("We couldn't connect to that server. Check the address and try again.", 'تعذّر الاتصال بهذا الخادم. تحقّق من العنوان وحاول مرة أخرى.')
+          ? "We couldn't connect to that server. Check the address and try again."
           : authErrorCopy(caught, pending.phase);
         if (caught.code === 'INVALID_OR_EXPIRED_OTP' ||
           (caught.code === 'AUTHENTICATION_FAILED' && (flow?.action === 'SIGN_UP' || pending.phase === 'password'))) {
@@ -290,7 +291,7 @@ export default function useMobileLogin() {
         });
         setError(typeof caught?.code === 'string' && caught.code.startsWith('MOBILE_')
           ? authErrorCopy(caught, pending.phase)
-          : copy('The request could not be completed. Please try again or contact support.', 'تعذّر إكمال الطلب. يُرجى المحاولة مرة أخرى أو التواصل مع الدعم.'));
+          : "The request could not be completed. Please try again or contact support.");
       }
     } finally {
       if (isCurrent(pending)) {
@@ -341,7 +342,7 @@ export default function useMobileLogin() {
     setMobileNumberError('');
     const mobile = mobileNumber.trim();
     if (!mobile) {
-      setMobileNumberError(copy('Enter your mobile number.', 'أدخل رقم هاتفك المحمول.'));
+      setMobileNumberError("Enter your mobile number.");
       return;
     }
     const code = normalizeCompanyCode(companyCode);
@@ -361,8 +362,8 @@ export default function useMobileLogin() {
       const issue = validateCompanyCode(code);
       if (issue) {
         setCompanyCodeError(issue === 'required'
-          ? copy('Enter your company code.', 'أدخل رمز الشركة.')
-          : copy('That company code is too long. Check it and try again.', 'رمز الشركة طويل جدًا. تحقّق منه وحاول مرة أخرى.'));
+          ? "Enter your company code."
+          : "That company code is too long. Check it and try again.");
         return;
       }
     }
@@ -412,7 +413,7 @@ export default function useMobileLogin() {
 
   const validateOtp = () => {
     if (otp.trim()) return true;
-    const message = copy('Enter the OTP.', 'أدخل رمز التحقق.');
+    const message = "Enter the OTP.";
     setOtpError(message);
     setError(message);
     return false;
@@ -434,8 +435,8 @@ export default function useMobileLogin() {
       const requirement = flow.credentials[name].requirement;
       if (requirement === 'required' && !value.trim()) {
         const message = name === 'password'
-          ? copy('Enter your password.', 'أدخل كلمة المرور.')
-          : copy('Enter the OTP.', 'أدخل رمز التحقق.');
+          ? "Enter your password."
+          : "Enter the OTP.";
         setError(message);
         if (name === 'otp') { setOtpError(message); moveTo(STEPS.OTP); }
         else setPasswordError(message);
@@ -484,7 +485,7 @@ export default function useMobileLogin() {
   const savePassword = () => {
     if (!flow || !passwordMode || operation.current) return;
     if (!otp.trim() || !newPassword.trim()) {
-      setError(copy('Enter the OTP and your new password.', 'أدخل رمز التحقق وكلمة المرور الجديدة.'));
+      setError("Enter the OTP and your new password.");
       return;
     }
     const issue = newPasswordError(newPassword, confirmPassword);
@@ -509,7 +510,7 @@ export default function useMobileLogin() {
       const activeFlow = await auth.begin({ mobileNumber: flow.mobileNumber });
       await applyFlow(auth, activeFlow, pending);
       if (unconfirmed && isCurrent(pending)) {
-        setError(copy("We couldn't confirm whether your password changed. Continue with the sign-in below.", 'تعذّر التأكد من تغيير كلمة المرور. تابع تسجيل الدخول أدناه.'));
+        setError("We couldn't confirm whether your password changed. Continue with the sign-in below.");
       }
     });
   };
@@ -542,7 +543,7 @@ export default function useMobileLogin() {
   const continuePasswordSignIn = () => {
     if (!flow || stepRef.current !== STEPS.PASSWORD_SIGN_IN || operation.current) return;
     if (!password.trim()) {
-      const message = copy('Enter your password.', 'أدخل كلمة المرور.');
+      const message = "Enter your password.";
       setPasswordError(message);
       setError(message);
       return;
@@ -632,7 +633,7 @@ export default function useMobileLogin() {
       setError('');
       setServerAddressState(value);
     },
-    serverAddressError,
+    serverAddressError: t(serverAddressError),
     mobileNumber,
     setMobileNumber,
     password,
@@ -652,15 +653,15 @@ export default function useMobileLogin() {
     isLoading,
     isHydrating,
     isAvailable: isMobileAuthAvailable(),
-    error,
-    companyCodeError,
-    mobileNumberError,
-    passwordError,
-    newPasswordError: newPasswordFieldError || (newPassword && (!newPassword.trim() || newPassword.length < MIN_PASSWORD_LENGTH)
-      ? newPasswordError(newPassword, confirmPassword) : ''),
-    confirmPasswordError: confirmPasswordError || (confirmPassword && newPassword !== confirmPassword
-      ? copy('Passwords do not match.', 'كلمتا المرور غير متطابقتين.') : ''),
-    otpError,
+    error: t(error),
+    companyCodeError: t(companyCodeError),
+    mobileNumberError: t(mobileNumberError),
+    passwordError: t(passwordError),
+    newPasswordError: t(newPasswordFieldError || (newPassword && (!newPassword.trim() || newPassword.length < MIN_PASSWORD_LENGTH)
+      ? newPasswordError(newPassword, confirmPassword) : '')),
+    confirmPasswordError: t(confirmPasswordError || (confirmPassword && newPassword !== confirmPassword
+      ? "Passwords do not match." : '')),
+    otpError: t(otpError),
     isNewPasswordValid: !!newPassword.trim() && newPassword.length >= MIN_PASSWORD_LENGTH && newPassword === confirmPassword,
     resendSeconds,
     otpSent,

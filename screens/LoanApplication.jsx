@@ -1,11 +1,7 @@
+import { translateMessage, t, useTranslation } from '../localization';
 import React, { useCallback, useEffect, useState } from "react";
-import {
-  Platform,
-  RefreshControl,
-  ScrollView,
-  Text,
-  View,
-} from "react-native";
+import { Platform, RefreshControl, ScrollView, View } from 'react-native';
+import Text from '../localization/LocalizedText';
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { ICON, RADIUS, SPACING, TYPO } from "../constants";
@@ -63,8 +59,9 @@ import {
  * order and raises the same toasts as the classic form.
  */
 function LoanApplication() {
+  useTranslation();
   const { colors } = useAppTheme();
-  useModernScreenHeader("Loan Application");
+  useModernScreenHeader(t("Loan Application"));
 
   const {
     productName,
@@ -236,15 +233,11 @@ function LoanApplication() {
               <Text
                 accessibilityRole="header"
                 style={{ ...TYPO.headline, color: colors.textPrimary }}
-              >
-                Loan request
-              </Text>
+              >{t("Loan request")}</Text>
               <Text
                 style={{ ...TYPO.caption, color: colors.textMuted }}
                 numberOfLines={2}
-              >
-                Pick a product, enter the amount you need and say what it's for.
-              </Text>
+              >{t("Pick a product, enter the amount you need and say what it's for.")}</Text>
             </View>
           </View>
         </Card>
@@ -253,8 +246,8 @@ function LoanApplication() {
         <ModuleCard
           dense
           icon="card-outline"
-          title="Loan details"
-          subtitle="Select the product and enter your request"
+          title={t("Loan details")}
+          subtitle={t("Select the product and enter your request")}
           style={{ marginBottom: SPACING.md }}
         >
           <View style={cardBody}>
@@ -262,10 +255,10 @@ function LoanApplication() {
                 sheet instead of the inline wheel — the value it hands back is
                 the identical raw `product_name` string. */}
             <PickerField
-              label="Loan product *"
+              label={t("Loan product *")}
               value={productName}
               placeholder={
-                loadingProducts ? "Loading products…" : "Select loan product"
+                loadingProducts ? t("Loading products…") : t("Select loan product")
               }
               icon={productName ? loanProductIcon(productName) : "list-outline"}
               onPress={openProductSheet}
@@ -276,7 +269,7 @@ function LoanApplication() {
             {/* Right-aligned and tabular, so the figure lines up digit for digit
                 with the one echoed in the summary below. */}
             <FormField
-              label="Loan amount *"
+              label={t("Loan amount *")}
               value={amount}
               onChangeText={setAmount}
               placeholder="0.00"
@@ -284,7 +277,7 @@ function LoanApplication() {
               keyboardType="numeric"
               align="right"
               invalid={attempted && (amountMissing || amountInvalid)}
-              accessibilityLabel="Loan amount"
+              accessibilityLabel={t("Loan amount")}
               style={{ marginTop: SPACING.md }}
             />
 
@@ -293,7 +286,7 @@ function LoanApplication() {
                 employee typing the full loan amount here again would produce an
                 application that repays in one month. */}
             <FormField
-              label="Repayment amount (per month) *"
+              label={t("Repayment amount (per month) *")}
               value={repaymentAmount}
               onChangeText={setRepaymentAmount}
               placeholder="0.00"
@@ -303,7 +296,7 @@ function LoanApplication() {
               invalid={
                 attempted && (repaymentAmountMissing || repaymentAmountInvalid)
               }
-              accessibilityLabel="Repayment amount"
+              accessibilityLabel={t("Repayment amount")}
               style={{ marginTop: SPACING.md }}
             />
 
@@ -311,9 +304,9 @@ function LoanApplication() {
                 the field has to appear in the payload, and a sheet is how every
                 other choice on this screen is made. */}
             <PickerField
-              label="Repayment method *"
-              value={repaymentMethod}
-              placeholder="Select repayment method"
+              label={t("Repayment method *")}
+              value={repaymentMethod ? translateMessage(repaymentMethod) : repaymentMethod}
+              placeholder={t("Select repayment method")}
               icon={repaymentMethod ? "calendar-outline" : "list-outline"}
               onPress={openRepaymentSheet}
               active={isRepaymentSheetVisible}
@@ -322,15 +315,15 @@ function LoanApplication() {
             />
 
             <FormField
-              label="Reason *"
+              label={t("Reason *")}
               value={reason}
               onChangeText={setReason}
-              placeholder="What is this loan for?"
+              placeholder={t("What is this loan for?")}
               multiline
               minLines={4}
               align="auto"
               invalid={attempted && reasonMissing}
-              accessibilityLabel="Reason"
+              accessibilityLabel={t("Reason")}
               style={{ marginTop: SPACING.md }}
             />
           </View>
@@ -344,14 +337,14 @@ function LoanApplication() {
         <ModuleCard
           dense
           icon="attach-outline"
-          title="Attachments"
-          subtitle="Attachment 1 is required"
+          title={t("Attachments")}
+          subtitle={t("Attachment 1 is required")}
           style={{ marginBottom: SPACING.md }}
         >
           <View style={cardBody}>
             <UploadField
               compact
-              label="Attachment 1"
+              label={t("Attachment 1")}
               optional={false}
               file={file1}
               onPick={pickFile1}
@@ -360,7 +353,7 @@ function LoanApplication() {
 
             <UploadField
               compact
-              label="Attachment 2"
+              label={t("Attachment 2")}
               file={file2}
               onPick={pickFile2}
               onRemove={removeFile2}
@@ -380,21 +373,13 @@ function LoanApplication() {
                 the card greys its surface on Android. */}
             <View
               accessible
-              accessibilityLabel={`Summary. ${
-                productMissing ? "No product selected" : productName
-              }, ${
-                amountMissing ? "no amount entered" : formatExpenseAmount(amount)
-              }, ${
-                repaymentAmountMissing
-                  ? "no repayment entered"
-                  : `${formatExpenseAmount(repaymentAmount)} per month`
-              }, ${attachmentCount} of 2 attachments.`}
+              accessibilityLabel={t("Summary. {{product}}, {{amount}}, {{repayment}}, {{count}} of 2 attachments.", { product: productMissing ? t("No product selected") : productName, amount: amountMissing ? t("no amount entered") : formatExpenseAmount(amount), repayment: repaymentAmountMissing
+                  ? t("no repayment entered")
+                  : t("{{amount}} per month", { amount: formatExpenseAmount(repaymentAmount) }), count: attachmentCount })}
             >
               <View style={{ flexDirection: "row", alignItems: "center" }}>
                 <View style={{ flex: 1.2, minWidth: 0 }}>
-                  <Text style={{ ...TYPO.caption, color: colors.textMuted }}>
-                    Loan product
-                  </Text>
+                  <Text style={{ ...TYPO.caption, color: colors.textMuted }}>{t("Loan product")}</Text>
                   <Text
                     numberOfLines={1}
                     style={{ ...TYPO.title3, color: colors.textPrimary }}
@@ -413,9 +398,7 @@ function LoanApplication() {
                 />
 
                 <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={{ ...TYPO.caption, color: colors.textMuted }}>
-                    Requested
-                  </Text>
+                  <Text style={{ ...TYPO.caption, color: colors.textMuted }}>{t("Requested")}</Text>
                   <Text
                     numberOfLines={1}
                     style={{
@@ -463,7 +446,7 @@ function LoanApplication() {
                     }}
                     numberOfLines={1}
                   >
-                    {`${formatExpenseAmount(repaymentAmount)} per month`}
+                    {t("{{amount}} per month", { amount: formatExpenseAmount(repaymentAmount) })}
                   </Text>
                 </View>
               )}
@@ -485,8 +468,8 @@ function LoanApplication() {
                   }}
                 >
                   {attachmentCount === 0
-                    ? "No documents attached"
-                    : `${attachmentCount} of 2 documents attached`}
+                    ? t("No documents attached")
+                    : t("{{count}} of 2 documents attached", { count: attachmentCount })}
                 </Text>
               </View>
             </View>
@@ -499,7 +482,7 @@ function LoanApplication() {
         {!!missing && (
           <StatusBanner
             tone="error"
-            title="Finish the form first"
+            title={t("Finish the form first")}
             message={missing}
             style={{ marginBottom: SPACING.md }}
           />
@@ -510,7 +493,7 @@ function LoanApplication() {
             and a sticky button would either cover that or push it off the screen.
             The bottom safe-area inset comes from <SafeAreaView>. */}
         <ActionButton
-          label="Submit loan application"
+          label={t("Submit loan application")}
           icon="paper-plane-outline"
           variant="filled"
           size="lg"
@@ -524,8 +507,8 @@ function LoanApplication() {
         <StatusBanner
           tone="info"
           icon="information-circle"
-          title="What happens next"
-          message="Your request goes through your company's loan approval workflow. You'll be notified once it has been approved or rejected."
+          title={t("What happens next")}
+          message={t("Your request goes through your company's loan approval workflow. You'll be notified once it has been approved or rejected.")}
           style={{ marginTop: SPACING.md }}
         />
 
@@ -536,10 +519,10 @@ function LoanApplication() {
             paged client-side at five and the whole response is already in
             memory, so there is nothing to virtualise. */}
         <SectionHeader
-          title="Your applications"
+          title={t("Your applications")}
           subtitle={
             loanApplications.length > 0
-              ? `${loanApplications.length} submitted`
+              ? t("{{count}} submitted", { count: loanApplications.length })
               : undefined
           }
           style={{ marginTop: SPACING.xxl }}
@@ -548,15 +531,15 @@ function LoanApplication() {
         {isFetchingHistory ? (
           // Only the history waits — the form above does not depend on this
           // query, so it stays usable while the list loads.
-          <ExpenseSkeleton count={2} label="Loading loan applications" />
+          <ExpenseSkeleton count={2} label={t("Loading loan applications")} />
         ) : isHistoryError ? (
           <Card>
             <EmptyState
               compact
               icon="cloud-offline-outline"
-              title="Couldn't load your applications"
-              description="Unable to load loan applications."
-              actionLabel="Retry"
+              title={t("Couldn't load your applications")}
+              description={t("Unable to load loan applications.")}
+              actionLabel={t("Retry")}
               onActionPress={refetchHistory}
             />
           </Card>
@@ -565,8 +548,8 @@ function LoanApplication() {
             <EmptyState
               compact
               icon="wallet-outline"
-              title="No loan applications yet"
-              description="Once you submit an application it will appear here with its approval status."
+              title={t("No loan applications yet")}
+              description={t("Once you submit an application it will appear here with its approval status.")}
             />
           </Card>
         ) : (
@@ -583,7 +566,7 @@ function LoanApplication() {
               <ActionButton
                 variant="outline"
                 icon="chevron-down"
-                label="Load more"
+                label={t("Load more")}
                 onPress={showMoreLoans}
               />
             )}
@@ -594,27 +577,28 @@ function LoanApplication() {
       <OptionSheet
         visible={isProductSheetVisible}
         onClose={closeProductSheet}
-        title="Loan product"
-        subtitle="Which loan are you applying for?"
+        title={t("Loan product")}
+        subtitle={t("Which loan are you applying for?")}
         options={productOptions}
         selected={productName}
         onSelect={selectProduct}
         iconForOption={loanProductIcon}
         emptyIcon="wallet-outline"
-        emptyTitle="No loan products"
-        emptyDescription="Your administrator hasn't configured any loan products yet."
+        emptyTitle={t("No loan products")}
+        emptyDescription={t("Your administrator hasn't configured any loan products yet.")}
       />
 
       <OptionSheet
         visible={isRepaymentSheetVisible}
         onClose={closeRepaymentSheet}
-        title="Repayment method"
-        subtitle="How should this loan be repaid?"
+        title={t("Repayment method")}
+        subtitle={t("How should this loan be repaid?")}
         options={repaymentMethods}
+        labelForOption={t}
         selected={repaymentMethod}
         onSelect={selectRepaymentMethod}
         emptyIcon="calendar-outline"
-        emptyTitle="No repayment methods"
+        emptyTitle={t("No repayment methods")}
       />
 
       <AttachmentSheet

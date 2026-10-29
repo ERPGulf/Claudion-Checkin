@@ -87,3 +87,27 @@ describe("localNotifications", () => {
     await expect(ensureNotificationSetup()).resolves.toBe(true);
   });
 });
+
+it('resolves persisted Arabic in a headless context before interpolating a checkout notification', async () => {
+  await jest.isolateModulesAsync(async () => {
+    const storageModule = require('@react-native-async-storage/async-storage');
+    const storage = storageModule.default || storageModule;
+    await storage.setItem('settings_language', 'ar');
+    const notifications = require('expo-notifications');
+    notifications.getPermissionsAsync.mockResolvedValue({ granted: true });
+    const { presentLocalNotification: deliver } = require('../services/notifications/localNotifications');
+    await deliver({
+      title: 'Checked out offline',
+      bodyKey: "You left {{office}}, so you've been checked out on this device. Check Attendance recovery for synchronization status.",
+      values: { office: 'Office A' },
+      data: { type: 'auto-checkout', pendingSync: true },
+    });
+    const content = notifications.scheduleNotificationAsync.mock.calls.at(-1)[0].content;
+    expect(content.title).toBe('تم تسجيل الانصراف دون اتصال');
+    expect(content.body).toContain('Office A');
+    expect(content.body).toContain('على هذا الجهاز');
+    expect(content.body).not.toContain('{{');
+    expect(content.data).toEqual({ type: 'auto-checkout', pendingSync: true });
+    await storage.removeItem('settings_language');
+  });
+});

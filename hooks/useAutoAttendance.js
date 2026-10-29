@@ -1,3 +1,4 @@
+import { translateMessage, t, useTranslation } from '../localization';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, AppState, Platform } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
@@ -68,6 +69,7 @@ import {
  * that is the one genuinely presentational thing this hook would otherwise own.
  */
 export default function useAutoAttendance() {
+  const { language, direction, isRTL } = useTranslation();
   const navigation = useNavigation();
   const dispatch = useDispatch();
   const available = isAvailable();
@@ -87,8 +89,9 @@ export default function useAutoAttendance() {
   const baseUrl = useSelector((state) => state.user?.baseUrl);
   const settingsScope = useSelector(selectAutoAttendanceScope);
 
-  const policy =
+  const policySource =
     GEOTAGGING_LABELS[geotagging] || GEOTAGGING_LABELS[GEOTAGGING.DISABLED];
+  const policy = { title: t(policySource.title), description: t(policySource.description) };
 
   const [monitoring, setMonitoring] = useState(false);
   // Everything automatic attendance needs (see readLocationAccess); null until read.
@@ -177,17 +180,17 @@ export default function useAutoAttendance() {
     try {
       if (!hasFullAccuracy()) {
         setReliabilityWarning(
-          'Precise Location is off for this app. A 100 m geofence needs it to detect check-in/out reliably — turn it on in Settings > Privacy & Security > Location Services.',
+          t("Precise Location is off for this app. A 100 m geofence needs it to detect check-in/out reliably — turn it on in Settings > Privacy & Security > Location Services."),
         );
       } else if (isLowPowerModeEnabled()) {
         setReliabilityWarning(
           Platform.OS === 'ios'
-            ? "Low Power Mode is on. iOS may delay or suppress automatic check-in/out until it's turned off."
-            : "Battery Saver is on. Android may delay or block automatic check-in/out until it's turned off.",
+            ? t("Low Power Mode is on. iOS may delay or suppress automatic check-in/out until it's turned off.")
+            : t("Battery Saver is on. Android may delay or block automatic check-in/out until it's turned off."),
         );
       } else if (Platform.OS === 'android' && !isIgnoringBatteryOptimizations()) {
         setReliabilityWarning(
-          'Battery optimization is restricting this app. Open Settings > Apps > Claudion Checkin > Battery and choose "Unrestricted" so check-in/out keeps working in the background.',
+          t("Battery optimization is restricting this app. Open Settings > Apps > Claudion Checkin > Battery and choose \"Unrestricted\" so check-in/out keeps working in the background."),
         );
       } else {
         setReliabilityWarning(null);
@@ -399,8 +402,8 @@ export default function useAutoAttendance() {
       console.log('[AutoAttendance] Failed to obtain location access:', error);
       // Fixed copy: the error is native/network text, not something to show.
       Alert.alert(
-        'Could not turn on monitoring',
-        'Something went wrong. Check your connection and try again.',
+        t("Could not turn on monitoring"),
+        t("Something went wrong. Check your connection and try again."),
       );
     } finally {
       setBusy(false);
@@ -412,7 +415,7 @@ export default function useAutoAttendance() {
   const handleStart = async () => {
     const parsed = parseGeofenceInput(latitudeText, longitudeText, radiusText);
     if (parsed.error) {
-      Alert.alert('Invalid geofence', parsed.error);
+      Alert.alert(t("Invalid geofence"), parsed.error);
       return;
     }
     const geofence = { ...parsed, identifier: OFFICE_GEOFENCE_IDENTIFIER };
@@ -435,8 +438,8 @@ export default function useAutoAttendance() {
     } catch (error) {
       console.log('[AutoAttendance] Failed to start monitoring:', error);
       Alert.alert(
-        'Could not start monitoring',
-        error?.message || 'Failed to register the geofence.',
+        t("Could not start monitoring"),
+        translateMessage(error?.message) || t("Failed to register the geofence."),
       );
     } finally {
       setBusy(false);
@@ -452,8 +455,8 @@ export default function useAutoAttendance() {
     } catch (error) {
       console.log('[AutoAttendance] Failed to stop monitoring:', error);
       Alert.alert(
-        'Could not stop monitoring',
-        error?.message || 'Failed to remove the geofence.',
+        t("Could not stop monitoring"),
+        translateMessage(error?.message) || t("Failed to remove the geofence."),
       );
     } finally {
       setBusy(false);
@@ -467,14 +470,14 @@ export default function useAutoAttendance() {
       if (foreground.status !== 'granted') {
         console.log('[AutoAttendance] Permission denied (foreground location)');
         setPermissionError(
-          'Location permission was denied. Allow location access to use automatic attendance.',
+          "Location permission was denied. Allow location access to use automatic attendance.",
         );
         return;
       }
       if (!(await Location.hasServicesEnabledAsync())) {
         Alert.alert(
-          'Location is off',
-          'Turn on Location in the device settings (on an emulator: Settings → Location).',
+          t("Location is off"),
+          t("Turn on Location in the device settings (on an emulator: Settings → Location)."),
         );
         return;
       }
@@ -507,8 +510,8 @@ export default function useAutoAttendance() {
 
       if (!position) {
         Alert.alert(
-          'No location fix',
-          'The device has no location yet. On an emulator, open Extended Controls (⋮ next to the emulator) → Location, pick a point and press "Set location", then try again. Opening Google Maps once also helps.',
+          t("No location fix"),
+          t("The device has no location yet. On an emulator, open Extended Controls (⋮ next to the emulator) → Location, pick a point and press \"Set location\", then try again. Opening Google Maps once also helps."),
         );
         return;
       }
@@ -522,8 +525,8 @@ export default function useAutoAttendance() {
     } catch (error) {
       console.log('[AutoAttendance] Failed to get current location:', error);
       Alert.alert(
-        'Location error',
-        error?.message || 'Could not get the current location.',
+        t("Location error"),
+        translateMessage(error?.message) || t("Could not get the current location."),
       );
     } finally {
       setBusy(false);
@@ -577,8 +580,8 @@ export default function useAutoAttendance() {
     permissionGranted,
     lastEvent,
     eventLog,
-    permissionError,
-    reliabilityWarning,
+    permissionError: translateMessage(permissionError),
+    reliabilityWarning: translateMessage(reliabilityWarning),
     busy,
     presence,
     presenceLoading,

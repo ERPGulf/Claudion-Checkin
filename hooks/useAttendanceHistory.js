@@ -1,3 +1,4 @@
+import { useTranslation } from '../localization';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { useInfiniteQuery } from '@tanstack/react-query';
@@ -35,6 +36,7 @@ export const PAGE_SIZE = 20;
  * re-runs when it changes.
  */
 export default function useAttendanceHistory() {
+  const { language } = useTranslation();
   const employeeCode = useSelector(selectEmployeeCode);
   const [queueRows, setQueueRows] = useState([]);
   const [queueCounts, setQueueCounts] = useState(null);
@@ -108,7 +110,7 @@ export default function useAttendanceHistory() {
 
   // Grouping is derived, never persisted — the flat list stays the source of
   // truth so pagination keeps appending to it untouched.
-  const sections = useMemo(() => groupRecordsByDay(records), [records]);
+  const sections = useMemo(() => groupRecordsByDay(records), [records, language]);
 
   /**
    * Pull-to-refresh does both halves: drains the queue, then refetches. In that

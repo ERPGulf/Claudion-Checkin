@@ -1,3 +1,4 @@
+import { useTranslation, translateMessage } from "../localization";
 import React, { useLayoutEffect } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -19,6 +20,7 @@ import PressableScale from '../components/common/PressableScale';
  * transition and the swipe-back gesture.
  */
 export default function useModernScreenHeader(title) {
+  const { t, isRTL } = useTranslation();
   const navigation = useNavigation();
   const { colors } = useAppTheme();
 
@@ -26,7 +28,7 @@ export default function useModernScreenHeader(title) {
     navigation.setOptions({
       headerShadowVisible: false,
       headerShown: true,
-      headerTitle: title,
+      headerTitle: translateMessage(title),
       headerTitleAlign: 'center',
       statusBarTranslucent: false,
       headerStyle: { backgroundColor: colors.surfaceSecondary },
@@ -35,7 +37,7 @@ export default function useModernScreenHeader(title) {
       headerLeft: () => (
         <PressableScale
           onPress={() => navigation.goBack()}
-          accessibilityLabel="Go back"
+          accessibilityLabel={t("Go back")}
           style={{
             width: 36,
             height: 36,
@@ -46,7 +48,7 @@ export default function useModernScreenHeader(title) {
           }}
         >
           <Ionicons
-            name="chevron-back"
+            name={isRTL ? "chevron-forward" : "chevron-back"}
             size={ICON.md}
             color={colors.textPrimary}
           />
@@ -55,7 +57,7 @@ export default function useModernScreenHeader(title) {
     });
   }, [
     navigation,
-    title,
+    title, t, isRTL,
     colors.surfaceSecondary,
     colors.textPrimary,
     colors.iconBackground,

@@ -1,6 +1,8 @@
+import { t, useTranslation } from '../localization';
 /* eslint-disable react/prop-types */
 import React, { memo, useEffect } from "react";
-import { AccessibilityInfo, Platform, Text, View } from "react-native";
+import { AccessibilityInfo, Platform, View } from 'react-native';
+import Text from '../localization/LocalizedText';
 import { Ionicons } from "@expo/vector-icons";
 import { ICON, RADIUS, SHADOWS, SPACING, TYPO } from "../constants";
 import useAppTheme from "../hooks/useAppTheme";
@@ -52,6 +54,7 @@ function ToastBanner({
   onPress,
   hide,
 }) {
+  const { isRTL, direction } = useTranslation();
   const { colors, isDark } = useAppTheme();
   const text1 = asText(rawText1);
   const text2 = asText(rawText2);
@@ -119,7 +122,7 @@ function ToastBanner({
           onPress={hide}
           hitSlop={12}
           accessibilityRole="button"
-          accessibilityLabel="Dismiss"
+          accessibilityLabel={t("Dismiss")}
           style={{
             width: 28,
             height: 28,

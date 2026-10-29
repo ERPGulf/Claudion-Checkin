@@ -1,3 +1,4 @@
+import { t, useTranslation } from "../../localization";
 /* eslint-disable react/prop-types */
 import React, { memo } from 'react';
 import { Image, View } from 'react-native';
@@ -29,6 +30,7 @@ const QUIET_ZONE = SPACING.lg;
  * that would flash the one thing the user came here to show.
  */
 function QrPlate({ uri, employee }) {
+  useTranslation();
   return (
     <View
       style={{
@@ -47,8 +49,8 @@ function QrPlate({ uri, employee }) {
         accessibilityRole="image"
         accessibilityLabel={
           employee
-            ? `QR code for employee ${employee}`
-            : 'Your employee QR code'
+            ? t("QR code for employee {{employee}}", { employee })
+            : t("Your employee QR code")
         }
       />
     </View>

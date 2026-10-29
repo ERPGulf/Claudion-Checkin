@@ -1,5 +1,8 @@
+import { translateMessage, t, formatNumber, useTranslation } from '../../localization';
+import { formatExpenseDate, formatExpenseAmount } from '../../utils/expenseClaims';
 import React from "react";
-import { View, Text } from "react-native";
+import { View } from 'react-native';
+import Text from '../../localization/LocalizedText';
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { COLORS } from "../../constants";
 import PropTypes from "prop-types";
@@ -11,17 +14,8 @@ import PropTypes from "prop-types";
  * dark mode.
  */
 export default function LeaveApplicationCard({ leave }) {
-  const formatDate = (date) => {
-    if (!date) return "-";
-
-    const parsedDate = new Date(date);
-
-    if (isNaN(parsedDate.getTime())) {
-      return date;
-    }
-
-    return parsedDate.toLocaleDateString("en-GB");
-  };
+  useTranslation();
+  const formatDate = formatExpenseDate;
 
   const getStatusStyle = (status) => {
     switch (status) {
@@ -75,10 +69,10 @@ export default function LeaveApplicationCard({ leave }) {
       <View className="flex-row justify-between items-center mb-3">
         <View className="flex-row items-center flex-1">
           <View
-            className="w-10 h-10 rounded-full items-center justify-center mr-3"
-            style={{
+            className="w-10 h-10 rounded-full items-center justify-center"
+            style={[{
               backgroundColor: "#F3F0FF",
-            }}
+            }, { marginEnd: 12 }]}
           >
             <Ionicons
               name="calendar-outline"
@@ -92,11 +86,10 @@ export default function LeaveApplicationCard({ leave }) {
               className="text-base font-semibold text-gray-800"
               numberOfLines={1}
             >
-              {leave?.name || "Leave Application"}
+              {leave?.name || t("Leave Application")}
             </Text>
 
-            <Text className="text-xs text-gray-500 mt-1">
-              Applied on {formatDate(leave?.posting_date)}
+            <Text className="text-xs text-gray-500 mt-1">{t("Applied on {{date}}", { date: formatDate(leave?.posting_date) })}
             </Text>
           </View>
         </View>
@@ -115,7 +108,7 @@ export default function LeaveApplicationCard({ leave }) {
               color: statusStyle.color,
             }}
           >
-            {leave?.status || "-"}
+            {leave?.status ? translateMessage(leave.status) : "-"}
           </Text>
         </View>
       </View>
@@ -123,21 +116,17 @@ export default function LeaveApplicationCard({ leave }) {
       {/* Leave Type */}
 
       <View className="flex-row justify-between py-2 border-b border-gray-100">
-        <Text className="text-sm text-gray-500">
-          Leave Type
-        </Text>
+        <Text className="text-sm text-gray-500">{t("Leave Type")}</Text>
 
         <Text className="text-sm font-semibold text-gray-800">
-          {leave?.leave_type || "-"}
+          {leave?.leave_type === "Remote" ? t("Remote") : leave?.leave_type || "-"}
         </Text>
       </View>
 
       {/* From Date */}
 
       <View className="flex-row justify-between py-2 border-b border-gray-100">
-        <Text className="text-sm text-gray-500">
-          From Date
-        </Text>
+        <Text className="text-sm text-gray-500">{t("From Date")}</Text>
 
         <Text className="text-sm font-medium text-gray-800">
           {formatDate(leave?.from_date)}
@@ -147,9 +136,7 @@ export default function LeaveApplicationCard({ leave }) {
       {/* To Date */}
 
       <View className="flex-row justify-between py-2 border-b border-gray-100">
-        <Text className="text-sm text-gray-500">
-          To Date
-        </Text>
+        <Text className="text-sm text-gray-500">{t("To Date")}</Text>
 
         <Text className="text-sm font-medium text-gray-800">
           {formatDate(leave?.to_date)}
@@ -159,12 +146,10 @@ export default function LeaveApplicationCard({ leave }) {
       {/* Total Days */}
 
       <View className="flex-row justify-between py-2 border-b border-gray-100">
-        <Text className="text-sm text-gray-500">
-          Total Days
-        </Text>
+        <Text className="text-sm text-gray-500">{t("Total Days")}</Text>
 
         <Text className="text-sm font-semibold text-gray-800">
-          {leave?.total_leave_days ?? "-"}
+          {leave?.total_leave_days == null ? "-" : formatNumber(leave.total_leave_days)}
         </Text>
       </View>
 
@@ -172,22 +157,16 @@ export default function LeaveApplicationCard({ leave }) {
 
       {Number(leave?.half_day) === 1 && (
         <View className="flex-row justify-between py-2 border-b border-gray-100">
-          <Text className="text-sm text-gray-500">
-            Half Day
-          </Text>
+          <Text className="text-sm text-gray-500">{t("Half Day")}</Text>
 
-          <Text className="text-sm font-medium text-gray-800">
-            Yes
-          </Text>
+          <Text className="text-sm font-medium text-gray-800">{t("Yes")}</Text>
         </View>
       )}
 
       {/* Reason */}
 
       <View className="pt-2">
-        <Text className="text-sm text-gray-500">
-          Reason
-        </Text>
+        <Text className="text-sm text-gray-500">{t("Reason")}</Text>
 
         <Text
           className="text-sm text-gray-700 mt-1"

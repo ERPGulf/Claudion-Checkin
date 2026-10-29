@@ -1,3 +1,4 @@
+import { t } from '../localization';
 import { formatExpenseDate } from './expenseClaims';
 
 /**
@@ -34,10 +35,10 @@ const STATUS_DESCRIPTIONS = {
 export function describeRecordStatus(status) {
   const key = typeof status === 'string' ? status.trim().toLowerCase() : '';
   const known = STATUS_DESCRIPTIONS[key];
-  if (known) return known;
+  if (known) return { ...known, label: t(known.label) };
 
   return {
-    label: key ? status.trim() : 'Unknown',
+    label: key ? status.trim() : t("Unknown"),
     tone: 'neutral',
     icon: 'help-circle-outline',
   };

@@ -1,3 +1,4 @@
+import { translateMessage, t, useTranslation } from '../localization';
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AppState } from "react-native";
 import { useDispatch, useSelector } from "react-redux";
@@ -17,6 +18,7 @@ import { addNetworkChangeListener, isOnline } from "../services/offline/NetworkL
 const READ_ERROR = "Could not read saved attendance. Please try again.";
 
 export default function useAttendanceRecovery() {
+  const { language, direction, isRTL } = useTranslation();
   const dispatch = useDispatch();
   const isLoggedIn = useSelector(selectIsLoggedIn);
   const employeeId = useSelector(selectEmployeeCode);
@@ -40,7 +42,7 @@ export default function useAttendanceRecovery() {
 
   const read = useCallback(async () => {
     const scope = await captureAttendanceQueueScope(employeeId);
-    if (!isLoggedIn || scope.tenantKey !== normalizeAttendanceTenantKey(baseUrl)) throw new Error("Account changed");
+    if (!isLoggedIn || scope.tenantKey !== normalizeAttendanceTenantKey(baseUrl)) throw new Error(t("Account changed"));
     const [counts, savedRows, automaticPending, automaticReview] = await Promise.all([
       countRecoveryByScope(scope), listRecoveryRows({ ...scope, since: since.current }),
       listPendingEvents(scope), listReviewEvents(scope),
@@ -109,12 +111,12 @@ export default function useAttendanceRecovery() {
       await assertAttendanceQueueScope(scope);
       if (!current()) return;
       runRecords.current = (result?.records ?? []).map(report => ({ ...before.rows.find(row => row.id === report.id), ...report, tenantKey: scope.tenantKey }));
-      if (["scope-changed", "another-session-syncing"].includes(result?.reason)) setNotice("Sync stopped because your account/session changed. Saved attendance has not been discarded.");
-      else if (result?.reason === "sync-error") setNotice("Could not finish synchronization. Check the saved records below before trying again.");
-      else if (result?.reason === "device_offline") setNotice("Attendance remains saved on this device. Synchronization can resume when your connection and company server are available.");
-      else if (["instance_unreachable", "server_unavailable"].includes(result?.reason)) setNotice("Unable to connect to your company's server. Saved attendance will be retried when synchronization runs.");
+      if (["scope-changed", "another-session-syncing"].includes(result?.reason)) setNotice(t("Sync stopped because your account/session changed. Saved attendance has not been discarded."));
+      else if (result?.reason === "sync-error") setNotice(t("Could not finish synchronization. Check the saved records below before trying again."));
+      else if (result?.reason === "device_offline") setNotice(t("Attendance remains saved on this device. Synchronization can resume when your connection and company server are available."));
+      else if (["instance_unreachable", "server_unavailable"].includes(result?.reason)) setNotice(t("Unable to connect to your company's server. Saved attendance will be retried when synchronization runs."));
     } catch {
-      if (current()) setNotice("Could not finish synchronization. Your account may have changed, or saved attendance could not be read.");
+      if (current()) setNotice(t("Could not finish synchronization. Your account may have changed, or saved attendance could not be read."));
     } finally {
       if (current()) {
         await refresh();
@@ -133,10 +135,10 @@ export default function useAttendanceRecovery() {
     try {
       const result = await reconcileAttendanceRow({ id, employeeId });
       if (current()) setNotice(result.verified
-        ? "The matching attendance log was verified on the server."
-        : "Could not verify an exact server record. Nothing was resent. This record remains saved; ask your administrator to check the original attendance and company.");
+        ? t("The matching attendance log was verified on the server.")
+        : t("Could not verify an exact server record. Nothing was resent. This record remains saved; ask your administrator to check the original attendance and company."));
     } catch {
-      if (current()) setNotice("Could not check this record. Your session or connection may have changed. Nothing was resent.");
+      if (current()) setNotice(t("Could not check this record. Your session or connection may have changed. Nothing was resent."));
     } finally {
       if (current()) { await refresh(); setCheckingId(null); }
       pressed.current = false;
@@ -151,12 +153,12 @@ export default function useAttendanceRecovery() {
     try {
       const result = await verifyAutoAttendanceEvent({ eventId, employeeId });
       if (current()) {
-        setNotice(result.verified ? "The server record was verified. The saved event can now reconcile your attendance session."
-          : "No exact server record was verified. The original event remains saved; nothing was resent.");
+        setNotice(result.verified ? t("The server record was verified. The saved event can now reconcile your attendance session.")
+          : t("No exact server record was verified. The original event remains saved; nothing was resent."));
         if (result.verified) dispatch(requestAutoAttendanceSync());
       }
     } catch {
-      if (current()) setNotice("Could not verify this event. Its original data remains saved; nothing was resent.");
+      if (current()) setNotice(t("Could not verify this event. Its original data remains saved; nothing was resent."));
     } finally {
       if (current()) { await refresh(); setCheckingId(null); }
       pressed.current = false;

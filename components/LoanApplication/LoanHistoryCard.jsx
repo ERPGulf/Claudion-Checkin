@@ -1,6 +1,8 @@
+import { translateMessage, t, useTranslation } from '../../localization';
 /* eslint-disable react/prop-types */
 import React from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+import Text from '../../localization/LocalizedText';
 import { Ionicons } from '@expo/vector-icons';
 import { ICON, RADIUS, SPACING, TYPO } from '../../constants';
 import useAppTheme from '../../hooks/useAppTheme';
@@ -34,6 +36,7 @@ import {
  * phone, which is exactly where the classic card wrapped it to two cramped lines.
  */
 function LoanHistoryCard({ loan, style }) {
+  useTranslation();
   const { colors } = useAppTheme();
 
   const {
@@ -74,7 +77,7 @@ function LoanHistoryCard({ loan, style }) {
               numberOfLines={1}
               style={{ ...TYPO.headline, color: colors.textPrimary }}
             >
-              {loan?.loan_product || 'Loan application'}
+              {loan?.loan_product || t("Loan application")}
             </Text>
             <Text
               numberOfLines={1}
@@ -131,9 +134,7 @@ function LoanHistoryCard({ loan, style }) {
               >
                 <Text
                   style={{ ...TYPO.caption, color: colors.textMuted, flex: 1 }}
-                >
-                  Repayment
-                </Text>
+                >{t("Repayment")}</Text>
                 <Text
                   style={{
                     ...TYPO.subhead,
@@ -143,7 +144,7 @@ function LoanHistoryCard({ loan, style }) {
                   }}
                   numberOfLines={1}
                 >
-                  {`${formatExpenseAmount(loan.repayment_amount)} / month`}
+                  {t("{{amount}} / month", { amount: formatExpenseAmount(loan.repayment_amount) })}
                 </Text>
               </View>
             )}
@@ -153,7 +154,7 @@ function LoanHistoryCard({ loan, style }) {
                 numberOfLines={2}
                 style={{ ...TYPO.caption, color: colors.textMuted }}
               >
-                {loan.repayment_method}
+                {translateMessage(loan.repayment_method)}
               </Text>
             )}
           </>

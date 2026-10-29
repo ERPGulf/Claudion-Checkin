@@ -1,6 +1,8 @@
+import { t, useTranslation } from '../../localization';
 /* eslint-disable react/prop-types */
 import React from "react";
-import { ScrollView, Text, View } from "react-native";
+import { ScrollView, View } from 'react-native';
+import Text from '../../localization/LocalizedText';
 import { Ionicons } from "@expo/vector-icons";
 import { ICON, RADIUS, SPACING, TYPO } from "../../constants";
 import { navigateSafely } from "../../navigation/rootNavigation";
@@ -43,6 +45,7 @@ const ROW_ICON = {
 
 /** One line of "will this sort itself out?", the question the sheet exists for. */
 function Fact({ icon, text, tone }) {
+  const { isRTL, direction } = useTranslation();
   const { colors } = useAppTheme();
 
   return (
@@ -74,6 +77,7 @@ function Fact({ icon, text, tone }) {
 }
 
 function QueueRowCard({ row, onCorrect }) {
+  const { isRTL, direction } = useTranslation();
   const { colors } = useAppTheme();
 
   const detail = describeQueueRow(row);
@@ -119,7 +123,7 @@ function QueueRowCard({ row, onCorrect }) {
           marginTop: SPACING.sm,
         }}
       >
-        {typeLabel} · {formatLogTime(date)}
+        {typeLabel}{t("·")}{formatLogTime(date)}
       </Text>
       <Text style={{ ...TYPO.caption, color: colors.textMuted }}>
         {formatLogDate(date)}
@@ -139,7 +143,7 @@ function QueueRowCard({ row, onCorrect }) {
         <Fact
           icon="refresh-outline"
           tone={detail.tone}
-          text="We'll keep trying automatically. You don't need to do anything."
+          text={t("We'll keep trying automatically. You don't need to do anything.")}
         />
       )}
 
@@ -147,7 +151,7 @@ function QueueRowCard({ row, onCorrect }) {
         <Fact
           icon="person-circle-outline"
           tone={detail.tone}
-          text="Your administrator needs to enable offline attendance on the server."
+          text={t("Your administrator needs to enable offline attendance on the server.")}
         />
       )}
 
@@ -155,13 +159,13 @@ function QueueRowCard({ row, onCorrect }) {
         <Fact
           icon="hand-right-outline"
           tone={detail.tone}
-          text="This one won't resolve on its own — submit an attendance request so HR can record it."
+          text={t("This one won't resolve on its own — submit an attendance request so HR can record it.")}
         />
       )}
 
       {detail.canCorrect && !!onCorrect && (
         <ActionButton
-          label="Submit attendance request"
+          label={t("Submit attendance request")}
           icon="create-outline"
           onPress={() => onCorrect(row)}
           style={{ marginTop: SPACING.md }}
@@ -180,7 +184,7 @@ function QueueRowCard({ row, onCorrect }) {
             marginTop: SPACING.md,
             fontVariant: ["tabular-nums"],
           }}
-          accessibilityLabel={`Record details: ${diagnostics}`}
+          accessibilityLabel={t("Record details: {{diagnostics}}", { diagnostics })}
         >
           {diagnostics}
         </Text>
@@ -196,6 +200,7 @@ function QueueRowCard({ row, onCorrect }) {
  * @param {Array<object>} props.rows unresolved queue rows, newest first
  */
 function AttendanceSyncSheet({ visible, onClose, rows = [] }) {
+  const { isRTL, direction } = useTranslation();
   const { colors } = useAppTheme();
 
   const handleCorrect = (row) => {
@@ -217,9 +222,7 @@ function AttendanceSyncSheet({ visible, onClose, rows = [] }) {
         date,
         time: date,
         logType: row.action === "checkout" ? "OUT" : "IN",
-        reason: `Offline attendance could not be recorded automatically (${
-          row.action === "checkout" ? "check-out" : "check-in"
-        } at ${formatLogTime(date)} on ${formatLogDate(date)}).`,
+        reason: t("Offline attendance could not be recorded automatically ({{action}} at {{time}} on {{date}}).", { action: t(row.action === "checkout" ? "check-out" : "check-in"), time: formatLogTime(date), date: formatLogDate(date) }),
         queueRowId: row.id,
       },
     });
@@ -229,11 +232,9 @@ function AttendanceSyncSheet({ visible, onClose, rows = [] }) {
     <BottomSheet
       visible={visible}
       onClose={onClose}
-      title="Attendance sync"
+      title={t("Attendance sync")}
       subtitle={
-        rows.length === 1
-          ? "1 record hasn't reached the server yet."
-          : `${rows.length} records haven't reached the server yet.`
+        t("{{count}} records have not reached the server yet.", { count: rows.length })
       }
     >
       {/* The sheet adds no inset of its own, and a long queue has to scroll
@@ -246,9 +247,7 @@ function AttendanceSyncSheet({ visible, onClose, rows = [] }) {
         showsVerticalScrollIndicator={false}
       >
         {rows.length === 0 ? (
-          <Text style={{ ...TYPO.body, color: colors.textSecondary }}>
-            Everything has synced.
-          </Text>
+          <Text style={{ ...TYPO.body, color: colors.textSecondary }}>{t("Everything has synced.")}</Text>
         ) : (
           rows.map((row) => (
             <QueueRowCard key={row.id} row={row} onCorrect={handleCorrect} />
@@ -261,10 +260,7 @@ function AttendanceSyncSheet({ visible, onClose, rows = [] }) {
             color: colors.textMuted,
             marginTop: SPACING.xs,
           }}
-        >
-          Your attendance is stored on this device and is never discarded, even
-          if it takes days to reach the server.
-        </Text>
+        >{t("Your attendance is stored on this device and is never discarded, even if it takes days to reach the server.")}</Text>
       </ScrollView>
     </BottomSheet>
   );

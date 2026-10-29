@@ -1,6 +1,8 @@
+import Text from '../../localization/LocalizedText';
+import { t, useTranslation } from '../../localization';
 /* eslint-disable react/prop-types */
 import React from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ICON, RADIUS, SPACING, TYPO } from '../../constants';
 import useAppTheme from '../../hooks/useAppTheme';
@@ -24,6 +26,7 @@ import QrPlate from './QrPlate';
  * for <name>, <id>" instead of walking an image, an avatar and two labels.
  */
 function QrBadgeCard({ imageUrl, employee, fullname }) {
+  useTranslation();
   const { colors } = useAppTheme();
 
   return (
@@ -32,9 +35,7 @@ function QrBadgeCard({ imageUrl, employee, fullname }) {
           paints its surface grey (#ECECEC) on Android. */}
       <View
         accessible
-        accessibilityLabel={`Employee badge${fullname ? ` for ${fullname}` : ''}${
-          employee ? `, ${employee}` : ''
-        }`}
+        accessibilityLabel={fullname ? t('Employee badge for {{name}}, {{employee}}', { name: fullname, employee: employee || '—' }) : t('Employee badge, {{employee}}', { employee: employee || '—' })}
         style={{ alignSelf: 'stretch', alignItems: 'center' }}
       >
         <QrPlate uri={imageUrl} employee={employee} />

@@ -1,6 +1,8 @@
+import { t, useTranslation } from '../../localization';
 /* eslint-disable react/prop-types */
 import React, { memo } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+import Text from '../../localization/LocalizedText';
 import { Ionicons } from '@expo/vector-icons';
 import { ICON, RADIUS, SPACING, TYPO } from '../../constants';
 import useAppTheme from '../../hooks/useAppTheme';
@@ -35,13 +37,14 @@ const CHIP = 40;
  * re-renders the list container rather than every row in it.
  */
 function NotificationRow({ notification, onPress, style }) {
+  const { language, direction, isRTL } = useTranslation();
   const { colors } = useAppTheme();
 
   const isUnread = notification.read === 0;
   const { icon, tone } = notificationIcon(notification.type);
   const time = formatNotificationTime(notification.date);
 
-  const title = notification.title || 'Notification';
+  const title = notification.title || t("Notification");
   const body = notification.notification || '';
 
   return (
@@ -53,10 +56,8 @@ function NotificationRow({ notification, onPress, style }) {
       // One announcement per row rather than four loose text nodes, and it leads
       // with the state — a screen-reader user should not have to reach the end of
       // the message to learn the thing is unread.
-      accessibilityLabel={`${isUnread ? 'Unread. ' : ''}${title}. ${body}${
-        time ? `. ${time}` : ''
-      }`}
-      accessibilityHint="Opens the full notification"
+      accessibilityLabel={[t(isUnread ? "Unread. {{title}}. {{body}}" : "{{title}}. {{body}}", { title, body }), time].filter(Boolean).join(". ")}
+      accessibilityHint={t("Opens the full notification")}
       style={[
         {
           minHeight: 44,
@@ -153,7 +154,7 @@ function NotificationRow({ notification, onPress, style }) {
           />
         ) : (
           <Ionicons
-            name="chevron-forward"
+            name={isRTL ? "chevron-back" : "chevron-forward"}
             size={ICON.sm}
             color={colors.textMuted}
           />

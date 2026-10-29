@@ -1,14 +1,7 @@
+import { translateMessage, t, useTranslation } from '../localization';
 import React, { useLayoutEffect } from "react";
-import {
-  ActivityIndicator,
-  Linking,
-  Platform,
-  ScrollView,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { ActivityIndicator, Linking, Platform, ScrollView, TextInput, TouchableOpacity, View } from 'react-native';
+import Text from '../localization/LocalizedText';
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import Entypo from "@expo/vector-icons/Entypo";
@@ -26,6 +19,7 @@ import {
 } from "../utils/autoAttendance";
 
 function InfoRow({ label, value }) {
+  const { language, direction, isRTL } = useTranslation();
   return (
     <View className="flex-row justify-between items-center py-1.5">
       <Text className="text-sm text-gray-500">{label}</Text>
@@ -35,6 +29,7 @@ function InfoRow({ label, value }) {
 }
 
 function InputRow({ label, value, onChangeText, editable }) {
+  const { language, direction, isRTL } = useTranslation();
   return (
     <View className="flex-row justify-between items-center py-1.5">
       <Text className="text-sm text-gray-500">{label}</Text>
@@ -53,6 +48,7 @@ function InputRow({ label, value, onChangeText, editable }) {
 }
 
 function SectionCard({ title, children }) {
+  const { language, direction, isRTL } = useTranslation();
   return (
     <View className="bg-white rounded-xl px-4 py-3 mb-4">
       <Text className="text-base font-semibold mb-1 text-gray-800">
@@ -76,6 +72,7 @@ function PresenceCard({
   lastEvent,
   onRefresh,
 }) {
+  const { language, direction, isRTL } = useTranslation();
   const known = presence != null;
   const inside = presence?.withinRadius === true;
 
@@ -90,19 +87,19 @@ function PresenceCard({
   let title;
   let subtitle;
   if (loading && !known) {
-    title = "Checking your location…";
-    subtitle = "Reading your current position";
+    title = t("Checking your location…");
+    subtitle = t("Reading your current position");
   } else if (!known) {
-    title = "Location unavailable";
+    title = t("Location unavailable");
     subtitle = permissionGranted
-      ? "No location fix or office boundary yet — tap refresh to retry."
-      : "Grant location access to see whether you're at the office.";
+      ? t("No location fix or office boundary yet — tap refresh to retry.")
+      : t("Grant location access to see whether you're at the office.");
   } else if (inside) {
-    title = "You're at the office";
-    subtitle = `Inside the ${formatDistance(presence.radius)} boundary`;
+    title = t("You're at the office");
+    subtitle = t("Inside the {{radius}} boundary", { radius: formatDistance(presence.radius) });
   } else {
-    title = "You're away from the office";
-    subtitle = `About ${formatDistance(presence.distance)} from the office`;
+    title = t("You're away from the office");
+    subtitle = t("About {{distance}} from the office", { distance: formatDistance(presence.distance) });
   }
 
   return (
@@ -112,8 +109,8 @@ function PresenceCard({
     >
       <View className="flex-row items-center">
         <View
-          className="h-11 w-11 rounded-full items-center justify-center mr-3"
-          style={{ backgroundColor: accent }}
+          className="h-11 w-11 rounded-full items-center justify-center"
+          style={[{ backgroundColor: accent }, { marginEnd: 12 }]}
         >
           <Ionicons name={icon} size={22} color={COLORS.white} />
         </View>
@@ -141,16 +138,16 @@ function PresenceCard({
           className="mt-3 pt-3 border-t"
           style={{ borderColor: "rgba(0,0,0,0.06)" }}
         >
-          <InfoRow label="Nearest office" value={presence.locationName || "Your office"} />
-          <InfoRow label="Distance to office" value={formatDistance(presence.distance)} />
-          <InfoRow label="Boundary radius" value={formatDistance(presence.radius)} />
-          <InfoRow label="Monitoring" value={monitoring ? "Active" : "Paused"} />
+          <InfoRow label={t("Nearest office")} value={presence.locationName || t("Your office")} />
+          <InfoRow label={t("Distance to office")} value={formatDistance(presence.distance)} />
+          <InfoRow label={t("Boundary radius")} value={formatDistance(presence.radius)} />
+          <InfoRow label={t("Monitoring")} value={monitoring ? t("Active") : t("Paused")} />
           <InfoRow
-            label="Last change"
+            label={t("Last change")}
             value={
               lastEvent?.transition
-                ? `${lastEvent.transition === "ENTER" ? "Arrived" : "Left"} · ${formatTimestamp(lastEvent.timestamp)}`
-                : "None yet"
+                ? `${lastEvent.transition === "ENTER" ? t("Arrived") : t("Left")} · ${formatTimestamp(lastEvent.timestamp)}`
+                : t("None yet")
             }
           />
         </View>
@@ -161,6 +158,7 @@ function PresenceCard({
 
 // __DEV__-only radio row used to simulate each server geotagging policy.
 function DevPolicyRow({ title, description, selected, onPress }) {
+  const { language, direction, isRTL } = useTranslation();
   return (
     <TouchableOpacity className="flex-row items-start py-2.5" onPress={onPress}>
       <Ionicons
@@ -169,9 +167,9 @@ function DevPolicyRow({ title, description, selected, onPress }) {
         color={selected ? COLORS.primary : COLORS.gray2}
         style={{ marginTop: 1 }}
       />
-      <View className="ml-2.5 flex-1">
-        <Text className="text-sm font-semibold text-gray-800">{title}</Text>
-        <Text className="text-xs text-gray-500 mt-0.5">{description}</Text>
+      <View className="flex-1" style={{ marginStart: 10 }}>
+        <Text className="text-sm font-semibold text-gray-800">{translateMessage(title)}</Text>
+        <Text className="text-xs text-gray-500 mt-0.5">{translateMessage(description)}</Text>
       </View>
     </TouchableOpacity>
   );
@@ -190,6 +188,7 @@ function DevPolicyRow({ title, description, selected, onPress }) {
  * Do not restyle this file. It is the before-picture in an A/B comparison.
  */
 export default function AutoAttendanceScreen() {
+  const { language, direction, isRTL } = useTranslation();
   const navigation = useNavigation();
 
   const {
@@ -231,19 +230,19 @@ export default function AutoAttendanceScreen() {
     navigation.setOptions({
       headerShown: true,
       headerShadowVisible: false,
-      headerTitle: "Automatic Attendance",
+      headerTitle: t("Automatic Attendance"),
       headerTitleAlign: "center",
       headerLeft: () => (
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Entypo
-            name="chevron-left"
+            name={isRTL ? "chevron-right" : "chevron-left"}
             size={SIZES.xxxLarge - 5}
             color={COLORS.primary}
           />
         </TouchableOpacity>
       ),
     });
-  }, [navigation]);
+  }, [navigation, language, isRTL]);
 
   if (!available) {
     return (
@@ -257,10 +256,7 @@ export default function AutoAttendanceScreen() {
             size={SIZES.xxxLarge + 10}
             color={COLORS.gray}
           />
-          <Text className="text-base text-center text-gray-500 mt-3">
-            Automatic attendance needs a development or production build that
-            includes the geofencing module. Rebuild the app to use it here.
-          </Text>
+          <Text className="text-base text-center text-gray-500 mt-3">{t("Automatic attendance needs a development or production build that includes the geofencing module. Rebuild the app to use it here.")}</Text>
         </View>
       </SafeAreaView>
     );
@@ -288,16 +284,14 @@ export default function AutoAttendanceScreen() {
           />
         ) : null}
 
-        <SectionCard title="Geotagging">
+        <SectionCard title={t("Geotagging")}>
           <View className="flex-row items-center mb-2">
             <Ionicons
               name="lock-closed-outline"
               size={13}
               color={COLORS.gray}
             />
-            <Text className="text-xs text-gray-400 ml-1">
-              Set by your administrator
-            </Text>
+            <Text className="text-xs text-gray-400" style={{ marginStart: 4 }}>{t("Set by your administrator")}</Text>
           </View>
 
           <View className="flex-row items-start">
@@ -313,7 +307,7 @@ export default function AutoAttendanceScreen() {
               color={allowed ? COLORS.primary : COLORS.gray2}
               style={{ marginTop: 1 }}
             />
-            <View className="ml-2.5 flex-1">
+            <View className="flex-1" style={{ marginStart: 10 }}>
               <Text className="text-sm font-semibold text-gray-800">
                 {policy.title}
               </Text>
@@ -324,13 +318,9 @@ export default function AutoAttendanceScreen() {
           </View>
 
           <View className="flex-row items-center justify-between mt-3 pt-3 border-t border-gray-100">
-            <View className="flex-1 pr-3">
-              <Text className="text-sm font-semibold text-gray-800">
-                Automatic attendance
-              </Text>
-              <Text className="text-xs text-gray-500 mt-0.5">
-                Managed by your administrator.
-              </Text>
+            <View className="flex-1" style={{ paddingEnd: 12 }}>
+              <Text className="text-sm font-semibold text-gray-800">{t("Automatic attendance")}</Text>
+              <Text className="text-xs text-gray-500 mt-0.5">{t("Managed by your administrator.")}</Text>
             </View>
             <Text className="text-xs font-semibold text-gray-600">
               {status.label}
@@ -353,57 +343,48 @@ export default function AutoAttendanceScreen() {
                   size={16}
                   color={COLORS.white}
                 />
-                <Text className="text-sm font-semibold text-white ml-1.5">
-                  Grant location access
-                </Text>
+                <Text className="text-sm font-semibold text-white" style={{ marginStart: 6 }}>{t("Grant location access")}</Text>
               </TouchableOpacity>
-              <Text className="text-xs text-gray-400 mt-2">
-                Automatic attendance needs precise location with "Allow all the
-                time" (Android) or "Always" (iOS) access to work while the app
-                is closed.
-              </Text>
+              <Text className="text-xs text-gray-400 mt-2">{t("Automatic attendance needs precise location with \"Allow all the time\" (Android) or \"Always\" (iOS) access to work while the app is closed.")}</Text>
             </>
           ) : null}
 
           {status.key === "unavailable" ? (
             <View className="flex-row items-start bg-red-50 rounded-lg px-3 py-2 mt-3">
               <Ionicons name="warning-outline" size={18} color="#DC2626" />
-              <Text className="text-xs text-red-600 ml-2 flex-1">
-                Automatic attendance could not start. Check that a work location
-                is assigned to you, or contact your administrator.
-              </Text>
+              <Text className="text-xs text-red-600 flex-1" style={{ marginStart: 8 }}>{t("Automatic attendance could not start. Check that a work location is assigned to you, or contact your administrator.")}</Text>
             </View>
           ) : null}
         </SectionCard>
 
-        <SectionCard title="Status">
+        <SectionCard title={t("Status")}>
           <View className="flex-row items-center py-1.5">
             <View
-              className="h-3 w-3 rounded-full mr-2"
-              style={{
+              className="h-3 w-3 rounded-full"
+              style={[{
                 backgroundColor: monitoring ? "#22C55E" : COLORS.gray2,
-              }}
+              }, { marginEnd: 8 }]}
             />
             <Text className="text-sm font-semibold text-gray-800">
-              {monitoring ? "Monitoring" : "Not Monitoring"}
+              {monitoring ? t("Monitoring") : t("Not Monitoring")}
             </Text>
           </View>
           <InfoRow
-            label="Automatic check-in/out"
-            value={active && fullActions ? "On" : "Off"}
+            label={t("Automatic check-in/out")}
+            value={active && fullActions ? t("On") : t("Off")}
           />
           <InfoRow
-            label="Last event"
-            value={lastEvent?.transition || "None yet"}
+            label={t("Last event")}
+            value={lastEvent?.transition || t("None yet")}
           />
           <InfoRow
-            label="Timestamp"
+            label={t("Timestamp")}
             value={formatTimestamp(lastEvent?.timestamp)}
           />
           {configured && permissionError ? (
             <View className="flex-row items-start bg-red-50 rounded-lg px-3 py-2 mt-2">
               <Ionicons name="warning-outline" size={18} color="#DC2626" />
-              <Text className="text-xs text-red-600 ml-2 flex-1">
+              <Text className="text-xs text-red-600 flex-1" style={{ marginStart: 8 }}>
                 {permissionError}
               </Text>
             </View>
@@ -411,7 +392,7 @@ export default function AutoAttendanceScreen() {
           {configured && reliabilityWarning ? (
             <View className="flex-row items-start bg-amber-50 rounded-lg px-3 py-2 mt-2">
               <Ionicons name="alert-circle-outline" size={18} color="#B45309" />
-              <Text className="text-xs ml-2 flex-1" style={{ color: "#B45309" }}>
+              <Text className="text-xs flex-1" style={[{ color: "#B45309" }, { marginStart: 8 }]}>
                 {reliabilityWarning}
               </Text>
             </View>
@@ -435,10 +416,10 @@ export default function AutoAttendanceScreen() {
                 size={18}
                 color={COLORS.gray}
               />
-              <Text className="text-xs text-gray-500 ml-2 flex-1">
+              <Text className="text-xs text-gray-500 flex-1" style={{ marginStart: 8 }}>
                 {Platform.OS === "ios"
-                  ? "Don't swipe this app away from the App Switcher while monitoring — it stops automatic check-in/out until you reopen the app. Locking the screen or pressing Home is fine."
-                  : "Don't \"Force stop\" this app from Settings while monitoring — it stops automatic check-in/out until you reopen the app. Swiping it away from Recents is fine. Also check your phone maker's battery settings (Xiaomi, Huawei, Oppo, Vivo, OnePlus, Samsung, etc. often restrict background apps by default)."}
+                  ? t("Don't swipe this app away from the App Switcher while monitoring — it stops automatic check-in/out until you reopen the app. Locking the screen or pressing Home is fine.")
+                  : t("Don't \"Force stop\" this app from Settings while monitoring — it stops automatic check-in/out until you reopen the app. Swiping it away from Recents is fine. Also check your phone maker's battery settings (Xiaomi, Huawei, Oppo, Vivo, OnePlus, Samsung, etc. often restrict background apps by default).")}
               </Text>
             </View>
             {Platform.OS === "android" ? (
@@ -449,9 +430,7 @@ export default function AutoAttendanceScreen() {
                 <Text
                   className="text-xs font-semibold"
                   style={{ color: COLORS.primary }}
-                >
-                  Open app settings
-                </Text>
+                >{t("Open app settings")}</Text>
               </TouchableOpacity>
             ) : null}
           </View>
@@ -459,15 +438,10 @@ export default function AutoAttendanceScreen() {
 
         {__DEV__ ? (
           <>
-            <Text className="text-xs font-semibold text-gray-400 mb-2">
-              DEVELOPER TESTING TOOLS (hidden in production builds)
-            </Text>
+            <Text className="text-xs font-semibold text-gray-400 mb-2">{t("DEVELOPER TESTING TOOLS (hidden in production builds)")}</Text>
 
-            <SectionCard title="Simulate Policy">
-              <Text className="text-xs text-gray-400 mb-1">
-                Overrides the server geotagging value locally so you can test
-                each state. Pauses the automatic server refresh until reset.
-              </Text>
+            <SectionCard title={t("Simulate Policy")}>
+              <Text className="text-xs text-gray-400 mb-1">{t("Overrides the server geotagging value locally so you can test each state. Pauses the automatic server refresh until reset.")}</Text>
               {DEV_POLICY_OPTIONS.map((value) => (
                 <DevPolicyRow
                   key={value}
@@ -484,36 +458,32 @@ export default function AutoAttendanceScreen() {
                 <Text
                   className="text-xs font-semibold"
                   style={{ color: COLORS.primary }}
-                >
-                  Reset to server policy
-                </Text>
+                >{t("Reset to server policy")}</Text>
               </TouchableOpacity>
             </SectionCard>
 
-            <SectionCard title="Manual Geofence Override">
+            <SectionCard title={t("Manual Geofence Override")}>
               <InputRow
-                label="Latitude"
+                label={t("Latitude")}
                 value={latitudeText}
                 onChangeText={setLatitudeText}
                 editable={!monitoring && !busy}
               />
               <InputRow
-                label="Longitude"
+                label={t("Longitude")}
                 value={longitudeText}
                 onChangeText={setLongitudeText}
                 editable={!monitoring && !busy}
               />
               <InputRow
-                label="Radius (m)"
+                label={t("Radius (m)")}
                 value={radiusText}
                 onChangeText={setRadiusText}
                 editable={!monitoring && !busy}
               />
-              <InfoRow label="Identifier" value={identifier} />
+              <InfoRow label={t("Identifier")} value={identifier} />
               {monitoring ? (
-                <Text className="text-xs text-gray-400 mt-1">
-                  Stop monitoring to change the location.
-                </Text>
+                <Text className="text-xs text-gray-400 mt-1">{t("Stop monitoring to change the location.")}</Text>
               ) : (
                 <TouchableOpacity
                   className="flex-row items-center justify-center mt-2 py-2 rounded-lg bg-gray-100"
@@ -527,19 +497,12 @@ export default function AutoAttendanceScreen() {
                     color={COLORS.primary}
                   />
                   <Text
-                    className="text-sm font-semibold ml-1.5"
-                    style={{ color: COLORS.primary }}
-                  >
-                    Use my current location
-                  </Text>
+                    className="text-sm font-semibold"
+                    style={[{ color: COLORS.primary }, { marginStart: 6 }]}
+                  >{t("Use my current location")}</Text>
                 </TouchableOpacity>
               )}
-              <Text className="text-xs text-gray-400 mt-2">
-                Overrides the office geofence with these coordinates. Note: if
-                the policy above is "all attendance actions", crossing this
-                manual fence will still trigger the real check-in/checkout API
-                — this is the same listener, not a separate sandbox.
-              </Text>
+              <Text className="text-xs text-gray-400 mt-2">{t("Overrides the office geofence with these coordinates. Note: if the policy above is \"all attendance actions\", crossing this manual fence will still trigger the real check-in/checkout API — this is the same listener, not a separate sandbox.")}</Text>
             </SectionCard>
 
             <TouchableOpacity
@@ -551,9 +514,7 @@ export default function AutoAttendanceScreen() {
               onPress={handleStart}
               disabled={busy || monitoring}
             >
-              <Text className="text-white text-base font-semibold">
-                Start Monitoring
-              </Text>
+              <Text className="text-white text-base font-semibold">{t("Start Monitoring")}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -565,9 +526,7 @@ export default function AutoAttendanceScreen() {
               onPress={handleStop}
               disabled={busy || !monitoring}
             >
-              <Text className="text-white text-base font-semibold">
-                Stop Monitoring
-              </Text>
+              <Text className="text-white text-base font-semibold">{t("Stop Monitoring")}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -578,16 +537,12 @@ export default function AutoAttendanceScreen() {
               <Text
                 className="text-base font-semibold"
                 style={{ color: COLORS.primary }}
-              >
-                Clear Status
-              </Text>
+              >{t("Clear Status")}</Text>
             </TouchableOpacity>
 
-            <SectionCard title="Event Log">
+            <SectionCard title={t("Event Log")}>
               {eventLog.length === 0 ? (
-                <Text className="text-sm text-gray-400 py-1.5">
-                  No events received in this session.
-                </Text>
+                <Text className="text-sm text-gray-400 py-1.5">{t("No events received in this session.")}</Text>
               ) : (
                 eventLog.map((entry) => (
                   <View
@@ -606,7 +561,7 @@ export default function AutoAttendanceScreen() {
                       }}
                     >
                       {entry.transition}
-                      {entry.message ? ` — ${entry.message}` : ""}
+                      {entry.message ? ` — ${translateMessage(entry.message)}` : ""}
                     </Text>
                     <Text className="text-xs text-gray-500">
                       {formatTimestamp(entry.timestamp || entry.receivedAt)}

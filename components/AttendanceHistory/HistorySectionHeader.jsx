@@ -1,6 +1,8 @@
+import { t, useTranslation } from '../../localization';
 /* eslint-disable react/prop-types */
 import React from 'react';
-import { View, Text } from 'react-native';
+import { View } from 'react-native';
+import Text from '../../localization/LocalizedText';
 import { SPACING, TYPO } from '../../constants';
 import useAppTheme from '../../hooks/useAppTheme';
 
@@ -14,6 +16,7 @@ import useAppTheme from '../../hooks/useAppTheme';
  * Needs an opaque background: it's sticky, so rows scroll underneath it.
  */
 function HistorySectionHeader({ title, count }) {
+  const { language, direction, isRTL } = useTranslation();
   const { colors } = useAppTheme();
 
   return (
@@ -37,7 +40,7 @@ function HistorySectionHeader({ title, count }) {
 
       {count > 0 && (
         <Text style={{ ...TYPO.caption, color: colors.textMuted }}>
-          {count === 1 ? '1 entry' : `${count} entries`}
+          {t("{{count}} entries", { count })}
         </Text>
       )}
     </View>

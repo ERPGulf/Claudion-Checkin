@@ -1,6 +1,8 @@
+import { useTranslation } from '../../localization';
 /* eslint-disable react/prop-types */
 import React from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+import Text from '../../localization/LocalizedText';
 import { RADIUS, SPACING, TYPO } from '../../constants';
 import useAppTheme from '../../hooks/useAppTheme';
 
@@ -17,6 +19,7 @@ import useAppTheme from '../../hooks/useAppTheme';
  * how many landed that day, which is what makes a long list scannable by day.
  */
 function NotificationDateHeader({ label, count }) {
+  const { language, direction, isRTL } = useTranslation();
   const { colors } = useAppTheme();
 
   return (

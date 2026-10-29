@@ -1,10 +1,6 @@
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  ActivityIndicator,
-  Linking,
-} from "react-native";
+import { translateMessage, t, useTranslation } from '../localization';
+import { View, TouchableOpacity, ActivityIndicator, Linking } from 'react-native';
+import Text from '../localization/LocalizedText';
 import { SafeAreaView } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Image } from "expo-image";
@@ -45,12 +41,13 @@ import { ATTENDANCE_FEATURES, isFeatureEnabled } from "../utils/featureSettings"
 import { getAuthSessionGeneration, isAuthSessionSuspended } from "../utils/authSessionGuard";
 
 function AttendanceCamera() {
+  const { language, direction, isRTL } = useTranslation();
   const navigation = useNavigation();
   const dispatch = useDispatch();
   const store = useStore();
   const { colors } = useAppTheme();
   // The themed stack header — the one back button on this screen.
-  useModernScreenHeader("Attendance Camera");
+  useModernScreenHeader(t("Attendance Camera"));
   const [permission, requestPermission] = useCameraPermissions();
   const [facing, setFacing] = useState("front");
   const [photo, setPhoto] = useState(null);
@@ -63,10 +60,10 @@ function AttendanceCamera() {
   const screenGeneration = useRef(getAuthSessionGeneration()).current;
   const assertPhotoAvailable = () => {
     if (screenGeneration !== getAuthSessionGeneration() || isAuthSessionSuspended()) {
-      throw new Error("The account changed. Please try again.");
+      throw new Error(t("The account changed. Please try again."));
     }
     if (!isFeatureEnabled(selectFeatureSettings(store.getState()), ATTENDANCE_FEATURES.PHOTO_UPLOAD)) {
-      throw new Error("Your administrator has turned photo attendance off for your account.");
+      throw new Error(t("Your administrator has turned photo attendance off for your account."));
     }
   };
 
@@ -90,13 +87,13 @@ function AttendanceCamera() {
       assertPhotoAvailable();
       setPhoto(newPhoto);
     } catch (error) {
-      Toast.show({ type: "error", text1: "Photo capture failed" });
+      Toast.show({ type: "error", text1: t("Photo capture failed") });
     }
   };
 
   // ✅ CHECK-IN / CHECK-OUT HANDLER
   const handleChecking = async (type, custom_in) => {
-    const failedTitle = type === "IN" ? "Check-in failed" : "Check-out failed";
+    const failedTitle = type === "IN" ? t("Check-in failed") : t("Check-out failed");
 
     try {
       assertPhotoAvailable();
@@ -131,8 +128,8 @@ function AttendanceCamera() {
           hapticsMessage("error");
           Toast.show({
             type: "error",
-            text1: "Location Error",
-            text2: `You are ${locationData.distance}m away. Allowed: ${locationData.radius}m`,
+            text1: t("Location Error"),
+            text2: t("You are {{distance}}m away. Allowed: {{radius}}m", { distance: locationData.distance, radius: locationData.radius }),
           });
           return;
         }
@@ -187,11 +184,11 @@ function AttendanceCamera() {
           type: "info",
           text1:
             session.status === SESSION_STATUS.CHECKED_IN
-              ? "Already checked in"
-              : "Already checked out",
+              ? t("Already checked in")
+              : t("Already checked out"),
           text2:
             session.closedBy === SESSION_ORIGIN.AUTO
-              ? "You were checked out automatically when you left the office."
+              ? t("You were checked out automatically when you left the office.")
               : undefined,
         });
         navigation.navigate("Attendance action");
@@ -205,7 +202,7 @@ function AttendanceCamera() {
         Toast.show({
           type: "error",
           text1: failedTitle,
-          text2: outcome.response?.message,
+          text2: translateMessage(outcome.response?.message),
         });
         return;
       }
@@ -216,7 +213,7 @@ function AttendanceCamera() {
       // The server accepted the request but answered without naming the record,
       // so there is nothing for the photo to attach to.
       if (!docname) {
-        throw new Error("Check-in failed: Missing Checkin ID");
+        throw new Error(t("Check-in failed: Missing Checkin ID"));
       }
 
       // Redux update. The attendance log now exists on the server, so the
@@ -252,9 +249,9 @@ function AttendanceCamera() {
           type: "error",
           text1:
             type === "IN"
-              ? "Checked in — photo not saved"
-              : "Checked out — photo not saved",
-          text2: "Your attendance was recorded without the photo.",
+              ? t("Checked in — photo not saved")
+              : t("Checked out — photo not saved"),
+          text2: t("Your attendance was recorded without the photo."),
         });
         navigation.navigate("Attendance action");
         return;
@@ -263,7 +260,7 @@ function AttendanceCamera() {
       hapticsMessage("success");
       Toast.show({
         type: "success",
-        text1: type === "IN" ? "Checked in" : "Checked out",
+        text1: type === "IN" ? t("Checked in") : t("Checked out"),
       });
 
       navigation.navigate("Attendance action");
@@ -274,7 +271,7 @@ function AttendanceCamera() {
       Toast.show({
         type: "error",
         text1: failedTitle,
-        text2: "Please try again.",
+        text2: t("Please try again."),
       });
     } finally {
       setIsLoading(false);
@@ -284,7 +281,7 @@ function AttendanceCamera() {
   // ✅ UPLOAD PHOTO FUNCTION
   // Throws on failure; the caller owns the one toast for the outcome.
   const uploadPicture = async (docname, { scope }) => {
-    if (!photo?.uri) throw new Error("No photo available for upload");
+    if (!photo?.uri) throw new Error(t("No photo available for upload"));
 
     const file = {
       uri: photo.uri,
@@ -298,7 +295,7 @@ function AttendanceCamera() {
 
     // The API returns: { message: ["/files/yourfile.png"] }
     const uploadedFileUrl = uploadResponse?.message?.[0];
-    if (!uploadedFileUrl) throw new Error("Upload failed: No file URL received");
+    if (!uploadedFileUrl) throw new Error(t("Upload failed: No file URL received"));
 
     // 2️⃣ Update custom_image field in Employee Checkin doctype
     const updateFormData = new FormData();
@@ -321,9 +318,7 @@ function AttendanceCamera() {
             color: colors.textMuted,
             marginTop: SPACING.sm,
           }}
-        >
-          Loading camera...
-        </Text>
+        >{t("Loading camera...")}</Text>
       </SafeAreaView>
     );
 
@@ -340,21 +335,19 @@ function AttendanceCamera() {
             textAlign: "center",
             marginBottom: SPACING.lg,
           }}
-        >
-          We need your permission to show the camera
-        </Text>
+        >{t("We need your permission to show the camera")}</Text>
         {/* Once the OS stops asking, the request resolves silently — only
             Settings can grant it then. */}
         {permission.canAskAgain ? (
           <ActionButton
             icon="camera-outline"
-            label="Allow camera"
+            label={t("Allow camera")}
             onPress={requestPermission}
           />
         ) : (
           <ActionButton
             icon="settings-outline"
-            label="Open Settings"
+            label={t("Open Settings")}
             onPress={() => Linking.openSettings()}
           />
         )}
@@ -377,7 +370,7 @@ function AttendanceCamera() {
           }}
         >
           <TouchableOpacity
-            style={{ position: "absolute", left: SPACING.md }}
+            style={{ position: "absolute", start: SPACING.md }}
             onPress={() => setPhoto(null)}
             disabled={isLoading}
             accessibilityRole="button"
@@ -388,13 +381,9 @@ function AttendanceCamera() {
                 ...TYPO.body,
                 color: isLoading ? colors.textMuted : colors.errorText,
               }}
-            >
-              Retake
-            </Text>
+            >{t("Retake")}</Text>
           </TouchableOpacity>
-          <Text style={{ ...TYPO.title3, color: colors.textPrimary }}>
-            Preview
-          </Text>
+          <Text style={{ ...TYPO.title3, color: colors.textPrimary }}>{t("Preview")}</Text>
         </View>
 
         <View style={{ flex: 1, paddingHorizontal: SPACING.md }}>
@@ -413,7 +402,7 @@ function AttendanceCamera() {
           <ActionButton
             size="lg"
             icon={checkin ? "log-out-outline" : "log-in-outline"}
-            label={checkin ? "Check out" : "Check in"}
+            label={checkin ? t("Check out") : t("Check in")}
             loading={isLoading}
             onPress={() =>
               checkin ? handleChecking("OUT", 0) : handleChecking("IN", 1)
@@ -443,7 +432,7 @@ function AttendanceCamera() {
         <TouchableOpacity
           onPress={takePicture}
           accessibilityRole="button"
-          accessibilityLabel="Take photo"
+          accessibilityLabel={t("Take photo")}
           style={{ width: 80, height: 80 }}
           className="bg-white justify-center items-center rounded-full"
         >
@@ -453,8 +442,8 @@ function AttendanceCamera() {
         <TouchableOpacity
           onPress={toggleCameraFacing}
           accessibilityRole="button"
-          accessibilityLabel="Switch camera"
-          style={{ width: 80, height: 80, position: "absolute", left: 16 }}
+          accessibilityLabel={t("Switch camera")}
+          style={{ width: 80, height: 80, position: "absolute", start: 16 }}
           className="justify-center items-center rounded-full"
         >
           <Ionicons name="refresh" size={44} color="white" />

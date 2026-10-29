@@ -1,3 +1,4 @@
+import { t, useTranslation } from "../localization";
 import { useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useDispatch, useSelector } from 'react-redux';
@@ -50,6 +51,7 @@ import { readProvisioning } from '../utils/provisioning';
  * }}
  */
 export default function useLogin() {
+  useTranslation();
   const dispatch = useDispatch();
   const [isLoading, setIsLoading] = useState(false);
   const employeeCode = useSelector(selectEmployeeCode);
@@ -67,9 +69,9 @@ export default function useLogin() {
   // Form validation schema
   const loginSchema = Yup.object().shape({
     password: Yup.string()
-      .min(5, 'Too short!')
-      .max(24, 'Too long!')
-      .required('Please enter your password.'),
+      .min(5, t("Too short!"))
+      .max(24, t("Too long!"))
+      .required(t("Please enter your password.")),
   });
 
   // Handle login
@@ -84,8 +86,8 @@ export default function useLogin() {
       if (!provisioned) {
         Toast.show({
           type: 'error',
-          text1: 'QR code not scanned',
-          text2: 'Please scan QR code first',
+          text1: t("QR code not scanned"),
+          text2: t("Please scan QR code first"),
           autoHide: true,
           visibilityTime: 3000,
         });
@@ -124,7 +126,7 @@ export default function useLogin() {
 
       Toast.show({
         type: 'success',
-        text1: 'Login successful',
+        text1: t("Login successful"),
         autoHide: true,
         visibilityTime: 3000,
       });

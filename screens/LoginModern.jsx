@@ -1,18 +1,18 @@
+import AuthFooter from '../components/common/AuthFooter';
+import { t, useTranslation, getLanguage } from "../localization";
 import React, { useEffect, useRef } from "react";
 import {
   Animated,
   Easing,
-  I18nManager,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Text,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { Formik } from "formik";
-import { BUILD_TAG, SPACING, TYPO } from "../constants";
+import { SPACING } from "../constants";
 import useAppTheme from "../hooks/useAppTheme";
 import useLogin from "../hooks/useLogin";
 import useReducedMotion from "../hooks/useReducedMotion";
@@ -89,6 +89,7 @@ const LIFT_DELAY_MS = 110;
  * tap on Login submits instead of only dismissing the keyboard.
  */
 function LoginModern() {
+  useTranslation();
   const navigation = useNavigation();
   const { colors } = useAppTheme();
   const reduceMotion = useReducedMotion();
@@ -208,9 +209,9 @@ function LoginModern() {
                       are not this screen's invention. */}
                   <Animated.View style={{ opacity: fade }}>
                     <FormField
-                      label="Password"
+                      label={t("Password")}
                       icon="lock-closed-outline"
-                      placeholder="Enter password"
+                      placeholder={t("Enter password")}
                       value={values.password}
                       onChangeText={handleChange("password")}
                       onBlur={() => setFieldTouched("password")}
@@ -226,8 +227,8 @@ function LoginModern() {
                           ? errors.password
                           : undefined
                       }
-                      accessibilityLabel="Password"
-                      accessibilityHint="Enter the password for your Claudion account"
+                      accessibilityLabel={t("Password")}
+                      accessibilityHint={t("Enter the password for your Claudion account")}
                     />
                   </Animated.View>
 
@@ -255,8 +256,8 @@ function LoginModern() {
                         highest-contrast thing on the screen; the shadow was
                         doing nothing the colour was not. */}
                     <ActionButton
-                      label="Login"
-                      icon={I18nManager.isRTL ? "arrow-back" : "arrow-forward"}
+                      label={t("Login")}
+                      icon={getLanguage() === 'ar' ? "arrow-back" : "arrow-forward"}
                       variant="accent"
                       size="lg"
                       loading={isLoading}
@@ -271,7 +272,7 @@ function LoginModern() {
                         cannot navigate out from under an in-flight login. */}
                     <OrDivider style={{ marginVertical: SPACING.lg }} />
                     <ActionButton
-                      label="Scan QR Code"
+                      label={t("Scan QR Code")}
                       icon="qr-code-outline"
                       variant="outline"
                       size="lg"
@@ -280,7 +281,7 @@ function LoginModern() {
                     />
                     {isMobileAuthAvailable() && (
                       <ActionButton
-                        label="Sign in with mobile number"
+                        label={t("Sign in with mobile number")}
                         icon="phone-portrait-outline"
                         variant="outline"
                         size="lg"
@@ -297,16 +298,7 @@ function LoginModern() {
                       two spacers are the only places the layout may stretch. */}
                   <View style={{ flex: 1, minHeight: SPACING.xl }} />
 
-                  {/* Same OTA build stamp, same source of truth. */}
-                  <Text
-                    style={{
-                      ...TYPO.caption2,
-                      color: colors.textMuted,
-                      textAlign: "center",
-                    }}
-                  >
-                    {BUILD_TAG}
-                  </Text>
+                  <AuthFooter />
                 </>
               )}
             </Formik>

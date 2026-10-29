@@ -1,5 +1,7 @@
+import { t, useTranslation } from '../localization';
 import React, { useRef, useState } from "react";
-import { View, Text, ScrollView, RefreshControl } from "react-native";
+import { View, ScrollView, RefreshControl } from 'react-native';
+import Text from '../localization/LocalizedText';
 import { Ionicons } from "@expo/vector-icons";
 import {
   SafeAreaView,
@@ -32,6 +34,7 @@ const DEV_BREAK_PRESETS = [
 ];
 
 function AttendanceAction() {
+  const { language, direction, isRTL } = useTranslation();
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useAppTheme();
   const [devOpen, setDevOpen] = useState(false);
@@ -72,7 +75,7 @@ function AttendanceAction() {
     handleInvalidateAccessToken,
   } = useAttendanceAction();
 
-  useModernScreenHeader("Attendance Action");
+  useModernScreenHeader(t("Attendance Action"));
 
   // Identical gating to the classic screen — only the presentation differs.
   const checkoutBlocked =
@@ -88,12 +91,12 @@ function AttendanceAction() {
 
   const locationValue =
     restrictLocation === 0
-      ? "Not Required"
+      ? t("Not Required")
       : !ready
-        ? "Getting Location..."
+        ? t("Getting Location...")
         : inTarget
-          ? "In bound"
-          : "Out of bound";
+          ? t("In bound")
+          : t("Out of bound");
 
   // A local AsyncStorage read, over in a frame or two. A spinner and "Loading
   // settings..." here only flashed on every visit; a blank page does not.
@@ -147,9 +150,7 @@ function AttendanceAction() {
                 textAlign: "center",
                 color: colors.warningText,
               }}
-            >
-              BREAK IN PROGRESS
-            </Text>
+            >{t("BREAK IN PROGRESS")}</Text>
             <Text
               style={{
                 ...TYPO.title1,
@@ -168,9 +169,7 @@ function AttendanceAction() {
                 color: colors.textMuted,
                 marginTop: SPACING.xs,
               }}
-            >
-              Auto-ends at 02:00:00
-            </Text>
+            >{t("Auto-ends at 02:00:00")}</Text>
           </Card>
         )}
 
@@ -180,11 +179,11 @@ function AttendanceAction() {
         {checkin && autoActionsEnabled && (
           <StatusBanner
             tone="success"
-            title="Automatic checkout is enabled"
+            title={t("Automatic checkout is enabled")}
             message={
               sessionOrigin === SESSION_ORIGIN.AUTO
-                ? "Checked in automatically. You'll be checked out when you leave the office."
-                : "You'll be checked out automatically when you leave the office."
+                ? t("Checked in automatically. You'll be checked out when you leave the office.")
+                : t("You'll be checked out automatically when you leave the office.")
             }
             style={{ marginTop: SPACING.lg }}
           />
@@ -192,14 +191,14 @@ function AttendanceAction() {
 
         {/* -------------------- SESSION DETAILS -------------------- */}
         <SectionHeader
-          title="Session details"
+          title={t("Session details")}
           style={{ marginTop: SPACING.xxl }}
         />
 
         <Card>
           <SettingsRow
             icon="calendar-outline"
-            title="Date and time"
+            title={t("Date and time")}
             value={dateTime}
           />
           <RowDivider />
@@ -215,10 +214,10 @@ function AttendanceAction() {
                 ? colors.errorText
                 : colors.textPrimary
             }
-            title="Location"
+            title={t("Location")}
             description={
               restrictLocation === 1 && distanceInfo
-                ? `Distance: ${distanceInfo.distance} m | Allowed: ${distanceInfo.radius} m`
+                ? t("Distance: {{distance}} m | Allowed: {{radius}} m", { distance: distanceInfo.distance, radius: distanceInfo.radius })
                 : undefined
             }
             value={locationValue}
@@ -231,7 +230,7 @@ function AttendanceAction() {
             size="lg"
             elevated
             icon={checkin ? "log-out-outline" : "log-in-outline"}
-            label={checkin ? "Check out" : "Check in"}
+            label={checkin ? t("Check out") : t("Check in")}
             onPress={() => {
               tapRef.current = "primary";
               handlePrimaryAction();
@@ -244,8 +243,8 @@ function AttendanceAction() {
             <>
               <StatusBanner
                 tone="warning"
-                title="You're outside the allowed area"
-                message="Move within the office radius to record this action."
+                title={t("You're outside the allowed area")}
+                message={t("Move within the office radius to record this action.")}
                 style={{ marginTop: SPACING.md }}
               />
               {/* Location is otherwise only read on mount and pull-to-refresh,
@@ -253,7 +252,7 @@ function AttendanceAction() {
               <ActionButton
                 variant="outline"
                 icon="locate-outline"
-                label="Check my location again"
+                label={t("Check my location again")}
                 loading={!ready}
                 onPress={fetchStatusAndLocation}
                 style={{ marginTop: SPACING.sm }}
@@ -278,10 +277,10 @@ function AttendanceAction() {
                 }
                 label={
                   breakUnavailable
-                    ? "Break not allowed"
+                    ? t("Break not allowed")
                     : onBreak
-                      ? "End break"
-                      : "Take break"
+                      ? t("End break")
+                      : t("Take break")
                 }
                 onPress={() => {
                   // A reason is asked for when starting a break and never when
@@ -314,8 +313,8 @@ function AttendanceAction() {
         {__DEV__ && (
           <>
             <SectionHeader
-              title="Developer tools"
-              subtitle="Debug builds only — never shipped to users."
+              title={t("Developer tools")}
+              subtitle={t("Debug builds only — never shipped to users.")}
               style={{ marginTop: SPACING.xxl }}
             />
 
@@ -324,8 +323,8 @@ function AttendanceAction() {
                 icon="construct-outline"
                 iconTint={colors.warningSurface}
                 iconColor={colors.warningText}
-                title="Developer tools"
-                description={devOpen ? "Tap to collapse" : "Tap to expand"}
+                title={t("Developer tools")}
+                description={devOpen ? t("Tap to collapse") : t("Tap to expand")}
                 onPress={() => setDevOpen((open) => !open)}
               >
                 <Ionicons
@@ -346,7 +345,7 @@ function AttendanceAction() {
                     variant="tinted"
                     tone="error"
                     icon="key-outline"
-                    label="DEV: Invalidate access token"
+                    label={t("DEV: Invalidate access token")}
                     onPress={handleInvalidateAccessToken}
                   />
 
@@ -356,7 +355,7 @@ function AttendanceAction() {
                     hitSlop={0}
                     accessibilityRole="switch"
                     accessibilityState={{ checked: devBreakMockMode }}
-                    accessibilityLabel="DEV local break flow"
+                    accessibilityLabel={t("DEV local break flow")}
                     style={{
                       marginTop: SPACING.md,
                       flexDirection: "row",
@@ -376,9 +375,7 @@ function AttendanceAction() {
                   >
                     <Text
                       style={{ ...TYPO.subhead, color: colors.textPrimary }}
-                    >
-                      DEV local break flow
-                    </Text>
+                    >{t("DEV local break flow")}</Text>
                     <Text
                       style={{
                         ...TYPO.caption2,
@@ -388,7 +385,7 @@ function AttendanceAction() {
                           : colors.textMuted,
                       }}
                     >
-                      {devBreakMockMode ? "ON" : "OFF"}
+                      {devBreakMockMode ? t("ON") : t("OFF")}
                     </Text>
                   </PressableScale>
 
@@ -401,9 +398,7 @@ function AttendanceAction() {
                       marginTop: SPACING.lg,
                       marginBottom: SPACING.sm,
                     }}
-                  >
-                    BREAK UI PRESETS
-                  </Text>
+                  >{t("BREAK UI PRESETS")}</Text>
 
                   <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
                     {DEV_BREAK_PRESETS.map((preset) => (
@@ -412,7 +407,7 @@ function AttendanceAction() {
                         onPress={() => applyDevBreakPreset(preset.key)}
                         scaleTo={0.96}
                         hitSlop={0}
-                        accessibilityLabel={`Preset ${preset.label}`}
+                        accessibilityLabel={t("Preset {{label}}", { label: t(preset.label) })}
                         style={{
                           minHeight: 34,
                           justifyContent: "center",
@@ -433,7 +428,7 @@ function AttendanceAction() {
                             color: colors.textSecondary,
                           }}
                         >
-                          {preset.label}
+                          {t(preset.label)}
                         </Text>
                       </PressableScale>
                     ))}
@@ -451,9 +446,9 @@ function AttendanceAction() {
       <BottomSheet
         visible={isBreakSheetVisible}
         onClose={() => setBreakSheetVisible(false)}
-        title="Take a break"
-        subtitle="Add a reason for this break (optional)"
-        closeLabel="Cancel"
+        title={t("Take a break")}
+        subtitle={t("Add a reason for this break (optional)")}
+        closeLabel={t("Cancel")}
         maxHeightRatio={0.6}
       >
         <View
@@ -464,19 +459,19 @@ function AttendanceAction() {
           }}
         >
           <FormField
-            label="Reason"
+            label={t("Reason")}
             optional
             value={breakReasonInput}
             onChangeText={setBreakReasonInput}
-            placeholder="What's the break for?"
+            placeholder={t("What's the break for?")}
             multiline
             minLines={3}
             align="auto"
-            accessibilityLabel="Break reason"
+            accessibilityLabel={t("Break reason")}
           />
 
           <ActionButton
-            label="Start break"
+            label={t("Start break")}
             icon="cafe-outline"
             variant="filled"
             size="lg"

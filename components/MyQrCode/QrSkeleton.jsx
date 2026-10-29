@@ -1,3 +1,4 @@
+import { t, useTranslation } from "../../localization";
 /* eslint-disable react/prop-types */
 import React from 'react';
 import { View } from 'react-native';
@@ -17,12 +18,13 @@ import { QR_SIZE } from './QrPlate';
  * it breathes at the same rate as every other skeleton in the app.
  */
 function QrSkeleton() {
+  useTranslation();
   const { colors } = useAppTheme();
   const opacity = useSkeletonPulse();
 
   return (
     <Card style={{ padding: SPACING.lg, alignItems: 'center' }}>
-      <View accessible accessibilityLabel="Loading your QR code">
+      <View accessible accessibilityLabel={t("Loading your QR code")}>
         <SkeletonBlock
           width={QR_SIZE + SPACING.lg * 2}
           height={QR_SIZE + SPACING.lg * 2}

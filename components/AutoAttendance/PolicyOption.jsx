@@ -1,6 +1,8 @@
+import { useTranslation } from '../../localization';
 /* eslint-disable react/prop-types */
 import React, { useEffect, useRef } from 'react';
-import { Animated, Text, View } from 'react-native';
+import { Animated, View } from 'react-native';
+import Text from '../../localization/LocalizedText';
 import { Ionicons } from '@expo/vector-icons';
 import { ICON, RADIUS, SPACING, TYPO } from '../../constants';
 import useAppTheme from '../../hooks/useAppTheme';
@@ -26,6 +28,7 @@ function PolicyOption({
   onPress,
   showDivider = false,
 }) {
+  const { language, direction, isRTL } = useTranslation();
   const { colors } = useAppTheme();
 
   // Transform/opacity only, so the tick can run on the native driver.

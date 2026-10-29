@@ -1,6 +1,8 @@
+import { t, useTranslation } from '../../localization';
 /* eslint-disable react/prop-types */
 import React from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+import Text from '../../localization/LocalizedText';
 import { SPACING, TYPO } from '../../constants';
 import useAppTheme from '../../hooks/useAppTheme';
 
@@ -8,7 +10,8 @@ import useAppTheme from '../../hooks/useAppTheme';
  * "── or ──" between a screen's own action and the other ways to sign in.
  * Decorative, so screen readers skip it; the buttons carry their own labels.
  */
-function OrDivider({ label = 'or', style }) {
+function OrDivider({ label = t("or"), style }) {
+  const { isRTL, direction } = useTranslation();
   const { colors } = useAppTheme();
   const line = <View style={{ flex: 1, height: 1, backgroundColor: colors.cardBorder }} />;
 

@@ -1,12 +1,7 @@
+import { isolateBidi, translateMessage, t, useTranslation } from '../localization';
 import React from "react";
-import {
-  ActivityIndicator,
-  Linking,
-  Platform,
-  ScrollView,
-  Text,
-  View,
-} from "react-native";
+import { ActivityIndicator, Linking, Platform, ScrollView, View } from 'react-native';
+import Text from '../localization/LocalizedText';
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { ICON, RADIUS, SPACING, TYPO } from "../constants";
@@ -45,6 +40,7 @@ import {
  * a nested card per group would have meant cards three deep.
  */
 function DevGroup({ title, subtitle, children, showDivider = true }) {
+  const { language, direction, isRTL } = useTranslation();
   const { colors } = useAppTheme();
 
   return (
@@ -99,8 +95,9 @@ function DevGroup({ title, subtitle, children, showDivider = true }) {
  * end up with a success tint and an error label.
  */
 function AutoAttendance() {
+  const { language, direction, isRTL } = useTranslation();
   const { colors } = useAppTheme();
-  useModernScreenHeader("Automatic Attendance");
+  useModernScreenHeader(t("Automatic Attendance"));
 
   const {
     available,
@@ -147,8 +144,8 @@ function AutoAttendance() {
           <Card>
             <EmptyState
               icon="hardware-chip-outline"
-              title="Not available in this build"
-              description="Automatic attendance needs a development or production build that includes the geofencing module. Rebuild the app to use it here."
+              title={t("Not available in this build")}
+              description={t("Automatic attendance needs a development or production build that includes the geofencing module. Rebuild the app to use it here.")}
             />
           </Card>
         </View>
@@ -164,25 +161,25 @@ function AutoAttendance() {
   const known = presence != null;
 
   const headline = (() => {
-    if (presenceLoading && !known) return "Checking your location…";
+    if (presenceLoading && !known) return t("Checking your location…");
     if (!known) {
-      return permissionGranted ? "Location unavailable" : "Location access needed";
+      return permissionGranted ? t("Location unavailable") : t("Location access needed");
     }
     return presence.withinRadius
-      ? "You're at the office"
-      : "You're away from the office";
+      ? t("You're at the office")
+      : t("You're away from the office");
   })();
 
   const supporting = (() => {
-    if (presenceLoading && !known) return "Reading your current position.";
+    if (presenceLoading && !known) return t("Reading your current position.");
     if (!known) {
       return permissionGranted
-        ? "No location fix or office boundary yet."
-        : "Grant location access to see whether you're at the office.";
+        ? t("No location fix or office boundary yet.")
+        : t("Grant location access to see whether you're at the office.");
     }
     return presence.withinRadius
-      ? `Inside the ${formatDistance(presence.radius)} boundary.`
-      : `About ${formatDistance(presence.distance)} away.`;
+      ? t("Inside the {{radius}} boundary.", { radius: formatDistance(presence.radius) })
+      : t("About {{distance}} away.", { distance: formatDistance(presence.distance) });
   })();
 
   return (
@@ -240,7 +237,7 @@ function AutoAttendance() {
               <PressableScale
                 onPress={refreshPresence}
                 disabled={presenceLoading}
-                accessibilityLabel="Refresh location"
+                accessibilityLabel={t("Refresh location")}
                 style={{
                   width: 36,
                   height: 36,
@@ -287,7 +284,7 @@ function AutoAttendance() {
             {known ? (
               <StatusBadge
                 tone="neutral"
-                label={`${formatDistance(presence.distance)} away`}
+                label={t("{{distance}} away", { distance: formatDistance(presence.distance) })}
                 icon="navigate-outline"
                 style={{ marginBottom: SPACING.xs }}
               />
@@ -297,8 +294,8 @@ function AutoAttendance() {
 
         {/* ---------- Geotagging ---------- */}
         <SectionHeader
-          title="Geotagging"
-          subtitle="Set by your administrator"
+          title={t("Geotagging")}
+          subtitle={t("Set by your administrator")}
           style={{ marginTop: SPACING.xl }}
         />
 
@@ -318,8 +315,8 @@ function AutoAttendance() {
           <SettingsRow
             size="comfortable"
             icon="walk-outline"
-            title="Automatic attendance"
-            description="Managed by your administrator."
+            title={t("Automatic attendance")}
+            description={t("Managed by your administrator.")}
           >
             <StatusBadge tone={status.tone} label={status.label} />
           </SettingsRow>
@@ -328,7 +325,7 @@ function AutoAttendance() {
         {status.key === "permission" ? (
           <>
             <ActionButton
-              label="Grant location access"
+              label={t("Grant location access")}
               icon="location-outline"
               variant="filled"
               size="md"
@@ -343,32 +340,28 @@ function AutoAttendance() {
                 color: colors.textMuted,
                 marginTop: SPACING.sm,
               }}
-            >
-              Automatic attendance needs precise location with &quot;Allow all
-              the time&quot; (Android) or &quot;Always&quot; (iOS) access to work
-              while the app is closed.
-            </Text>
+            >{t("Automatic attendance needs precise location with \"Allow all the time\" (Android) or \"Always\" (iOS) access to work while the app is closed.")}</Text>
           </>
         ) : null}
 
         {status.key === "unavailable" ? (
           <StatusBanner
             tone="error"
-            title="Monitoring unavailable"
-            message="Automatic attendance could not start. Check that a work location is assigned to you, or contact your administrator."
+            title={t("Monitoring unavailable")}
+            message={t("Automatic attendance could not start. Check that a work location is assigned to you, or contact your administrator.")}
             style={{ marginTop: SPACING.md }}
           />
         ) : null}
 
         {/* ---------- Status ---------- */}
         <SectionHeader
-          title="Status"
-          subtitle="What the monitoring service is doing right now"
+          title={t("Status")}
+          subtitle={t("What the monitoring service is doing right now")}
           style={{ marginTop: SPACING.xl }}
         />
 
         <Card>
-          <SettingsRow size="comfortable" icon="radio-outline" title="Monitoring">
+          <SettingsRow size="comfortable" icon="radio-outline" title={t("Monitoring")}>
             <StatusBadge
               tone={monitoringState.tone}
               label={monitoringState.label}
@@ -379,7 +372,7 @@ function AutoAttendance() {
           <SettingsRow
             size="comfortable"
             icon="flash-outline"
-            title="Automatic check-in/out"
+            title={t("Automatic check-in/out")}
           >
             <StatusBadge
               tone={automaticState.tone}
@@ -390,7 +383,7 @@ function AutoAttendance() {
           <SettingsRow
             size="comfortable"
             icon="swap-vertical-outline"
-            title="Last event"
+            title={t("Last event")}
           >
             <StatusBadge
               tone={transitionState.tone}
@@ -402,7 +395,7 @@ function AutoAttendance() {
           <SettingsRow
             size="comfortable"
             icon="time-outline"
-            title="Last update"
+            title={t("Last update")}
             value={formatTimestamp(lastEvent?.timestamp)}
           />
         </Card>
@@ -410,7 +403,7 @@ function AutoAttendance() {
         {configured && permissionError ? (
           <StatusBanner
             tone="error"
-            title="Location permission needed"
+            title={t("Location permission needed")}
             message={permissionError}
             style={{ marginTop: SPACING.md }}
           />
@@ -420,14 +413,14 @@ function AutoAttendance() {
           <>
             <StatusBanner
               tone="warning"
-              title="Monitoring may be delayed"
+              title={t("Monitoring may be delayed")}
               message={reliabilityWarning}
               style={{ marginTop: SPACING.md }}
             />
             {/* Right under the warning that sends people to Settings. Both
                 platforms: Linking.openSettings opens this app's page on iOS too. */}
             <ActionButton
-              label="Open app settings"
+              label={t("Open app settings")}
               icon="settings-outline"
               variant="outline"
               size="md"
@@ -448,11 +441,11 @@ function AutoAttendance() {
           // Huawei, Oppo, Vivo, OnePlus, Samsung) killing it in the background.
           <StatusBanner
             tone="info"
-            title="Keep the app running"
+            title={t("Keep the app running")}
             message={
               Platform.OS === "ios"
-                ? "Don't swipe this app away from the App Switcher while monitoring — it stops automatic check-in/out until you reopen the app. Locking the screen or pressing Home is fine."
-                : "Don't \"Force stop\" this app from Settings while monitoring — it stops automatic check-in/out until you reopen the app. Swiping it away from Recents is fine. Also check your phone maker's battery settings (Xiaomi, Huawei, Oppo, Vivo, OnePlus, Samsung, etc. often restrict background apps by default)."
+                ? t("Don't swipe this app away from the App Switcher while monitoring — it stops automatic check-in/out until you reopen the app. Locking the screen or pressing Home is fine.")
+                : t("Don't \"Force stop\" this app from Settings while monitoring — it stops automatic check-in/out until you reopen the app. Swiping it away from Recents is fine. Also check your phone maker's battery settings (Xiaomi, Huawei, Oppo, Vivo, OnePlus, Samsung, etc. often restrict background apps by default).")
             }
             style={{ marginTop: SPACING.md }}
           />
@@ -462,28 +455,28 @@ function AutoAttendance() {
         {__DEV__ ? (
           <CollapsibleCard
             icon="construct-outline"
-            title="Developer Tools"
-            subtitle="Hidden in production builds"
-            badgeLabel="Debug only"
+            title={t("Developer Tools")}
+            subtitle={t("Hidden in production builds")}
+            badgeLabel={t("Debug only")}
             badgeTone="warning"
             style={{ marginTop: SPACING.xl }}
           >
             <DevGroup
-              title="Policy simulation"
-              subtitle="Overrides the server geotagging value locally so you can test each state. Pauses the automatic server refresh until reset."
+              title={t("Policy simulation")}
+              subtitle={t("Overrides the server geotagging value locally so you can test each state. Pauses the automatic server refresh until reset.")}
             >
               {DEV_POLICY_OPTIONS.map((value, index) => (
                 <PolicyOption
                   key={value}
-                  title={GEOTAGGING_LABELS[value].title}
-                  description={GEOTAGGING_LABELS[value].description}
+                  title={t(GEOTAGGING_LABELS[value].title)}
+                  description={t(GEOTAGGING_LABELS[value].description)}
                   selected={geotagging === value}
                   onPress={() => handleSimulatePolicy(value)}
                   showDivider={index < DEV_POLICY_OPTIONS.length - 1}
                 />
               ))}
               <ActionButton
-                label="Reset to server policy"
+                label={t("Reset to server policy")}
                 icon="cloud-download-outline"
                 variant="outline"
                 size="md"
@@ -493,19 +486,19 @@ function AutoAttendance() {
             </DevGroup>
 
             <DevGroup
-              title="Manual geofence override"
-              subtitle="Replaces the office geofence with these coordinates."
+              title={t("Manual geofence override")}
+              subtitle={t("Replaces the office geofence with these coordinates.")}
             >
               <View style={{ flexDirection: "row" }}>
                 <CoordinateField
-                  label="Latitude"
+                  label={t("Latitude")}
                   value={latitudeText}
                   onChangeText={setLatitudeText}
                   editable={!monitoring && !busy}
                 />
                 <View style={{ width: SPACING.sm }} />
                 <CoordinateField
-                  label="Longitude"
+                  label={t("Longitude")}
                   value={longitudeText}
                   onChangeText={setLongitudeText}
                   editable={!monitoring && !busy}
@@ -514,11 +507,11 @@ function AutoAttendance() {
 
               <View style={{ marginTop: SPACING.md }}>
                 <CoordinateField
-                  label="Radius (metres)"
+                  label={t("Radius (metres)")}
                   value={radiusText}
                   onChangeText={setRadiusText}
                   editable={!monitoring && !busy}
-                  hint={`Identifier: ${identifier}`}
+                  hint={t("Identifier: {{identifier}}", { identifier: isolateBidi(identifier) })}
                 />
               </View>
 
@@ -529,12 +522,10 @@ function AutoAttendance() {
                     color: colors.textMuted,
                     marginTop: SPACING.sm,
                   }}
-                >
-                  Stop monitoring to change the location.
-                </Text>
+                >{t("Stop monitoring to change the location.")}</Text>
               ) : (
                 <ActionButton
-                  label="Use my current location"
+                  label={t("Use my current location")}
                   icon="locate-outline"
                   variant="outline"
                   size="md"
@@ -547,18 +538,18 @@ function AutoAttendance() {
 
               <StatusBanner
                 tone="warning"
-                title="This is not a sandbox"
-                message={'If the policy above is "all attendance actions", crossing this manual fence still triggers the real check-in/checkout API — it is the same listener.'}
+                title={t("This is not a sandbox")}
+                message={t("If the policy above is \"all attendance actions\", crossing this manual fence still triggers the real check-in/checkout API — it is the same listener.")}
                 style={{ marginTop: SPACING.md }}
               />
             </DevGroup>
 
             <DevGroup
-              title="Monitoring controls"
-              subtitle="Registers the fence above directly, bypassing the bootstrap."
+              title={t("Monitoring controls")}
+              subtitle={t("Registers the fence above directly, bypassing the bootstrap.")}
             >
               <ActionButton
-                label="Start monitoring"
+                label={t("Start monitoring")}
                 icon="play-outline"
                 variant="filled"
                 size="md"
@@ -566,7 +557,7 @@ function AutoAttendance() {
                 onPress={handleStart}
               />
               <ActionButton
-                label="Stop monitoring"
+                label={t("Stop monitoring")}
                 icon="stop-outline"
                 variant="tinted"
                 tone="error"
@@ -576,7 +567,7 @@ function AutoAttendance() {
                 style={{ marginTop: SPACING.sm }}
               />
               <ActionButton
-                label="Clear status"
+                label={t("Clear status")}
                 icon="trash-outline"
                 variant="outline"
                 size="md"
@@ -587,16 +578,16 @@ function AutoAttendance() {
             </DevGroup>
 
             <DevGroup
-              title="Event log"
-              subtitle={`Geofence events received this session (newest first, max ${MAX_LOG_ENTRIES}).`}
+              title={t("Event log")}
+              subtitle={t("Geofence events received this session (newest first, max {{count}}).", { count: MAX_LOG_ENTRIES })}
               showDivider={false}
             >
               {eventLog.length === 0 ? (
                 <EmptyState
                   compact
                   icon="pulse-outline"
-                  title="No events yet"
-                  description="Cross the geofence boundary, or start monitoring, to see events appear here."
+                  title={t("No events yet")}
+                  description={t("Cross the geofence boundary, or start monitoring, to see events appear here.")}
                 />
               ) : (
                 eventLog.map((entry, index) => (

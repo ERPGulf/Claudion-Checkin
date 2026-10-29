@@ -1,3 +1,4 @@
+import { t, getLanguage, formatDate, formatTime, formatRelativeTime } from '../localization';
 import { format, formatDistanceStrict, isValid } from 'date-fns';
 
 /**
@@ -32,7 +33,8 @@ export function formatUpdateDate(value) {
   if (value === null || value === undefined) return null;
 
   const date = value instanceof Date ? value : new Date(value);
-  return isValid(date) ? format(date, 'd MMM yyyy, hh:mm a') : null;
+  if (!isValid(date)) return null;
+  return getLanguage() === 'en' ? format(date, 'd MMM yyyy, hh:mm a') : `${formatDate(date)}، ${formatTime(date, { hour12: true })}`;
 }
 
 /** "3 days ago". Null when undateable or in the future by more than a minute. */
@@ -48,7 +50,10 @@ export function formatUpdateAge(value, now = new Date()) {
 
   // `formatDistanceStrict`, not `formatDistanceToNowStrict`: the latter reads
   // the real clock and would ignore the injected `now`, making this untestable.
-  return `${formatDistanceStrict(date, now)} ago`;
+  if (getLanguage() === 'en') return `${formatDistanceStrict(date, now)} ago`;
+  const seconds = Math.abs(now.getTime() - date.getTime()) / 1000;
+  const [unit, divisor] = seconds < 60 ? ['second', 1] : seconds < 3600 ? ['minute', 60] : seconds < 86400 ? ['hour', 3600] : seconds < 2592000 ? ['day', 86400] : seconds < 31536000 ? ['month', 2592000] : ['year', 31536000];
+  return formatRelativeTime(-Math.round(seconds / divisor), unit, { numeric: 'always' });
 }
 
 /** First 8 characters of the update UUID — enough to match against EAS. */
@@ -103,8 +108,8 @@ export function describeRunningUpdate({
     return {
       ...base,
       source: UPDATE_SOURCE.DEVELOPMENT,
-      label: 'Development build',
-      detail: 'Updates are disabled in this build',
+      label: t('Development build'),
+      detail: t('Updates are disabled in this build'),
     };
   }
 
@@ -116,17 +121,17 @@ export function describeRunningUpdate({
     return {
       ...base,
       source: UPDATE_SOURCE.EMBEDDED,
-      label: 'Original build',
-      detail: publishedAt ? `Built ${publishedAt}` : 'No update applied yet',
+      label: t('Original build'),
+      detail: publishedAt ? t('Built {{date}}', { date: publishedAt }) : t('No update applied yet'),
     };
   }
 
   return {
     ...base,
     source: UPDATE_SOURCE.OTA,
-    label: publishedAt ?? 'Applied',
+    label: publishedAt ?? t('Applied'),
     // The two things support actually needs: which update, and from where.
-    detail: [age, id && `ID ${id}`, resolvedChannel]
+    detail: [age, id && t('ID {{id}}', { id }), resolvedChannel]
       .filter(Boolean)
       .join(' · '),
   };

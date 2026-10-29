@@ -1,12 +1,9 @@
+import { formatExpenseDate } from '../../utils/expenseClaims';
+import { t, getLanguage, useTranslation } from '../../localization';
 import React from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  Image,
-  ScrollView,
-} from "react-native";
+import { View, TouchableOpacity, Image, ScrollView } from 'react-native';
+import TextInput from '../../localization/LocalizedTextInput';
+import Text from '../../localization/LocalizedText';
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Picker } from "@react-native-picker/picker";
 import PropTypes from "prop-types";
@@ -27,6 +24,7 @@ import useExpenseClaimForm from "../../hooks/useExpenseClaimForm";
  * On removal of the experiment: delete this file along with ExpenseClaimLegacy.
  */
 function ClaimForm({ onSubmit, isLoading, resetSignal }) {
+  useTranslation();
   const {
     expenseDate,
     expenseType,
@@ -57,24 +55,22 @@ function ClaimForm({ onSubmit, isLoading, resetSignal }) {
       className="bg-white p-4 rounded-lg shadow"
       keyboardShouldPersistTaps="handled"
     >
-      <Text className="text-xl font-semibold mb-4 text-gray-800">
-        Expense Claim Form
-      </Text>
+      <Text className="text-xl font-semibold mb-4 text-gray-800">{t("Expense Claim Form")}</Text>
 
       {/* Expense Date */}
-      <Label text="Expense Date" required />
+      <Label text={t("Expense Date")} required />
       <TouchableOpacity
         onPress={showDatePicker}
         className="border border-gray-300 rounded p-2 mb-3 bg-gray-50"
       >
         <Text className="text-gray-700">
-          {expenseDate || "Select Expense Date"}
+          {expenseDate ? formatExpenseDate(expenseDate) : t("Select Expense Date")}
         </Text>
       </TouchableOpacity>
 
       {showPicker && (
         <>
-          <DateTimePicker
+          <DateTimePicker locale={getLanguage()}
             value={expenseDate ? new Date(expenseDate) : new Date()}
             mode="date"
             display="default"
@@ -85,21 +81,21 @@ function ClaimForm({ onSubmit, isLoading, resetSignal }) {
               onPress={closeDatePicker}
               className="self-end px-3 py-2 mb-2"
             >
-              <Text className="text-blue-600 font-medium">Done</Text>
+              <Text className="text-blue-600 font-medium">{t("Done")}</Text>
             </TouchableOpacity>
           )}
         </>
       )}
 
       {/* Expense Type */}
-      <Label text="Expense Type" required />
+      <Label text={t("Expense Type")} required />
       <View className="border border-gray-300 rounded mb-3 bg-gray-50">
         <Picker
           selectedValue={expenseType}
           onValueChange={setExpenseType}
           style={{ color: "#111827" }}
         >
-          <Picker.Item label="Select type" value="" color="#9CA3AF" />
+          <Picker.Item label={t("Select type")} value="" color="#9CA3AF" />
 
           {expenseTypes.map((type) => (
             <Picker.Item key={type} label={type} value={type} color="#111827" />
@@ -108,9 +104,9 @@ function ClaimForm({ onSubmit, isLoading, resetSignal }) {
       </View>
 
       {/* Description */}
-      <Label text="Description" optional />
+      <Label text={t("Description")} optional />
       <TextInput
-        placeholder="Enter description"
+        placeholder={t("Enter description")}
         placeholderTextColor="#6B7280"
         value={description}
         onChangeText={setDescription}
@@ -120,9 +116,9 @@ function ClaimForm({ onSubmit, isLoading, resetSignal }) {
       />
 
       {/* Amount */}
-      <Label text="Amount" required />
+      <Label text={t("Amount")} required />
       <TextInput
-        placeholder="Enter amount"
+        placeholder={t("Enter amount")}
         placeholderTextColor="#6B7280"
         value={amount}
         onChangeText={setAmount}
@@ -145,8 +141,8 @@ function ClaimForm({ onSubmit, isLoading, resetSignal }) {
           }`}
         >
           {fileUrl
-            ? `Attached: ${fileUrl?.name || "File"} ✅`
-            : "Attach Receipt / File"}
+            ? t("Attached: {{name}} ✅", { name: fileUrl?.name || t("File") })
+            : t("Attach Receipt / File")}
         </Text>
       </TouchableOpacity>
 
@@ -165,16 +161,18 @@ function ClaimForm({ onSubmit, isLoading, resetSignal }) {
           )}
           <TouchableOpacity
             onPress={handleRemoveAttachment}
-            className="absolute top-2 right-2 bg-red-500 p-1 rounded-full"
-          >
-            <Text className="text-white text-sm font-semibold">X</Text>
+            accessibilityRole="button"
+            accessibilityLabel={t("Remove attachment")}
+            className="absolute top-2 bg-red-500 p-1 rounded-full"
+           style={{ end: 8 }}>
+            <Text className="text-white text-sm font-semibold">×</Text>
           </TouchableOpacity>
         </View>
       )}
 
       {/* Submit Button */}
       <SubmitButton
-        title="Submit Claim"
+        title={t("Submit Claim")}
         loading={isLoading}
         onPress={handleSubmit}
       />
@@ -195,12 +193,15 @@ export default ClaimForm;
 //
 // ✅ Label Component Added Below
 //
-const Label = ({ text, required, optional }) => (
+const Label = ({ text, required, optional }) => {
+  useTranslation();
+  return (
   <Text className="text-gray-700 mb-1">
     {text} {required && <Text className="text-red-500">*</Text>}
-    {optional && <Text className="text-gray-400">(Optional)</Text>}
+    {optional && <Text className="text-gray-400">{t("(Optional)")}</Text>}
   </Text>
-);
+  );
+};
 
 Label.propTypes = {
   text: PropTypes.string.isRequired,

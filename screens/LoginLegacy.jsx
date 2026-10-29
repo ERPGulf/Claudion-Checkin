@@ -1,11 +1,13 @@
+import TextInput from '../localization/LocalizedTextInput';
+import Text from '../localization/LocalizedText';
+import AuthFooter from '../components/common/AuthFooter';
+import { t, useTranslation } from "../localization";
 import React, { useState } from "react";
 import { getNotifications } from "../services/api/notification.service";
 import { setUnreadCount } from "../redux/Slices/notificationSlice";
 
 import {
   View,
-  Text,
-  TextInput,
   TouchableOpacity,
   ActivityIndicator,
   Platform,
@@ -19,8 +21,9 @@ import { Toast } from "react-native-toast-message/lib/src/Toast";
 import { Formik } from "formik";
 import * as Yup from "yup";
 import { useNavigation } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { setSignIn } from "../redux/Slices/AuthSlice";
-import { COLORS, SIZES, BUILD_TAG } from "../constants";
+import { COLORS, SIZES } from "../constants";
 import { isMobileAuthAvailable } from "../utils/mobileAuthCrypto";
 import { WelcomeCard } from "../components/Login";
 import { selectEmployeeCode } from "../redux/Slices/UserSlice";
@@ -40,7 +43,9 @@ const ALTERNATIVE_BUTTON = {
 const ALTERNATIVE_LABEL = { color: COLORS.primary, fontSize: 18, fontWeight: "600" };
 
 function LoginLegacy() {
+  useTranslation();
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
   const dispatch = useDispatch();
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -49,9 +54,9 @@ function LoginLegacy() {
   // Form validation schema
   const loginSchema = Yup.object().shape({
     password: Yup.string()
-      .min(5, "Too short!")
-      .max(24, "Too long!")
-      .required("Please enter your password."),
+      .min(5, t("Too short!"))
+      .max(24, t("Too long!"))
+      .required(t("Please enter your password.")),
   });
 
   // Handle login
@@ -65,8 +70,8 @@ function LoginLegacy() {
       if (!api_key || !app_key || !baseUrl) {
         Toast.show({
           type: "error",
-          text1: "QR code not scanned",
-          text2: "Please scan QR code first",
+          text1: t("QR code not scanned"),
+          text2: t("Please scan QR code first"),
           autoHide: true,
           visibilityTime: 3000,
         });
@@ -104,7 +109,7 @@ function LoginLegacy() {
       } catch (err) {}
       Toast.show({
         type: "success",
-        text1: "Login successful",
+        text1: t("Login successful"),
         autoHide: true,
         visibilityTime: 3000,
       });
@@ -141,6 +146,7 @@ function LoginLegacy() {
         paddingTop: Constants.statusBarHeight,
         backgroundColor: COLORS.grayBackground,
         paddingHorizontal: 12,
+        paddingBottom: insets.bottom,
       }}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
@@ -169,9 +175,7 @@ function LoginLegacy() {
                   fontSize: 16,
                   marginBottom: 5,
                 }}
-              >
-                Password
-              </Text>
+              >{t("Password")}</Text>
 
               <View
                 style={{
@@ -187,10 +191,11 @@ function LoginLegacy() {
                 }}
               >
                 <TextInput
+                  style={{ writingDirection: "ltr", textAlign: "left" }}
                   secureTextEntry={!showPassword}
                   value={values.password}
                   onChangeText={handleChange("password")}
-                  placeholder="Enter password"
+                  placeholder={t("Enter password")}
                   placeholderTextColor={COLORS.gray2}
                   onBlur={() => setFieldTouched("password")}
                   style={{
@@ -244,9 +249,7 @@ function LoginLegacy() {
                       fontSize: 18,
                       fontWeight: "bold",
                     }}
-                  >
-                    Login
-                  </Text>
+                  >{t("Login")}</Text>
                 )}
               </TouchableOpacity>
 
@@ -254,32 +257,23 @@ function LoginLegacy() {
                 onPress={() => navigation.navigate("Qrscan")}
                 style={ALTERNATIVE_BUTTON}
               >
-                <Text style={ALTERNATIVE_LABEL}>Rescan QR Code</Text>
+                <Text style={ALTERNATIVE_LABEL}>{t("Rescan QR Code")}</Text>
               </TouchableOpacity>
 
               {isMobileAuthAvailable() && (
                 <TouchableOpacity
                   disabled={isLoading}
                   accessibilityRole="button"
-                  accessibilityLabel="Sign in with mobile number"
+                  accessibilityLabel={t("Sign in with mobile number")}
                   accessibilityState={{ disabled: isLoading }}
                   onPress={() => navigation.navigate("mobile login")}
                   style={[ALTERNATIVE_BUTTON, { marginTop: 12 }]}
                 >
-                  <Text style={ALTERNATIVE_LABEL}>Sign in with mobile number</Text>
+                  <Text style={ALTERNATIVE_LABEL}>{t("Sign in with mobile number")}</Text>
                 </TouchableOpacity>
               )}
 
-              <Text
-                style={{
-                  textAlign: "center",
-                  color: COLORS.gray2,
-                  fontSize: 12,
-                  marginTop: 14,
-                }}
-              >
-                {BUILD_TAG}
-              </Text>
+              <AuthFooter />
             </View>
           </View>
         )}

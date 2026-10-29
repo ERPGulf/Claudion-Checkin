@@ -1,5 +1,7 @@
+import Text from '../localization/LocalizedText';
+import { t, useTranslation } from "../localization";
 import React from "react";
-import { Linking, ScrollView, Text, View } from "react-native";
+import { Linking, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { ICON, SPACING, TYPO } from "../constants";
@@ -32,8 +34,9 @@ import { QrBadgeCard, QrSkeleton } from "../components/MyQrCode";
  * functionality rather than a redesign.
  */
 function MyQrCode() {
+  useTranslation();
   const { colors } = useAppTheme();
-  useModernScreenHeader("My QR Code");
+  useModernScreenHeader(t("My QR Code"));
 
   const { imageUrl, employee, fullname, loading, error, retry } = useQrCode();
 
@@ -58,10 +61,7 @@ function MyQrCode() {
             marginBottom: SPACING.md,
           }}
           numberOfLines={2}
-        >
-          Present this QR code when you are asked to identify yourself or to
-          record attendance.
-        </Text>
+        >{t("Present this QR code when you are asked to identify yourself or to record attendance.")}</Text>
 
         {/* ---------- Badge ---------- */}
         {loading ? (
@@ -70,9 +70,9 @@ function MyQrCode() {
           <Card>
             <EmptyState
               icon="qr-code-outline"
-              title="Unable to load QR code"
-              description="Please try again later. If it keeps failing, contact your HR administrator."
-              actionLabel="Try again"
+              title={t("Unable to load QR code")}
+              description={t("Please try again later. If it keeps failing, contact your HR administrator.")}
+              actionLabel={t("Try again")}
               onActionPress={retry}
             />
           </Card>
@@ -90,8 +90,8 @@ function MyQrCode() {
         <StatusBanner
           tone="info"
           icon="information-circle"
-          title="About this QR code"
-          message="It uniquely identifies your employee profile and may be used for attendance, identity verification or company services."
+          title={t("About this QR code")}
+          message={t("It uniquely identifies your employee profile and may be used for attendance, identity verification or company services.")}
           style={{ marginTop: SPACING.md }}
         />
 
@@ -101,7 +101,7 @@ function MyQrCode() {
         <PressableScale
           onPress={() => Linking.openURL("https://erpgulf.com")}
           accessibilityRole="link"
-          accessibilityLabel="Open ERPGulf.com"
+          accessibilityLabel={t("Open ERPGulf.com")}
           style={{
             flexDirection: "row",
             alignItems: "center",

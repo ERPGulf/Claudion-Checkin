@@ -1,3 +1,5 @@
+import { hydrateLocale } from "./localization";
+import LocaleRoot from "./localization/LocaleRoot";
 import { Provider } from "react-redux";
 import { store, persistor } from "./redux/Store";
 import "react-native-gesture-handler";
@@ -144,7 +146,7 @@ export default function App() {
         // palette of the first paint; the Home variant decides which screen
         // component mounts, and getting it wrong remounts Home and fires its
         // focus effects (and their network calls) twice.
-        await Promise.all([hydrateAppearance(), hydrateHomeExperience()]);
+        await Promise.all([hydrateAppearance(), hydrateHomeExperience(), hydrateLocale()]);
 
         // Not awaited with the two above: the banner is an overlay, so the worst
         // case is one frame before the preference lands. Blocking the splash on
@@ -182,32 +184,34 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <Provider store={store}>
-        <PersistGate persistor={persistor} loading={null}>
-          <QueryClientProvider client={queryClient}>
-            <FcmBootstrap />
-            <AutoAttendanceBootstrap />
-            <AutoAttendanceOnboarding />
-            <OfflineAttendanceBootstrap />
-            {/* Fetches server-driven feature availability for the session. The
-                navigator below does not wait on it — it renders off the
-                persisted settings and re-renders if they change. */}
-            <FeatureSettingsBootstrap />
-            <CrashReportingBootstrap />
-            {/* Around the navigator only: a render error in a screen must not
-                stop the bootstraps above, which run automatic attendance. */}
-            <ErrorBoundary>
-              <Navigator />
-            </ErrorBoundary>
-            {/* Above the navigator so it floats over any screen, below AppToast
-                so a transient toast still wins the top of the screen. */}
-            <OfflineBanner />
-            <UpdateBanner />
-            <ThemedStatusBar />
-            <AppToast />
-          </QueryClientProvider>
-        </PersistGate>
-      </Provider>
+      <LocaleRoot>
+        <Provider store={store}>
+          <PersistGate persistor={persistor} loading={null}>
+            <QueryClientProvider client={queryClient}>
+              <FcmBootstrap />
+              <AutoAttendanceBootstrap />
+              <AutoAttendanceOnboarding />
+              <OfflineAttendanceBootstrap />
+              {/* Fetches server-driven feature availability for the session. The
+                  navigator below does not wait on it — it renders off the
+                  persisted settings and re-renders if they change. */}
+              <FeatureSettingsBootstrap />
+              <CrashReportingBootstrap />
+              {/* Around the navigator only: a render error in a screen must not
+                  stop the bootstraps above, which run automatic attendance. */}
+              <ErrorBoundary>
+                <Navigator />
+              </ErrorBoundary>
+              {/* Above the navigator so it floats over any screen, below AppToast
+                  so a transient toast still wins the top of the screen. */}
+              <OfflineBanner />
+              <UpdateBanner />
+              <ThemedStatusBar />
+              <AppToast />
+            </QueryClientProvider>
+          </PersistGate>
+        </Provider>
+      </LocaleRoot>
     </SafeAreaProvider>
   );
 }

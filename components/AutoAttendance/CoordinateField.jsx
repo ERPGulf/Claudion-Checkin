@@ -1,6 +1,9 @@
+import { useTranslation } from '../../localization';
 /* eslint-disable react/prop-types */
 import React from 'react';
-import { Text, TextInput, View } from 'react-native';
+import { View } from 'react-native';
+import TextInput from '../../localization/LocalizedTextInput';
+import Text from '../../localization/LocalizedText';
 import { RADIUS, SPACING, TYPO } from '../../constants';
 import useAppTheme from '../../hooks/useAppTheme';
 
@@ -17,6 +20,7 @@ import useAppTheme from '../../hooks/useAppTheme';
  * the disabled rule are unchanged from the classic InputRow.
  */
 function CoordinateField({ label, value, onChangeText, editable = true, hint }) {
+  const { language, direction, isRTL } = useTranslation();
   const { colors } = useAppTheme();
 
   return (

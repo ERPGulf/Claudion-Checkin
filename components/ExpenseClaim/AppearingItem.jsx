@@ -1,3 +1,4 @@
+import { useTranslation } from '../../localization';
 /* eslint-disable react/prop-types */
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Easing } from 'react-native';
@@ -23,6 +24,7 @@ const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1);
  * appended — move.
  */
 function AppearingItem({ itemKey, seen, children }) {
+  useTranslation();
   const reduceMotion = useReducedMotion();
 
   // Read once, at mount, before the effect below marks this key. `useState`'s

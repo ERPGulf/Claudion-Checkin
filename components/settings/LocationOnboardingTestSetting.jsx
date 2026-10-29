@@ -1,5 +1,7 @@
+import Text from '../../localization/LocalizedText';
+import { t, useTranslation } from "../../localization";
 import React from "react";
-import { Text } from "react-native";
+import { } from "react-native";
 import { SPACING, TYPO } from "../../constants";
 import useAppTheme from "../../hooks/useAppTheme";
 import { GEOTAGGING } from "../../redux/Slices/AutoAttendanceSlice";
@@ -16,22 +18,19 @@ const internalBuild = () => {
 
 /** Opens the location explanation for either geotagging mode, whatever this account's configuration. */
 export default function LocationOnboardingTestSetting() {
+  useTranslation();
   const { colors } = useAppTheme();
   if (!internalBuild()) return null;
   return (
     <>
-      <SectionHeader title="Location explanation test" subtitle="Development and preview builds" style={{ marginTop: SPACING.xxl }} />
+      <SectionHeader title={t("Location explanation test")} subtitle={t("Development and preview builds")} style={{ marginTop: SPACING.xxl }} />
       <Card padded>
-        <Text style={{ ...TYPO.body, color: colors.textSecondary }}>
-          Shows what employees see before the system location prompts. Nothing is requested or recorded.
-        </Text>
-        <ActionButton label="Automatic attendance (mode 2)" icon="location-outline"
+        <Text style={{ ...TYPO.body, color: colors.textSecondary }}>{t("Shows what employees see before the system location prompts. Nothing is requested or recorded.")}</Text>
+        <ActionButton label={t("Automatic attendance (mode 2)")} icon="location-outline"
           onPress={() => previewLocationAccessExplanation(GEOTAGGING.ALL_ACTIONS)} style={{ marginTop: SPACING.lg }} />
-        <ActionButton label="Warnings only (mode 1)" icon="alert-circle-outline" variant="outline"
+        <ActionButton label={t("Warnings only (mode 1)")} icon="alert-circle-outline" variant="outline"
           onPress={() => previewLocationAccessExplanation(GEOTAGGING.WARNINGS_ONLY)} style={{ marginTop: SPACING.md }} />
-        <Text style={{ ...TYPO.caption, color: colors.textSecondary, marginTop: SPACING.md }}>
-          Employees never see mode 1 yet: the backend defines no warning behaviour for it.
-        </Text>
+        <Text style={{ ...TYPO.caption, color: colors.textSecondary, marginTop: SPACING.md }}>{t("Employees never see mode 1 yet: the backend defines no warning behaviour for it.")}</Text>
       </Card>
     </>
   );

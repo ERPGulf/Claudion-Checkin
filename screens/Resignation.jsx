@@ -1,5 +1,7 @@
+import { t, getLanguage, useTranslation } from '../localization';
 import React, { useCallback, useEffect, useState } from "react";
-import { Platform, ScrollView, Text, View } from "react-native";
+import { Platform, ScrollView, View } from 'react-native';
+import Text from '../localization/LocalizedText';
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -30,8 +32,9 @@ import PickerWithDone from "../components/common/PickerWithDone";
  * Application. It gates nothing — the hook still raises its Alert.
  */
 function Resignation() {
+  useTranslation();
   const { colors, isDark } = useAppTheme();
-  useModernScreenHeader("Resignation");
+  useModernScreenHeader(t("Resignation"));
 
   const {
     resignationDate,
@@ -123,16 +126,11 @@ function Resignation() {
               <Text
                 accessibilityRole="header"
                 style={{ ...TYPO.headline, color: colors.textPrimary }}
-              >
-                Resignation
-              </Text>
+              >{t("Resignation")}</Text>
               <Text
                 style={{ ...TYPO.caption, color: colors.textMuted }}
                 numberOfLines={2}
-              >
-                Submit your resignation with the date and your reason for
-                leaving.
-              </Text>
+              >{t("Submit your resignation with the date and your reason for leaving.")}</Text>
             </View>
           </View>
         </Card>
@@ -141,8 +139,8 @@ function Resignation() {
         {submitted && (
           <StatusBanner
             tone="success"
-            title="Resignation submitted"
-            message={`Reference ${submitted.name}. You'll be notified once it has been reviewed.`}
+            title={t("Resignation submitted")}
+            message={t("Reference {{reference}}. You'll be notified once it has been reviewed.", { reference: submitted.name })}
             style={{ marginBottom: SPACING.md }}
           />
         )}
@@ -151,13 +149,13 @@ function Resignation() {
         <ModuleCard
           dense
           icon="document-text-outline"
-          title="Resignation details"
-          subtitle="When you're leaving and why"
+          title={t("Resignation details")}
+          subtitle={t("When you're leaving and why")}
           style={{ marginBottom: SPACING.md }}
         >
           <View style={cardBody}>
             <PickerField
-              label="Resignation date *"
+              label={t("Resignation date *")}
               value={formatLogDate(resignationDate)}
               icon="calendar-outline"
               onPress={openDatePicker}
@@ -171,7 +169,7 @@ function Resignation() {
                 needsDone={needsDoneAffordance}
                 onDone={closeDatePicker}
               >
-                <DateTimePicker
+                <DateTimePicker locale={getLanguage()}
                   value={resignationDate}
                   mode="date"
                   minimumDate={earliestResignationDate()}
@@ -184,15 +182,15 @@ function Resignation() {
 
             <View style={{ marginTop: SPACING.md }}>
               <FormField
-                label="Reason *"
+                label={t("Reason *")}
                 value={reason}
                 onChangeText={setReason}
-                placeholder="Tell us why you're resigning..."
+                placeholder={t("Tell us why you're resigning...")}
                 multiline
                 minLines={4}
                 align="auto"
-                accessibilityLabel="Resignation reason"
-                accessibilityHint="Describe your reason for resigning"
+                accessibilityLabel={t("Resignation reason")}
+                accessibilityHint={t("Describe your reason for resigning")}
                 invalid={attempted && reasonMissing}
               />
             </View>
@@ -205,14 +203,14 @@ function Resignation() {
         <ModuleCard
           dense
           icon="attach-outline"
-          title="Attachments"
-          subtitle="Add a resignation letter or supporting document"
+          title={t("Attachments")}
+          subtitle={t("Add a resignation letter or supporting document")}
           style={{ marginBottom: SPACING.md }}
         >
           <View style={cardBody}>
             <UploadField
               compact
-              label="Attachment 1"
+              label={t("Attachment 1")}
               file={file1}
               onPick={pickFile1}
               onRemove={removeFile1}
@@ -220,7 +218,7 @@ function Resignation() {
 
             <UploadField
               compact
-              label="Attachment 2"
+              label={t("Attachment 2")}
               file={file2}
               onPick={pickFile2}
               onRemove={removeFile2}
@@ -235,15 +233,15 @@ function Resignation() {
         {attempted && reasonMissing && (
           <StatusBanner
             tone="error"
-            title="Finish the form first"
-            message="Add a reason for your resignation."
+            title={t("Finish the form first")}
+            message={t("Add a reason for your resignation.")}
             style={{ marginBottom: SPACING.md }}
           />
         )}
 
         {/* ---------- Submit ---------- */}
         <ActionButton
-          label="Submit resignation"
+          label={t("Submit resignation")}
           icon="paper-plane-outline"
           variant="filled"
           size="lg"
@@ -257,8 +255,8 @@ function Resignation() {
         <StatusBanner
           tone="info"
           icon="information-circle"
-          title="What happens next"
-          message="Your resignation goes to HR for review. You'll be notified about the next steps, including your notice period."
+          title={t("What happens next")}
+          message={t("Your resignation goes to HR for review. You'll be notified about the next steps, including your notice period.")}
           style={{ marginTop: SPACING.md }}
         />
       </ScrollView>

@@ -1,6 +1,8 @@
+import { t, useTranslation } from '../../localization';
 /* eslint-disable react/prop-types */
 import React from 'react';
-import { View, Text } from 'react-native';
+import { View } from 'react-native';
+import Text from '../../localization/LocalizedText';
 import { Ionicons } from '@expo/vector-icons';
 import { RADIUS } from '../../constants';
 import useAppTheme from '../../hooks/useAppTheme';
@@ -12,13 +14,14 @@ import { getInitials } from '../../utils/textDirection';
  * without touching call sites.
  */
 function Avatar({ name, size = 44, style, children }) {
+  useTranslation();
   const { colors } = useAppTheme();
   const initials = getInitials(name);
 
   return (
     <View
       accessible
-      accessibilityLabel={name ? `Profile: ${name}` : 'Profile'}
+      accessibilityLabel={name ? t('Profile: {{name}}', { name }) : t('Profile')}
       style={[
         {
           width: size,

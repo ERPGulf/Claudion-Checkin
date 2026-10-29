@@ -1,3 +1,4 @@
+import { translateMessage, t, useTranslation } from '../localization';
 import { useEffect, useState, useRef, useCallback } from "react";
 import { Alert } from "react-native";
 import { useDispatch, useSelector, useStore } from "react-redux";
@@ -71,6 +72,7 @@ const getTodayString = () =>
   new Date().toLocaleDateString("en-GB").replace(/\//g, "-");
 
 export default function useAttendanceAction() {
+  const { language, direction, isRTL } = useTranslation();
   const navigation = useNavigation();
   const dispatch = useDispatch();
   const store = useStore();
@@ -329,8 +331,8 @@ export default function useAttendanceAction() {
       if (!isMountedRef.current) return;
       Toast.show({
         type: "error",
-        text1: "Location error",
-        text2: error.message,
+        text1: t("Location error"),
+        text2: translateMessage(error.message),
       });
       setInTarget(false);
       setReady(true);
@@ -355,7 +357,7 @@ export default function useAttendanceAction() {
         const server = await getServerTime();
         if (!isMountedRef.current) return;
         if (server) {
-          setDateTime(updateDateTime(server));
+          setDateTime(server);
           return;
         }
       } catch {
@@ -364,7 +366,7 @@ export default function useAttendanceAction() {
 
       const local = await formatOfflineTimestamp();
       if (!isMountedRef.current) return;
-      setDateTime(updateDateTime(local));
+      setDateTime(local);
     };
 
     loadServerTime();
@@ -525,11 +527,11 @@ export default function useAttendanceAction() {
           dispatch(setBreakMinutes(breakData?.total_break_minutes ?? 0));
 
           Alert.alert(
-            "Break Ended",
-            "2-hour break limit reached. Break automatically stopped.",
+            t("Break Ended"),
+            t("2-hour break limit reached. Break automatically stopped."),
           );
         } catch {
-          Alert.alert("Error", "Auto break end failed");
+          Alert.alert(t("Error"), t("Auto break end failed"));
         }
       }
     }, 1000);
@@ -569,11 +571,11 @@ export default function useAttendanceAction() {
             type: "info",
             text1:
               outcome.session.status === SESSION_STATUS.CHECKED_IN
-                ? "Already checked in"
-                : "Already checked out",
+                ? t("Already checked in")
+                : t("Already checked out"),
             text2:
               outcome.session.closedBy === SESSION_ORIGIN.AUTO
-                ? "You were checked out automatically when you left the office."
+                ? t("You were checked out automatically when you left the office.")
                 : undefined,
           });
           return;
@@ -583,8 +585,8 @@ export default function useAttendanceAction() {
           hapticsMessage("error");
           Toast.show({
             type: "error",
-            text1: "Action blocked",
-            text2: outcome.response?.message,
+            text1: t("Action blocked"),
+            text2: translateMessage(outcome.response?.message),
           });
           return;
         }
@@ -625,7 +627,7 @@ export default function useAttendanceAction() {
         hapticsMessage("success");
         Toast.show({
           type: "success",
-          text1: type === "IN" ? "Checked in!" : "Checked out!",
+          text1: type === "IN" ? t("Checked in!") : t("Checked out!"),
         });
       } catch (error) {
         console.log("AttendanceAction.handleDirectCheckInOut error:", {
@@ -637,12 +639,11 @@ export default function useAttendanceAction() {
         hapticsMessage("error");
         Toast.show({
           type: "error",
-          text1: "Failed",
-          text2:
-            error?.response?.data?.message ||
-            error?.response?.data ||
-            error.message ||
+          text1: t("Failed"),
+          text2: translateMessage(
+            error?.response?.data?.message || error?.response?.data || error.message,
             "Request failed",
+          ),
         });
       } finally {
         setActionLoading(false);
@@ -669,8 +670,8 @@ export default function useAttendanceAction() {
       if (!refreshToken) {
         Toast.show({
           type: "error",
-          text1: "Refresh token missing",
-          text2: "Cannot invalidate access token without a refresh token.",
+          text1: t("Refresh token missing"),
+          text2: t("Cannot invalidate access token without a refresh token."),
         });
         return;
       }
@@ -679,14 +680,14 @@ export default function useAttendanceAction() {
       const maskedRefresh = `${refreshToken.slice(0, 6)}...${refreshToken.slice(-4)}`;
       Toast.show({
         type: "success",
-        text1: "Dev token invalidated",
-        text2: `Refresh token preserved: ${maskedRefresh}`,
+        text1: t("Dev token invalidated"),
+        text2: t("Refresh token preserved: {{token}}", { token: maskedRefresh }),
       });
     } catch (error) {
       Toast.show({
         type: "error",
-        text1: "Dev token reset failed",
-        text2: error.message || "Unable to invalidate access token.",
+        text1: t("Dev token reset failed"),
+        text2: error.message || t("Unable to invalidate access token."),
       });
     }
   }, []);
@@ -754,7 +755,7 @@ export default function useAttendanceAction() {
         setMonthlyCapMessage("Monthly break limit reached (8h)");
         Toast.show({
           type: "error",
-          text1: "Monthly break limit reached (8h)",
+          text1: t("Monthly break limit reached (8h)"),
         });
       }
 
@@ -764,7 +765,7 @@ export default function useAttendanceAction() {
 
       Toast.show({
         type: "success",
-        text1: `DEV preset applied: ${preset}`,
+        text1: t("DEV preset applied: {{preset}}", { preset }),
       });
     },
     [dispatch],
@@ -783,20 +784,20 @@ export default function useAttendanceAction() {
     if (!isBreakEnabled()) {
       Toast.show({
         type: "error",
-        text1: "Not available",
-        text2: "Your administrator has turned this feature off for your account.",
+        text1: t("Not available"),
+        text2: t("Your administrator has turned this feature off for your account."),
       });
       return;
     }
     if (!checkin) {
-      Toast.show({ type: "error", text1: "Please check-in first" });
+      Toast.show({ type: "error", text1: t("Please check-in first") });
       return;
     }
 
     if (restrictLocation === 1 && !inTarget) {
       Toast.show({
         type: "error",
-        text1: "You are out of allowed location",
+        text1: t("You are out of allowed location"),
       });
       return;
     }
@@ -821,7 +822,7 @@ export default function useAttendanceAction() {
           );
           await AsyncStorage.setItem("breakStartTime", String(startTime));
 
-          Toast.show({ type: "success", text1: "DEV break started (local)" });
+          Toast.show({ type: "success", text1: t("DEV break started (local)") });
           return;
         }
 
@@ -846,7 +847,7 @@ export default function useAttendanceAction() {
 
         Toast.show({
           type: "success",
-          text1: `DEV break ended (total: ${nextTotal}m)`,
+          text1: t("DEV break ended (total: {{minutes}}m)", { minutes: nextTotal }),
         });
         return;
       } finally {
@@ -872,7 +873,7 @@ export default function useAttendanceAction() {
       if (isBreakCompleted(breakDataCheck)) {
         Toast.show({
           type: "error",
-          text1: "Break already completed for today",
+          text1: t("Break already completed for today"),
         });
         return;
       }
@@ -894,7 +895,7 @@ export default function useAttendanceAction() {
           setMonthlyCapMessage("");
         }
 
-        Toast.show({ type: "error", text1: response.message });
+        Toast.show({ type: "error", text1: translateMessage(response.message) });
         return;
       }
 
@@ -923,12 +924,12 @@ export default function useAttendanceAction() {
 
       syncBreakState(breakData);
 
-      Toast.show({ type: "success", text1: response.message });
+      Toast.show({ type: "success", text1: translateMessage(response.message) });
     } catch (error) {
       Toast.show({
         type: "error",
-        text1: "Break failed",
-        text2: error.message,
+        text1: t("Break failed"),
+        text2: translateMessage(error.message),
       });
     } finally {
       setActionLoading(false);
@@ -986,8 +987,8 @@ export default function useAttendanceAction() {
     } catch (error) {
       Toast.show({
         type: "error",
-        text1: "Action failed",
-        text2: error.message,
+        text1: t("Action failed"),
+        text2: translateMessage(error.message),
       });
     }
   }, [checkin, handleDirectCheckInOut, navigation, store]);
@@ -1000,7 +1001,7 @@ export default function useAttendanceAction() {
     checkinLocation,
     sessionOrigin,
     autoActionsEnabled,
-    dateTime,
+    dateTime: dateTime ? updateDateTime(dateTime) : null,
     // location gating
     restrictLocation: manualInPolicy.requiresRadius ? 1 : 0,
     unrestrictedCheckout: unrestrictedManualCheckout ? 1 : 0,
@@ -1014,7 +1015,7 @@ export default function useAttendanceAction() {
     breakStartTime,
     breakMinutes,
     breakCompleted,
-    monthlyCapMessage,
+    monthlyCapMessage: translateMessage(monthlyCapMessage),
     // ui state
     actionLoading,
     refresh,

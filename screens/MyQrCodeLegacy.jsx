@@ -1,7 +1,8 @@
+import Text from '../localization/LocalizedText';
+import { t, useTranslation, getLanguage } from "../localization";
 import React, { useEffect, useLayoutEffect, useState } from "react";
 import {
   View,
-  Text,
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
@@ -17,7 +18,7 @@ import { useSelector } from "react-redux";
 const HeaderBackButton = ({ onPress }) => (
   <TouchableOpacity onPress={onPress}>
     <Entypo
-      name="chevron-left"
+      name={getLanguage() === 'ar' ? 'chevron-right' : 'chevron-left'}
       size={SIZES.xxxLarge - 5}
       color={COLORS.primary}
     />
@@ -39,6 +40,7 @@ const HeaderBackButton = ({ onPress }) => (
  * route at `screens/MyQrCode.jsx` unconditionally.
  */
 const MyQrCodeLegacy = () => {
+  const { language } = useTranslation();
   const navigation = useNavigation();
   const [qrData, setQrData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -77,12 +79,12 @@ const MyQrCodeLegacy = () => {
   useLayoutEffect(() => {
     navigation.setOptions({
       headerShown: true,
-      headerTitle: "My QR Code",
+      headerTitle: t("My QR Code"),
       headerTitleAlign: "center",
       headerShadowVisible: false,
       headerLeft: () => <HeaderBackButton onPress={navigation.goBack} />,
     });
-  }, [navigation]);
+  }, [navigation, language]);
 
   return (
     <ScrollView className="flex-1 bg-white px-4 pt-4">
@@ -98,7 +100,7 @@ const MyQrCodeLegacy = () => {
               resizeMode="contain"
             />
           ) : (
-            <Text className="text-red-500">QR Code not available</Text>
+            <Text className="text-red-500">{t("QR Code not available")}</Text>
           )}
 
           {/* Employee Code */}
@@ -108,7 +110,7 @@ const MyQrCodeLegacy = () => {
               size={SIZES.xLarge}
               color={COLORS.primary}
             />
-            <Text className="ml-2 text-base font-semibold text-gray-900">
+            <Text className="text-base font-semibold text-gray-900" style={{ marginStart: 8 }}>
               {qrData?.employee || "—"}
             </Text>
           </View>

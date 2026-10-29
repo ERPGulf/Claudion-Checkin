@@ -1,6 +1,8 @@
+import { t, useTranslation } from '../../localization';
 /* eslint-disable react/prop-types */
 import React from 'react';
-import { Keyboard, Text, View } from 'react-native';
+import { Keyboard, View } from 'react-native';
+import Text from '../../localization/LocalizedText';
 import { Ionicons } from '@expo/vector-icons';
 import { ICON, RADIUS, SHADOWS, SPACING, TYPO } from '../../constants';
 import useAppTheme from '../../hooks/useAppTheme';
@@ -93,6 +95,7 @@ function PickerField({
   readOnly = false,
   style,
 }) {
+  const { isRTL, direction } = useTranslation();
   const { colors, isDark } = useAppTheme();
 
   const empty = !value;
@@ -184,6 +187,7 @@ function PickerField({
  * contradict — it is announced as a disabled value instead.
  */
 function Field({ readOnly, onPress, label, display, style, children }) {
+  const { isRTL, direction } = useTranslation();
   if (readOnly) {
     return (
       <View
@@ -210,7 +214,7 @@ function Field({ readOnly, onPress, label, display, style, children }) {
       hitSlop={0}
       accessibilityRole="button"
       accessibilityLabel={`${label}: ${display}`}
-      accessibilityHint="Opens a picker"
+      accessibilityHint={t("Opens a picker")}
       style={style}
     >
       {children}

@@ -1,6 +1,8 @@
+import { t, useTranslation } from '../../localization';
 /* eslint-disable react/prop-types */
 import React, { useEffect, useRef, useState } from "react";
-import { AccessibilityInfo, Animated, Easing, Platform, Text, View } from "react-native";
+import { AccessibilityInfo, Animated, Easing, Platform, View } from 'react-native';
+import Text from '../../localization/LocalizedText';
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ICON, LAYOUT, RADIUS, SHADOWS, SPACING, TYPO } from "../../constants";
@@ -168,6 +170,7 @@ function TrailingIcon({ name, motion, color, reduceMotion }) {
 }
 
 function OfflineBanner() {
+  const { language } = useTranslation();
   const { colors, isDark } = useAppTheme();
   const insets = useSafeAreaInsets();
   const reduceMotion = useReduceMotion();
@@ -309,7 +312,7 @@ function OfflineBanner() {
             scaleTo={0.99}
             hitSlop={0}
             accessibilityRole="button"
-            accessibilityLabel={`${describeOfflineStatusForA11y(shown)}. Tap for details.`}
+            accessibilityLabel={t("{{status}}. Tap for details.", { status: describeOfflineStatusForA11y(shown) })}
             style={{ flexDirection: "row", alignItems: "center", flex: 1 }}
           >
             {body}

@@ -1,9 +1,10 @@
+import Text from '../../localization/LocalizedText';
+import { t, useTranslation } from '../../localization';
 /* eslint-disable react/prop-types */
 import React from 'react';
 import {
   Animated,
   StyleSheet,
-  Text,
   View,
   useWindowDimensions,
 } from 'react-native';
@@ -52,7 +53,8 @@ const FRAME_HAIRLINE = 'rgba(255,255,255,0.32)';
  * surfaces — the action sheet, the permission and loading states — are fully
  * themed.
  */
-function ScanOverlay({ hint = 'Align the QR code inside the frame.' }) {
+function ScanOverlay({ hint = t('Align the QR code inside the frame.') }) {
+  useTranslation();
   const { width } = useWindowDimensions();
   const size = Math.min(Math.round(width * FRAME_RATIO), FRAME_MAX);
 

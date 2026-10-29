@@ -155,7 +155,9 @@ function ShimmerField({ active = true }) {
               position: 'absolute',
               ...field.rect,
               transform: !animate
-                ? undefined
+                // Animated removes an undefined transform as null on a native
+                // focus change. RN 0.86 requires an array when validating it.
+                ? []
                 : [
                     { translateX: span(width * field.drift.x) },
                     // Vertical travel is a fraction of the horizontal (see

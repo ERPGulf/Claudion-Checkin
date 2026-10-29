@@ -1,7 +1,8 @@
+import Text from '../../localization/LocalizedText';
+import { t, useTranslation, getLanguage } from "../../localization";
 import React, { useLayoutEffect } from "react";
 import {
   View,
-  Text,
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
@@ -19,6 +20,7 @@ const formatLabel = (key = "") =>
     .replace(/\b\w/g, (char) => char.toUpperCase());
 
 const ShortcutDetails = ({ title, data, loading, error = false, onRetry }) => {
+  const { language } = useTranslation();
   const navigation = useNavigation();
 
   useLayoutEffect(() => {
@@ -30,21 +32,21 @@ const ShortcutDetails = ({ title, data, loading, error = false, onRetry }) => {
       headerLeft: () => (
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Entypo
-            name="chevron-left"
+            name={getLanguage() === 'ar' ? 'chevron-right' : 'chevron-left'}
             size={SIZES.xxxLarge - 5}
             color={COLORS.primary}
           />
         </TouchableOpacity>
       ),
     });
-  }, [navigation, title]);
+  }, [navigation, title, language]);
 
   /* ---------- Loading ---------- */
   if (loading) {
     return (
       <View className="flex-1 justify-center items-center">
         <ActivityIndicator size="large" color={COLORS.primary} />
-        <Text className="mt-2 text-gray-500">Loading details...</Text>
+        <Text className="mt-2 text-gray-500">{t("Loading details...")}</Text>
       </View>
     );
   }
@@ -54,9 +56,9 @@ const ShortcutDetails = ({ title, data, loading, error = false, onRetry }) => {
       <View className="flex-1 justify-center items-center" accessibilityLiveRegion="polite">
         <EmptyState
           icon="cloud-offline-outline"
-          title="Unable to load records"
-          description="Please check your connection and try again."
-          actionLabel="Try again"
+          title={t("Unable to load records")}
+          description={t("Please check your connection and try again.")}
+          actionLabel={t("Try again")}
           onActionPress={onRetry}
         />
       </View>
@@ -71,7 +73,7 @@ const ShortcutDetails = ({ title, data, loading, error = false, onRetry }) => {
   if (!hasValidData) {
     return (
       <View className="flex-1 justify-center items-center">
-        <Text className="text-gray-500 text-sm">No records available</Text>
+        <Text className="text-gray-500 text-sm">{t("No records available")}</Text>
       </View>
     );
   }

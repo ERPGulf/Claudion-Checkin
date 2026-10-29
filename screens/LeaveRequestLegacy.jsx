@@ -1,14 +1,10 @@
+import { formatExpenseDate } from '../utils/expenseClaims';
+import { t, getLanguage, useTranslation } from '../localization';
 import { useLayoutEffect } from "react";
 import { useNavigation } from "@react-navigation/native";
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  ScrollView,
-  Platform,
-  ActivityIndicator,
-} from "react-native";
+import { View, TouchableOpacity, ScrollView, Platform, ActivityIndicator } from 'react-native';
+import TextInput from '../localization/LocalizedTextInput';
+import Text from '../localization/LocalizedText';
 import AttachmentBottomSheet from "../components/attachment/AttachmentBottomSheet";
 import LeaveApplicationCard from "../components/LeaveApplication/LeaveApplicationCard";
 import AttachmentPicker from "../components/attachment/AttachmentPicker";
@@ -37,6 +33,7 @@ import useLeaveRequest from "../hooks/useLeaveRequest";
  * route at `screens/LeaveRequest.jsx` unconditionally.
  */
 export default function LeaveRequestLegacy() {
+  const { language, isRTL } = useTranslation();
   const navigation = useNavigation();
 
   const {
@@ -53,7 +50,6 @@ export default function LeaveRequestLegacy() {
     attachment,
     loading,
     remoteAgreementText,
-    formatDate,
     showFromPicker,
     showToPicker,
     setShowFromPicker,
@@ -81,31 +77,27 @@ export default function LeaveRequestLegacy() {
     navigation.setOptions({
       headerShown: true,
       headerShadowVisible: false,
-      headerTitle: "Leave Application",
+      headerTitle: t("Leave Application"),
       headerTitleAlign: "center",
       headerLeft: () => (
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Entypo
-            name="chevron-left"
+            name={isRTL ? "chevron-right" : "chevron-left"}
             size={SIZES.xxxLarge - 5}
             color={COLORS.primary}
           />
         </TouchableOpacity>
       ),
     });
-  }, [navigation]);
+  }, [navigation, language, isRTL]);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
       <ScrollView className="p-4" contentContainerStyle={{ paddingBottom: 40 }}>
-        <Text className="text-xl font-semibold mb-4 text-gray-800">
-          Leave Application
-        </Text>
+        <Text className="text-xl font-semibold mb-4 text-gray-800">{t("Leave Application")}</Text>
 
         {/* Leave Type Picker */}
-        <Text className="text-sm font-medium text-gray-700 mb-1">
-          Select Leave Type
-        </Text>
+        <Text className="text-sm font-medium text-gray-700 mb-1">{t("Select Leave Type")}</Text>
         <View className="border border-gray-300 rounded mb-4 bg-gray-50">
           <Picker
             selectedValue={leaveType}
@@ -113,7 +105,7 @@ export default function LeaveRequestLegacy() {
             style={{ color: "#111827" }}
           >
             <Picker.Item
-              label="Select Leave Type"
+              label={t("Select Leave Type")}
               value="__none__"
               color="#9CA3AF"
             />
@@ -121,7 +113,7 @@ export default function LeaveRequestLegacy() {
             {leaveTypes.map((item, index) => (
               <Picker.Item
                 key={index}
-                label={item}
+                label={item === "Remote" ? t("Remote") : item}
                 value={item}
                 color="#111827"
               />
@@ -130,11 +122,11 @@ export default function LeaveRequestLegacy() {
         </View>
 
         {/* Reason */}
-        <Text className="text-sm font-medium text-gray-700 mb-1">Reason</Text>
+        <Text className="text-sm font-medium text-gray-700 mb-1">{t("Reason")}</Text>
         <TextInput
           value={reason}
           onChangeText={setReason}
-          placeholder="Enter reason for leave"
+          placeholder={t("Enter reason for leave")}
           placeholderTextColor="#6B7280"
           multiline
           className="border border-gray-300 rounded-lg px-3 py-2 mb-3 text-gray-900"
@@ -146,18 +138,16 @@ export default function LeaveRequestLegacy() {
         />
 
         {/* From Date */}
-        <Text className="text-sm font-medium text-gray-700 mb-1">
-          From Date
-        </Text>
+        <Text className="text-sm font-medium text-gray-700 mb-1">{t("From Date")}</Text>
         <TouchableOpacity
           onPress={() => setShowFromPicker(true)}
           className="border border-gray-300 rounded-lg px-3 py-2 mb-3"
         >
-          <Text>{formatDate(fromDate)}</Text>
+          <Text>{formatExpenseDate(fromDate)}</Text>
         </TouchableOpacity>
         {showFromPicker && (
           <>
-            <DateTimePicker
+            <DateTimePicker locale={getLanguage()}
               value={
                 fromDate instanceof Date && !isNaN(fromDate)
                   ? fromDate
@@ -172,23 +162,23 @@ export default function LeaveRequestLegacy() {
                 onPress={closeFromPicker}
                 className="self-end px-3 py-2 mb-2"
               >
-                <Text className="text-blue-600 font-medium">Done</Text>
+                <Text className="text-blue-600 font-medium">{t("Done")}</Text>
               </TouchableOpacity>
             )}
           </>
         )}
 
         {/* To Date */}
-        <Text className="text-sm font-medium text-gray-700 mb-1">To Date</Text>
+        <Text className="text-sm font-medium text-gray-700 mb-1">{t("To Date")}</Text>
         <TouchableOpacity
           onPress={() => setShowToPicker(true)}
           className="border border-gray-300 rounded-lg px-3 py-2 mb-3"
         >
-          <Text>{formatDate(toDate)}</Text>
+          <Text>{formatExpenseDate(toDate)}</Text>
         </TouchableOpacity>
         {showToPicker && (
           <>
-            <DateTimePicker
+            <DateTimePicker locale={getLanguage()}
               value={
                 toDate instanceof Date && !isNaN(toDate) ? toDate : new Date()
               }
@@ -202,7 +192,7 @@ export default function LeaveRequestLegacy() {
                 onPress={closeToPicker}
                 className="self-end px-3 py-2 mb-2"
               >
-                <Text className="text-blue-600 font-medium">Done</Text>
+                <Text className="text-blue-600 font-medium">{t("Done")}</Text>
               </TouchableOpacity>
             )}
           </>
@@ -239,44 +229,34 @@ export default function LeaveRequestLegacy() {
                 onValueChange={setAgreed}
                 color={agreed ? COLORS.primary : undefined}
               />
-              <Text className="ml-2 text-gray-700 text-sm flex-1">
-                I have read and agree to the full remote work policy.
-              </Text>
+              <Text className="text-gray-700 text-sm flex-1" style={{ marginStart: 8 }}>{t("I have read and agree to the full remote work policy.")}</Text>
             </View>
           </View>
         )}
 
         {/* Posting Date */}
-        <Text className="text-sm font-medium text-gray-700 mb-1">
-          Posting Date
-        </Text>
+        <Text className="text-sm font-medium text-gray-700 mb-1">{t("Posting Date")}</Text>
         <View className="border border-gray-300 rounded-lg px-3 py-2 mb-4 bg-gray-100">
-          <Text>{formatDate(postingDate)}</Text>
+          <Text>{formatExpenseDate(postingDate)}</Text>
         </View>
 
         {/* Submit button */}
         <SubmitButton
-          title="Submit Leave Request"
+          title={t("Submit Leave Request")}
           loading={loading}
           onPress={handleSubmit}
         />
 
         {/* Leave Application History */}
-        <Text className="text-lg font-semibold mt-6 mb-3 text-gray-800">
-          Leave Application History
-        </Text>
+        <Text className="text-lg font-semibold mt-6 mb-3 text-gray-800">{t("Leave Application History")}</Text>
 
         {isFetchingHistory ? (
           <View className="items-center py-6">
             <ActivityIndicator size="small" color={COLORS.primary} />
-            <Text className="text-gray-500 mt-2">
-              Loading leave applications...
-            </Text>
+            <Text className="text-gray-500 mt-2">{t("Loading leave applications...")}</Text>
           </View>
         ) : visibleLeaves.length === 0 ? (
-          <Text className="text-gray-500 text-center mt-6">
-            No leave applications yet.
-          </Text>
+          <Text className="text-gray-500 text-center mt-6">{t("No leave applications yet.")}</Text>
         ) : (
           <>
             {visibleLeaves.map((item, index) => (
@@ -290,7 +270,7 @@ export default function LeaveRequestLegacy() {
                 onPress={showMoreLeaves}
                 className="p-3 mb-6 rounded bg-gray-300"
               >
-                <Text className="text-center font-semibold">Load More</Text>
+                <Text className="text-center font-semibold">{t("Load More")}</Text>
               </TouchableOpacity>
             )}
           </>

@@ -1,5 +1,7 @@
+import { t, useTranslation } from '../localization';
 import React, { useLayoutEffect } from "react";
-import { View, TouchableOpacity, Text, ActivityIndicator } from "react-native";
+import { View, TouchableOpacity, ActivityIndicator } from 'react-native';
+import Text from '../localization/LocalizedText';
 import Entypo from "@expo/vector-icons/Entypo";
 import { useNavigation } from "@react-navigation/native";
 import { FlashList } from "@shopify/flash-list";
@@ -19,25 +21,26 @@ import useAttendanceHistory from "../hooks/useAttendanceHistory";
  * Do not restyle this file. It is the before-picture in an A/B comparison.
  */
 function AttendanceHistoryLegacy() {
+  const { language, direction, isRTL } = useTranslation();
   const navigation = useNavigation();
 
   useLayoutEffect(() => {
     navigation.setOptions({
       headerShadowVisible: false,
       headerShown: true,
-      headerTitle: "Attendance History",
+      headerTitle: t("Attendance History"),
       headerTitleAlign: "center",
       headerLeft: () => (
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Entypo
-            name="chevron-left"
+            name={isRTL ? "chevron-right" : "chevron-left"}
             size={SIZES.xxxLarge - 5}
             color={COLORS.primary}
           />
         </TouchableOpacity>
       ),
     });
-  }, [navigation]);
+  }, [navigation, language, isRTL]);
 
   const {
     isLoading,
@@ -59,9 +62,7 @@ function AttendanceHistoryLegacy() {
   if (isError || !records.length) {
     return (
       <View className="flex-1 justify-center items-center">
-        <Text className="text-base text-gray-600">
-          No attendance records found
-        </Text>
+        <Text className="text-base text-gray-600">{t("No attendance records found")}</Text>
       </View>
     );
   }

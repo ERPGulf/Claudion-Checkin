@@ -1,13 +1,10 @@
+import { formatFieldTime } from '../utils/attendanceRequest';
+import { formatExpenseDate } from '../utils/expenseClaims';
+import { t, getLanguage, useTranslation } from '../localization';
 import { useLayoutEffect } from "react";
 import { useNavigation } from "@react-navigation/native";
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  ScrollView,
-  Platform,
-  ActivityIndicator,
-} from "react-native";
+import { View, TouchableOpacity, ScrollView, Platform, ActivityIndicator } from 'react-native';
+import Text from '../localization/LocalizedText';
 import { SafeAreaView } from "react-native-safe-area-context";
 import Entypo from "@expo/vector-icons/Entypo";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -32,6 +29,7 @@ import AttendanceRequestCard from "../components/AttendanceRequest/AttendanceReq
  * Do not restyle this file. It is the before-picture in an A/B comparison.
  */
 export default function AttendanceRequestScreen() {
+  const { language, isRTL } = useTranslation();
   const navigation = useNavigation();
 
   const {
@@ -44,7 +42,6 @@ export default function AttendanceRequestScreen() {
     loading,
     reasons,
     today,
-    formatDate,
     showFromPicker,
     showToPicker,
     showFromTimePicker,
@@ -82,19 +79,19 @@ export default function AttendanceRequestScreen() {
     navigation.setOptions({
       headerShown: true,
       headerShadowVisible: false,
-      headerTitle: "Attendance Request",
+      headerTitle: t("Attendance Request"),
       headerTitleAlign: "center",
       headerLeft: () => (
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Entypo
-            name="chevron-left"
+            name={isRTL ? "chevron-right" : "chevron-left"}
             size={SIZES.xxxLarge - 5}
             color={COLORS.primary}
           />
         </TouchableOpacity>
       ),
     });
-  }, [navigation]);
+  }, [navigation, language, isRTL]);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
@@ -103,24 +100,20 @@ export default function AttendanceRequestScreen() {
         contentContainerStyle={{ padding: 16 }}
       >
         {/* TITLE */}
-        <Text className="text-lg font-semibold mb-4 text-gray-800">
-          Attendance Request
-        </Text>
+        <Text className="text-lg font-semibold mb-4 text-gray-800">{t("Attendance Request")}</Text>
 
         {/* FROM DATE */}
-        <Text className="text-sm font-medium text-gray-700 mb-1">
-          From Date
-        </Text>
+        <Text className="text-sm font-medium text-gray-700 mb-1">{t("From Date")}</Text>
         <TouchableOpacity
           onPress={openFromPicker}
           className="border border-gray-300 rounded px-3 py-2 mb-3"
         >
-          <Text>{formatDate(fromDate)}</Text>
+          <Text>{formatExpenseDate(fromDate)}</Text>
         </TouchableOpacity>
 
         {showFromPicker && (
           <>
-            <DateTimePicker
+            <DateTimePicker locale={getLanguage()}
               value={fromDate}
               mode="date"
               maximumDate={today}
@@ -132,24 +125,24 @@ export default function AttendanceRequestScreen() {
                 onPress={closeFromPicker}
                 className="self-end px-3 py-2 mb-2"
               >
-                <Text className="text-blue-600 font-medium">Done</Text>
+                <Text className="text-blue-600 font-medium">{t("Done")}</Text>
               </TouchableOpacity>
             )}
           </>
         )}
 
         {/* TO DATE */}
-        <Text className="text-sm font-medium text-gray-700 mb-1">To Date</Text>
+        <Text className="text-sm font-medium text-gray-700 mb-1">{t("To Date")}</Text>
         <TouchableOpacity
           onPress={openToPicker}
           className="border border-gray-300 rounded px-3 py-2 mb-4"
         >
-          <Text>{formatDate(toDate)}</Text>
+          <Text>{formatExpenseDate(toDate)}</Text>
         </TouchableOpacity>
 
         {showToPicker && (
           <>
-            <DateTimePicker
+            <DateTimePicker locale={getLanguage()}
               value={toDate}
               mode="date"
               maximumDate={today}
@@ -162,30 +155,25 @@ export default function AttendanceRequestScreen() {
                 onPress={closeToPicker}
                 className="self-end px-3 py-2 mb-2"
               >
-                <Text className="text-blue-600 font-medium">Done</Text>
+                <Text className="text-blue-600 font-medium">{t("Done")}</Text>
               </TouchableOpacity>
             )}
           </>
         )}
         {/* FROM TIME */}
-        <Text className="text-sm font-medium text-gray-700 mb-1">
-          From Time
-        </Text>
+        <Text className="text-sm font-medium text-gray-700 mb-1">{t("From Time")}</Text>
         <TouchableOpacity
           onPress={openFromTimePicker}
           className="border border-gray-300 rounded px-3 py-2 mb-3"
         >
           <Text>
-            {fromTime.toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
+            {formatFieldTime(fromTime)}
           </Text>
         </TouchableOpacity>
 
         {showFromTimePicker && (
           <>
-            <DateTimePicker
+            <DateTimePicker locale={getLanguage()}
               value={fromTime}
               mode="time"
               display="default"
@@ -196,29 +184,26 @@ export default function AttendanceRequestScreen() {
                 onPress={closeFromTimePicker}
                 className="self-end px-3 py-2 mb-2"
               >
-                <Text className="text-blue-600 font-medium">Done</Text>
+                <Text className="text-blue-600 font-medium">{t("Done")}</Text>
               </TouchableOpacity>
             )}
           </>
         )}
 
         {/* TO TIME */}
-        <Text className="text-sm font-medium text-gray-700 mb-1">To Time</Text>
+        <Text className="text-sm font-medium text-gray-700 mb-1">{t("To Time")}</Text>
         <TouchableOpacity
           onPress={openToTimePicker}
           className="border border-gray-300 rounded px-3 py-2 mb-3"
         >
           <Text>
-            {toTime.toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
+            {formatFieldTime(toTime)}
           </Text>
         </TouchableOpacity>
 
         {showToTimePicker && (
           <>
-            <DateTimePicker
+            <DateTimePicker locale={getLanguage()}
               value={toTime}
               mode="time"
               display="default"
@@ -229,15 +214,13 @@ export default function AttendanceRequestScreen() {
                 onPress={closeToTimePicker}
                 className="self-end px-3 py-2 mb-2"
               >
-                <Text className="text-blue-600 font-medium">Done</Text>
+                <Text className="text-blue-600 font-medium">{t("Done")}</Text>
               </TouchableOpacity>
             )}
           </>
         )}
         {/* REASON */}
-        <Text className="text-sm font-medium text-gray-700 mb-2">
-          Select Reason
-        </Text>
+        <Text className="text-sm font-medium text-gray-700 mb-2">{t("Select Reason")}</Text>
 
         {reasons.map((item, index) => (
           <TouchableOpacity
@@ -250,7 +233,7 @@ export default function AttendanceRequestScreen() {
               onValueChange={() => setSelectedReason(item)}
               color={selectedReason === item ? COLORS.primary : undefined}
             />
-            <Text className="ml-2 text-gray-700">{item}</Text>
+            <Text className="text-gray-700" style={{ marginStart: 8 }}>{t(item)}</Text>
           </TouchableOpacity>
         ))}
         <AttachmentPicker
@@ -262,7 +245,7 @@ export default function AttendanceRequestScreen() {
         {/* SUBMIT */}
         <View style={{ marginTop: 16 }}>
           <SubmitButton
-            title="Submit Attendance Request"
+            title={t("Submit Attendance Request")}
             loading={loading}
             onPress={handleSubmit}
             disabled={loading}
@@ -270,21 +253,15 @@ export default function AttendanceRequestScreen() {
         </View>
 
         {/* HISTORY */}
-        <Text className="text-lg font-semibold mt-6 mb-3 text-gray-800">
-          Attendance Request History
-        </Text>
+        <Text className="text-lg font-semibold mt-6 mb-3 text-gray-800">{t("Attendance Request History")}</Text>
 
         {isFetchingHistory ? (
           <View className="items-center py-6">
             <ActivityIndicator size="small" color={COLORS.primary} />
-            <Text className="text-gray-500 mt-2">
-              Loading attendance requests...
-            </Text>
+            <Text className="text-gray-500 mt-2">{t("Loading attendance requests...")}</Text>
           </View>
         ) : visibleRequests.length === 0 ? (
-          <Text className="text-gray-500 text-center mt-6">
-            No attendance requests yet.
-          </Text>
+          <Text className="text-gray-500 text-center mt-6">{t("No attendance requests yet.")}</Text>
         ) : (
           <>
             {visibleRequests.map((item, index) => (
@@ -298,7 +275,7 @@ export default function AttendanceRequestScreen() {
                 onPress={showMoreRequests}
                 className="p-3 mb-6 rounded bg-gray-300"
               >
-                <Text className="text-center font-semibold">Load More</Text>
+                <Text className="text-center font-semibold">{t("Load More")}</Text>
               </TouchableOpacity>
             )}
           </>

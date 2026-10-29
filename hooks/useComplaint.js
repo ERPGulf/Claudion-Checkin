@@ -1,3 +1,4 @@
+import { translateMessage, t, useTranslation } from '../localization';
 import { useCallback, useRef, useState } from 'react';
 import { Alert } from 'react-native';
 import {
@@ -35,6 +36,7 @@ import { getAuthSessionGeneration } from '../utils/authSessionGuard';
  * derived from state that already exists and gates nothing.
  */
 export default function useComplaint() {
+  useTranslation();
   const actionGeneration = useRef(getAuthSessionGeneration()).current;
   const [message, setMessage] = useState('');
   const [file, setFile] = useState(null);
@@ -87,7 +89,7 @@ export default function useComplaint() {
 
   const submitComplaint = useCallback(async () => {
     if (!message.trim()) {
-      Alert.alert('Validation', 'Please enter complaint message');
+      Alert.alert(t("Validation"), t("Please enter complaint message"));
       return;
     }
 
@@ -103,7 +105,7 @@ export default function useComplaint() {
       // fixed message instead.
       if (result.error) {
         hapticsMessage('error');
-        Alert.alert('Error', result.error);
+        Alert.alert(t("Error"), translateMessage(result.error));
         return;
       }
 
@@ -119,7 +121,7 @@ export default function useComplaint() {
 
       await getCapabilitySnapshot(capabilityScope);
       hapticsMessage('success');
-      Alert.alert('Success', 'Complaint submitted successfully');
+      Alert.alert(t("Success"), t("Complaint submitted successfully"));
 
       setMessage('');
       setFile(null);
@@ -128,7 +130,7 @@ export default function useComplaint() {
       // "Complaint created but docname missing".
       console.log('Complaint submit failed:', error?.message);
       hapticsMessage('error');
-      Alert.alert('Error', 'Failed to submit complaint');
+      Alert.alert(t("Error"), t("Failed to submit complaint"));
     } finally {
       setLoading(false);
     }

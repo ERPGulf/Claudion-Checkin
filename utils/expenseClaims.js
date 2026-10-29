@@ -1,3 +1,4 @@
+import { t, formatDate, formatNumber } from '../localization';
 import { format } from 'date-fns';
 
 /**
@@ -55,7 +56,7 @@ export function parseExpenseDate(value) {
  */
 export function formatExpenseDate(value) {
   const date = parseExpenseDate(value);
-  return date ? format(date, 'd MMM yyyy') : 'No date';
+  return date ? formatDate(date, { day: 'numeric', month: 'short', year: 'numeric' }) : t("No date");
 }
 
 /** `YYYY-MM-DD` in local time — the wire format `createExpenseClaim` expects. */
@@ -85,9 +86,7 @@ export function formatExpenseAmount(amount) {
   const numeric = typeof amount === 'number' ? amount : Number(amount);
   if (!Number.isFinite(numeric)) return '—';
 
-  const [whole, fraction] = Math.abs(numeric).toFixed(2).split('.');
-  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-  return `${numeric < 0 ? '-' : ''}${grouped}.${fraction}`;
+  return formatNumber(numeric, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 /* -------------------------------------------------------------------------
@@ -117,10 +116,10 @@ const STATUS_DESCRIPTIONS = {
 export function describeExpenseStatus(status) {
   const key = typeof status === 'string' ? status.trim().toLowerCase() : '';
   const known = STATUS_DESCRIPTIONS[key];
-  if (known) return known;
+  if (known) return { ...known, label: t(known.label) };
 
   return {
-    label: key ? status.trim() : 'Unknown',
+    label: key ? status.trim() : t("Unknown"),
     tone: 'neutral',
     icon: 'help-circle-outline',
   };
@@ -159,7 +158,7 @@ export function expenseTypeIcon(type) {
 
 /** "travel" → "Travel". Mirrors what the classic card did inline. */
 export function formatExpenseType(type) {
-  if (typeof type !== 'string' || !type.trim()) return 'Expense';
+  if (typeof type !== 'string' || !type.trim()) return t("Expense");
   const trimmed = type.trim();
   return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
 }
@@ -191,7 +190,7 @@ export function resolveAttachments(fileUrl, baseUrl = '') {
       const name =
         (typeof file === 'object' && file?.name) ||
         decodeURIComponent(url.split('/').pop()?.split('?')[0] || '') ||
-        'Attachment';
+        t("Attachment");
 
       return {
         key: `${url}-${index}`,
@@ -283,8 +282,8 @@ export function describeClaimForA11y(claim, attachmentCount = 0) {
     formatExpenseDate(claim?.expense_date),
     claim?.status ? status : null,
     attachmentCount
-      ? `${attachmentCount} attachment${attachmentCount > 1 ? 's' : ''}`
-      : 'No attachment',
+      ? t('{{count}} attachment', { count: attachmentCount })
+      : t("No attachment"),
   ]
     .filter(Boolean)
     .join(', ');

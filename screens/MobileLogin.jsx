@@ -1,3 +1,4 @@
+import { useTranslation } from "../localization";
 import React, { useCallback, useEffect, useRef } from 'react';
 import { BackHandler } from 'react-native';
 import { useStore } from 'react-redux';
@@ -30,6 +31,7 @@ const STEP_SCREENS = {
 };
 
 function MobileLoginForm() {
+  useTranslation();
   const navigation = useNavigation();
   // One hook owns the whole flow. Native screens receive it through context;
   // credentials never become route params or navigator state.
@@ -92,6 +94,7 @@ function MobileLoginForm() {
 }
 
 export default function MobileLogin() {
+  useTranslation();
   const navigation = useNavigation();
   const { colors } = useAppTheme();
   if (isMobileAuthAvailable()) return <MobileLoginForm />;

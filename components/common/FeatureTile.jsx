@@ -1,6 +1,7 @@
 /* eslint-disable react/prop-types */
 import React from 'react';
-import { View, Text } from 'react-native';
+import { View } from 'react-native';
+import Text from '../../localization/LocalizedText';
 import {
   Ionicons,
   MaterialCommunityIcons,
@@ -91,7 +92,7 @@ function FeatureTile({
             style={{
               position: 'absolute',
               top: -4,
-              right: -4,
+              end: -4,
               width: 18,
               height: 18,
               borderRadius: RADIUS.pill,
@@ -111,7 +112,7 @@ function FeatureTile({
             style={{
               position: 'absolute',
               top: -2,
-              right: -2,
+              end: -2,
               minWidth: 16,
               height: 16,
               paddingHorizontal: 4,

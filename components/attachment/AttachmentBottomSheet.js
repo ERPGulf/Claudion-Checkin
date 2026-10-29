@@ -1,14 +1,7 @@
+import { t, useTranslation } from '../../localization';
 import React, { useEffect, useRef } from 'react';
-import {
-  View,
-  Text,
-  Modal,
-  TouchableOpacity,
-  TouchableWithoutFeedback,
-  Animated,
-  StyleSheet,
-  Platform,
-} from 'react-native';
+import { View, Modal, TouchableOpacity, TouchableWithoutFeedback, Animated, StyleSheet, Platform } from 'react-native';
+import Text from '../../localization/LocalizedText';
 import { Ionicons } from '@expo/vector-icons';
 import PropTypes from 'prop-types';
 
@@ -19,6 +12,7 @@ const AttachmentBottomSheet = ({
   onSelectGallery,
   onSelectDocument,
 }) => {
+  const { direction } = useTranslation();
   const slideAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -45,7 +39,7 @@ const AttachmentBottomSheet = ({
       onRequestClose={onClose}
     >
       <TouchableWithoutFeedback onPress={onClose}>
-        <View style={styles.overlay}>
+        <View style={[styles.overlay, { direction }]}>
           <TouchableWithoutFeedback onPress={(e) => {}}>
             <Animated.View
               style={[
@@ -64,7 +58,7 @@ const AttachmentBottomSheet = ({
             >
               <View style={styles.dragHandle} />
               
-              <Text style={styles.title}>Add Attachment</Text>
+              <Text style={styles.title}>{t("Add Attachment")}</Text>
 
               <View style={styles.optionsContainer}>
                 <TouchableOpacity
@@ -77,7 +71,7 @@ const AttachmentBottomSheet = ({
                   <View style={[styles.iconContainer, { backgroundColor: '#E0F2FE' }]}>
                     <Ionicons name="camera" size={24} color="#0284C7" />
                   </View>
-                  <Text style={styles.optionText}>Take Photo</Text>
+                  <Text style={styles.optionText}>{t("Take Photo")}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -90,7 +84,7 @@ const AttachmentBottomSheet = ({
                   <View style={[styles.iconContainer, { backgroundColor: '#DCFCE7' }]}>
                     <Ionicons name="image" size={24} color="#16A34A" />
                   </View>
-                  <Text style={styles.optionText}>Choose Image</Text>
+                  <Text style={styles.optionText}>{t("Choose Image")}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -103,13 +97,13 @@ const AttachmentBottomSheet = ({
                   <View style={[styles.iconContainer, { backgroundColor: '#FEF9C3' }]}>
                     <Ionicons name="document-text" size={24} color="#CA8A04" />
                   </View>
-                  <Text style={styles.optionText}>Browse Files</Text>
+                  <Text style={styles.optionText}>{t("Browse Files")}</Text>
                 </TouchableOpacity>
               </View>
               
               {/* Optional explicit cancel button for iOS primarily to ensure easy exit */}
               <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
-                <Text style={styles.cancelButtonText}>Cancel</Text>
+                <Text style={styles.cancelButtonText}>{t("Cancel")}</Text>
               </TouchableOpacity>
             </Animated.View>
           </TouchableWithoutFeedback>
@@ -176,7 +170,7 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16,
+    marginEnd: 16,
   },
   optionText: {
     fontSize: 16,

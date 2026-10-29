@@ -1,3 +1,4 @@
+import { t, useTranslation } from "../../localization";
 import React from 'react';
 import { View } from 'react-native';
 import { useSelector } from 'react-redux';
@@ -5,7 +6,7 @@ import { useNavigation } from '@react-navigation/native';
 import { RADIUS, SHADOWS, SPACING } from '../../constants';
 import useAppTheme from '../../hooks/useAppTheme';
 import { activeButtonsSelector } from '../../redux/Slices/QuickAccessSlice';
-import { filterOfferedShortcuts } from '../../utils/quickAccess';
+import { filterOfferedShortcuts, quickAccessLabel } from '../../utils/quickAccess';
 import { selectFeatureSettings } from '../../redux/Slices/FeatureSettingsSlice';
 import SectionHeader from '../common/SectionHeader';
 import FeatureTile from '../common/FeatureTile';
@@ -20,6 +21,7 @@ const COLUMNS = 4;
  * state instead of a dashed 2px placeholder box.
  */
 function QuickAccess() {
+  useTranslation();
   const navigation = useNavigation();
   const { colors, isDark } = useAppTheme();
   const activeButtons = useSelector(activeButtonsSelector);
@@ -34,9 +36,9 @@ function QuickAccess() {
   return (
     <View style={{ width: '100%' }}>
       <SectionHeader
-        title="Quick Access"
+        title={t("Quick Access")}
         // Empty: the card's own "Add shortcuts" button is the one action.
-        actionLabel={hasShortcuts ? 'Edit' : undefined}
+        actionLabel={hasShortcuts ? t("Edit") : undefined}
         actionIcon="options-outline"
         onActionPress={openPicker}
       />
@@ -59,7 +61,7 @@ function QuickAccess() {
               <FeatureTile
                 key={item?.iconName}
                 icon={item?.iconName}
-                label={[item?.text1, item?.text2]}
+                label={quickAccessLabel(item)}
                 columns={COLUMNS}
                 tint={colors.accentSurface}
                 iconColor={colors.primary2}
@@ -72,9 +74,9 @@ function QuickAccess() {
         ) : (
           <EmptyState
             icon="flash-outline"
-            title="Pin your most-used actions"
-            description="Add shortcuts here to reach the features you use every day in one tap."
-            actionLabel="Add shortcuts"
+            title={t("Pin your most-used actions")}
+            description={t("Add shortcuts here to reach the features you use every day in one tap.")}
+            actionLabel={t("Add shortcuts")}
             onActionPress={openPicker}
           />
         )}

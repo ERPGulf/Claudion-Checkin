@@ -1,4 +1,4 @@
-import { format } from 'date-fns';
+import { t, translateMessage, formatDate } from '../localization';
 
 /**
  * Pure presentation logic for the document detail screens (Shortcut 1/2/3).
@@ -27,10 +27,8 @@ import { format } from 'date-fns';
  * titled identically on both UIs.
  */
 export function formatFieldLabel(key = '') {
-  return key
-    .toString()
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, char => char.toUpperCase());
+  const label = key.toString().replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
+  return translateMessage(label);
 }
 
 /* -------------------------------------------------------------------------
@@ -131,14 +129,14 @@ const STATUS_TONES = [
 
 export function describeDocumentStatus(value) {
   const text = value == null ? '' : String(value).trim();
-  if (!text) return { label: 'Not available', tone: 'neutral', icon: 'help-circle-outline' };
+  if (!text) return { label: t("Not available"), tone: 'neutral', icon: 'help-circle-outline' };
 
   const match = STATUS_TONES.find(([pattern]) => pattern.test(text));
 
   return {
     // The tenant's own wording, capitalised the way every other label on the
     // screen is — never replaced with a word they didn't use.
-    label: text.charAt(0).toUpperCase() + text.slice(1),
+    label: translateMessage(text.charAt(0).toUpperCase() + text.slice(1)),
     tone: match ? match[1].tone : 'neutral',
     icon: match ? match[1].icon : 'ellipse-outline',
   };
@@ -184,12 +182,12 @@ export function describeRemaining(value) {
 
   if (days === null) return { days: null, tone: 'neutral', caption: null };
   if (days <= 0) {
-    return { days, tone: 'error', caption: 'Expired' };
+    return { days, tone: 'error', caption: t("Expired") };
   }
   if (days <= EXPIRY_WARNING_DAYS) {
-    return { days, tone: 'warning', caption: 'Renew soon' };
+    return { days, tone: 'warning', caption: t("Renew soon") };
   }
-  return { days, tone: 'success', caption: 'Valid' };
+  return { days, tone: 'success', caption: t("Valid") };
 }
 
 /* -------------------------------------------------------------------------
@@ -226,7 +224,7 @@ export function formatFieldValue(value) {
     if (iso) {
       const [, year, month, day] = iso;
       const parsed = new Date(Number(year), Number(month) - 1, Number(day));
-      if (!Number.isNaN(parsed.getTime())) return format(parsed, 'd MMM yyyy');
+      if (!Number.isNaN(parsed.getTime())) return formatDate(parsed, { day: 'numeric', month: 'short', year: 'numeric' });
     }
 
     return trimmed;
@@ -304,7 +302,7 @@ export function resolveValidityWindow(data, remainingValue) {
  */
 export function documentSubtitle(title) {
   const trimmed = String(title || '').trim();
-  if (!trimmed) return 'Document information';
+  if (!trimmed) return t('Document information');
 
   const sentence =
     trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase();
@@ -313,7 +311,7 @@ export function documentSubtitle(title) {
   // stutter — "Health information information".
   if (/\b(information|details|info)$/i.test(sentence)) return sentence;
 
-  return `${sentence} information`;
+  return t('{{document}} information', { document: sentence });
 }
 
 /**
@@ -369,7 +367,7 @@ export function buildDetailModel(data, title) {
   // "Valid until …" itself.
   const subtitle =
     expiryValue && !remaining
-      ? `Valid until ${expiryValue}`
+      ? t('Valid until {{date}}', { date: expiryValue })
       : documentSubtitle(title);
 
   return { status, remaining, rows, subtitle, expiryValue };

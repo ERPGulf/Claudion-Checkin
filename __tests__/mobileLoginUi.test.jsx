@@ -1,3 +1,4 @@
+import { setLanguage } from '../localization';
 import React from 'react';
 import { BackHandler, I18nManager, KeyboardAvoidingView, ScrollView, StyleSheet } from 'react-native';
 import { act, render, fireEvent } from '@testing-library/react-native';
@@ -75,7 +76,8 @@ let mockHardwareBack;
 let backSubscription;
 const originalRtl = I18nManager.isRTL;
 
-beforeEach(() => {
+beforeEach(async () => {
+  await act(async () => { await setLanguage('en'); });
   jest.clearAllMocks();
   mockColors = COLORS;
   mockMobileAvailable = true;
@@ -452,14 +454,15 @@ it.each([COLORS, DARK_COLORS])('uses the selected palette and keyboard-friendly 
   expect(screen.UNSAFE_getByType(KeyboardAvoidingView)).toBeTruthy();
 });
 
-it('localizes the new steps and aligns Arabic inputs and copy for RTL', () => {
-  I18nManager.isRTL = true;
+it('localizes Arabic independently of the device and keeps password input LTR', async () => {
+  I18nManager.isRTL = false;
+  await act(async () => { await setLanguage('ar'); });
   mockLogin.step = 'PASSWORD_OPTION';
   const screen = render(<MobileLogin />);
   expect(screen.getByText('أمّن حسابك')).toBeTruthy();
   expect(screen.getByLabelText('تخطي الآن')).toBeTruthy();
-  expect(StyleSheet.flatten(screen.getByLabelText('كلمة مرور جديدة').props.style).textAlign).toBe('right');
-  expect(StyleSheet.flatten(screen.getByText('أمّن حسابك').props.style).textAlign).toBe('right');
+  expect(StyleSheet.flatten(screen.getByLabelText('كلمة مرور جديدة').props.style).textAlign).toBe('left');
+  expect(StyleSheet.flatten(screen.getByText('أمّن حسابك').props.style).textAlign).toBe('left');
   fireEvent.press(screen.getByLabelText('تخطي الآن'));
   expect(mockLogin.skipPassword).toHaveBeenCalledTimes(1);
 });

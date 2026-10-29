@@ -529,10 +529,12 @@ describe('modern Login', () => {
     expect(mobile.minHeight).toBe(qr.minHeight);
   });
 
-  it('keeps the build stamp', () => {
-    const { getByText } = renderScreen();
+  it('shows app and OTA versions below a compact language action', () => {
+    const { getByText, getByRole, queryByText } = renderScreen();
 
-    expect(getByText(BUILD_TAG)).toBeTruthy();
+    expect(getByText(/^Version .+ · OTA .+/)).toBeTruthy();
+    expect(getByRole('button', { name: 'Switch to Arabic' })).toBeTruthy();
+    expect(queryByText(BUILD_TAG)).toBeNull();
   });
 
   it('scrolls rather than clips, so large type and the keyboard have room', () => {

@@ -1,3 +1,4 @@
+import { t, translateMessage, hydrateLocale, getLanguage } from '../../localization';
 // Local (on-device) notifications — distinct from FCM remote push in
 // fcm.service.js. Used by automatic attendance to alert the user when the
 // office geofence checks them out. Fires whenever the JS context is alive
@@ -21,16 +22,16 @@ Notifications.setNotificationHandler({
   }),
 });
 
-let channelReady = false;
+let channelLanguage = null;
 
 async function ensureAndroidChannel() {
-  if (Platform.OS !== "android" || channelReady) return;
+  if (Platform.OS !== "android" || channelLanguage === getLanguage()) return;
   try {
     await Notifications.setNotificationChannelAsync(ATTENDANCE_CHANNEL_ID, {
-      name: "Attendance",
+      name: t("Attendance"),
       importance: Notifications.AndroidImportance.HIGH,
     });
-    channelReady = true;
+    channelLanguage = getLanguage();
   } catch (error) {
     console.log(`${LOG_PREFIX} Failed to create channel:`, error?.message);
   }
@@ -44,6 +45,7 @@ async function ensureAndroidChannel() {
  */
 export async function ensureNotificationSetup() {
   try {
+    await hydrateLocale();
     await ensureAndroidChannel();
     const current = await Notifications.getPermissionsAsync();
     if (current.granted) return true;
@@ -61,7 +63,7 @@ export async function ensureNotificationSetup() {
  * notifications aren't permitted — a missing alert must never break check-out.
  * @param {{title: string, body: string, data?: object}} options
  */
-export async function presentLocalNotification({ title, body, data = {} }) {
+export async function presentLocalNotification({ title, body, bodyKey, values, data = {} }) {
   try {
     const granted = await ensureNotificationSetup();
     if (!granted) {
@@ -69,7 +71,12 @@ export async function presentLocalNotification({ title, body, data = {} }) {
       return;
     }
     await Notifications.scheduleNotificationAsync({
-      content: { title, body, data, sound: true },
+      content: {
+        title: translateMessage(title),
+        body: bodyKey ? t(bodyKey, values) : translateMessage(body),
+        data,
+        sound: true,
+      },
       // `{ channelId }` delivers immediately on the given Android channel; iOS
       // has no channels, so a null trigger delivers immediately there.
       trigger:

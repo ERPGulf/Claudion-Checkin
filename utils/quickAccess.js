@@ -1,3 +1,4 @@
+import { translateMessage, t } from '../localization';
 import { isRouteEnabled } from './featureSettings';
 
 /**
@@ -123,4 +124,11 @@ export function availableQuickAccessOptions(settings) {
   return QUICK_ACCESS_OPTIONS.filter(option =>
     isRouteEnabled(settings, option.url),
   );
+}
+
+/** Localize presentation from the canonical catalogue, never persisted display text. */
+export function quickAccessLabel(item) {
+  const canonical = QUICK_ACCESS_OPTIONS.find(option => option.id === item?.id);
+  const source = canonical ? [canonical.text1, canonical.text2].filter(Boolean).join(' ') : [item?.text1, item?.text2].filter(Boolean).join(' ');
+  return translateMessage(source);
 }

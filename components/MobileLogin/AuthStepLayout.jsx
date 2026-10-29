@@ -1,13 +1,16 @@
+import Text from '../../localization/LocalizedText';
+import { useTranslation, getLanguage } from "../../localization";
 import React, { useEffect, useRef } from 'react';
-import { ActivityIndicator, Animated, Easing, I18nManager, KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Animated, Easing, KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { BUILD_TAG, ICON, RADIUS, SPACING, TYPO } from '../../constants';
+import { ICON, RADIUS, SPACING, TYPO } from '../../constants';
 import useAppTheme from '../../hooks/useAppTheme';
 import useReducedMotion from '../../hooks/useReducedMotion';
 import { hapticsMessage } from '../../utils/HapticsMessage';
 import PressableScale from '../common/PressableScale';
 import StatusBanner from '../common/StatusBanner';
+import AuthFooter from '../common/AuthFooter';
 import BrandMark from '../Welcome/BrandMark';
 import { useMobileLoginFlow } from './MobileLoginContext';
 import { mobileLoginCopy } from './mobileLoginCopy';
@@ -17,6 +20,7 @@ const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1);
 // Sits above the fields rather than below the actions: the keyboard usually
 // stays up after a submit, and anything under the buttons is behind it.
 function ErrorBanner({ message }) {
+  useTranslation();
   const reduceMotion = useReducedMotion();
   const enter = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -39,6 +43,7 @@ function ErrorBanner({ message }) {
 // Quiet text-weight action for resend and recovery, so a step has one loud
 // button instead of a stack of equal ones.
 export function TextAction({ label, onPress, disabled, style }) {
+  useTranslation();
   const { colors } = useAppTheme();
   return (
     <PressableScale
@@ -55,10 +60,11 @@ export function TextAction({ label, onPress, disabled, style }) {
 }
 
 export default function AuthStepLayout({ title, subtitle, children }) {
+  useTranslation();
   const { colors } = useAppTheme();
   const { login, onBack, showBack } = useMobileLoginFlow();
   const busy = login.isLoading || login.isHydrating;
-  const textAlign = I18nManager.isRTL ? 'right' : 'left';
+  const textAlign = getLanguage() === 'ar' ? 'right' : 'left';
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceSecondary }} edges={['top', 'bottom', 'left', 'right']}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -78,7 +84,7 @@ export default function AuthStepLayout({ title, subtitle, children }) {
                 onPress={onBack}
                 style={{ minHeight: 44, minWidth: 44, borderRadius: RADIUS.pill, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.iconBackground }}
               >
-                <Ionicons name={I18nManager.isRTL ? 'arrow-forward' : 'arrow-back'} size={ICON.md} color={busy ? colors.textMuted : colors.textPrimary} />
+                <Ionicons name={getLanguage() === 'ar' ? 'arrow-forward' : 'arrow-back'} size={ICON.md} color={busy ? colors.textMuted : colors.textPrimary} />
               </PressableScale>
             )}
           </View>
@@ -96,8 +102,8 @@ export default function AuthStepLayout({ title, subtitle, children }) {
                 : children}
             </View>
           </View>
-          <View style={{ flex: 1, minHeight: SPACING.xxxl }} />
-          <Text style={{ ...TYPO.caption2, color: colors.textMuted, textAlign: 'center' }}>{BUILD_TAG}</Text>
+          <View style={{ flex: 1, minHeight: SPACING.xl }} />
+          <AuthFooter style={{ marginTop: 0 }} />
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -105,6 +111,7 @@ export default function AuthStepLayout({ title, subtitle, children }) {
 }
 
 export function CompleteStep() {
+  useTranslation();
   const { colors } = useAppTheme();
   return (
     <AuthStepLayout title={mobileLoginCopy('completing')} subtitle={mobileLoginCopy('completingSubtitle')}>

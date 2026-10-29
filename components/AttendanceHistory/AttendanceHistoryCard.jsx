@@ -1,6 +1,8 @@
+import { t, useTranslation } from '../../localization';
 /* eslint-disable react/prop-types */
 import React from 'react';
-import { View, Text } from 'react-native';
+import { View } from 'react-native';
+import Text from '../../localization/LocalizedText';
 import { Ionicons } from '@expo/vector-icons';
 import { ICON, RADIUS, SPACING, TYPO } from '../../constants';
 import useAppTheme from '../../hooks/useAppTheme';
@@ -24,6 +26,7 @@ import {
  * words in it, and drifting apart would read as two unrelated affordances.
  */
 function Chip({ icon, label, surface, text }) {
+  const { language, direction, isRTL } = useTranslation();
   return (
     <View
       style={{
@@ -85,6 +88,7 @@ function AttendanceHistoryCard({
   showDate = true,
   onPress,
 }) {
+  const { language, direction, isRTL } = useTranslation();
   const { colors } = useAppTheme();
 
   const date = parseLogTime(time);
@@ -205,10 +209,10 @@ function AttendanceHistoryCard({
   // 28 Jul 2026" as a single row instead of three unrelated fragments.
   const a11yLabel = [
     label,
-    trigger ? 'automatic' : null,
+    trigger ? t('automatic') : null,
     formatLogTime(date),
     formatLogDate(date),
-    source ? `from ${source}` : null,
+    source ? t("from {{source}}", { source }) : null,
   ]
     .filter(Boolean)
     .join(', ');

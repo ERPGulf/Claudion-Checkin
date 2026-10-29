@@ -1,5 +1,6 @@
+import { useTranslation } from "../../localization";
 import React from 'react';
-import { I18nManager, View } from 'react-native';
+import { View } from 'react-native';
 import ActionButton from '../common/ActionButton';
 import FormField from '../common/FormField';
 import AuthStepLayout, { TextAction } from './AuthStepLayout';
@@ -7,6 +8,7 @@ import { useMobileLoginFlow } from './MobileLoginContext';
 import { mobileLoginCopy } from './mobileLoginCopy';
 
 export default function PasswordSignInStep() {
+  useTranslation();
   const { login } = useMobileLoginFlow();
   const busy = login.isLoading || login.isHydrating;
   const canSubmit = !busy && !!login.password?.trim();
@@ -30,7 +32,7 @@ export default function PasswordSignInStep() {
         disabled={busy}
         returnKeyType="go"
         onSubmitEditing={submit}
-        align={I18nManager.isRTL ? 'right' : 'left'}
+        align="left"
       />
       <ActionButton label={mobileLoginCopy(needsOtp ? 'continue' : 'signIn')} variant="accent" size="lg" loading={login.isLoading} disabled={!canSubmit} onPress={login.continuePasswordSignIn} />
       {(login.canResetPassword || login.canCreatePassword) && (

@@ -1,7 +1,9 @@
+import { t, useTranslation } from '../localization';
 import { useCallback, useEffect, useState } from "react";
 import { getAuthSessionGeneration, isAuthSessionSuspended } from "../utils/authSessionGuard";
 
 const useShortcutData = (employeeCode, fetchFn) => {
+  useTranslation();
   const [data, setData] = useState({});
   const [title, setTitle] = useState("Records");
   const [loading, setLoading] = useState(true);
@@ -48,7 +50,7 @@ const useShortcutData = (employeeCode, fetchFn) => {
     };
   }, [employeeCode, fetchFn, attempt]);
 
-  return { data, title, loading, error, retry };
+  return { data, title: title === "Records" ? t("Records") : title, loading, error, retry };
 };
 
 export default useShortcutData;

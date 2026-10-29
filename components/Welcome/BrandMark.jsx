@@ -1,3 +1,4 @@
+import { t, useTranslation } from "../../localization";
 /* eslint-disable react/prop-types */
 import React, { memo } from 'react';
 import { Image } from 'expo-image';
@@ -57,6 +58,7 @@ export const WORDMARK_ASPECT = 3081 / 763;
  * no recolour, no crop into the artwork.
  */
 function BrandMark({ width = BRAND_MARK_MAX_WIDTH }) {
+  useTranslation();
   const { isDark } = useAppTheme();
 
   return (
@@ -67,7 +69,7 @@ function BrandMark({ width = BRAND_MARK_MAX_WIDTH }) {
       style={{ width, height: width / WORDMARK_ASPECT }}
       accessible
       accessibilityRole="image"
-      accessibilityLabel="Claudion"
+      accessibilityLabel={t("Claudion")}
     />
   );
 }

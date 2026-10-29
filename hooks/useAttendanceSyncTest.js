@@ -1,3 +1,4 @@
+import { t, useTranslation } from '../localization';
 import { useEffect, useRef, useState } from "react";
 import { useSelector } from "react-redux";
 import { selectIsLoggedIn } from "../redux/Slices/AuthSlice";
@@ -9,6 +10,7 @@ import { addAttendanceSyncTestPair, canUseAttendanceSyncTest } from "../services
 import { assertAttendanceQueueScope } from "../services/offline/attendanceQueueProvenance";
 
 export default function useAttendanceSyncTest() {
+  const { language, direction, isRTL } = useTranslation();
   const loggedIn = useSelector(selectIsLoggedIn);
   const employeeId = useSelector(selectEmployeeCode);
   const tenantKey = useSelector(selectBaseUrl);
@@ -39,9 +41,9 @@ export default function useAttendanceSyncTest() {
     } catch (error) {
       if (current()) setState({ identity, busy: null, result: null,
         error: ["FEATURE_DISABLED", "EMPLOYEE_AUTO_ATTENDANCE_DISABLED", "EMPLOYEE_AUTO_ATTENDANCE_POLICY_UNAVAILABLE"].includes(error?.code)
-          ? "Automatic and offline attendance must be enabled for this employee."
+          ? t("Automatic and offline attendance must be enabled for this employee.")
           : error?.code === "ATTENDANCE_SYNC_TEST" ? error.message
-          : "Could not finish adding the test pair. Check Attendance recovery before trying again." });
+          : t("Could not finish adding the test pair. Check Attendance recovery before trying again.") });
     } finally {
       pressed.current = false;
     }

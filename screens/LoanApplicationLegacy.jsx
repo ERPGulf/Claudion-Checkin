@@ -1,12 +1,7 @@
+import { translateMessage, t, useTranslation } from '../localization';
 import React, { useLayoutEffect, useState } from "react";
-import {
-  TouchableOpacity,
-  Alert,
-  ActivityIndicator,
-  ScrollView,
-  Text,
-  View,
-} from "react-native";
+import { TouchableOpacity, Alert, ActivityIndicator, ScrollView, View } from 'react-native';
+import Text from '../localization/LocalizedText';
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -45,6 +40,7 @@ const PAGE_SIZE = 5;
  * route at `screens/LoanApplication.jsx` unconditionally.
  */
 export default function LoanApplicationLegacy() {
+  const { language, isRTL } = useTranslation();
   const navigation = useNavigation();
   const employeeCode = useSelector(selectEmployeeCode);
 
@@ -55,19 +51,19 @@ export default function LoanApplicationLegacy() {
     navigation.setOptions({
       headerShown: true,
       headerShadowVisible: false,
-      headerTitle: "Loan Application",
+      headerTitle: t("Loan Application"),
       headerTitleAlign: "center",
       headerLeft: () => (
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Entypo
-            name="chevron-left"
+            name={isRTL ? "chevron-right" : "chevron-left"}
             size={SIZES.xxxLarge - 5}
             color={COLORS.primary}
           />
         </TouchableOpacity>
       ),
     });
-  }, [navigation]);
+  }, [navigation, language, isRTL]);
 
   /* ===========================
      Loan Application History
@@ -108,16 +104,16 @@ export default function LoanApplicationLegacy() {
       await refetch();
       setVisibleCount(PAGE_SIZE);
 
-      Alert.alert("Success", "Loan application submitted successfully.", [
+      Alert.alert(t("Success"), t("Loan application submitted successfully."), [
         {
-          text: "OK",
+          text: t("OK"),
           onPress: () => setResetFormFlag((prev) => !prev),
         },
       ]);
     },
 
     onError: (err) => {
-      Alert.alert("Error", err.message || "Failed to submit loan application.");
+      Alert.alert(t("Error"), translateMessage(err.message || t("Failed to submit loan application.")));
     },
   });
 
@@ -142,22 +138,16 @@ export default function LoanApplicationLegacy() {
 
         {/* Loan Application History */}
 
-        <Text className="text-lg font-semibold mt-6 mb-3 text-gray-800">
-          Loan Application History
-        </Text>
+        <Text className="text-lg font-semibold mt-6 mb-3 text-gray-800">{t("Loan Application History")}</Text>
 
         {isFetching ? (
           <View className="items-center py-6">
             <ActivityIndicator size="small" color={COLORS.primary} />
 
-            <Text className="text-gray-500 mt-2">
-              Loading loan applications...
-            </Text>
+            <Text className="text-gray-500 mt-2">{t("Loading loan applications...")}</Text>
           </View>
         ) : visibleLoans.length === 0 ? (
-          <Text className="text-gray-500 text-center mt-6">
-            No loan applications yet.
-          </Text>
+          <Text className="text-gray-500 text-center mt-6">{t("No loan applications yet.")}</Text>
         ) : (
           <>
             {visibleLoans.map((item, index) => (
@@ -171,7 +161,7 @@ export default function LoanApplicationLegacy() {
                 onPress={() => setVisibleCount((prev) => prev + PAGE_SIZE)}
                 className="p-3 mb-6 rounded bg-gray-300"
               >
-                <Text className="text-center font-semibold">Load More</Text>
+                <Text className="text-center font-semibold">{t("Load More")}</Text>
               </TouchableOpacity>
             )}
           </>

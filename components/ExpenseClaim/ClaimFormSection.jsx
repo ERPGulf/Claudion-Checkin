@@ -1,6 +1,8 @@
+import { t, formatList, getLanguage, useTranslation } from '../../localization';
 /* eslint-disable react/prop-types */
 import React, { useCallback, useEffect, useState } from 'react';
-import { Platform, Text, View } from 'react-native';
+import { Platform, View } from 'react-native';
+import Text from '../../localization/LocalizedText';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
 import { ICON, RADIUS, SPACING, TYPO } from '../../constants';
@@ -41,19 +43,14 @@ function pickerValue(wireDate) {
  */
 function describeMissing({ dateMissing, typeMissing, amountInvalid }) {
   const parts = [
-    dateMissing ? 'an expense date' : null,
-    typeMissing ? 'an expense type' : null,
-    amountInvalid ? 'a valid amount' : null,
+    dateMissing ? t("an expense date") : null,
+    typeMissing ? t("an expense type") : null,
+    amountInvalid ? t("a valid amount") : null,
   ].filter(Boolean);
 
   if (!parts.length) return null;
 
-  const list =
-    parts.length === 1
-      ? parts[0]
-      : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
-
-  return `Add ${list}.`;
+  return t('Add {{fields}}.', { fields: formatList(parts) });
 }
 
 /**
@@ -78,6 +75,7 @@ function describeMissing({ dateMissing, typeMissing, amountInvalid }) {
  * raises the same toasts as the classic form.
  */
 function ClaimFormSection({ addClaim, isCreating, resetFormFlag }) {
+  useTranslation();
   const { colors, isDark } = useAppTheme();
 
   const {
@@ -167,34 +165,30 @@ function ClaimFormSection({ addClaim, isCreating, resetFormFlag }) {
             <Text
               accessibilityRole="header"
               style={{ ...TYPO.headline, color: colors.textPrimary }}
-            >
-              Expense claims
-            </Text>
+            >{t("Expense claims")}</Text>
             <Text
               style={{ ...TYPO.caption, color: colors.textMuted }}
               numberOfLines={2}
-            >
-              Claim what you spent, and follow it through approval.
-            </Text>
+            >{t("Claim what you spent, and follow it through approval.")}</Text>
           </View>
         </View>
       </Card>
 
       {/* ================= CREATE CLAIM ================= */}
-      <SectionHeader title="Create claim" subtitle="Required fields are marked" />
+      <SectionHeader title={t("Create claim")} subtitle={t("Required fields are marked")} />
 
       {/* ---------- Expense information ---------- */}
       <ModuleCard
         icon="calendar-outline"
-        title="Expense information"
-        subtitle="When it happened, and what kind"
+        title={t("Expense information")}
+        subtitle={t("When it happened, and what kind")}
         style={{ marginBottom: SPACING.md }}
       >
         <View style={cardBody}>
           <PickerField
-            label="Expense date *"
+            label={t("Expense date *")}
             value={expenseDate ? formatExpenseDate(expenseDate) : ''}
-            placeholder="Select a date"
+            placeholder={t("Select a date")}
             icon="calendar-outline"
             onPress={showDatePicker}
             active={showPicker}
@@ -209,7 +203,7 @@ function ClaimFormSection({ addClaim, isCreating, resetFormFlag }) {
               needsDone={needsDoneAffordance}
               onDone={closeDatePicker}
             >
-              <DateTimePicker
+              <DateTimePicker locale={getLanguage()}
                 value={pickerValue(expenseDate)}
                 mode="date"
                 themeVariant={pickerTheme}
@@ -223,9 +217,9 @@ function ClaimFormSection({ addClaim, isCreating, resetFormFlag }) {
               The chevron opens a sheet rather than a wheel — see
               <ExpenseTypeSheet>. */}
           <PickerField
-            label="Expense type *"
+            label={t("Expense type *")}
             value={expenseType}
-            placeholder="Choose a type"
+            placeholder={t("Choose a type")}
             icon={expenseType ? expenseTypeIcon(expenseType) : 'pricetag-outline'}
             onPress={openTypeSheet}
             active={isTypeSheetVisible}
@@ -238,13 +232,13 @@ function ClaimFormSection({ addClaim, isCreating, resetFormFlag }) {
       {/* ---------- Details ---------- */}
       <ModuleCard
         icon="cash-outline"
-        title="Details"
-        subtitle="How much, and what for"
+        title={t("Details")}
+        subtitle={t("How much, and what for")}
         style={{ marginBottom: SPACING.md }}
       >
         <View style={cardBody}>
           <FormField
-            label="Amount *"
+            label={t("Amount *")}
             value={amount}
             onChangeText={setAmount}
             placeholder="0.00"
@@ -252,14 +246,14 @@ function ClaimFormSection({ addClaim, isCreating, resetFormFlag }) {
             keyboardType="numeric"
             align="right"
             invalid={attempted && amountInvalid}
-            accessibilityLabel="Amount"
+            accessibilityLabel={t("Amount")}
           />
 
           <FormField
-            label="Description"
+            label={t("Description")}
             value={description}
             onChangeText={setDescription}
-            placeholder="What was this expense for?"
+            placeholder={t("What was this expense for?")}
             multiline
             optional
             style={{ marginTop: SPACING.md }}
@@ -270,8 +264,8 @@ function ClaimFormSection({ addClaim, isCreating, resetFormFlag }) {
       {/* ---------- Receipt ---------- */}
       <ModuleCard
         icon="attach-outline"
-        title="Receipt"
-        subtitle="Optional supporting document"
+        title={t("Receipt")}
+        subtitle={t("Optional supporting document")}
         style={{ marginBottom: SPACING.md }}
       >
         <View style={cardBody}>
@@ -289,14 +283,14 @@ function ClaimFormSection({ addClaim, isCreating, resetFormFlag }) {
       {!!missing && (
         <StatusBanner
           tone="error"
-          title="Finish the form first"
+          title={t("Finish the form first")}
           message={missing}
           style={{ marginBottom: SPACING.md }}
         />
       )}
 
       <ActionButton
-        label="Submit claim"
+        label={t("Submit claim")}
         icon="paper-plane-outline"
         variant="filled"
         size="lg"

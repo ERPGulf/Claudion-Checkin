@@ -1,0 +1,962 @@
+{
+  "summary": {
+    "files": 326,
+    "namespaces": [
+      "attendance",
+      "auth",
+      "common",
+      "hr"
+    ],
+    "englishKeys": 1449,
+    "arabicKeys": 1449,
+    "resourceErrors": 0,
+    "conflictingTranslations": 0,
+    "missingLiteralKeys": 0,
+    "unlocalizedSourceSites": 0,
+    "dynamicTranslationCalls": 57
+  },
+  "resourceErrors": [],
+  "conflictingTranslations": [],
+  "untranslated": [],
+  "missingKeys": [],
+  "invariant": [
+    {
+      "file": "components/Home/YourLavas.jsx",
+      "line": 379,
+      "value": "ERPGulf.com",
+      "reason": "Company domain"
+    },
+    {
+      "file": "components/HomeLegacy/YourLavas.jsx",
+      "line": 383,
+      "value": "ERPGulf.com",
+      "reason": "Company domain"
+    },
+    {
+      "file": "components/MobileLogin/AccountStep.jsx",
+      "line": 71,
+      "value": "erp.yourcompany.com",
+      "reason": "Synthetic URL example; machine-readable LTR"
+    },
+    {
+      "file": "components/ShortcutDetails/ShortcutDetailsLegacy.js",
+      "line": 120,
+      "value": "ERPGulf.com",
+      "reason": "Company domain"
+    },
+    {
+      "file": "screens/MyQrCode.jsx",
+      "line": 124,
+      "value": "ERPGulf.com",
+      "reason": "Company domain"
+    },
+    {
+      "file": "screens/MyQrCodeLegacy.jsx",
+      "line": 125,
+      "value": "ERPGulf.com",
+      "reason": "Company domain"
+    }
+  ],
+  "cataloguedSource": [
+    {
+      "file": "components/AutoAttendance/LocationAccessExplainer.jsx",
+      "line": 35,
+      "value": "Make attendance easier",
+      "translated": true
+    },
+    {
+      "file": "components/AutoAttendance/LocationAccessExplainer.jsx",
+      "line": 36,
+      "value": "Your employer has turned on automatic attendance. This app uses your location to record your attendance at your assigned workplace, even when the app is closed or not in use.",
+      "translated": true
+    },
+    {
+      "file": "components/AutoAttendance/LocationAccessExplainer.jsx",
+      "line": 41,
+      "value": "Checked in as you arrive",
+      "translated": true
+    },
+    {
+      "file": "components/AutoAttendance/LocationAccessExplainer.jsx",
+      "line": 42,
+      "value": "At your assigned workplace, without opening the app.",
+      "translated": true
+    },
+    {
+      "file": "components/AutoAttendance/LocationAccessExplainer.jsx",
+      "line": 47,
+      "value": "Checked out as you leave",
+      "translated": true
+    },
+    {
+      "file": "components/AutoAttendance/LocationAccessExplainer.jsx",
+      "line": 48,
+      "value": "Recorded as you leave your assigned workplace.",
+      "translated": true
+    },
+    {
+      "file": "components/AutoAttendance/LocationAccessExplainer.jsx",
+      "line": 54,
+      "value": "Enable location-based attendance",
+      "translated": true
+    },
+    {
+      "file": "components/AutoAttendance/LocationAccessExplainer.jsx",
+      "line": 55,
+      "value": "Location access helps the app remind you about attendance and warn you when you're near or outside your assigned workplace. It never checks you in or out.",
+      "translated": true
+    },
+    {
+      "file": "components/AutoAttendance/LocationAccessExplainer.jsx",
+      "line": 60,
+      "value": "Attendance guidance",
+      "translated": true
+    },
+    {
+      "file": "components/AutoAttendance/LocationAccessExplainer.jsx",
+      "line": 61,
+      "value": "See whether you're at your assigned workplace.",
+      "translated": true
+    },
+    {
+      "file": "components/AutoAttendance/LocationAccessExplainer.jsx",
+      "line": 66,
+      "value": "Warnings and reminders",
+      "translated": true
+    },
+    {
+      "file": "components/AutoAttendance/LocationAccessExplainer.jsx",
+      "line": 67,
+      "value": "When you're near or outside your workplace.",
+      "translated": true
+    },
+    {
+      "file": "components/AutoAttendance/LocationAccessExplainer.jsx",
+      "line": 72,
+      "value": "You stay in control",
+      "translated": true
+    },
+    {
+      "file": "components/AutoAttendance/LocationAccessExplainer.jsx",
+      "line": 73,
+      "value": "You check in and out yourself, as usual.",
+      "translated": true
+    },
+    {
+      "file": "components/AutoAttendance/LocationAccessExplainer.jsx",
+      "line": 85,
+      "value": "Kept when you're offline",
+      "translated": true
+    },
+    {
+      "file": "components/AutoAttendance/LocationAccessExplainer.jsx",
+      "line": 86,
+      "value": "Sent once you're back online.",
+      "translated": true
+    },
+    {
+      "file": "components/Home/YourLavas.jsx",
+      "line": 64,
+      "value": "Attendance action",
+      "translated": true
+    },
+    {
+      "file": "components/Home/YourLavas.jsx",
+      "line": 69,
+      "value": "Attendance history",
+      "translated": true
+    },
+    {
+      "file": "components/Home/YourLavas.jsx",
+      "line": 74,
+      "value": "Attendance request",
+      "translated": true
+    },
+    {
+      "file": "components/Home/YourLavas.jsx",
+      "line": 79,
+      "value": "Automatic attendance",
+      "translated": true
+    },
+    {
+      "file": "components/Home/YourLavas.jsx",
+      "line": 84,
+      "value": "Expense claim",
+      "translated": true
+    },
+    {
+      "file": "components/Home/YourLavas.jsx",
+      "line": 89,
+      "value": "Leave request",
+      "translated": true
+    },
+    {
+      "file": "components/Home/YourLavas.jsx",
+      "line": 99,
+      "value": "Loan application",
+      "translated": true
+    },
+    {
+      "file": "components/Home/YourLavas.jsx",
+      "line": 104,
+      "value": "Complaints",
+      "translated": true
+    },
+    {
+      "file": "components/Home/YourLavas.jsx",
+      "line": 109,
+      "value": "Resignation",
+      "translated": true
+    },
+    {
+      "file": "components/common/AttachmentSheet.jsx",
+      "line": 17,
+      "value": "Take Photo",
+      "translated": true
+    },
+    {
+      "file": "components/common/AttachmentSheet.jsx",
+      "line": 18,
+      "value": "Capture a new receipt",
+      "translated": true
+    },
+    {
+      "file": "components/common/AttachmentSheet.jsx",
+      "line": 23,
+      "value": "Choose Image",
+      "translated": true
+    },
+    {
+      "file": "components/common/AttachmentSheet.jsx",
+      "line": 24,
+      "value": "Select from your gallery",
+      "translated": true
+    },
+    {
+      "file": "components/common/AttachmentSheet.jsx",
+      "line": 29,
+      "value": "Browse Files",
+      "translated": true
+    },
+    {
+      "file": "components/common/AttachmentSheet.jsx",
+      "line": 30,
+      "value": "PDF, JPG, PNG",
+      "translated": true
+    },
+    {
+      "file": "components/settings/AppearanceSetting.jsx",
+      "line": 14,
+      "value": "System",
+      "translated": true
+    },
+    {
+      "file": "components/settings/AppearanceSetting.jsx",
+      "line": 15,
+      "value": "Light",
+      "translated": true
+    },
+    {
+      "file": "components/settings/AppearanceSetting.jsx",
+      "line": 16,
+      "value": "Dark",
+      "translated": true
+    },
+    {
+      "file": "navigation/home.tabbar.jsx",
+      "line": 23,
+      "value": "Home",
+      "translated": true
+    },
+    {
+      "file": "navigation/home.tabbar.jsx",
+      "line": 24,
+      "value": "Chat",
+      "translated": true
+    },
+    {
+      "file": "navigation/home.tabbar.jsx",
+      "line": 25,
+      "value": "Profile",
+      "translated": true
+    },
+    {
+      "file": "redux/Slices/AutoAttendanceSlice.js",
+      "line": 35,
+      "value": "Disabled",
+      "translated": true
+    },
+    {
+      "file": "redux/Slices/AutoAttendanceSlice.js",
+      "line": 36,
+      "value": "Automatic attendance is turned off for your account.",
+      "translated": true
+    },
+    {
+      "file": "redux/Slices/AutoAttendanceSlice.js",
+      "line": 39,
+      "value": "Warnings only",
+      "translated": true
+    },
+    {
+      "file": "redux/Slices/AutoAttendanceSlice.js",
+      "line": 41,
+      "value": "Your location is not monitored, and you are not checked in or out automatically.",
+      "translated": true
+    },
+    {
+      "file": "redux/Slices/AutoAttendanceSlice.js",
+      "line": 44,
+      "value": "All attendance actions",
+      "translated": true
+    },
+    {
+      "file": "redux/Slices/AutoAttendanceSlice.js",
+      "line": 46,
+      "value": "Automatically checks you in and out when you cross the office boundary.",
+      "translated": true
+    },
+    {
+      "file": "screens/AttendanceAction.jsx",
+      "line": 28,
+      "value": "Idle 00:00",
+      "translated": true
+    },
+    {
+      "file": "screens/AttendanceAction.jsx",
+      "line": 29,
+      "value": "Idle 00:45",
+      "translated": true
+    },
+    {
+      "file": "screens/AttendanceAction.jsx",
+      "line": 30,
+      "value": "Running +30m",
+      "translated": true
+    },
+    {
+      "file": "screens/AttendanceAction.jsx",
+      "line": 31,
+      "value": "Cap 02:00",
+      "translated": true
+    },
+    {
+      "file": "screens/AttendanceAction.jsx",
+      "line": 32,
+      "value": "Completed 1/day",
+      "translated": true
+    },
+    {
+      "file": "screens/AttendanceAction.jsx",
+      "line": 33,
+      "value": "Monthly Cap 8h",
+      "translated": true
+    },
+    {
+      "file": "screens/SelectQuickAccessLegacy.jsx",
+      "line": 50,
+      "value": "Attendance",
+      "translated": true
+    },
+    {
+      "file": "screens/SelectQuickAccessLegacy.jsx",
+      "line": 51,
+      "value": "action",
+      "translated": true
+    },
+    {
+      "file": "screens/SelectQuickAccessLegacy.jsx",
+      "line": 57,
+      "value": "Attendance",
+      "translated": true
+    },
+    {
+      "file": "screens/SelectQuickAccessLegacy.jsx",
+      "line": 58,
+      "value": "history",
+      "translated": true
+    },
+    {
+      "file": "screens/SelectQuickAccessLegacy.jsx",
+      "line": 92,
+      "value": "Trip",
+      "translated": true
+    },
+    {
+      "file": "screens/SelectQuickAccessLegacy.jsx",
+      "line": 93,
+      "value": "details",
+      "translated": true
+    },
+    {
+      "file": "utils/attendanceHistory.js",
+      "line": 68,
+      "value": "Checked in",
+      "translated": true
+    },
+    {
+      "file": "utils/attendanceHistory.js",
+      "line": 69,
+      "value": "Checked out",
+      "translated": true
+    },
+    {
+      "file": "utils/attendanceHistory.js",
+      "line": 71,
+      "value": "Late entry",
+      "translated": true
+    },
+    {
+      "file": "utils/attendanceHistory.js",
+      "line": 76,
+      "value": "Early exit",
+      "translated": true
+    },
+    {
+      "file": "utils/attendanceHistory.js",
+      "line": 81,
+      "value": "Break started",
+      "translated": true
+    },
+    {
+      "file": "utils/attendanceHistory.js",
+      "line": 82,
+      "value": "Break ended",
+      "translated": true
+    },
+    {
+      "file": "utils/attendanceHistory.js",
+      "line": 173,
+      "value": "Not submitted",
+      "translated": true
+    },
+    {
+      "file": "utils/attendanceHistory.js",
+      "line": 176,
+      "value": "Needs review",
+      "translated": true
+    },
+    {
+      "file": "utils/attendanceHistory.js",
+      "line": 179,
+      "value": "Pending sync",
+      "translated": true
+    },
+    {
+      "file": "utils/attendanceHistory.js",
+      "line": 184,
+      "value": "Syncing",
+      "translated": true
+    },
+    {
+      "file": "utils/attendanceHistory.js",
+      "line": 189,
+      "value": "Synced",
+      "translated": true
+    },
+    {
+      "file": "utils/attendanceHistory.js",
+      "line": 197,
+      "value": "Waiting for administrator",
+      "translated": true
+    },
+    {
+      "file": "utils/attendanceHistory.js",
+      "line": 203,
+      "value": "Needs correction",
+      "translated": true
+    },
+    {
+      "file": "utils/attendanceHistory.js",
+      "line": 208,
+      "value": "Correction submitted",
+      "translated": true
+    },
+    {
+      "file": "utils/attendanceHistory.js",
+      "line": 213,
+      "value": "Already synced",
+      "translated": true
+    },
+    {
+      "file": "utils/expenseClaims.js",
+      "line": 106,
+      "value": "Approved",
+      "translated": true
+    },
+    {
+      "file": "utils/expenseClaims.js",
+      "line": 107,
+      "value": "Paid",
+      "translated": true
+    },
+    {
+      "file": "utils/expenseClaims.js",
+      "line": 108,
+      "value": "Rejected",
+      "translated": true
+    },
+    {
+      "file": "utils/expenseClaims.js",
+      "line": 109,
+      "value": "Cancelled",
+      "translated": true
+    },
+    {
+      "file": "utils/expenseClaims.js",
+      "line": 110,
+      "value": "Pending",
+      "translated": true
+    },
+    {
+      "file": "utils/expenseClaims.js",
+      "line": 111,
+      "value": "Unpaid",
+      "translated": true
+    },
+    {
+      "file": "utils/expenseClaims.js",
+      "line": 112,
+      "value": "Submitted",
+      "translated": true
+    },
+    {
+      "file": "utils/expenseClaims.js",
+      "line": 113,
+      "value": "Draft",
+      "translated": true
+    },
+    {
+      "file": "utils/quickAccess.js",
+      "line": 22,
+      "value": "Attendance",
+      "translated": true
+    },
+    {
+      "file": "utils/quickAccess.js",
+      "line": 23,
+      "value": "action",
+      "translated": true
+    },
+    {
+      "file": "utils/quickAccess.js",
+      "line": 29,
+      "value": "Attendance",
+      "translated": true
+    },
+    {
+      "file": "utils/quickAccess.js",
+      "line": 30,
+      "value": "history",
+      "translated": true
+    },
+    {
+      "file": "utils/quickAccess.js",
+      "line": 36,
+      "value": "Attendance",
+      "translated": true
+    },
+    {
+      "file": "utils/quickAccess.js",
+      "line": 37,
+      "value": "request",
+      "translated": false
+    },
+    {
+      "file": "utils/quickAccess.js",
+      "line": 43,
+      "value": "Automatic",
+      "translated": true
+    },
+    {
+      "file": "utils/quickAccess.js",
+      "line": 44,
+      "value": "attendance",
+      "translated": false
+    },
+    {
+      "file": "utils/quickAccess.js",
+      "line": 50,
+      "value": "Leave",
+      "translated": true
+    },
+    {
+      "file": "utils/quickAccess.js",
+      "line": 51,
+      "value": "request",
+      "translated": false
+    },
+    {
+      "file": "utils/quickAccess.js",
+      "line": 57,
+      "value": "Expense",
+      "translated": true
+    },
+    {
+      "file": "utils/quickAccess.js",
+      "line": 58,
+      "value": "claim",
+      "translated": true
+    },
+    {
+      "file": "utils/quickAccess.js",
+      "line": 64,
+      "value": "Loan",
+      "translated": true
+    },
+    {
+      "file": "utils/quickAccess.js",
+      "line": 65,
+      "value": "application",
+      "translated": true
+    },
+    {
+      "file": "utils/quickAccess.js",
+      "line": 71,
+      "value": "Complaints",
+      "translated": true
+    },
+    {
+      "file": "utils/quickAccess.js",
+      "line": 77,
+      "value": "Vacation",
+      "translated": true
+    },
+    {
+      "file": "utils/quickAccess.js",
+      "line": 78,
+      "value": "list",
+      "translated": true
+    },
+    {
+      "file": "utils/quickAccess.js",
+      "line": 84,
+      "value": "My QR",
+      "translated": true
+    },
+    {
+      "file": "utils/records.js",
+      "line": 27,
+      "value": "Open",
+      "translated": true
+    },
+    {
+      "file": "utils/records.js",
+      "line": 28,
+      "value": "Approved",
+      "translated": true
+    },
+    {
+      "file": "utils/records.js",
+      "line": 29,
+      "value": "Rejected",
+      "translated": true
+    },
+    {
+      "file": "utils/records.js",
+      "line": 30,
+      "value": "Cancelled",
+      "translated": true
+    },
+    {
+      "file": "utils/records.js",
+      "line": 31,
+      "value": "Submitted",
+      "translated": true
+    },
+    {
+      "file": "utils/records.js",
+      "line": 32,
+      "value": "Draft",
+      "translated": true
+    }
+  ],
+  "dynamicCalls": [
+    {
+      "file": "components/AutoAttendance/LocationAccessExplainer.jsx",
+      "line": 95,
+      "expression": "hint ? \"{{title}}. {{description}} {{hint}}\" : \"{{title}}. {{description}}\""
+    },
+    {
+      "file": "components/AutoAttendance/LocationAccessExplainer.jsx",
+      "line": 95,
+      "expression": "title"
+    },
+    {
+      "file": "components/AutoAttendance/LocationAccessExplainer.jsx",
+      "line": 95,
+      "expression": "description"
+    },
+    {
+      "file": "components/AutoAttendance/LocationAccessExplainer.jsx",
+      "line": 95,
+      "expression": "hint"
+    },
+    {
+      "file": "components/AutoAttendance/LocationAccessExplainer.jsx",
+      "line": 114,
+      "expression": "title"
+    },
+    {
+      "file": "components/AutoAttendance/LocationAccessExplainer.jsx",
+      "line": 123,
+      "expression": "description"
+    },
+    {
+      "file": "components/AutoAttendance/LocationAccessExplainer.jsx",
+      "line": 127,
+      "expression": "hint"
+    },
+    {
+      "file": "components/AutoAttendance/LocationAccessExplainer.jsx",
+      "line": 286,
+      "expression": "copy.title"
+    },
+    {
+      "file": "components/AutoAttendance/LocationAccessExplainer.jsx",
+      "line": 289,
+      "expression": "copy.description"
+    },
+    {
+      "file": "components/AutoAttendance/LocationAccessExplainer.jsx",
+      "line": 303,
+      "expression": "copy.footnote"
+    },
+    {
+      "file": "components/Home/YourLavas.jsx",
+      "line": 301,
+      "expression": "item.label"
+    },
+    {
+      "file": "components/HomeLegacy/YourLavas.jsx",
+      "line": 299,
+      "expression": "item.nav === 'Auto attendance' ? 'Automatic attendance' : item.nav === 'comingsoon' ? 'Vacation list' : item.nav"
+    },
+    {
+      "file": "components/MobileLogin/mobileLoginCopy.js",
+      "line": 61,
+      "expression": "COPY[key] || 'Sign-in could not finish'"
+    },
+    {
+      "file": "components/Notifications/NotificationRow.jsx",
+      "line": 59,
+      "expression": "isUnread ? \"Unread. {{title}}. {{body}}\" : \"{{title}}. {{body}}\""
+    },
+    {
+      "file": "components/common/AttachmentSheet.jsx",
+      "line": 82,
+      "expression": "option.title"
+    },
+    {
+      "file": "components/common/AttachmentSheet.jsx",
+      "line": 83,
+      "expression": "option.description"
+    },
+    {
+      "file": "components/common/AttachmentSheet.jsx",
+      "line": 84,
+      "expression": "option.title"
+    },
+    {
+      "file": "components/common/AttachmentSheet.jsx",
+      "line": 84,
+      "expression": "option.description"
+    },
+    {
+      "file": "components/common/AttendanceSyncSheet.jsx",
+      "line": 225,
+      "expression": "row.action === \"checkout\" ? \"check-out\" : \"check-in\""
+    },
+    {
+      "file": "components/common/AuthFooter.jsx",
+      "line": 30,
+      "expression": "runningVersion.otaLabelKey"
+    },
+    {
+      "file": "components/common/SearchBar.jsx",
+      "line": 161,
+      "expression": "noun === 'claim' ? '{{count}} claims' : noun === 'notification' ? '{{count}} notifications' : '{{count}} {{noun}}'"
+    },
+    {
+      "file": "components/common/UploadField.jsx",
+      "line": 90,
+      "expression": "label ? '{{label}}. Upload supporting document. {{requirement}}.' : 'Upload supporting document. {{requirement}}.'"
+    },
+    {
+      "file": "components/common/UploadField.jsx",
+      "line": 164,
+      "expression": "label ? '{{label}}. Attached: {{name}}. Tap to replace.' : 'Attached: {{name}}. Tap to replace.'"
+    },
+    {
+      "file": "components/settings/AppearanceSetting.jsx",
+      "line": 77,
+      "expression": "option.label"
+    },
+    {
+      "file": "components/settings/AppearanceSetting.jsx",
+      "line": 104,
+      "expression": "option.label"
+    },
+    {
+      "file": "components/settings/AttendanceRecoverySetting.jsx",
+      "line": 83,
+      "expression": "event.transition === 'EXIT' ? 'exit' : event.transition === 'ENTER' ? 'entry' : 'transition'"
+    },
+    {
+      "file": "components/settings/LanguageSetting.jsx",
+      "line": 49,
+      "expression": "language === 'ar' ? 'Switch to English' : 'Switch to Arabic'"
+    },
+    {
+      "file": "hooks/useAutoAttendance.js",
+      "line": 94,
+      "expression": "policySource.title"
+    },
+    {
+      "file": "hooks/useAutoAttendance.js",
+      "line": 94,
+      "expression": "policySource.description"
+    },
+    {
+      "file": "hooks/useLeaveRequest.js",
+      "line": 379,
+      "expression": "REMOTE_AGREEMENT_TEXT"
+    },
+    {
+      "file": "hooks/useMobileLogin.js",
+      "line": 636,
+      "expression": "serverAddressError"
+    },
+    {
+      "file": "hooks/useMobileLogin.js",
+      "line": 656,
+      "expression": "error"
+    },
+    {
+      "file": "hooks/useMobileLogin.js",
+      "line": 657,
+      "expression": "companyCodeError"
+    },
+    {
+      "file": "hooks/useMobileLogin.js",
+      "line": 658,
+      "expression": "mobileNumberError"
+    },
+    {
+      "file": "hooks/useMobileLogin.js",
+      "line": 659,
+      "expression": "passwordError"
+    },
+    {
+      "file": "hooks/useMobileLogin.js",
+      "line": 660,
+      "expression": "newPasswordFieldError || (newPassword && (!newPassword.trim() || newPassword.length < MIN_PASSWORD_LENGTH)\n      ? newPasswordError(newPassword, confirmPassword) : '')"
+    },
+    {
+      "file": "hooks/useMobileLogin.js",
+      "line": 662,
+      "expression": "confirmPasswordError || (confirmPassword && newPassword !== confirmPassword\n      ? \"Passwords do not match.\" : '')"
+    },
+    {
+      "file": "hooks/useMobileLogin.js",
+      "line": 664,
+      "expression": "otpError"
+    },
+    {
+      "file": "navigation/app-navigator.jsx",
+      "line": 107,
+      "expression": "route.name"
+    },
+    {
+      "file": "navigation/auth-navigator.jsx",
+      "line": 63,
+      "expression": "route.name"
+    },
+    {
+      "file": "navigation/home.tabbar.jsx",
+      "line": 174,
+      "expression": "tab.label"
+    },
+    {
+      "file": "navigation/home.tabbar.jsx",
+      "line": 175,
+      "expression": "tab.label"
+    },
+    {
+      "file": "screens/AttendanceAction.jsx",
+      "line": 410,
+      "expression": "preset.label"
+    },
+    {
+      "file": "screens/AttendanceAction.jsx",
+      "line": 431,
+      "expression": "preset.label"
+    },
+    {
+      "file": "screens/AttendanceRequest.jsx",
+      "line": 434,
+      "expression": "item"
+    },
+    {
+      "file": "screens/AttendanceRequestLegacy.jsx",
+      "line": 236,
+      "expression": "item"
+    },
+    {
+      "file": "screens/AutoAttendance.jsx",
+      "line": 471,
+      "expression": "GEOTAGGING_LABELS[value].title"
+    },
+    {
+      "file": "screens/AutoAttendance.jsx",
+      "line": 472,
+      "expression": "GEOTAGGING_LABELS[value].description"
+    },
+    {
+      "file": "screens/Profile.jsx",
+      "line": 268,
+      "expression": "message"
+    },
+    {
+      "file": "screens/Profile.jsx",
+      "line": 313,
+      "expression": "message"
+    },
+    {
+      "file": "screens/Profile.jsx",
+      "line": 538,
+      "expression": "updateStatus.key"
+    },
+    {
+      "file": "services/notifications/localNotifications.js",
+      "line": 76,
+      "expression": "bodyKey"
+    },
+    {
+      "file": "utils/attendanceHistory.js",
+      "line": 88,
+      "expression": "known.label"
+    },
+    {
+      "file": "utils/attendanceHistory.js",
+      "line": 223,
+      "expression": "known.label"
+    },
+    {
+      "file": "utils/attendanceRecovery.js",
+      "line": 157,
+      "expression": "counts.syncing ? \"{{success}} synced · {{waiting}} waiting · {{attention}} needs attention · {{syncing}} syncing\" : \"{{success}} synced · {{waiting}} waiting · {{attention}} needs attention\""
+    },
+    {
+      "file": "utils/expenseClaims.js",
+      "line": 119,
+      "expression": "known.label"
+    },
+    {
+      "file": "utils/records.js",
+      "line": 38,
+      "expression": "known.label"
+    }
+  ],
+  "scope": "Static application source audit. Dynamic tenant content, device/native dialogs, keyboard behavior, and layout require the documented platform review; cataloguedSource and dynamicCalls are reported for manual review, not claimed as proven coverage."
+}

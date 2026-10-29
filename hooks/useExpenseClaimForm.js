@@ -1,3 +1,4 @@
+import { translateMessage, t, useTranslation } from '../localization';
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, Platform, ToastAndroid } from 'react-native';
 import { format } from 'date-fns';
@@ -22,6 +23,7 @@ import { useAttachmentPicker } from './useAttachmentPicker';
  * both screens, so the classic form's behaviour is unchanged.
  */
 export default function useExpenseClaimForm({ onSubmit, resetSignal } = {}) {
+  useTranslation();
   const [expenseDate, setExpenseDate] = useState('');
   const [expenseType, setExpenseType] = useState('');
   const [description, setDescription] = useState('');
@@ -36,8 +38,8 @@ export default function useExpenseClaimForm({ onSubmit, resetSignal } = {}) {
     useAttachmentPicker('expense_claim');
 
   const showToast = useCallback(msg => {
-    if (Platform.OS === 'android') ToastAndroid.show(msg, ToastAndroid.SHORT);
-    else Alert.alert('Notice', msg);
+    if (Platform.OS === 'android') ToastAndroid.show(translateMessage(msg), ToastAndroid.SHORT);
+    else Alert.alert(t("Notice"), translateMessage(msg));
   }, []);
 
   useEffect(() => {
@@ -140,10 +142,10 @@ export default function useExpenseClaimForm({ onSubmit, resetSignal } = {}) {
    * ------------------------------------------------------------------- */
 
   const handleSubmit = useCallback(async () => {
-    if (!expenseDate.trim()) return showToast('Please select an expense date.');
-    if (!expenseType) return showToast('Please select an expense type.');
+    if (!expenseDate.trim()) return showToast(t("Please select an expense date."));
+    if (!expenseType) return showToast(t("Please select an expense type."));
     if (!amount.trim() || Number.isNaN(Number(amount))) {
-      return showToast('Please enter a valid amount.');
+      return showToast(t("Please enter a valid amount."));
     }
 
     const payload = {
@@ -157,7 +159,7 @@ export default function useExpenseClaimForm({ onSubmit, resetSignal } = {}) {
     try {
       await onSubmit?.(payload);
     } catch {
-      showToast('Failed to submit claim. Please try again.');
+      showToast(t("Failed to submit claim. Please try again."));
     }
   }, [
     expenseDate,

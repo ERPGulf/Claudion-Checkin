@@ -1,3 +1,4 @@
+import { t } from '../../localization';
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 import { AuthError, createAuthClient } from "@erpgulf/auth-sdk";
@@ -353,7 +354,7 @@ export const completeMobileSignIn = async ({
       logMobileAuthDebug("handoff.notifications.failed", { error, nonfatal: true });
     }
     if (generation === getAuthSessionGeneration()) {
-      Toast.show({ type: "success", text1: "Login successful", autoHide: true, visibilityTime: 3000 });
+      Toast.show({ type: "success", text1: t("Login successful"), autoHide: true, visibilityTime: 3000 });
     }
     logMobileAuthDebug("handoff.complete", { generation, currentGeneration: getAuthSessionGeneration() });
     return { status: "authenticated" };

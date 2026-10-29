@@ -1,6 +1,8 @@
+import { t, useTranslation } from '../../localization';
 /* eslint-disable react/prop-types */
 import React, { useRef } from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
+import Text from '../../localization/LocalizedText';
 import { Ionicons } from '@expo/vector-icons';
 import { ICON, RADIUS, SPACING, TYPO } from '../../constants';
 import useAppTheme from '../../hooks/useAppTheme';
@@ -27,6 +29,7 @@ import {
  * the app's own formatters ("Today · 2:33 PM") instead of printed raw.
  */
 function NotificationSheet({ notification: selected, onClose }) {
+  const { language, direction, isRTL } = useTranslation();
   const { colors } = useAppTheme();
 
   // The sheet stays mounted for its exit; keep showing the last notification so
@@ -48,9 +51,9 @@ function NotificationSheet({ notification: selected, onClose }) {
     <BottomSheet
       visible={!!selected}
       onClose={onClose}
-      title={notification?.title || 'Notification'}
+      title={notification?.title || t("Notification")}
       subtitle={stamp || undefined}
-      closeLabel="Close"
+      closeLabel={t("Close")}
     >
       <View style={{ paddingBottom: SPACING.md }}>
         <View
