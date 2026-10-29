@@ -63,7 +63,7 @@ The implementation covers these presentation families and their shared hooks/com
 - [ ] Physical-device location transitions, killed-process/background behavior, permission prompts and notification delivery verified after the native release build.
 - [ ] Professional native-Arabic terminology and accessibility review completed.
 
-The generated [coverage report](localization-coverage.json) records 324 source files, four feature catalogues and 1,444 unique keys per language. It reports zero resource errors, conflicting translations, missing literal keys and detected untranslated source sites. It also lists dynamic translation calls and source maps for review. This is a bounded static check, not a proof that arbitrary backend content or every native layout is localized.
+The generated [coverage report](localization-coverage.json) records 326 source files, four feature catalogues and 1,449 unique keys per language. It reports zero resource errors, conflicting translations, missing literal keys and detected untranslated source sites. It also lists dynamic translation calls and source maps for review. This is a bounded static check, not a proof that arbitrary backend content or every native layout is localized.
 
 ## Attendance and background safety
 
@@ -115,7 +115,7 @@ xcodebuild -workspace ios/ClaudionCheckin.xcworkspace -scheme ClaudionCheckin \
 ./gradlew :app:assembleDebug --console=plain
 ```
 
-Final result: **145 suites passed, 3,071 tests passed, 13 existing TODOs**. Both platform production Hermes bundles exported successfully. The final unsigned iOS simulator build reported `BUILD SUCCEEDED`; the generated Android debug build reported `BUILD SUCCESSFUL` (640 tasks). Native permission plists/strings passed `plutil -lint`; generated Android manifest declares both RTL support and locale configuration. `git diff --check` is clean. `--forceExit` handles the existing Jest open-handle issue; it does not imply that issue was repaired. Lint completes with no errors and 19 hook dependency warnings, including existing dependencies and intentional locale-driven presentation recomputation. No TypeScript application check is configured in this JavaScript repository.
+Final result: **147 suites passed, 3,085 tests passed, 13 existing TODOs**. Both platform production Hermes bundles exported successfully. The final unsigned iOS simulator build reported `BUILD SUCCEEDED`; the generated Android debug build reported `BUILD SUCCESSFUL` (640 tasks). Native permission plists/strings passed `plutil -lint`; generated Android manifest declares both RTL support and locale configuration. `git diff --check` is clean. `--forceExit` handles the existing Jest open-handle issue; it does not imply that issue was repaired. Lint completes with no errors and 19 hook dependency warnings, including existing dependencies and intentional locale-driven presentation recomputation. No TypeScript application check is configured in this JavaScript repository.
 
 ## Platform review scope
 
@@ -159,3 +159,28 @@ Implementation was checked against the installed dependencies and these official
 - [React Native I18nManager](https://reactnative.dev/docs/i18nmanager)
 - [React Navigation direction](https://reactnavigation.org/docs/navigation-container/#direction)
 - [i18next translation framework](https://www.i18next.com/)
+
+
+## Compact authentication footer
+
+The shared `AuthFooter` replaces the dated manual build stamp on authentication
+screens. A 38pt secondary language pill sits above separate, muted app/OTA
+metadata, with a 44pt iOS or 48dp Android touch target. The default Profile
+language setting retains its existing layout. The pill uses theme surface/border
+tokens, medium 15pt text, a globe, and the alternative language name.
+
+`describeAuthFooter` reads the available native/config app version (falling back
+to the bundled app config) and the running Expo update identity. Applied OTA
+bundles show an eight-character update ID; embedded and development bundles are
+labeled honestly. The footer performs no update check, API call, or restart.
+Platform metadata is captured once per launch; its labels remain reactive to
+language changes. No new dependency or native build is required for this UI change.
+
+
+The compact footer was visually checked on the smaller iPhone simulator in both
+dark English and dark Arabic. Its version line remains inside the safe-area
+viewport after reducing only the empty gap above the mobile footer. Previews:
+[English](localization/screenshots/login-footer-en-dark.png) and
+[Arabic](localization/screenshots/login-footer-ar-dark.png). The platform-specific
+44pt/48dp touch sizes, switching, persistence failures and rapid taps are covered
+by the component tests.

@@ -1,4 +1,3 @@
-import LanguageSetting from '../settings/LanguageSetting';
 import Text from '../../localization/LocalizedText';
 import { useTranslation, getLanguage } from "../../localization";
 import React, { useRef } from 'react';
@@ -128,7 +127,6 @@ export default function AccountStep() {
           navigation.navigate('Qrscan');
         }}
       />
-      <LanguageSetting compact />
     </AuthStepLayout>
   );
 }

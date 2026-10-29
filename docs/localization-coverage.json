@@ -1,19 +1,19 @@
 {
   "summary": {
-    "files": 324,
+    "files": 326,
     "namespaces": [
       "attendance",
       "auth",
       "common",
       "hr"
     ],
-    "englishKeys": 1444,
-    "arabicKeys": 1444,
+    "englishKeys": 1449,
+    "arabicKeys": 1449,
     "resourceErrors": 0,
     "conflictingTranslations": 0,
     "missingLiteralKeys": 0,
     "unlocalizedSourceSites": 0,
-    "dynamicTranslationCalls": 55
+    "dynamicTranslationCalls": 57
   },
   "resourceErrors": [],
   "conflictingTranslations": [],
@@ -34,7 +34,7 @@
     },
     {
       "file": "components/MobileLogin/AccountStep.jsx",
-      "line": 72,
+      "line": 71,
       "value": "erp.yourcompany.com",
       "reason": "Synthetic URL example; machine-readable LTR"
     },
@@ -768,6 +768,11 @@
       "expression": "row.action === \"checkout\" ? \"check-out\" : \"check-in\""
     },
     {
+      "file": "components/common/AuthFooter.jsx",
+      "line": 30,
+      "expression": "runningVersion.otaLabelKey"
+    },
+    {
       "file": "components/common/SearchBar.jsx",
       "line": 161,
       "expression": "noun === 'claim' ? '{{count}} claims' : noun === 'notification' ? '{{count}} notifications' : '{{count}} {{noun}}'"
@@ -796,6 +801,11 @@
       "file": "components/settings/AttendanceRecoverySetting.jsx",
       "line": 83,
       "expression": "event.transition === 'EXIT' ? 'exit' : event.transition === 'ENTER' ? 'entry' : 'transition'"
+    },
+    {
+      "file": "components/settings/LanguageSetting.jsx",
+      "line": 49,
+      "expression": "language === 'ar' ? 'Switch to English' : 'Switch to Arabic'"
     },
     {
       "file": "hooks/useAutoAttendance.js",

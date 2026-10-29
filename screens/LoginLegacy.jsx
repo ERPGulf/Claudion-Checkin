@@ -1,6 +1,6 @@
 import TextInput from '../localization/LocalizedTextInput';
 import Text from '../localization/LocalizedText';
-import LanguageSetting from '../components/settings/LanguageSetting';
+import AuthFooter from '../components/common/AuthFooter';
 import { t, useTranslation } from "../localization";
 import React, { useState } from "react";
 import { getNotifications } from "../services/api/notification.service";
@@ -21,8 +21,9 @@ import { Toast } from "react-native-toast-message/lib/src/Toast";
 import { Formik } from "formik";
 import * as Yup from "yup";
 import { useNavigation } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { setSignIn } from "../redux/Slices/AuthSlice";
-import { COLORS, SIZES, BUILD_TAG } from "../constants";
+import { COLORS, SIZES } from "../constants";
 import { isMobileAuthAvailable } from "../utils/mobileAuthCrypto";
 import { WelcomeCard } from "../components/Login";
 import { selectEmployeeCode } from "../redux/Slices/UserSlice";
@@ -44,6 +45,7 @@ const ALTERNATIVE_LABEL = { color: COLORS.primary, fontSize: 18, fontWeight: "60
 function LoginLegacy() {
   useTranslation();
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
   const dispatch = useDispatch();
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -144,6 +146,7 @@ function LoginLegacy() {
         paddingTop: Constants.statusBarHeight,
         backgroundColor: COLORS.grayBackground,
         paddingHorizontal: 12,
+        paddingBottom: insets.bottom,
       }}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
@@ -270,21 +273,11 @@ function LoginLegacy() {
                 </TouchableOpacity>
               )}
 
-              <Text
-                style={[{
-                  textAlign: "center",
-                  color: COLORS.gray2,
-                  fontSize: 12,
-                  marginTop: 14,
-                }, { writingDirection: 'ltr' }]}
-              >
-                {BUILD_TAG}
-              </Text>
+              <AuthFooter />
             </View>
           </View>
         )}
       </Formik>
-      <LanguageSetting compact />
     </KeyboardAvoidingView>
   );
 }

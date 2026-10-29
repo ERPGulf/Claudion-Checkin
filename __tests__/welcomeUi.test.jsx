@@ -168,14 +168,15 @@ describe('modern Welcome screen', () => {
     expect(subtitle.props.numberOfLines).toBeUndefined();
   });
 
-  it('keeps the build stamp, demoted to a footer', () => {
-    const { getByText } = render(<WelcomeScreen />);
+  it('shows quiet app and OTA metadata instead of the dated build stamp', () => {
+    const { getByText, queryByText } = render(<WelcomeScreen />);
 
-    const stamp = getByText(BUILD_TAG);
+    const stamp = getByText(/^Version .+ · OTA .+/);
     const style = flatten(stamp.props.style);
 
     expect(style.color).toBe(COLORS.textMuted);
     expect(style.fontSize).toBeLessThan(14);
+    expect(queryByText(BUILD_TAG)).toBeNull();
   });
 
   it('routes the QR option to the scanner, as before', () => {
@@ -616,7 +617,7 @@ describe('modern Welcome screen in dark mode', () => {
     expect(flatten(dark.getByText(SUBTITLE).props.style).color).toBe(
       DARK_COLORS.textSecondary,
     );
-    expect(flatten(dark.getByText(BUILD_TAG).props.style).color).toBe(
+    expect(flatten(dark.getByText(/^Version .+ · OTA .+/).props.style).color).toBe(
       DARK_COLORS.textMuted,
     );
   });

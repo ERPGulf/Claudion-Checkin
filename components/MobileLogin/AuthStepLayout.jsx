@@ -4,12 +4,13 @@ import React, { useEffect, useRef } from 'react';
 import { ActivityIndicator, Animated, Easing, KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { BUILD_TAG, ICON, RADIUS, SPACING, TYPO } from '../../constants';
+import { ICON, RADIUS, SPACING, TYPO } from '../../constants';
 import useAppTheme from '../../hooks/useAppTheme';
 import useReducedMotion from '../../hooks/useReducedMotion';
 import { hapticsMessage } from '../../utils/HapticsMessage';
 import PressableScale from '../common/PressableScale';
 import StatusBanner from '../common/StatusBanner';
+import AuthFooter from '../common/AuthFooter';
 import BrandMark from '../Welcome/BrandMark';
 import { useMobileLoginFlow } from './MobileLoginContext';
 import { mobileLoginCopy } from './mobileLoginCopy';
@@ -101,8 +102,8 @@ export default function AuthStepLayout({ title, subtitle, children }) {
                 : children}
             </View>
           </View>
-          <View style={{ flex: 1, minHeight: SPACING.xxxl }} />
-          <Text style={[{ ...TYPO.caption2, color: colors.textMuted, textAlign: 'center' }, { writingDirection: 'ltr' }]}>{BUILD_TAG}</Text>
+          <View style={{ flex: 1, minHeight: SPACING.xl }} />
+          <AuthFooter style={{ marginTop: 0 }} />
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

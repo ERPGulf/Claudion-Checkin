@@ -1,6 +1,6 @@
 import Text from '../../localization/LocalizedText';
 import React, { useRef, useState } from 'react';
-import { View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SPACING, RADIUS, TYPO, ICON } from '../../constants';
 import useAppTheme from '../../hooks/useAppTheme';
@@ -16,7 +16,7 @@ const LANGUAGES = [
 
 /** Device preference, independent of authentication and attendance storage. */
 export default function LanguageSetting({ compact = false }) {
-  const { t, language } = useTranslation();
+  const { t, language, direction } = useTranslation();
   const { colors } = useAppTheme();
   const pending = useRef(false);
   const [busy, setBusy] = useState(false);
@@ -36,9 +36,60 @@ export default function LanguageSetting({ compact = false }) {
     }
   };
 
+  if (compact) {
+    const alternative = LANGUAGES.find(option => option.code !== language);
+    const touchSize = Platform.OS === 'android' ? 48 : 44;
+    return (
+      <View style={{ alignItems: 'center', maxWidth: '100%' }}>
+        <PressableScale
+          onPress={() => choose(alternative.code)}
+          disabled={busy}
+          accessible
+          accessibilityRole="button"
+          accessibilityLabel={t(language === 'ar' ? 'Switch to English' : 'Switch to Arabic')}
+          accessibilityLanguage={language}
+          accessibilityState={{ disabled: busy, busy }}
+          hitSlop={0}
+          scaleTo={0.98}
+          style={{
+            alignItems: 'center',
+            justifyContent: 'center',
+            minWidth: touchSize,
+            minHeight: touchSize,
+          }}
+        >
+          <View style={{
+            direction,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            minHeight: 38,
+            paddingHorizontal: SPACING.lg,
+            paddingVertical: SPACING.xs,
+            gap: SPACING.sm,
+            borderRadius: RADIUS.pill,
+            borderWidth: StyleSheet.hairlineWidth,
+            borderColor: colors.cardBorder,
+            backgroundColor: colors.cardBackground,
+          }}>
+            <Ionicons name="globe-outline" size={ICON.sm} color={colors.textSecondary} accessible={false} />
+            <Text style={{ ...TYPO.headline, fontWeight: '500', color: colors.textSecondary, textAlign: 'center', writingDirection: alternative.code === 'ar' ? 'rtl' : 'ltr' }}>
+              {alternative.name}
+            </Text>
+          </View>
+        </PressableScale>
+        {error && (
+          <Text accessibilityLiveRegion="polite" style={{ ...TYPO.caption, color: colors.errorText, textAlign: 'center' }}>
+            {t('Could not save your language. Please try again.')}
+          </Text>
+        )}
+      </View>
+    );
+  }
+
   return (
-    <View style={{ marginTop: compact ? SPACING.lg : SPACING.xxl }}>
-      {!compact && <SectionHeader title={t('Language')} />}
+    <View style={{ marginTop: SPACING.xxl }}>
+      <SectionHeader title={t('Language')} />
       <Card padded>
         <View accessibilityRole="radiogroup" accessibilityLabel={t('Language')} style={{ flexDirection: 'row', gap: SPACING.sm }}>
           {LANGUAGES.map(option => {

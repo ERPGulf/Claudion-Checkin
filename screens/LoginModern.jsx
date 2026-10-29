@@ -1,5 +1,4 @@
-import Text from '../localization/LocalizedText';
-import LanguageSetting from '../components/settings/LanguageSetting';
+import AuthFooter from '../components/common/AuthFooter';
 import { t, useTranslation, getLanguage } from "../localization";
 import React, { useEffect, useRef } from "react";
 import {
@@ -13,7 +12,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { Formik } from "formik";
-import { BUILD_TAG, SPACING, TYPO } from "../constants";
+import { SPACING } from "../constants";
 import useAppTheme from "../hooks/useAppTheme";
 import useLogin from "../hooks/useLogin";
 import useReducedMotion from "../hooks/useReducedMotion";
@@ -299,20 +298,10 @@ function LoginModern() {
                       two spacers are the only places the layout may stretch. */}
                   <View style={{ flex: 1, minHeight: SPACING.xl }} />
 
-                  {/* Same OTA build stamp, same source of truth. */}
-                  <Text
-                    style={[{
-                      ...TYPO.caption2,
-                      color: colors.textMuted,
-                      textAlign: "center",
-                    }, { writingDirection: 'ltr' }]}
-                  >
-                    {BUILD_TAG}
-                  </Text>
+                  <AuthFooter />
                 </>
               )}
             </Formik>
-            <LanguageSetting compact />
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>

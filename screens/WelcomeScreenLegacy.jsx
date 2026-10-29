@@ -1,10 +1,9 @@
-import Text from '../localization/LocalizedText';
-import LanguageSetting from '../components/settings/LanguageSetting';
+import AuthFooter from '../components/common/AuthFooter';
 import { View, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Image } from "expo-image";
 import React from "react";
-import { COLORS, BUILD_TAG, SPACING } from "../constants";
+import { COLORS, SPACING } from "../constants";
 import { SignInOptions } from "../components/Welcome";
 import icon from "../assets/icon.png";
 
@@ -39,9 +38,6 @@ function WelcomeScreenLegacy() {
             style={{ width: 250, height: 250 }}
           />
 
-          <Text style={[{ color: COLORS.gray2, fontSize: 12, marginTop: 8 }, { writingDirection: 'ltr' }]}>
-            {BUILD_TAG}
-          </Text>
         </View>
 
         <View
@@ -51,7 +47,7 @@ function WelcomeScreenLegacy() {
           }}
         >
           <SignInOptions />
-          <LanguageSetting compact />
+          <AuthFooter />
         </View>
       </ScrollView>
     </SafeAreaView>

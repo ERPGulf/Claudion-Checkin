@@ -1,5 +1,5 @@
 import Text from '../localization/LocalizedText';
-import LanguageSetting from '../components/settings/LanguageSetting';
+import AuthFooter from '../components/common/AuthFooter';
 import { t, useTranslation } from "../localization";
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -14,7 +14,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { BlurView } from "expo-blur";
 import { useIsFocused } from "@react-navigation/native";
-import { BUILD_TAG, SPACING, TYPO } from "../constants";
+import { SPACING, TYPO } from "../constants";
 import useAppTheme from "../hooks/useAppTheme";
 import useReducedMotion from "../hooks/useReducedMotion";
 import {
@@ -54,7 +54,7 @@ const BLUR_INTENSITY = 40;
  * Modern Welcome / Get Started.
  *
  * Presentation only. Still the first screen of the auth stack, still the same
- * `BUILD_TAG`, and each sign-in option does exactly one thing — navigate to its route.
+ * running app/update metadata, and each sign-in option navigates to its route.
  * No provisioning, storage or startup work lives here; the classic screen had
  * none and neither does this.
  *
@@ -263,23 +263,10 @@ function WelcomeScreenModern() {
             <View style={{ paddingVertical: SPACING.xl }}>
               <View style={{ paddingHorizontal: SPACING.xl }}>
                 <SignInOptions />
-                <LanguageSetting compact />
               </View>
             </View>
 
-            {/* Same OTA build stamp, same source of truth — a footnote under the
-                CTA, where a version belongs. Left at `textMuted` rather than
-                dimmed further: at 11pt another opacity step would push it under
-                the 3:1 floor, and it already recedes on size alone. */}
-            <Text
-              style={[{
-                ...TYPO.caption2,
-                color: colors.textMuted,
-                textAlign: "center",
-              }, { writingDirection: 'ltr' }]}
-            >
-              {BUILD_TAG}
-            </Text>
+            <AuthFooter style={{ marginTop: 0, paddingHorizontal: SPACING.lg }} />
           </Animated.View>
         </ScrollView>
       </SafeAreaView>
