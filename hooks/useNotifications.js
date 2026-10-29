@@ -1,3 +1,4 @@
+import { useTranslation } from '../localization';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useDispatch } from 'react-redux';
@@ -47,6 +48,7 @@ import { getAuthSessionGeneration, isAuthSessionSuspended } from '../utils/authS
  * - `unreadCount`, counted with the same `read === 0` rule for the header line.
  */
 export default function useNotifications() {
+  const { language } = useTranslation();
   const [list, setList] = useState([]);
   const [selected, setSelected] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -149,7 +151,7 @@ export default function useNotifications() {
     [list, searchQuery],
   );
 
-  const sections = useMemo(() => groupByDate(filtered), [filtered]);
+  const sections = useMemo(() => groupByDate(filtered), [filtered, language]);
 
   return {
     // Values

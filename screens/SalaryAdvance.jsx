@@ -1,3 +1,4 @@
+import { translateMessage, t, useTranslation } from '../localization';
 import React, { useLayoutEffect, useState } from "react";
 import { View, TouchableOpacity, Alert, ScrollView } from "react-native";
 import Entypo from "@expo/vector-icons/Entypo";
@@ -9,6 +10,7 @@ import { COLORS, SIZES } from "../constants";
 import { SalaryAdvanceRequest } from "../services/api/salaryAdvance.service";
 
 export default function SalaryAdvance() {
+  const { language, isRTL } = useTranslation();
   const navigation = useNavigation();
   const [resetFormFlag, setResetFormFlag] = useState(false);
 
@@ -17,27 +19,27 @@ export default function SalaryAdvance() {
     navigation.setOptions({
       headerShown: true,
       headerShadowVisible: false,
-      headerTitle: "Salary Advance",
+      headerTitle: t("Salary Advance"),
       headerTitleAlign: "center",
       headerLeft: () => (
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Entypo
-            name="chevron-left"
+            name={isRTL ? "chevron-right" : "chevron-left"}
             size={SIZES.xxxLarge - 5}
             color={COLORS.primary}
           />
         </TouchableOpacity>
       ),
     });
-  }, [navigation]);
+  }, [navigation, language, isRTL]);
 
   const { mutateAsync: submitRequest, isPending } = useMutation({
     mutationFn: SalaryAdvanceRequest,
 
     onSuccess: () => {
-      Alert.alert("Success", "Salary advance request submitted successfully.", [
+      Alert.alert(t("Success"), t("Salary advance request submitted successfully."), [
         {
-          text: "OK",
+          text: t("OK"),
           onPress: () => setResetFormFlag((prev) => !prev),
         },
       ]);
@@ -45,8 +47,8 @@ export default function SalaryAdvance() {
 
     onError: (err) => {
       Alert.alert(
-        "Error",
-        err.message || "Failed to submit salary advance request.",
+        t("Error"),
+        translateMessage(err.message || t("Failed to submit salary advance request.")),
       );
     },
   });

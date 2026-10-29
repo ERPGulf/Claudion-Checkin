@@ -1,3 +1,4 @@
+import { t, useTranslation } from "../../localization";
 import React from "react";
 import { Alert, View } from "react-native";
 import Toast from "react-native-toast-message";
@@ -23,6 +24,7 @@ import SettingsRow from "../common/SettingsRow";
  * so the buttons are disabled there and the row says why.
  */
 export default function CrashlyticsTestSetting() {
+  useTranslation();
   const { colors } = useAppTheme();
   if (!canRunCrashTests()) return null;
 
@@ -32,8 +34,8 @@ export default function CrashlyticsTestSetting() {
     recordTestNonFatal();
     Toast.show({
       type: "info",
-      text1: "Test non-fatal recorded",
-      text2: "Close and reopen the app to upload it.",
+      text1: t("Test non-fatal recorded"),
+      text2: t("Close and reopen the app to upload it."),
       visibilityTime: 3500,
       autoHide: true,
     });
@@ -41,11 +43,11 @@ export default function CrashlyticsTestSetting() {
 
   const handleCrash = () => {
     Alert.alert(
-      "Crash the app?",
-      "The app closes immediately. Reopen it afterwards so the crash report uploads.",
+      t("Crash the app?"),
+      t("The app closes immediately. Reopen it afterwards so the crash report uploads."),
       [
-        { text: "Cancel", style: "cancel" },
-        { text: "Crash", style: "destructive", onPress: triggerTestCrash },
+        { text: t("Cancel"), style: "cancel" },
+        { text: t("Crash"), style: "destructive", onPress: triggerTestCrash },
       ],
     );
   };
@@ -53,8 +55,8 @@ export default function CrashlyticsTestSetting() {
   return (
     <>
       <SectionHeader
-        title="Crash reporting test"
-        subtitle="Internal builds only. Not shown in production."
+        title={t("Crash reporting test")}
+        subtitle={t("Internal builds only. Not shown in production.")}
         style={{ marginTop: SPACING.xxl }}
       />
 
@@ -63,11 +65,11 @@ export default function CrashlyticsTestSetting() {
           icon="bug-outline"
           iconTint={collecting ? colors.infoSurface : colors.warningSurface}
           iconColor={collecting ? colors.infoText : colors.warningText}
-          title={collecting ? "Crashlytics is collecting" : "Crashlytics is not collecting"}
+          title={collecting ? t("Crashlytics is collecting") : t("Crashlytics is not collecting")}
           description={
             collecting
-              ? "Reports upload the next time the app starts."
-              : "Debug builds send nothing unless firebase.json sets crashlytics_debug_enabled."
+              ? t("Reports upload the next time the app starts.")
+              : t("Debug builds send nothing unless firebase.json sets crashlytics_debug_enabled.")
           }
         />
 
@@ -76,7 +78,7 @@ export default function CrashlyticsTestSetting() {
             variant="tinted"
             tone="warning"
             icon="flask-outline"
-            label="Record test non-fatal"
+            label={t("Record test non-fatal")}
             onPress={handleNonFatal}
             disabled={!collecting}
           />
@@ -84,7 +86,7 @@ export default function CrashlyticsTestSetting() {
             variant="tinted"
             tone="error"
             icon="warning-outline"
-            label="Force native crash"
+            label={t("Force native crash")}
             onPress={handleCrash}
             disabled={!collecting}
             style={{ marginTop: SPACING.md }}

@@ -390,6 +390,16 @@ function LegacyAutoAttendanceBootstrap() {
             body: outcome.queued
               ? `${where}, so you've been checked out on this device. Check Attendance recovery for synchronization status.`
               : `${where}, so ${startedManually ? "your check-in was closed" : "you've been checked out"} automatically.`,
+            // Local notification delivery resolves the persisted locale before
+            // interpolating. Office names remain unmodified server data.
+            bodyKey: outcome.queued
+              ? (officeName
+                ? "You left {{office}}, so you've been checked out on this device. Check Attendance recovery for synchronization status."
+                : "You left the office, so you've been checked out on this device. Check Attendance recovery for synchronization status.")
+              : startedManually
+                ? (officeName ? "You left {{office}}, so your check-in was closed automatically." : "You left the office, so your check-in was closed automatically.")
+                : (officeName ? "You left {{office}}, so you've been checked out automatically." : "You left the office, so you've been checked out automatically."),
+            values: { office: officeName },
             data: {
               type: "auto-checkout",
               pendingSync: outcome.queued,

@@ -283,7 +283,7 @@ const getMessageTitle = (remoteMessage) => {
   const notificationTitle = remoteMessage?.notification?.title;
   const dataTitle = messageData.title;
 
-  return notificationTitle || dataTitle || "New update";
+  return notificationTitle || dataTitle || t("New update");
 };
 
 const getMessageBody = (remoteMessage) => {
@@ -291,7 +291,7 @@ const getMessageBody = (remoteMessage) => {
   const notificationBody = remoteMessage?.notification?.body;
   const dataBody = messageData.body || messageData.message;
 
-  return notificationBody || dataBody || "You have a new notification.";
+  return notificationBody || dataBody || t("You have a new notification.");
 };
 
 const logNotificationPayload = (source, remoteMessage) => {
@@ -1132,3 +1132,4 @@ export const clearFcmRegistration = async () => {
   // Not awaited, and never allowed to reject into the logout path.
   revokeFcmRegistration(messagingInstance, storedTopics, epoch).catch(() => {});
 };
+import { t } from '../../localization';

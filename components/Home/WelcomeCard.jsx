@@ -1,5 +1,7 @@
+import Text from '../../localization/LocalizedText';
+import { t, useTranslation } from "../../localization";
 import React from 'react';
-import { View, Text } from 'react-native';
+import { View } from 'react-native';
 import { useSelector } from 'react-redux';
 import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { RADIUS, SHADOWS, SPACING, TYPO } from '../../constants';
@@ -9,9 +11,9 @@ import Avatar from '../common/Avatar';
 import NotificationButton from '../common/NotificationButton';
 
 function getGreeting(hour) {
-  if (hour < 12) return 'Good morning';
-  if (hour < 17) return 'Good afternoon';
-  return 'Good evening';
+  if (hour < 12) return t('Good morning');
+  if (hour < 17) return t('Good afternoon');
+  return t('Good evening');
 }
 
 /**
@@ -21,6 +23,7 @@ function getGreeting(hour) {
  * becomes the largest thing on screen rather than the word "Home".
  */
 function WelcomeCard() {
+  useTranslation();
   const navigation = useNavigation();
   const { colors, isDark } = useAppTheme();
   const fullname = useSelector(state => state.user.fullname);
@@ -81,7 +84,7 @@ function WelcomeCard() {
             marginTop: 2,
           }}
         >
-          {fullname || 'Welcome'}
+          {fullname || t("Welcome")}
         </Text>
 
         {!!employeeCode && (

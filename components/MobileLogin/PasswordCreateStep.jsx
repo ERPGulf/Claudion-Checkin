@@ -1,5 +1,6 @@
+import { useTranslation } from "../../localization";
 import React, { useRef, useState } from 'react';
-import { I18nManager } from 'react-native';
+
 import ActionButton from '../common/ActionButton';
 import FormField from '../common/FormField';
 import AuthStepLayout from './AuthStepLayout';
@@ -7,6 +8,7 @@ import { useMobileLoginFlow } from './MobileLoginContext';
 import { mobileLoginCopy } from './mobileLoginCopy';
 
 export default function PasswordCreateStep() {
+  useTranslation();
   const { login } = useMobileLoginFlow();
   const confirmRef = useRef(null);
   const [leftNew, setLeftNew] = useState(false);
@@ -46,7 +48,7 @@ export default function PasswordCreateStep() {
         returnKeyType="next"
         submitBehavior="submit"
         onSubmitEditing={() => confirmRef.current?.focus()}
-        align={I18nManager.isRTL ? 'right' : 'left'}
+        align="left"
       />
       <FormField
         ref={confirmRef}
@@ -65,7 +67,7 @@ export default function PasswordCreateStep() {
         disabled={busy}
         returnKeyType="go"
         onSubmitEditing={submit}
-        align={I18nManager.isRTL ? 'right' : 'left'}
+        align="left"
       />
       <ActionButton label={mobileLoginCopy(resetting ? 'resetTitle' : 'createPassword')} variant="accent" size="lg" loading={login.isLoading} disabled={!canSubmit} onPress={login.submitNewPassword} />
       {optional && <ActionButton label={mobileLoginCopy('skipPassword')} variant="outline" size="lg" disabled={busy} onPress={login.skipPassword} />}

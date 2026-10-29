@@ -1,5 +1,7 @@
+import { t, useTranslation } from '../localization';
 import React, { useCallback, useEffect, useState } from "react";
-import { Platform, ScrollView, Text, View } from "react-native";
+import { Platform, ScrollView, View } from 'react-native';
+import Text from '../localization/LocalizedText';
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { ICON, RADIUS, SPACING, TYPO } from "../constants";
@@ -39,8 +41,9 @@ import AttachmentSheet from "../components/common/AttachmentSheet";
  * the hook's Alert.
  */
 function Complaints() {
+  useTranslation();
   const { colors } = useAppTheme();
-  useModernScreenHeader("Complaints");
+  useModernScreenHeader(t("Complaints"));
 
   const {
     message,
@@ -121,16 +124,11 @@ function Complaints() {
               <Text
                 accessibilityRole="header"
                 style={{ ...TYPO.headline, color: colors.textPrimary }}
-              >
-                Complaint
-              </Text>
+              >{t("Complaint")}</Text>
               <Text
                 style={{ ...TYPO.caption, color: colors.textMuted }}
                 numberOfLines={2}
-              >
-                Submit feedback or report an issue. The relevant department
-                reviews it.
-              </Text>
+              >{t("Submit feedback or report an issue. The relevant department reviews it.")}</Text>
             </View>
           </View>
         </Card>
@@ -139,8 +137,8 @@ function Complaints() {
         <ModuleCard
           dense
           icon="chatbox-ellipses-outline"
-          title="Complaint details"
-          subtitle="Describe the issue you're experiencing"
+          title={t("Complaint details")}
+          subtitle={t("Describe the issue you're experiencing")}
           style={{ marginBottom: SPACING.md }}
         >
           <View style={cardBody}>
@@ -150,15 +148,15 @@ function Complaints() {
                 the script the user types; the stored value is the raw string
                 either way. */}
             <FormField
-              label="Message *"
+              label={t("Message *")}
               value={message}
               onChangeText={setMessage}
-              placeholder="Enter your message here..."
+              placeholder={t("Enter your message here...")}
               multiline
               minLines={4}
               align="auto"
-              accessibilityLabel="Complaint message"
-              accessibilityHint="Describe the issue you want to report"
+              accessibilityLabel={t("Complaint message")}
+              accessibilityHint={t("Describe the issue you want to report")}
               invalid={messageMissing}
             />
 
@@ -169,7 +167,7 @@ function Complaints() {
                 control on the screen. */}
             <UploadField
               compact
-              label="Attachment"
+              label={t("Attachment")}
               file={file}
               onPick={pickFile}
               onRemove={removeFile}
@@ -183,8 +181,8 @@ function Complaints() {
         {messageMissing && (
           <StatusBanner
             tone="error"
-            title="Finish the form first"
-            message="Add a message."
+            title={t("Finish the form first")}
+            message={t("Add a message.")}
             style={{ marginBottom: SPACING.md }}
           />
         )}
@@ -195,7 +193,7 @@ function Complaints() {
             screen. Same arrangement as Attendance Request and Leave
             Application. The bottom safe-area inset comes from <SafeAreaView>. */}
         <ActionButton
-          label="Submit complaint"
+          label={t("Submit complaint")}
           icon="paper-plane-outline"
           variant="filled"
           size="lg"
@@ -209,8 +207,8 @@ function Complaints() {
         <StatusBanner
           tone="info"
           icon="information-circle"
-          title="What happens next"
-          message="Your complaint goes to the relevant department. You'll be notified once it has been reviewed or resolved."
+          title={t("What happens next")}
+          message={t("Your complaint goes to the relevant department. You'll be notified once it has been reviewed or resolved.")}
           style={{ marginTop: SPACING.md }}
         />
       </ScrollView>

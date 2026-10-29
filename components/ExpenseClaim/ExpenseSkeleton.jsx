@@ -1,3 +1,4 @@
+import { t, useTranslation } from '../../localization';
 /* eslint-disable react/prop-types */
 import React from 'react';
 import { Animated, View } from 'react-native';
@@ -18,7 +19,8 @@ import { useSkeletonPulse } from '../common/Skeleton';
  * gradient library) using the shared native-driver pulse and reduced-motion
  * preference.
  */
-function ExpenseSkeleton({ count = 2, label = 'Loading expense claims' }) {
+function ExpenseSkeleton({ count = 2, label = t("Loading expense claims") }) {
+  useTranslation();
   const { colors } = useAppTheme();
   const opacity = useSkeletonPulse();
 

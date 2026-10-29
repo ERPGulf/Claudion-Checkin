@@ -1,9 +1,13 @@
-import { View, Text, Image, TouchableOpacity, Linking } from "react-native";
+import { translateMessage, t, useTranslation } from '../../localization';
+import { formatExpenseDate, formatExpenseAmount } from '../../utils/expenseClaims';
+import { View, Image, TouchableOpacity, Linking } from 'react-native';
+import Text from '../../localization/LocalizedText';
 import React, { useEffect, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
 
 function ExpenseCard({ claim }) {
+  useTranslation();
   const [baseUrl, setBaseUrl] = useState("");
 
   useEffect(() => {
@@ -36,21 +40,18 @@ function ExpenseCard({ claim }) {
   return (
     <View className="mb-3 p-4 bg-gray-100 rounded-lg shadow-sm">
       <Text className="text-base font-semibold mb-1 text-gray-900">
-        {claim.title || "Expense Claim"}
+        {claim.title || t("Expense Claim")}
       </Text>
-      <Text className="text-sm text-gray-700 mb-1">
-        Amount:{" "}
-        <Text className="font-semibold text-gray-900">{claim.amount}</Text>
+      <Text className="text-sm text-gray-700 mb-1">{t("Amount:")}{" "}
+        <Text className="font-semibold text-gray-900">{formatExpenseAmount(claim.amount)}</Text>
       </Text>
-      <Text className="text-sm text-gray-700 mb-1">
-        Date: {claim.expense_date || "N/A"}
+      <Text className="text-sm text-gray-700 mb-1">{t("Date:")}{claim.expense_date ? formatExpenseDate(claim.expense_date) : t("N/A")}
       </Text>
-      <Text className="text-sm text-gray-700 mb-1">
-        Type:{" "}
+      <Text className="text-sm text-gray-700 mb-1">{t("Type:")}{" "}
         {claim.expense_type
           ? claim.expense_type.charAt(0).toUpperCase() +
             claim.expense_type.slice(1)
-          : "N/A"}
+          : t("N/A")}
       </Text>
       {claim.description && (
         <Text className="text-sm text-gray-600 mb-2 italic">
@@ -81,11 +82,11 @@ function ExpenseCard({ claim }) {
               {isImage ? (
                 <Image
                   source={{ uri: fileUrl }}
-                  className="w-12 h-12 rounded mr-3"
+                  className="w-12 h-12 rounded"
                   resizeMode="cover"
-                />
+                 style={{ marginEnd: 12 }}/>
               ) : (
-                <View className="w-12 h-12 mr-3 items-center justify-center bg-gray-300 rounded">
+                <View className="w-12 h-12 items-center justify-center bg-gray-300 rounded" style={{ marginEnd: 12 }}>
                   <Ionicons
                     name="document-text-outline"
                     size={28}
@@ -94,13 +95,13 @@ function ExpenseCard({ claim }) {
                 </View>
               )}
               <Text className="text-gray-700" numberOfLines={1}>
-                {fileName || "Attachment"}
+                {fileName || t("Attachment")}
               </Text>
             </TouchableOpacity>
           );
         })
       ) : (
-        <Text className="text-xs text-gray-400 mt-1">No attachments</Text>
+        <Text className="text-xs text-gray-400 mt-1">{t("No attachments")}</Text>
       )}
       {claim.status && (
         <View
@@ -109,7 +110,7 @@ function ExpenseCard({ claim }) {
           )}`}
         >
           <Text className="text-xs font-medium uppercase tracking-wide">
-            {claim.status}
+            {translateMessage(claim.status)}
           </Text>
         </View>
       )}

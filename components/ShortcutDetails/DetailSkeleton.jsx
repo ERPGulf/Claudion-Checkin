@@ -1,3 +1,4 @@
+import { t, useTranslation } from "../../localization";
 /* eslint-disable react/prop-types */
 import React from 'react';
 import { Animated, View } from 'react-native';
@@ -15,6 +16,7 @@ import { useSkeletonPulse } from '../common/Skeleton';
  * and reduced-motion preference.
  */
 function DetailSkeleton({ rows = 5 }) {
+  useTranslation();
   const { colors } = useAppTheme();
   const opacity = useSkeletonPulse();
 
@@ -39,7 +41,7 @@ function DetailSkeleton({ rows = 5 }) {
   };
 
   return (
-    <View accessible accessibilityLabel="Loading details">
+    <View accessible accessibilityLabel={t("Loading details")}>
       {/* Hero */}
       <View
         style={{ ...surface, padding: SPACING.lg, marginBottom: SPACING.md }}

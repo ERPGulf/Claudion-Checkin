@@ -1,13 +1,9 @@
+import { formatExpenseDate } from '../../utils/expenseClaims';
+import { translateMessage, t, getLanguage, useTranslation } from '../../localization';
 import React, { useEffect, useState } from "react";
-import {
-  ScrollView,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  Platform,
-  ToastAndroid,
-  Alert,
-} from "react-native";
+import { ScrollView, TouchableOpacity, Platform, ToastAndroid, Alert } from 'react-native';
+import TextInput from '../../localization/LocalizedTextInput';
+import Text from '../../localization/LocalizedText';
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Ionicons } from "@expo/vector-icons";
 import PropTypes from "prop-types";
@@ -15,6 +11,7 @@ import { COLORS } from "../../constants";
 import SubmitButton from "../common/SubmitButton";
 
 function SalaryAdvanceForm({ onSubmit, isLoading, resetSignal }) {
+  useTranslation();
   const [amount, setAmount] = useState("");
   const [purpose, setPurpose] = useState("");
   const [date, setDate] = useState("");
@@ -28,9 +25,9 @@ function SalaryAdvanceForm({ onSubmit, isLoading, resetSignal }) {
 
   const showToast = (msg) => {
     if (Platform.OS === "android") {
-      ToastAndroid.show(msg, ToastAndroid.SHORT);
+      ToastAndroid.show(translateMessage(msg), ToastAndroid.SHORT);
     } else {
-      Alert.alert("Notice", msg);
+      Alert.alert(t("Notice"), translateMessage(msg));
     }
   };
 
@@ -46,19 +43,19 @@ function SalaryAdvanceForm({ onSubmit, isLoading, resetSignal }) {
     const amountValue = Number(amount);
 
     if (!amount.trim()) {
-      return showToast("Please enter amount.");
+      return showToast(t("Please enter amount."));
     }
 
     if (isNaN(amountValue) || amountValue <= 0) {
-      return showToast("Please enter a valid amount greater than zero.");
+      return showToast(t("Please enter a valid amount greater than zero."));
     }
 
     if (!date) {
-      return showToast("Please select a date.");
+      return showToast(t("Please select a date."));
     }
 
     if (!purpose.trim()) {
-      return showToast("Please enter the purpose.");
+      return showToast(t("Please enter the purpose."));
     }
 
     const payload = {
@@ -72,7 +69,7 @@ function SalaryAdvanceForm({ onSubmit, isLoading, resetSignal }) {
     
     } catch (error) {
       console.log("Submit Error:", error);
-      showToast("Failed to submit salary advance request.");
+      showToast(t("Failed to submit salary advance request."));
     }
   };
 
@@ -81,14 +78,12 @@ function SalaryAdvanceForm({ onSubmit, isLoading, resetSignal }) {
       className="bg-white p-4 rounded-lg shadow"
       keyboardShouldPersistTaps="handled"
     >
-      <Text className="text-xl font-semibold mb-4 text-gray-800">
-        Salary Advance Form
-      </Text>
+      <Text className="text-xl font-semibold mb-4 text-gray-800">{t("Salary Advance Form")}</Text>
 
       {/* Amount */}
-      <Label text="Amount" required />
+      <Label text={t("Amount")} required />
       <TextInput
-        placeholder="Enter amount"
+        placeholder={t("Enter amount")}
         placeholderTextColor="#6B7280"
         value={amount}
         onChangeText={setAmount}
@@ -97,21 +92,21 @@ function SalaryAdvanceForm({ onSubmit, isLoading, resetSignal }) {
       />
 
       {/* Date */}
-      <Label text="Date" required />
+      <Label text={t("Date")} required />
 
       <TouchableOpacity
         onPress={() => setShowPicker(true)}
         className="border border-gray-300 rounded p-2 mb-3 bg-gray-50 flex-row justify-between items-center"
       >
         <Text className={date ? "text-gray-700" : "text-gray-400"}>
-          {date || "Select Date"}
+          {date ? formatExpenseDate(date) : t("Select Date")}
         </Text>
 
         <Ionicons name="calendar-outline" size={22} color={COLORS.primary} />
       </TouchableOpacity>
 
       {showPicker && (
-        <DateTimePicker
+        <DateTimePicker locale={getLanguage()}
           value={date ? new Date(date) : new Date()}
           mode="date"
           display="default"
@@ -121,10 +116,10 @@ function SalaryAdvanceForm({ onSubmit, isLoading, resetSignal }) {
       )}
 
       {/* Purpose */}
-      <Label text="Purpose" required />
+      <Label text={t("Purpose")} required />
 
       <TextInput
-        placeholder="Enter purpose"
+        placeholder={t("Enter purpose")}
         placeholderTextColor="#6B7280"
         value={purpose}
         onChangeText={setPurpose}
@@ -138,7 +133,7 @@ function SalaryAdvanceForm({ onSubmit, isLoading, resetSignal }) {
 
       {/* Submit */}
       <SubmitButton
-        title="Submit Request"
+        title={t("Submit Request")}
         loading={isLoading}
         onPress={handleSubmit}
       />
@@ -148,12 +143,15 @@ function SalaryAdvanceForm({ onSubmit, isLoading, resetSignal }) {
 
 export default SalaryAdvanceForm;
 
-const Label = ({ text, required, optional }) => (
+const Label = ({ text, required, optional }) => {
+  useTranslation();
+  return (
   <Text className="text-gray-700 mb-1">
     {text} {required && <Text className="text-red-500">*</Text>}
-    {optional && <Text className="text-gray-400">(Optional)</Text>}
+    {optional && <Text className="text-gray-400">{t("(Optional)")}</Text>}
   </Text>
-);
+  );
+};
 
 Label.propTypes = {
   text: PropTypes.string.isRequired,

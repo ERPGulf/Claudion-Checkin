@@ -1,6 +1,8 @@
+import { t, useTranslation } from '../../localization';
 /* eslint-disable react/prop-types */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Modal, Platform, ScrollView, Text, View } from 'react-native';
+import { Modal, Platform, ScrollView, View } from 'react-native';
+import Text from '../../localization/LocalizedText';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSelector } from 'react-redux';
@@ -85,11 +87,12 @@ const OFFLINE_BENEFIT = {
 };
 
 function Row({ icon, title, description, hint }) {
+  const { language, direction, isRTL } = useTranslation();
   const { colors } = useAppTheme();
   return (
     <View
       accessible
-      accessibilityLabel={`${title}. ${description}${hint ? ` ${hint}` : ''}`}
+      accessibilityLabel={t(hint ? "{{title}}. {{description}} {{hint}}" : "{{title}}. {{description}}", { title: t(title), description: t(description), hint: hint ? t(hint) : "" })}
       style={{ flexDirection: 'row', alignItems: 'flex-start', marginTop: SPACING.lg }}
     >
       <View
@@ -108,7 +111,7 @@ function Row({ icon, title, description, hint }) {
         <Ionicons name={icon} size={ICON.sm} color={colors.accentText} />
       </View>
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={{ ...TYPO.headline, color: colors.textPrimary }}>{title}</Text>
+        <Text style={{ ...TYPO.headline, color: colors.textPrimary }}>{t(title)}</Text>
         <Text
           style={{
             ...TYPO.subhead,
@@ -117,11 +120,11 @@ function Row({ icon, title, description, hint }) {
             marginTop: 2,
           }}
         >
-          {description}
+          {t(description)}
         </Text>
         {hint ? (
           <Text style={{ ...TYPO.subhead, color: colors.textPrimary, marginTop: SPACING.xs }}>
-            {hint}
+            {t(hint)}
           </Text>
         ) : null}
       </View>
@@ -143,6 +146,7 @@ function Row({ icon, title, description, hint }) {
  * Google Play does not let navigating away count as consent.
  */
 export default function LocationAccessExplainer() {
+  const { language, direction, isRTL } = useTranslation();
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
@@ -245,6 +249,7 @@ export default function LocationAccessExplainer() {
       <View
         style={{
           flex: 1,
+          direction,
           backgroundColor: colors.surfaceSecondary,
           paddingTop: insets.top,
           paddingStart: insets.left,
@@ -278,10 +283,10 @@ export default function LocationAccessExplainer() {
             accessibilityRole="header"
             style={{ ...TYPO.title2, color: colors.textPrimary, marginTop: SPACING.lg }}
           >
-            {copy.title}
+            {t(copy.title)}
           </Text>
           <Text style={{ ...TYPO.body, color: colors.textSecondary, marginTop: SPACING.sm }}>
-            {copy.description}
+            {t(copy.description)}
           </Text>
 
           {benefits.map(({ key, ...benefit }) => <Row key={key} {...benefit} />)}
@@ -290,14 +295,12 @@ export default function LocationAccessExplainer() {
             <Text
               accessibilityRole="header"
               style={{ ...TYPO.title3, color: colors.textPrimary, marginTop: SPACING.xxl }}
-            >
-              You&apos;ll be asked for
-            </Text>
+            >{t("You'll be asked for")}</Text>
           ) : null}
           {steps.map(({ key, ...step }) => <Row key={key} {...step} />)}
 
           <Text style={{ ...TYPO.caption, color: colors.textMuted, marginTop: SPACING.xl }}>
-            {copy.footnote}
+            {t(copy.footnote)}
           </Text>
         </ScrollView>
 
@@ -309,7 +312,7 @@ export default function LocationAccessExplainer() {
           }}
         >
           <ActionButton
-            label="Continue"
+            label={t("Continue")}
             variant="filled"
             size="lg"
             loading={busy}
@@ -318,7 +321,7 @@ export default function LocationAccessExplainer() {
           />
           {Platform.OS === 'ios' ? null : (
             <ActionButton
-              label="Not now"
+              label={t("Not now")}
               variant="outline"
               size="lg"
               disabled={busy}

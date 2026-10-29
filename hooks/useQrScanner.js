@@ -1,3 +1,4 @@
+import { t, useTranslation } from "../localization";
 import { useCallback, useEffect, useRef, useState } from 'react';
 import base64 from 'base-64';
 import { invalidateAuthSession } from '../utils/authSessionGuard';
@@ -57,6 +58,7 @@ import {
  * }}
  */
 export default function useQrScanner() {
+  useTranslation();
   const navigation = useNavigation();
   const dispatch = useDispatch();
   const [permission, requestPermission] = useCameraPermissions();
@@ -212,10 +214,10 @@ export default function useQrScanner() {
         dispatch(setEmployeeCode(cleanedData.employee_code));
         navigation.navigate('login');
       } else {
-        alert('Invalid QR code. Please try again.');
+        alert(t("Invalid QR code. Please try again."));
       }
     } catch (err) {
-      alert('Invalid QR code');
+      alert(t("Invalid QR code"));
     }
   };
 
@@ -241,7 +243,7 @@ export default function useQrScanner() {
         await handleQRCodeData(data);
       }
     } catch {
-      alert('No QR-CODE Found');
+      alert(t("No QR-CODE Found"));
     }
   };
 

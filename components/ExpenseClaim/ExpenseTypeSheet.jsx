@@ -1,3 +1,4 @@
+import { t, useTranslation } from '../../localization';
 /* eslint-disable react/prop-types */
 import React from 'react';
 import OptionSheet from '../common/OptionSheet';
@@ -16,19 +17,20 @@ import { expenseTypeIcon } from '../../utils/expenseClaims';
  * before, and the value handed back is still the raw server string.
  */
 function ExpenseTypeSheet({ visible, types = [], selected, onSelect, onClose }) {
+  useTranslation();
   return (
     <OptionSheet
       visible={visible}
       onClose={onClose}
-      title="Expense type"
-      subtitle="What kind of expense was this?"
+      title={t("Expense type")}
+      subtitle={t("What kind of expense was this?")}
       options={types}
       selected={selected}
       onSelect={onSelect}
       iconForOption={expenseTypeIcon}
       emptyIcon="pricetags-outline"
-      emptyTitle="No expense types"
-      emptyDescription="Your administrator hasn't configured any expense claim types yet."
+      emptyTitle={t("No expense types")}
+      emptyDescription={t("Your administrator hasn't configured any expense claim types yet.")}
     />
   );
 }

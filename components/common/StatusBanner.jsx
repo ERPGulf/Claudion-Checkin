@@ -1,6 +1,7 @@
 /* eslint-disable react/prop-types */
 import React, { useEffect } from 'react';
-import { AccessibilityInfo, Platform, View, Text } from 'react-native';
+import { AccessibilityInfo, Platform, View } from 'react-native';
+import Text from '../../localization/LocalizedText';
 import { Ionicons } from '@expo/vector-icons';
 import { ICON, RADIUS, SPACING, TYPO } from '../../constants';
 import useAppTheme from '../../hooks/useAppTheme';

@@ -1,5 +1,8 @@
+import LanguageSetting from '../settings/LanguageSetting';
+import Text from '../../localization/LocalizedText';
+import { useTranslation, getLanguage } from "../../localization";
 import React, { useRef } from 'react';
-import { I18nManager, Text, View } from 'react-native';
+import { View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ICON, RADIUS, SPACING, TYPO } from '../../constants';
 import useAppTheme from '../../hooks/useAppTheme';
@@ -13,11 +16,12 @@ import { useMobileLoginFlow } from './MobileLoginContext';
 import { mobileLoginCopy } from './mobileLoginCopy';
 
 function CompanySelection({ onNext }) {
+  useTranslation();
   const { login } = useMobileLoginFlow();
   const { colors } = useAppTheme();
   const busy = login.isLoading || login.isHydrating;
   const discovery = login.discovery === 'server' ? 'server' : 'company';
-  const align = I18nManager.isRTL ? 'right' : 'left';
+  const align = getLanguage() === 'ar' ? 'right' : 'left';
   if (login.backendUrl) {
     return (
       <Card padded>
@@ -25,7 +29,7 @@ function CompanySelection({ onNext }) {
           <Ionicons name="business-outline" size={ICON.md} color={colors.primary2} style={{ marginEnd: SPACING.md }} />
           <View style={{ flex: 1 }}>
             <Text style={{ ...TYPO.headline, color: colors.textPrimary, textAlign: align }}>{mobileLoginCopy('selectedCompany')}</Text>
-            <Text numberOfLines={1} style={{ ...TYPO.caption, color: colors.textMuted, marginTop: SPACING.xs, textAlign: align }}>{login.backendUrl}</Text>
+            <Text numberOfLines={1} style={{ ...TYPO.caption, color: colors.textMuted, marginTop: SPACING.xs, textAlign: 'left', writingDirection: 'ltr' }}>{login.backendUrl}</Text>
           </View>
           <PressableScale
             accessibilityLabel={mobileLoginCopy('changeCompany')}
@@ -78,13 +82,14 @@ function CompanySelection({ onNext }) {
         returnKeyType="next"
         submitBehavior="submit"
         onSubmitEditing={onNext}
-        align={align}
+        align="left"
       />
     </View>
   );
 }
 
 export default function AccountStep() {
+  useTranslation();
   const { login, navigation } = useMobileLoginFlow();
   const busy = login.isLoading || login.isHydrating;
   const mobileRef = useRef(null);
@@ -108,9 +113,9 @@ export default function AccountStep() {
         disabled={busy}
         returnKeyType="go"
         onSubmitEditing={submit}
-        align={I18nManager.isRTL ? 'right' : 'left'}
+        align="left"
       />
-      <ActionButton label={mobileLoginCopy('continue')} icon={I18nManager.isRTL ? 'arrow-back' : 'arrow-forward'} variant="accent" size="lg" loading={login.isLoading} disabled={busy} onPress={login.begin} />
+      <ActionButton label={mobileLoginCopy('continue')} icon={getLanguage() === 'ar' ? 'arrow-back' : 'arrow-forward'} variant="accent" size="lg" loading={login.isLoading} disabled={busy} onPress={login.begin} />
       <OrDivider label={mobileLoginCopy('or')} />
       <ActionButton
         label={mobileLoginCopy('scanQr')}
@@ -123,6 +128,7 @@ export default function AccountStep() {
           navigation.navigate('Qrscan');
         }}
       />
+      <LanguageSetting compact />
     </AuthStepLayout>
   );
 }

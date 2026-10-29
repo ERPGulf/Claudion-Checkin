@@ -1,5 +1,8 @@
+import { translateMessage, t, useTranslation } from '../../localization';
+import { formatExpenseDate, formatExpenseAmount } from '../../utils/expenseClaims';
 import React from "react";
-import { View, Text } from "react-native";
+import { View } from 'react-native';
+import Text from '../../localization/LocalizedText';
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { COLORS } from "../../constants";
 import PropTypes from "prop-types";
@@ -13,17 +16,8 @@ import PropTypes from "prop-types";
 export default function AttendanceRequestCard({
   request,
 }) {
-  const formatDate = (date) => {
-    if (!date) return "-";
-
-    const parsedDate = new Date(date);
-
-    if (isNaN(parsedDate.getTime())) {
-      return date;
-    }
-
-    return parsedDate.toLocaleDateString("en-GB");
-  };
+  useTranslation();
+  const formatDate = formatExpenseDate;
 
   const formatTime = (time) => {
     if (!time) return "-";
@@ -85,10 +79,10 @@ export default function AttendanceRequestCard({
       <View className="flex-row justify-between items-center mb-3">
         <View className="flex-row items-center flex-1">
           <View
-            className="w-10 h-10 rounded-full items-center justify-center mr-3"
-            style={{
+            className="w-10 h-10 rounded-full items-center justify-center"
+            style={[{
               backgroundColor: "#F3F0FF",
-            }}
+            }, { marginEnd: 12 }]}
           >
             <Ionicons
               name="time-outline"
@@ -102,7 +96,7 @@ export default function AttendanceRequestCard({
               className="text-base font-semibold text-gray-800"
               numberOfLines={1}
             >
-              {request?.name || "Attendance Request"}
+              {request?.name || t("Attendance Request")}
             </Text>
 
             <Text className="text-xs text-gray-500 mt-1">
@@ -126,7 +120,7 @@ export default function AttendanceRequestCard({
               color: statusStyle.color,
             }}
           >
-            {request?.status || "-"}
+            {request?.status ? translateMessage(request.status) : "-"}
           </Text>
         </View>
       </View>
@@ -134,9 +128,7 @@ export default function AttendanceRequestCard({
       {/* From Date */}
 
       <View className="flex-row justify-between py-2 border-b border-gray-100">
-        <Text className="text-sm text-gray-500">
-          From Date
-        </Text>
+        <Text className="text-sm text-gray-500">{t("From Date")}</Text>
 
         <Text className="text-sm font-medium text-gray-800">
           {formatDate(request?.from_date)}
@@ -146,9 +138,7 @@ export default function AttendanceRequestCard({
       {/* To Date */}
 
       <View className="flex-row justify-between py-2 border-b border-gray-100">
-        <Text className="text-sm text-gray-500">
-          To Date
-        </Text>
+        <Text className="text-sm text-gray-500">{t("To Date")}</Text>
 
         <Text className="text-sm font-medium text-gray-800">
           {formatDate(request?.to_date)}
@@ -158,9 +148,7 @@ export default function AttendanceRequestCard({
       {/* From Time */}
 
       <View className="flex-row justify-between py-2 border-b border-gray-100">
-        <Text className="text-sm text-gray-500">
-          From Time
-        </Text>
+        <Text className="text-sm text-gray-500">{t("From Time")}</Text>
 
         <Text className="text-sm font-medium text-gray-800">
           {formatTime(request?.from_time)}
@@ -170,9 +158,7 @@ export default function AttendanceRequestCard({
       {/* To Time */}
 
       <View className="flex-row justify-between py-2 border-b border-gray-100">
-        <Text className="text-sm text-gray-500">
-          To Time
-        </Text>
+        <Text className="text-sm text-gray-500">{t("To Time")}</Text>
 
         <Text className="text-sm font-medium text-gray-800">
           {formatTime(request?.to_time)}
@@ -183,28 +169,22 @@ export default function AttendanceRequestCard({
 
       {Number(request?.half_day) === 1 && (
         <View className="flex-row justify-between py-2 border-b border-gray-100">
-          <Text className="text-sm text-gray-500">
-            Half Day
-          </Text>
+          <Text className="text-sm text-gray-500">{t("Half Day")}</Text>
 
-          <Text className="text-sm font-medium text-gray-800">
-            Yes
-          </Text>
+          <Text className="text-sm font-medium text-gray-800">{t("Yes")}</Text>
         </View>
       )}
 
       {/* Reason */}
 
       <View className="py-2 border-b border-gray-100">
-        <Text className="text-sm text-gray-500">
-          Reason
-        </Text>
+        <Text className="text-sm text-gray-500">{t("Reason")}</Text>
 
         <Text
           className="text-sm text-gray-700 mt-1"
           numberOfLines={3}
         >
-          {request?.reason || "-"}
+          {request?.reason ? translateMessage(request.reason) : "-"}
         </Text>
       </View>
 
@@ -212,9 +192,7 @@ export default function AttendanceRequestCard({
 
       {request?.explanation && (
         <View className="pt-2">
-          <Text className="text-sm text-gray-500">
-            Explanation
-          </Text>
+          <Text className="text-sm text-gray-500">{t("Explanation")}</Text>
 
           <Text
             className="text-sm text-gray-700 mt-1"

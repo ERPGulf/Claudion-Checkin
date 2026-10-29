@@ -1,3 +1,4 @@
+import { t, useTranslation } from '../../localization';
 /* eslint-disable react/prop-types */
 import React from 'react';
 import { View } from 'react-native';
@@ -18,11 +19,12 @@ import { SkeletonBlock, useSkeletonPulse } from '../common/Skeleton';
  * breathes in step and at the same rate as the skeletons on the other screens.
  */
 function NotificationSkeleton({ groups = 2, rowsPerGroup = 3 }) {
+  const { language, direction, isRTL } = useTranslation();
   const { colors } = useAppTheme();
   const opacity = useSkeletonPulse();
 
   return (
-    <View accessible accessibilityLabel="Loading notifications">
+    <View accessible accessibilityLabel={t("Loading notifications")}>
       {Array.from({ length: groups }).map((_, groupIndex) => (
         <View key={`notification-skeleton-group-${groupIndex}`}>
           <SkeletonBlock

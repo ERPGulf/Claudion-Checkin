@@ -1,4 +1,6 @@
-import { TouchableOpacity, Text, StyleSheet } from "react-native";
+import { t, useTranslation } from '../../localization';
+import { TouchableOpacity, StyleSheet } from 'react-native';
+import Text from '../../localization/LocalizedText';
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useDispatch } from "react-redux";
 import { revertAll } from "../../redux/CommonActions";
@@ -6,6 +8,7 @@ import { saveTokens } from "../../services/api";
 // your reset slice
 
 export default function ResetTokenButton() {
+  const { isRTL, direction } = useTranslation();
   const dispatch = useDispatch();
 
   const handleResetToken = async () => {
@@ -17,7 +20,7 @@ export default function ResetTokenButton() {
 
   return (
     <TouchableOpacity style={styles.button} onPress={handleResetToken}>
-      <Text style={styles.text}>Reset Token</Text>
+      <Text style={styles.text}>{t("Reset Token")}</Text>
     </TouchableOpacity>
   );
 }
@@ -26,7 +29,7 @@ const styles = StyleSheet.create({
   button: {
     position: "absolute",
     bottom: 40,
-    right: 20,
+    end: 20,
     backgroundColor: "#FF4C4C",
     paddingVertical: 12,
     paddingHorizontal: 16,

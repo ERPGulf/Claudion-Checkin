@@ -1,3 +1,4 @@
+import { translateMessage, t, useTranslation } from '../localization';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Platform } from 'react-native';
 import {
@@ -83,6 +84,7 @@ export function formatDate(date) {
  * both screens.
  */
 export default function useLeaveRequest() {
+  useTranslation();
   const actionGeneration = useRef(getAuthSessionGeneration()).current;
   const [leaveType, setLeaveType] = useState(NO_LEAVE_TYPE);
   const [reason, setReason] = useState('');
@@ -122,7 +124,7 @@ export default function useLeaveRequest() {
       const { message, error } = await getLeaveTypes();
 
       if (error) {
-        Alert.alert('Error', error);
+        Alert.alert(t("Error"), translateMessage(error));
       } else {
         setLeaveTypes(message || []);
       }
@@ -263,19 +265,19 @@ export default function useLeaveRequest() {
     const to = normalizeDate(toDate);
 
     if (to < from) {
-      Alert.alert('Invalid Date', 'To date cannot be before From date.');
+      Alert.alert(t("Invalid Date"), t("To date cannot be before From date."));
       return;
     }
 
     if (!leaveType || leaveType === NO_LEAVE_TYPE) {
-      Alert.alert('Missing Field', 'Please select a leave type.');
+      Alert.alert(t("Missing Field"), t("Please select a leave type."));
       return;
     }
 
     if (leaveType === REMOTE_LEAVE_TYPE && !agreed) {
       Alert.alert(
-        'Agreement Required',
-        'Please agree to the remote work policy.',
+        t("Agreement Required"),
+        t("Please agree to the remote work policy."),
       );
       return;
     }
@@ -298,7 +300,7 @@ export default function useLeaveRequest() {
 
       if (res?.error) {
         hapticsMessage('error');
-        Alert.alert('Error', res.error);
+        Alert.alert(t("Error"), translateMessage(res.error));
         return;
       }
 
@@ -312,7 +314,7 @@ export default function useLeaveRequest() {
         const uploadRes = await uploadLeaveAttachment(attachment, docname, { capabilityScope });
 
         if (uploadRes?.error) {
-          Alert.alert('Warning', 'Leave created, but attachment upload failed.');
+          Alert.alert(t("Warning"), t("Leave created, but attachment upload failed."));
         }
       }
 
@@ -323,9 +325,9 @@ export default function useLeaveRequest() {
       resetHistoryPage();
 
       hapticsMessage('success');
-      Alert.alert('Success', 'Leave request submitted successfully!', [
+      Alert.alert(t("Success"), t("Leave request submitted successfully!"), [
         {
-          text: 'OK',
+          text: t("OK"),
           onPress: resetForm,
         },
       ]);
@@ -334,7 +336,7 @@ export default function useLeaveRequest() {
       // "Leave docname missing", which means nothing to an employee.
       console.log('Leave submit failed:', err?.message);
       hapticsMessage('error');
-      Alert.alert('Error', 'Something went wrong.');
+      Alert.alert(t("Error"), t("Something went wrong."));
     } finally {
       setLoading(false);
     }
@@ -374,7 +376,7 @@ export default function useLeaveRequest() {
     attachment,
     loading,
     isRemote,
-    remoteAgreementText: REMOTE_AGREEMENT_TEXT,
+    remoteAgreementText: t(REMOTE_AGREEMENT_TEXT),
 
     // Formatter, so both screens build a wire date the same way
     formatDate,

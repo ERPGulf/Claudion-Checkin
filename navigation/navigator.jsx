@@ -1,3 +1,4 @@
+import { useTranslation } from "../localization";
 import React from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { useSelector } from "react-redux";
@@ -13,9 +14,11 @@ const handleNavigationChange = () => {
 };
 
 function Navigator() {
+  const { direction } = useTranslation();
   const isLoggedIn = useSelector(selectIsLoggedIn);
   return (
     <NavigationContainer
+      direction={direction}
       ref={navigationRef}
       onReady={handleNavigationChange}
       onStateChange={handleNavigationChange}

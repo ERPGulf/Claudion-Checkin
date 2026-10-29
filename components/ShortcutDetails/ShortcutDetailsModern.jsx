@@ -1,6 +1,8 @@
+import Text from '../../localization/LocalizedText';
+import { t, useTranslation } from "../../localization";
 /* eslint-disable react/prop-types */
 import React, { useEffect, useMemo, useRef } from 'react';
-import { Animated, Linking, ScrollView, Text, View } from 'react-native';
+import { Animated, Linking, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { ICON, RADIUS, SPACING, TYPO } from '../../constants';
@@ -46,12 +48,13 @@ import {
  *     · footer                          muted ERPGulf link
  */
 function ShortcutDetailsModern({ title, data, loading, error = false, onRetry }) {
+  const { language } = useTranslation();
   const { colors } = useAppTheme();
-  useModernScreenHeader(title || 'Details');
+  useModernScreenHeader(title || t('Details'));
 
   const { status, remaining, rows, subtitle, expiryValue } = useMemo(
     () => buildDetailModel(data, title),
-    [data, title],
+    [data, title, language],
   );
 
   // Only a real span produces a fraction; without an issue date this stays null
@@ -94,9 +97,9 @@ function ShortcutDetailsModern({ title, data, loading, error = false, onRetry })
           <Card>
             <EmptyState
               icon="cloud-offline-outline"
-              title="Unable to load records"
-              description="Please check your connection and try again."
-              actionLabel="Try again"
+              title={t("Unable to load records")}
+              description={t("Please check your connection and try again.")}
+              actionLabel={t("Try again")}
               onActionPress={onRetry}
             />
           </Card>
@@ -119,10 +122,8 @@ function ShortcutDetailsModern({ title, data, loading, error = false, onRetry })
           <Card>
             <EmptyState
               icon="document-text-outline"
-              title="No records available"
-              description={`There's nothing on file for ${
-                title || 'this document'
-              } yet. It will appear here once your administrator adds it.`}
+              title={t("No records available")}
+              description={t("There's nothing on file for {{document}} yet. It will appear here once your administrator adds it.", { document: title || t('this document') })}
             />
           </Card>
         </View>
@@ -186,7 +187,7 @@ function ShortcutDetailsModern({ title, data, loading, error = false, onRetry })
                   accessibilityRole="header"
                   style={{ ...TYPO.title3, color: colors.textPrimary }}
                 >
-                  {title || 'Document'}
+                  {title || t("Document")}
                 </Text>
                 {!!subtitle && (
                   <Text
@@ -254,7 +255,7 @@ function ShortcutDetailsModern({ title, data, loading, error = false, onRetry })
                   repaints its surface on Android. */}
               <View
                 accessible
-                accessibilityLabel={`${remaining.label}, ${countdown.days} days, ${countdown.caption}`}
+                accessibilityLabel={t('{{label}}, {{count}} days, {{status}}', { label: remaining.label, count: countdown.days, status: countdown.caption })}
                 style={{ flexDirection: 'row', alignItems: 'center' }}
               >
                 <View style={{ flex: 1, minWidth: 0 }}>
@@ -281,7 +282,7 @@ function ShortcutDetailsModern({ title, data, loading, error = false, onRetry })
                     adjustsFontSizeToFit
                     minimumFontScale={0.7}
                   >
-                    {countdown.days} {Math.abs(countdown.days) === 1 ? 'day' : 'days'}
+                    {t('{{count}} days', { count: countdown.days })}
                   </Text>
                 </View>
 
@@ -314,9 +315,7 @@ function ShortcutDetailsModern({ title, data, loading, error = false, onRetry })
                       ...TYPO.caption,
                       color: colors.textSecondary,
                     }}
-                  >
-                    Valid until
-                  </Text>
+                  >{t("Valid until")}</Text>
                   <Text
                     style={{
                       ...TYPO.headline,
@@ -335,8 +334,8 @@ function ShortcutDetailsModern({ title, data, loading, error = false, onRetry })
           {rows.length > 0 && (
             <ModuleCard
               icon="document-text-outline"
-              title="Document information"
-              subtitle={`${rows.length} ${rows.length === 1 ? 'field' : 'fields'}`}
+              title={t("Document information")}
+              subtitle={t("{{count}} fields", { count: rows.length })}
             >
               {/* Negative inset so the rows reach the card's own edges and
                   their dividers can run the full width, while ModuleCard keeps
@@ -368,7 +367,7 @@ function ShortcutDetailsModern({ title, data, loading, error = false, onRetry })
           <PressableScale
             onPress={() => Linking.openURL('https://erpgulf.com')}
             accessibilityRole="link"
-            accessibilityLabel="Open erpgulf.com"
+            accessibilityLabel={t("Open erpgulf.com")}
             style={{
               flexDirection: 'row',
               alignItems: 'center',
@@ -390,9 +389,7 @@ function ShortcutDetailsModern({ title, data, loading, error = false, onRetry })
                 color: colors.textMuted,
                 marginStart: SPACING.xs + 2,
               }}
-            >
-              Powered by ERPGulf.com
-            </Text>
+            >{t("Powered by ERPGulf.com")}</Text>
           </PressableScale>
         </Animated.View>
       </ScrollView>

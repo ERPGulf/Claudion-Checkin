@@ -1,6 +1,8 @@
+import { translateMessage, t, useTranslation } from '../../localization';
 /* eslint-disable react/prop-types */
 import React from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+import Text from '../../localization/LocalizedText';
 import { Ionicons } from '@expo/vector-icons';
 import { ICON, RADIUS, SPACING, TYPO } from '../../constants';
 import useAppTheme from '../../hooks/useAppTheme';
@@ -20,6 +22,7 @@ import StatusBadge from '../common/StatusBadge';
  * debugging screen the exact token the native module emitted is the useful part.
  */
 function EventLogItem({ entry, isLast = false }) {
+  const { language, direction, isRTL } = useTranslation();
   const { colors } = useAppTheme();
   const { tone, label, icon } = describeTransition(entry?.transition);
 
@@ -92,7 +95,7 @@ function EventLogItem({ entry, isLast = false }) {
             marginTop: 2,
           }}
         >
-          {entry?.message || entry?.transition || 'Event'}
+          {translateMessage(entry?.message) || entry?.transition || t("Event")}
         </Text>
       </View>
     </View>

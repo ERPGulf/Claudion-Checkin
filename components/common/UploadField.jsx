@@ -1,6 +1,8 @@
+import { t, useTranslation } from '../../localization';
 /* eslint-disable react/prop-types */
 import React, { useEffect, useRef } from 'react';
-import { Animated, Image, Text, View } from 'react-native';
+import { Animated, Image, View } from 'react-native';
+import Text from '../../localization/LocalizedText';
 import { Ionicons } from '@expo/vector-icons';
 import { ICON, RADIUS, SPACING, TYPO } from '../../constants';
 import useAppTheme from '../../hooks/useAppTheme';
@@ -44,9 +46,10 @@ function UploadField({
   optional = true,
   style,
 }) {
+  const { isRTL, direction } = useTranslation();
   const { colors } = useAppTheme();
 
-  const requirement = optional ? 'Optional' : 'Required';
+  const requirement = optional ? t('Optional') : t('Required');
 
   const caption = !!label && (
     <Text
@@ -84,10 +87,8 @@ function UploadField({
         scaleTo={0.99}
         hitSlop={0}
         accessibilityRole="button"
-        accessibilityLabel={`${
-          label ? `${label}. ` : ''
-        }Upload supporting document. ${requirement}.`}
-        accessibilityHint="Opens options to take a photo, choose an image or browse files"
+        accessibilityLabel={t(label ? '{{label}}. Upload supporting document. {{requirement}}.' : 'Upload supporting document. {{requirement}}.', { label, requirement })}
+        accessibilityHint={t("Opens options to take a photo, choose an image or browse files")}
           style={{
             minHeight: compact ? 46 : 54,
             flexDirection: 'row',
@@ -112,12 +113,8 @@ function UploadField({
             <Text
               style={{ ...TYPO.headline, color: colors.textPrimary }}
               numberOfLines={1}
-            >
-              Upload supporting document
-            </Text>
-            <Text style={{ ...TYPO.caption2, color: colors.textMuted }}>
-              PDF • JPG • PNG
-            </Text>
+            >{t("Upload supporting document")}</Text>
+            <Text style={{ ...TYPO.caption2, color: colors.textMuted }}>{t("PDF • JPG • PNG")}</Text>
           </View>
 
           <View
@@ -164,9 +161,7 @@ function UploadField({
         scaleTo={0.99}
         hitSlop={0}
         accessibilityRole="button"
-        accessibilityLabel={`${
-          label ? `${label}. ` : ''
-        }Attached: ${file.name}. Tap to replace.`}
+        accessibilityLabel={t(label ? '{{label}}. Attached: {{name}}. Tap to replace.' : 'Attached: {{name}}. Tap to replace.', { label, name: file.name })}
         style={{
           borderRadius: RADIUS.lg,
           borderWidth: 1,
@@ -190,9 +185,7 @@ function UploadField({
                 fontWeight: '600',
                 color: colors.successText,
               }}
-            >
-              Attached
-            </Text>
+            >{t("Attached")}</Text>
             <Text
               numberOfLines={1}
               // Frappe filenames are regularly Arabic; align to the script the
@@ -210,7 +203,7 @@ function UploadField({
           <PressableScale
             onPress={onRemove}
             accessibilityRole="button"
-            accessibilityLabel="Remove attachment"
+            accessibilityLabel={t("Remove attachment")}
             style={{
               width: 30,
               height: 30,

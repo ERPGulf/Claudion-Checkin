@@ -1,10 +1,13 @@
-import { View, Text } from "react-native";
+import Text from '../../localization/LocalizedText';
+import { t, useTranslation } from "../../localization";
+import { View } from "react-native";
 import React from "react";
 import { useSelector } from "react-redux";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { COLORS, SIZES } from "../../constants";
 
 function WelcomeCard() {
+  useTranslation();
   const fullname = useSelector((state) => state.user.fullname);
 
   // Detect Arabic characters only for name direction
@@ -24,11 +27,11 @@ function WelcomeCard() {
     >
       {/* Top title section */}
       <View className="flex-row justify-center items-center mb-20">
-        <Text className="text-3xl font-bold text-white">Login</Text>
+        <Text className="text-3xl font-bold text-white">{t("Login")}</Text>
       </View>
       {/* Greeting section */}
       <View>
-        <Text className="text-xl font-semibold text-white mb-1">Hey,</Text>
+        <Text className="text-xl font-semibold text-white mb-1">{t("Hey,")}</Text>
 
         <View
           style={{
@@ -54,10 +57,10 @@ function WelcomeCard() {
               fontFamily: undefined,
             }}
           >
-            {fullname || "username"}
+            {fullname || t("username")}
           </Text>
 
-          <View className="bg-gray-800 w-10 h-10 items-center justify-center rounded-full ml-2">
+          <View className="bg-gray-800 w-10 h-10 items-center justify-center rounded-full" style={{ marginStart: 8 }}>
             <MaterialCommunityIcons name="hand-wave" color="white" size={24} />
           </View>
         </View>

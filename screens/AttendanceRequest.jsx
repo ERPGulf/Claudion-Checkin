@@ -1,12 +1,7 @@
+import { translateMessage, t, getLanguage, useTranslation } from '../localization';
 import React, { useCallback, useEffect, useState } from "react";
-import {
-  Platform,
-  RefreshControl,
-  ScrollView,
-  Text,
-  View,
-  useWindowDimensions,
-} from "react-native";
+import { Platform, RefreshControl, ScrollView, View, useWindowDimensions } from 'react-native';
+import Text from '../localization/LocalizedText';
 import { SafeAreaView } from "react-native-safe-area-context";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Ionicons } from "@expo/vector-icons";
@@ -67,6 +62,7 @@ const pickerValue = (value) =>
  * has to stay next to the field it edits.
  */
 function FieldGroup({ fields, twoColumns }) {
+  useTranslation();
   if (twoColumns) {
     return (
       <>
@@ -121,8 +117,9 @@ function FieldGroup({ fields, twoColumns }) {
  * Attendance History.
  */
 function AttendanceRequest() {
+  useTranslation();
   const { colors, isDark } = useAppTheme();
-  useModernScreenHeader("Attendance Request");
+  useModernScreenHeader(t("Attendance Request"));
 
   const {
     fromDate,
@@ -193,8 +190,8 @@ function AttendanceRequest() {
   // The date range has its own banner in the date card.
   const missing = attempted
     ? [
-        timeRangeInvalid ? "To time must be after From time." : null,
-        reasonMissing ? "Choose a reason." : null,
+        timeRangeInvalid ? t("To time must be after From time.") : null,
+        reasonMissing ? t("Choose a reason.") : null,
       ]
         .filter(Boolean)
         .join(" ") || null
@@ -275,15 +272,11 @@ function AttendanceRequest() {
               <Text
                 accessibilityRole="header"
                 style={{ ...TYPO.headline, color: colors.textPrimary }}
-              >
-                Attendance request
-              </Text>
+              >{t("Attendance request")}</Text>
               <Text
                 style={{ ...TYPO.caption, color: colors.textMuted }}
                 numberOfLines={2}
-              >
-                For a work-from-home or on-duty day.
-              </Text>
+              >{t("For a work-from-home or on-duty day.")}</Text>
             </View>
           </View>
         </Card>
@@ -291,8 +284,8 @@ function AttendanceRequest() {
         {/* ---------- Date & time ---------- */}
         <ModuleCard
           icon="calendar-outline"
-          title="Date & time"
-          subtitle="The period this request covers"
+          title={t("Date & time")}
+          subtitle={t("The period this request covers")}
           style={{ marginBottom: SPACING.md }}
         >
           <View style={cardBody}>
@@ -301,7 +294,7 @@ function AttendanceRequest() {
               fields={[
                 {
                   key: "fromDate",
-                  label: "From date",
+                  label: t("From date"),
                   value: formatLogDate(fromDate),
                   icon: "calendar-outline",
                   onPress: openFromPicker,
@@ -312,7 +305,7 @@ function AttendanceRequest() {
                       needsDone={needsDoneAffordance}
                       onDone={closeFromPicker}
                     >
-                      <DateTimePicker
+                      <DateTimePicker locale={getLanguage()}
                         value={pickerValue(fromDate)}
                         mode="date"
                         maximumDate={today}
@@ -325,7 +318,7 @@ function AttendanceRequest() {
                 },
                 {
                   key: "toDate",
-                  label: "To date",
+                  label: t("To date"),
                   value: formatLogDate(toDate),
                   icon: "calendar-outline",
                   onPress: openToPicker,
@@ -336,7 +329,7 @@ function AttendanceRequest() {
                       needsDone={needsDoneAffordance}
                       onDone={closeToPicker}
                     >
-                      <DateTimePicker
+                      <DateTimePicker locale={getLanguage()}
                         value={pickerValue(toDate)}
                         mode="date"
                         maximumDate={today}
@@ -357,8 +350,8 @@ function AttendanceRequest() {
             {dateRangeInvalid && (
               <StatusBanner
                 tone="error"
-                title="Check the date range"
-                message="To date cannot be before From date."
+                title={t("Check the date range")}
+                message={t("To date cannot be before From date.")}
                 style={{ marginTop: SPACING.md }}
               />
             )}
@@ -369,7 +362,7 @@ function AttendanceRequest() {
                 fields={[
                   {
                     key: "fromTime",
-                    label: "From time",
+                    label: t("From time"),
                     value: formatFieldTime(fromTime),
                     icon: "time-outline",
                     onPress: openFromTimePicker,
@@ -380,7 +373,7 @@ function AttendanceRequest() {
                         needsDone={needsDoneAffordance}
                         onDone={closeFromTimePicker}
                       >
-                        <DateTimePicker
+                        <DateTimePicker locale={getLanguage()}
                           value={pickerValue(fromTime)}
                           mode="time"
                           display={
@@ -394,7 +387,7 @@ function AttendanceRequest() {
                   },
                   {
                     key: "toTime",
-                    label: "To time",
+                    label: t("To time"),
                     value: formatFieldTime(toTime),
                     icon: "time-outline",
                     onPress: openToTimePicker,
@@ -405,7 +398,7 @@ function AttendanceRequest() {
                         needsDone={needsDoneAffordance}
                         onDone={closeToTimePicker}
                       >
-                        <DateTimePicker
+                        <DateTimePicker locale={getLanguage()}
                           value={pickerValue(toTime)}
                           mode="time"
                           display={
@@ -426,19 +419,19 @@ function AttendanceRequest() {
         {/* ---------- Reason ---------- */}
         <ModuleCard
           icon="help-circle-outline"
-          title="Reason"
-          subtitle="Choose one"
+          title={t("Reason")}
+          subtitle={t("Choose one")}
           style={{ marginBottom: SPACING.md }}
         >
           <View
             style={cardBody}
             accessibilityRole="radiogroup"
-            accessibilityLabel="Reason for the request"
+            accessibilityLabel={t("Reason for the request")}
           >
             {reasons.map((item, index) => (
               <ReasonOption
                 key={item}
-                label={item}
+                label={t(item)}
                 icon={REASON_ICON[item] || "pricetag-outline"}
                 selected={selectedReason === item}
                 onPress={() => setSelectedReason(item)}
@@ -453,8 +446,8 @@ function AttendanceRequest() {
         {/* ---------- Attachment ---------- */}
         <ModuleCard
           icon="attach-outline"
-          title="Attachment"
-          subtitle="Optional supporting document"
+          title={t("Attachment")}
+          subtitle={t("Optional supporting document")}
           style={{ marginBottom: SPACING.md }}
         >
           <View style={cardBody}>
@@ -471,7 +464,7 @@ function AttendanceRequest() {
         {!!missing && (
           <StatusBanner
             tone="error"
-            title="Finish the form first"
+            title={t("Finish the form first")}
             message={missing}
             style={{ marginBottom: SPACING.md }}
           />
@@ -479,7 +472,7 @@ function AttendanceRequest() {
 
         {/* ---------- Submit ---------- */}
         <ActionButton
-          label="Submit attendance request"
+          label={t("Submit attendance request")}
           icon="paper-plane-outline"
           variant="filled"
           size="lg"
@@ -495,31 +488,31 @@ function AttendanceRequest() {
         <StatusBanner
           tone="info"
           icon="information-circle"
-          message="Your manager will review this request. You'll be notified once it's approved or rejected."
+          message={t("Your manager will review this request. You'll be notified once it's approved or rejected.")}
           style={{ marginTop: SPACING.md }}
         />
 
         {/* ---------- History ---------- */}
         <SectionHeader
-          title="Your requests"
+          title={t("Your requests")}
           subtitle={
             attendanceRequests.length > 0
-              ? `${attendanceRequests.length} submitted`
+              ? t("{{count}} submitted", { count: attendanceRequests.length })
               : undefined
           }
           style={{ marginTop: SPACING.xxl }}
         />
 
         {isFetchingHistory ? (
-          <ExpenseSkeleton count={2} label="Loading attendance requests" />
+          <ExpenseSkeleton count={2} label={t("Loading attendance requests")} />
         ) : isHistoryError ? (
           <Card>
             <EmptyState
               compact
               icon="cloud-offline-outline"
-              title="Couldn't load your requests"
-              description="Unable to load attendance requests."
-              actionLabel="Retry"
+              title={t("Couldn't load your requests")}
+              description={t("Unable to load attendance requests.")}
+              actionLabel={t("Retry")}
               onActionPress={refetchHistory}
             />
           </Card>
@@ -528,8 +521,8 @@ function AttendanceRequest() {
             <EmptyState
               compact
               icon="calendar-outline"
-              title="No attendance requests yet"
-              description="Once you submit a request it will appear here with its approval status."
+              title={t("No attendance requests yet")}
+              description={t("Once you submit a request it will appear here with its approval status.")}
             />
           </Card>
         ) : (
@@ -538,20 +531,20 @@ function AttendanceRequest() {
               <RecordCard
                 key={item?.name || index}
                 icon="calendar-outline"
-                title={item?.reason || "Attendance request"}
+                title={item?.reason ? translateMessage(item.reason) : t("Attendance request")}
                 subtitle={item?.name}
                 status={describeRecordStatus(item?.status)}
                 headline={formatDateRange(item?.from_date, item?.to_date)}
                 rows={[
-                  { label: "From time", value: item?.from_time },
-                  { label: "To time", value: item?.to_time },
+                  { label: t("From time"), value: item?.from_time },
+                  { label: t("To time"), value: item?.to_time },
                   {
-                    label: "Half day",
-                    value: item?.half_day ? "Yes" : null,
+                    label: t("Half day"),
+                    value: item?.half_day ? t("Yes") : null,
                   },
                 ]}
                 note={item?.explanation}
-                accessibilityLabel={`${item?.reason || "Attendance request"}, ${formatDateRange(item?.from_date, item?.to_date)}, ${describeRecordStatus(item?.status).label}.`}
+                accessibilityLabel={`${item?.reason ? translateMessage(item.reason) : t("Attendance request")}, ${formatDateRange(item?.from_date, item?.to_date)}, ${describeRecordStatus(item?.status).label}.`}
                 style={{ marginBottom: SPACING.md }}
               />
             ))}
@@ -560,7 +553,7 @@ function AttendanceRequest() {
               <ActionButton
                 variant="outline"
                 icon="chevron-down"
-                label="Load more"
+                label={t("Load more")}
                 onPress={showMoreRequests}
               />
             )}

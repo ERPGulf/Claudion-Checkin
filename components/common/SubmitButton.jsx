@@ -1,14 +1,17 @@
+import { t, useTranslation } from '../../localization';
 import React from "react";
-import { TouchableOpacity, Text, ActivityIndicator } from "react-native";
+import { TouchableOpacity, ActivityIndicator } from 'react-native';
+import Text from '../../localization/LocalizedText';
 import { COLORS } from "../../constants";
 
 export default function SubmitButton({
-  title = "Submit",
+  title = t("Submit"),
   loading = false,
   onPress,
   disabled,
   style,
 }) {
+  const { isRTL, direction } = useTranslation();
   const isDisabled = loading || disabled;
 
   return (

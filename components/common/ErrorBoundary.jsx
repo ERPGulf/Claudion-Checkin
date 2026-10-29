@@ -1,3 +1,4 @@
+import { t, useTranslation } from '../../localization';
 /* eslint-disable react/prop-types */
 import React from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -8,6 +9,7 @@ import Card from "./Card";
 import EmptyState from "./EmptyState";
 
 function ErrorFallback({ onRetry }) {
+  const { isRTL, direction } = useTranslation();
   const { colors } = useAppTheme();
 
   return (
@@ -22,9 +24,9 @@ function ErrorFallback({ onRetry }) {
       <Card>
         <EmptyState
           icon="alert-circle-outline"
-          title="Something went wrong"
-          description="This screen ran into a problem. Try again, or restart the app if it keeps happening."
-          actionLabel="Try again"
+          title={t("Something went wrong")}
+          description={t("This screen ran into a problem. Try again, or restart the app if it keeps happening.")}
+          actionLabel={t("Try again")}
           onActionPress={onRetry}
         />
       </Card>

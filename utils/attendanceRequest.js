@@ -1,45 +1,45 @@
-import { format } from 'date-fns';
+import { formatTime, getLanguage } from '../localization';
 
 /**
  * Presentation helpers for the attendance-request fields.
  *
- * Formatting goes through date-fns, which reads a Date's *local* components.
- * That matters: the screen previously formatted with `toLocaleTimeString`, whose
- * Intl path resolved a correct local Date in UTC — turning "now" into 5:30 AM on
- * a UTC+05:30 device. Only the hour *cycle* below consults Intl, and that is a
- * property of the locale rather than of the timezone, so the shift cannot return.
+ * Read local wall-clock components before using the selected app locale. The
+ * native Intl path previously resolved local values in UTC on some devices;
+ * formatting a display-only UTC copy prevents that shift from returning.
  */
 
-let cachedPrefers24Hour;
+const cachedPrefers24Hour = new Map();
 
 /**
- * Whether this device's locale writes time on a 24-hour clock.
+ * Whether the selected app locale writes time on a 24-hour clock.
  *
- * Resolved once and cached — the answer cannot change without an app restart.
+ * Cached per language, so an in-app language switch uses the new hour cycle.
  * Falls back to 12-hour, which is what the rest of the app renders, so a device
  * with no usable Intl reads the same as Attendance History rather than flipping
  * to a format nothing else in the app uses.
  */
 export function prefers24Hour() {
-  if (cachedPrefers24Hour !== undefined) return cachedPrefers24Hour;
+  const language = getLanguage();
+  if (cachedPrefers24Hour.has(language)) return cachedPrefers24Hour.get(language);
 
-  cachedPrefers24Hour = false;
+  let prefers24Hour = false;
   try {
-    const resolved = new Intl.DateTimeFormat(undefined, {
+    const resolved = new Intl.DateTimeFormat(language, {
       hour: 'numeric',
     }).resolvedOptions();
 
     if (typeof resolved.hour12 === 'boolean') {
-      cachedPrefers24Hour = !resolved.hour12;
+      prefers24Hour = !resolved.hour12;
     } else if (typeof resolved.hourCycle === 'string') {
       // h23/h24 are the 24-hour cycles; h11/h12 are the 12-hour ones.
-      cachedPrefers24Hour = resolved.hourCycle.startsWith('h2');
+      prefers24Hour = resolved.hourCycle.startsWith('h2');
     }
   } catch (error) {
     // Keep 12-hour. A display preference is not worth throwing over.
   }
 
-  return cachedPrefers24Hour;
+  cachedPrefers24Hour.set(language, prefers24Hour);
+  return prefers24Hour;
 }
 
 /**
@@ -50,5 +50,6 @@ export function prefers24Hour() {
  */
 export function formatFieldTime(date, use24Hour = prefers24Hour()) {
   if (!date) return '--:--';
-  return format(date, use24Hour ? 'HH:mm' : 'hh:mm a');
+  const wallClock = new Date(Date.UTC(2000, 0, 1, date.getHours(), date.getMinutes()));
+  return formatTime(wallClock, { timeZone: 'UTC', hour: '2-digit', minute: '2-digit', hour12: !use24Hour });
 }

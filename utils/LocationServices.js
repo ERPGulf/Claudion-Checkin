@@ -1,3 +1,4 @@
+import { t } from '../localization';
 import * as Location from "expo-location";
 import { Toast } from "react-native-toast-message/lib/src/Toast";
 
@@ -8,8 +9,8 @@ export const requestLocationAccess = async () => {
     if (status !== "granted") {
       Toast.show({
         type: "error",
-        text1: "Location Permission Denied",
-        text2: "Enable location to continue.",
+        text1: t("Location Permission Denied"),
+        text2: t("Enable location to continue."),
       });
       return false;
     }
@@ -33,7 +34,7 @@ export const getPreciseCoordinates = async () => {
   } catch (err) {
     Toast.show({
       type: "error",
-      text1: "Unable to fetch location",
+      text1: t("Unable to fetch location"),
     });
     return null;
   }

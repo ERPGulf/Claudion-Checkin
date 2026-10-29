@@ -1,6 +1,8 @@
+import Text from '../../localization/LocalizedText';
+import { t, useTranslation } from "../../localization";
 /* eslint-disable react/prop-types */
 import React from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 import { SPACING, TYPO } from '../../constants';
 import useAppTheme from '../../hooks/useAppTheme';
 import { resolveTextAlign } from '../../utils/textDirection';
@@ -48,7 +50,8 @@ import Card from '../common/Card';
  * the headline instead of captioning an empty line. "Welcome back, there" is not
  * a sentence worth shipping.
  */
-function GreetingCard({ name, subtitle = 'Continue securely to your workspace.' }) {
+function GreetingCard({ name, subtitle = t("Continue securely to your workspace.") }) {
+  useTranslation();
   const { colors } = useAppTheme();
 
   const named = !!name;
@@ -57,7 +60,7 @@ function GreetingCard({ name, subtitle = 'Continue securely to your workspace.' 
     <Card padded>
       <View
         accessible
-        accessibilityLabel={`Welcome back${named ? `, ${name}` : ''}. ${subtitle}`}
+        accessibilityLabel={named ? t('Welcome back, {{name}}. {{subtitle}}', { name, subtitle }) : t('Welcome back. {{subtitle}}', { subtitle })}
         style={{ flexDirection: 'row', alignItems: 'center' }}
       >
         <Avatar name={name} size={44} />
@@ -66,9 +69,7 @@ function GreetingCard({ name, subtitle = 'Continue securely to your workspace.' 
             shoving the avatar out of the card. */}
         <View style={{ flex: 1, minWidth: 0, marginStart: SPACING.md }}>
           {named && (
-            <Text style={{ ...TYPO.caption, color: colors.textSecondary }}>
-              Welcome back
-            </Text>
+            <Text style={{ ...TYPO.caption, color: colors.textSecondary }}>{t("Welcome back")}</Text>
           )}
 
           <Text
@@ -82,7 +83,7 @@ function GreetingCard({ name, subtitle = 'Continue securely to your workspace.' 
               marginTop: named ? 2 : 0,
             }}
           >
-            {named ? name : 'Welcome back'}
+            {named ? name : t("Welcome back")}
           </Text>
 
           <Text

@@ -1,4 +1,7 @@
-import { View, Text, TouchableOpacity, Platform } from 'react-native';
+import Text from '../../localization/LocalizedText';
+import { quickAccessLabel } from '../../utils/quickAccess';
+import { t, useTranslation } from "../../localization";
+import { View, TouchableOpacity, Platform } from 'react-native';
 import React from 'react';
 import { FontAwesome, AntDesign } from '@expo/vector-icons';
 import { useSelector } from 'react-redux';
@@ -10,6 +13,7 @@ import { selectFeatureSettings } from '../../redux/Slices/FeatureSettingsSlice';
 import { filterOfferedShortcuts } from '../../utils/quickAccess';
 
 function QuickAccess() {
+  useTranslation();
   const navigation = useNavigation();
   const activeButtons = useSelector(activeButtonsSelector);
   const featureSettings = useSelector(selectFeatureSettings);
@@ -17,14 +21,12 @@ function QuickAccess() {
   return (
     <View className="mt-4 w-full">
       <View className="flex-row justify-between items-center ">
-        <Text className="text-sm font-semibold">Quick Access</Text>
+        <Text className="text-sm font-semibold">{t("Quick Access")}</Text>
         <TouchableOpacity
           className="flex-row space-x-2 items-center"
           onPress={() => navigation.navigate('Quick access')}
         >
-          <Text className="text-sm font-semibold" style={{ color: COLORS.red }}>
-            Add New
-          </Text>
+          <Text className="text-sm font-semibold" style={{ color: COLORS.red }}>{t("Add New")}</Text>
           <FontAwesome name="plus" size={SIZES.xLarge} color={COLORS.red} />
         </TouchableOpacity>
       </View>
@@ -45,8 +47,8 @@ function QuickAccess() {
             >
               <ButtonItem
                 iconName={item?.iconName}
-                text1={item?.text1}
-                text2={item?.text2 || null}
+                text1={quickAccessLabel(item)}
+                text2={null}
               />
             </TouchableOpacity>
           ))
@@ -60,12 +62,7 @@ function QuickAccess() {
               size={SIZES.xxxLarge - 4}
               color={COLORS.red}
             />
-            <Text className="text-xs mt-2 font-light text-gray-800">
-              Add quick shortcuts to your most used features
-            </Text>
-            <Text className="text-xs font-light text-gray-800">
-              here to access them quickly
-            </Text>
+            <Text className="text-xs mt-2 font-light text-gray-800" style={{ textAlign: "center" }}>{t("Add quick shortcuts to your most used features here to access them quickly.")}</Text>
           </TouchableOpacity>
         )}
       </View>

@@ -1,3 +1,4 @@
+import { t, useTranslation } from "../../localization";
 /* eslint-disable react/prop-types */
 import React from 'react';
 import { View } from 'react-native';
@@ -27,6 +28,7 @@ const TRACK_HEIGHT = 6;
  * the bar can never disagree with the badge, and both resolve per palette.
  */
 function ValidityBar({ tone = 'neutral', fraction = null, style }) {
+  useTranslation();
   const { colors } = useAppTheme();
 
   const measured = typeof fraction === 'number' && Number.isFinite(fraction);
@@ -41,7 +43,7 @@ function ValidityBar({ tone = 'neutral', fraction = null, style }) {
       // Announced only when it means something. A neutral bar is decoration and
       // a screen reader should skip it — the day count beside it is the content.
       accessibilityRole={measured ? 'progressbar' : 'none'}
-      accessibilityLabel={measured ? 'Validity remaining' : undefined}
+      accessibilityLabel={measured ? t("Validity remaining") : undefined}
       accessibilityValue={
         measured
           ? { min: 0, max: 100, now: Math.round(clamped * 100) }

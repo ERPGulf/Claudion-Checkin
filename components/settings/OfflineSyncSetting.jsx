@@ -1,3 +1,4 @@
+import { t, useTranslation } from "../../localization";
 import React from 'react';
 import { Switch } from 'react-native';
 import { SPACING } from '../../constants';
@@ -28,6 +29,7 @@ import SettingsRow from '../common/SettingsRow';
  * retrying, and Attendance History shows each one with its chip regardless.
  */
 function OfflineSyncSetting() {
+  useTranslation();
   const { colors } = useAppTheme();
   const { enabled, setEnabled } = useOfflineSyncAlerts();
   const { blockedCount, rejectedCount, offlineSyncSupported } =
@@ -36,21 +38,21 @@ function OfflineSyncSetting() {
   const unsupported = offlineSyncSupported === false;
 
   const description = unsupported
-    ? "Your server doesn't support offline attendance, so these alerts are already hidden. Records are still saved and retried."
+    ? t("Your server doesn't support offline attendance, so these alerts are already hidden. Records are still saved and retried.")
     : blockedCount > 0
-      ? `${blockedCount} record${blockedCount === 1 ? '' : 's'} waiting on your administrator. Turning this off hides the banner — nothing is deleted.`
-      : 'Show a banner when attendance is waiting on your administrator.';
+      ? t('Records waiting on your administrator. Turning this off hides the banner; nothing is deleted.', { count: blockedCount })
+      : t('Show a banner when attendance is waiting on your administrator.');
 
   return (
     <>
-      <SectionHeader title="Attendance sync" style={{ marginTop: SPACING.xxl }} />
+      <SectionHeader title={t("Attendance sync")} style={{ marginTop: SPACING.xxl }} />
 
       <Card>
         <SettingsRow
           icon="cloud-offline-outline"
           iconTint={colors.warningSurface}
           iconColor={colors.warningText}
-          title="Offline sync alerts"
+          title={t("Offline sync alerts")}
           description={description}
         >
           <Switch
@@ -58,7 +60,7 @@ function OfflineSyncSetting() {
             onValueChange={setEnabled}
             disabled={unsupported}
             trackColor={{ false: colors.iconBackground, true: colors.primary2 }}
-            accessibilityLabel="Offline sync alerts"
+            accessibilityLabel={t("Offline sync alerts")}
           />
         </SettingsRow>
 
@@ -69,10 +71,8 @@ function OfflineSyncSetting() {
             icon="alert-circle-outline"
             iconTint={colors.errorSurface}
             iconColor={colors.errorText}
-            title="Corrections are always shown"
-            description={`${rejectedCount} record${
-              rejectedCount === 1 ? '' : 's'
-            } need your action. These stay visible even with alerts off.`}
+            title={t("Corrections are always shown")}
+            description={t('Records need your action. These stay visible even with alerts off.', { count: rejectedCount })}
           />
         )}
       </Card>

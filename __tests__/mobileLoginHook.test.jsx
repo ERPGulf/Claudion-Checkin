@@ -1,3 +1,4 @@
+import { setLanguage } from '../localization';
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { I18nManager } from 'react-native';
@@ -42,6 +43,7 @@ let client;
 const rtlDescriptor = Object.getOwnPropertyDescriptor(I18nManager, 'isRTL');
 
 beforeEach(async () => {
+  await act(async () => { await setLanguage('en'); });
   await AsyncStorage.clear();
   jest.clearAllMocks();
   Object.defineProperty(I18nManager, 'isRTL', { configurable: true, value: false });
@@ -242,11 +244,17 @@ it.each([
 });
 
 it('provides Arabic lookup copy and rethrows unknown lookup failures', async () => {
-  Object.defineProperty(I18nManager, 'isRTL', { configurable: true, value: true });
+  await act(async () => { await setLanguage('ar'); });
   lookupServer.mockRejectedValueOnce(new ServerLookupError('notFound'));
   const view = await mount();
   await start(view);
   expect(view.result.current.error).toContain('رمز الشركة');
+  const beforeSwitch = { mobile: view.result.current.mobileNumber, attempts: lookupServer.mock.calls.length };
+  await act(async () => { await setLanguage('en'); });
+  expect(view.result.current.error).toContain("couldn't find that company code");
+  expect(view.result.current.mobileNumber).toBe(beforeSwitch.mobile);
+  expect(lookupServer).toHaveBeenCalledTimes(beforeSwitch.attempts);
+  expect(client.sendOtp).not.toHaveBeenCalled();
   const unknown = new Error('unexpected lookup failure');
   lookupServer.mockRejectedValueOnce(unknown);
   await act(async () => { await expect(view.result.current.begin()).rejects.toBe(unknown); });

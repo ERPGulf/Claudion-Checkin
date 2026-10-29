@@ -1,3 +1,4 @@
+import { t, useTranslation } from "../../localization";
 import React from 'react';
 import { Switch } from 'react-native';
 import { SPACING } from '../../constants';
@@ -18,14 +19,15 @@ import SettingsRow from '../common/SettingsRow';
  * nothing behind this label changed.
  */
 function HomeExperienceSetting() {
+  useTranslation();
   const { enabled, setEnabled } = useHomeExperience();
   const { colors } = useAppTheme();
 
   return (
     <>
       <SectionHeader
-        title="Experimental UI"
-        subtitle="Preview work in progress. These options may change or disappear."
+        title={t("Experimental UI")}
+        subtitle={t("Preview work in progress. These options may change or disappear.")}
         style={{ marginTop: SPACING.xxl }}
       />
 
@@ -34,14 +36,14 @@ function HomeExperienceSetting() {
           icon="flask-outline"
           iconTint={colors.accentSurface}
           iconColor={colors.primary2}
-          title="Enable New UI"
-          description="Switch between the classic interface and the redesigned interface."
+          title={t("Enable New UI")}
+          description={t("Switch between the classic interface and the redesigned interface.")}
         >
           <Switch
             value={enabled}
             onValueChange={setEnabled}
             trackColor={{ true: colors.primary2 }}
-            accessibilityLabel="Enable New UI"
+            accessibilityLabel={t("Enable New UI")}
           />
         </SettingsRow>
       </Card>

@@ -1,6 +1,8 @@
+import { useTranslation } from '../../localization';
 /* eslint-disable react/prop-types */
 import React, { useEffect, useRef } from 'react';
-import { Animated, Text, View } from 'react-native';
+import { Animated, View } from 'react-native';
+import Text from '../../localization/LocalizedText';
 import { Ionicons } from '@expo/vector-icons';
 import { ICON, RADIUS, SPACING, TYPO } from '../../constants';
 import useAppTheme from '../../hooks/useAppTheme';
@@ -29,6 +31,7 @@ export const REASON_ROW_HEIGHT = 46;
  * under the 3:1 WCAG floor for non-text contrast.
  */
 function ReasonOption({ label, icon, selected, onPress, showDivider = false }) {
+  useTranslation();
   const { colors } = useAppTheme();
   const reduceMotion = useReducedMotion();
 

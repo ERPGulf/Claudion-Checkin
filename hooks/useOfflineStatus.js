@@ -1,3 +1,4 @@
+import { useTranslation } from '../localization';
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSelector } from "react-redux";
 import { selectIsLoggedIn } from "../redux/Slices/AuthSlice";
@@ -47,6 +48,7 @@ import {
  * a deliberate, bounded delay rather than a poll.
  */
 export default function useOfflineStatus() {
+  useTranslation();
   const isLoggedIn = useSelector(selectIsLoggedIn);
   const employeeCode = useSelector(selectEmployeeCode);
   const { enabled: alertsEnabled } = useOfflineSyncAlerts();

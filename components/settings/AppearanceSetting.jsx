@@ -1,5 +1,7 @@
+import Text from '../../localization/LocalizedText';
+import { t, useTranslation } from "../../localization";
 import React from 'react';
-import { View, Text } from 'react-native';
+import { View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { RADIUS, SPACING, TYPO } from '../../constants';
 import useAppTheme from '../../hooks/useAppTheme';
@@ -9,9 +11,9 @@ import SectionHeader from '../common/SectionHeader';
 import SettingsRow from '../common/SettingsRow';
 
 const OPTIONS = [
-  { mode: 'system', label: 'System', icon: 'phone-portrait-outline' },
-  { mode: 'light', label: 'Light', icon: 'sunny-outline' },
-  { mode: 'dark', label: 'Dark', icon: 'moon-outline' },
+  { mode: 'system', label: "System", icon: 'phone-portrait-outline' },
+  { mode: 'light', label: "Light", icon: 'sunny-outline' },
+  { mode: 'dark', label: "Dark", icon: 'moon-outline' },
 ];
 
 /**
@@ -25,12 +27,13 @@ const OPTIONS = [
  * three labelled segments need the full card width to stay legible.
  */
 function AppearanceSetting() {
+  useTranslation();
   const { colors, isDark, mode, setMode, darkAvailable } = useAppTheme();
 
   return (
     <>
       <SectionHeader
-        title="Appearance"
+        title={t("Appearance")}
         style={{ marginTop: SPACING.xxl }}
       />
 
@@ -39,11 +42,11 @@ function AppearanceSetting() {
           icon={isDark ? 'moon' : 'contrast-outline'}
           iconTint={colors.accentSurface}
           iconColor={colors.primary2}
-          title="Theme"
+          title={t("Theme")}
           description={
             darkAvailable
-              ? 'Choose a palette, or follow your device setting.'
-              : 'Turn on Modern UI to use dark mode.'
+              ? t("Choose a palette, or follow your device setting.")
+              : t("Turn on Modern UI to use dark mode.")
           }
         />
 
@@ -71,10 +74,11 @@ function AppearanceSetting() {
                 hitSlop={0}
                 accessibilityRole="radio"
                 accessibilityState={{ selected, disabled: !darkAvailable }}
-                accessibilityLabel={`${option.label} appearance`}
+                accessibilityLabel={t("{{theme}} appearance", { theme: t(option.label) })}
                 style={{
                   flex: 1,
-                  height: 38,
+                  minHeight: 44,
+                  paddingVertical: SPACING.sm,
                   flexDirection: 'row',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -97,7 +101,7 @@ function AppearanceSetting() {
                     fontWeight: selected ? '600' : '500',
                   }}
                 >
-                  {option.label}
+                  {t(option.label)}
                 </Text>
               </PressableScale>
             );

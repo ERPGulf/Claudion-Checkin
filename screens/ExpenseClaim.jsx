@@ -1,3 +1,4 @@
+import { t, useTranslation } from '../localization';
 import React, { useCallback, useMemo, useRef, useState } from "react";
 import { Platform, RefreshControl, SectionList, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -61,8 +62,9 @@ const GUTTER = { paddingHorizontal: SPACING.lg };
  * searches every claim and pagination then walks the matches.
  */
 function ExpenseClaim() {
+  useTranslation();
   const { colors } = useAppTheme();
-  useModernScreenHeader("Expense Claims");
+  useModernScreenHeader(t("Expense Claims"));
 
   const {
     baseUrl,
@@ -168,9 +170,9 @@ function ExpenseClaim() {
             <EmptyState
               compact
               icon="cloud-offline-outline"
-              title="Couldn't load your claims"
-              description="Unable to load expense claims."
-              actionLabel="Retry"
+              title={t("Couldn't load your claims")}
+              description={t("Unable to load expense claims.")}
+              actionLabel={t("Retry")}
               onActionPress={refetch}
             />
           </Card>
@@ -187,9 +189,9 @@ function ExpenseClaim() {
           <Card>
             <EmptyState
               icon="search-outline"
-              title="No matching expense claims"
-              description="Try another keyword — you can search by type, amount, date, status or receipt name."
-              actionLabel="Clear search"
+              title={t("No matching expense claims")}
+              description={t("Try another keyword — you can search by type, amount, date, status or receipt name.")}
+              actionLabel={t("Clear search")}
               onActionPress={() => setSearchQuery("")}
             />
           </Card>
@@ -202,9 +204,9 @@ function ExpenseClaim() {
         <Card>
           <EmptyState
             icon="receipt-outline"
-            title="No expense claims yet."
-            description="Anything you claim will appear here with its approval status."
-            actionLabel="Create expense claim"
+            title={t("No expense claims yet.")}
+            description={t("Anything you claim will appear here with its approval status.")}
+            actionLabel={t("Create expense claim")}
             onActionPress={scrollToForm}
           />
         </Card>

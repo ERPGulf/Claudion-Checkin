@@ -1,3 +1,4 @@
+import { useTranslation } from "../localization";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
 import React, { useEffect, useState } from "react";
@@ -35,6 +36,7 @@ const Stack = createNativeStackNavigator();
  * onto a different tenant.
  */
 function AuthNavigator() {
+  const { direction, t } = useTranslation();
   const mobileAvailable = isMobileAuthAvailable();
   // null = undecided. Rendering the navigator before this resolves would bake in
   // whichever route happened to be the default.
@@ -58,7 +60,7 @@ function AuthNavigator() {
   return (
     <Stack.Navigator
       initialRouteName={initialRoute}
-      screenOptions={{ headerShown: false }}
+      screenOptions={({ route }) => ({ headerShown: false, title: t(route.name), contentStyle: { direction } })}
     >
       <Stack.Screen name="login" component={Login} />
       <Stack.Screen name="Qrscan" component={QrScan} />

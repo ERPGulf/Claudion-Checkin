@@ -1,3 +1,4 @@
+import { formatDate, t } from '../localization';
 import { formatFieldTime } from './attendanceRequest';
 
 /* -------------------------------------------------------------------------
@@ -23,10 +24,10 @@ export function formatDateLabel(dateString) {
     a.getMonth() === b.getMonth() &&
     a.getFullYear() === b.getFullYear();
 
-  if (isSameDay(date, today)) return 'Today';
-  if (isSameDay(date, yesterday)) return 'Yesterday';
+  if (isSameDay(date, today)) return t("Today");
+  if (isSameDay(date, yesterday)) return t("Yesterday");
 
-  return date.toLocaleDateString('en-GB', {
+  return formatDate(date, {
     day: '2-digit',
     month: 'short',
     year: 'numeric',

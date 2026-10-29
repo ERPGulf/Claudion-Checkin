@@ -1,3 +1,4 @@
+import { translateMessage, t, useTranslation } from '../localization';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert } from 'react-native';
 import { useSelector } from 'react-redux';
@@ -34,6 +35,7 @@ export const PAGE_SIZE = 5;
  * inlines it, and neither arrangement should force the other to re-render.
  */
 export default function useExpenseClaims() {
+  useTranslation();
   const actionGeneration = useRef(getAuthSessionGeneration()).current;
   const employeeCode = useSelector(selectEmployeeCode);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
@@ -94,16 +96,16 @@ export default function useExpenseClaims() {
           if (upload?.error) throw new Error(upload.error);
         }
       } catch (e) {
-        Alert.alert('Warning', 'Expense created, but file upload failed.');
+        Alert.alert(t("Warning"), t("Expense created, but file upload failed."));
       }
 
       await getCapabilitySnapshot(capabilityScope);
       await refetch();
 
       hapticsMessage('success');
-      Alert.alert('Success', 'Expense claim submitted successfully!', [
+      Alert.alert(t("Success"), t("Expense claim submitted successfully!"), [
         {
-          text: 'OK',
+          text: t("OK"),
           onPress: () => {
             setResetFormFlag(prev => !prev);
           },
@@ -112,7 +114,7 @@ export default function useExpenseClaims() {
     },
     onError: err => {
       hapticsMessage('error');
-      Alert.alert('Error', err.message || 'Failed to create expense claim.');
+      Alert.alert(t("Error"), translateMessage(err.message || t("Failed to create expense claim.")));
     },
   });
 

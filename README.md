@@ -4,6 +4,8 @@ Contributor setup, architecture, validation commands, and compatibility constrai
 
 The QR/password and company-code/mobile sign-in methods are described in [Mobile sign-in](docs/mobile-sign-in.md), including lookup configuration and the staging checks required before rollout.
 
+English/Arabic architecture, native build requirements, validation results and remaining review work are documented in [Localization](docs/localization.md). Run `npm run validate:localization` when changing UI copy.
+
 ## Firebase Cloud Messaging (FCM)
 
 This app now includes production-ready FCM client wiring for Android and iOS:

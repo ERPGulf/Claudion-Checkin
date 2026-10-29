@@ -1,3 +1,4 @@
+import { t, useTranslation } from '../localization';
 // components/UpdateBanner.jsx
 //
 // App-wide OTA update banner. It checks expo-updates on mount and every time the
@@ -7,18 +8,14 @@
 // relaunch. Mounted once at the app root (App.js), above the navigator.
 
 import React, { useCallback, useEffect, useState } from "react";
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  ActivityIndicator,
-  AppState,
-} from "react-native";
+import { View, TouchableOpacity, ActivityIndicator, AppState } from 'react-native';
+import Text from '../localization/LocalizedText';
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Updates from "expo-updates";
 import { COLORS } from "../constants";
 
 export default function UpdateBanner() {
+  const { language, direction, isRTL } = useTranslation();
   const insets = useSafeAreaInsets();
   const { isUpdateAvailable, isUpdatePending, isDownloading } =
     Updates.useUpdates();
@@ -81,13 +78,9 @@ export default function UpdateBanner() {
         elevation: 9999,
       }}
     >
-      <View style={{ flex: 1, paddingRight: 12 }}>
-        <Text style={{ color: COLORS.white, fontSize: 15, fontWeight: "700" }}>
-          Update available
-        </Text>
-        <Text style={{ color: COLORS.white, fontSize: 12, opacity: 0.9 }}>
-          A new version is ready to install.
-        </Text>
+      <View style={{ flex: 1, paddingEnd: 12 }}>
+        <Text style={{ color: COLORS.white, fontSize: 15, fontWeight: "700" }}>{t("Update available")}</Text>
+        <Text style={{ color: COLORS.white, fontSize: 12, opacity: 0.9 }}>{t("A new version is ready to install.")}</Text>
       </View>
 
       <TouchableOpacity
@@ -105,9 +98,7 @@ export default function UpdateBanner() {
         {applying ? (
           <ActivityIndicator size="small" color={COLORS.primary} />
         ) : (
-          <Text style={{ color: COLORS.primary, fontWeight: "700" }}>
-            Update now
-          </Text>
+          <Text style={{ color: COLORS.primary, fontWeight: "700" }}>{t("Update now")}</Text>
         )}
       </TouchableOpacity>
     </View>

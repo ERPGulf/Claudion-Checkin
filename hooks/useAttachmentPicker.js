@@ -1,3 +1,4 @@
+import { translateMessage, t, useTranslation } from '../localization';
 import { useEffect, useRef, useState } from 'react';
 import { Alert } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
@@ -13,6 +14,7 @@ import { selectScopedFeatureSettings } from '../redux/Slices/FeatureSettingsSlic
 import { isFeatureEnabled } from '../utils/featureSettings';
 
 export const useAttachmentPicker = (capability) => {
+  useTranslation();
   const [isPicking, setIsPicking] = useState(false);
   const mounted = useRef(true);
   const picking = useRef(false);
@@ -50,7 +52,7 @@ export const useAttachmentPicker = (capability) => {
       return await available() && current() ? file : null;
     } catch (error) {
       if (isCurrent() && error?.code !== 'FEATURE_DISABLED' && error?.code !== 'CAPABILITY_SCOPE_CHANGED') {
-        Alert.alert('Error', errorMessage);
+        Alert.alert(t("Error"), translateMessage(errorMessage));
       }
       return null;
     } finally {
@@ -65,8 +67,8 @@ export const useAttachmentPicker = (capability) => {
     if (!await available() || !current()) return false;
     if (status !== 'granted') {
       Alert.alert(
-        'Permission Denied',
-        'Camera permission is required to take photos. Please enable it in your device settings.'
+        t("Permission Denied"),
+        t("Camera permission is required to take photos. Please enable it in your device settings.")
       );
       return false;
     }
@@ -79,8 +81,8 @@ export const useAttachmentPicker = (capability) => {
     if (!await available() || !current()) return false;
     if (status !== 'granted') {
       Alert.alert(
-        'Permission Denied',
-        'Media library permission is required to choose images. Please enable it in your device settings.'
+        t("Permission Denied"),
+        t("Media library permission is required to choose images. Please enable it in your device settings.")
       );
       return false;
     }
@@ -109,7 +111,7 @@ export const useAttachmentPicker = (capability) => {
       };
     }
     return null;
-  }, 'Failed to open camera.');
+  }, t("Failed to open camera."));
 
   const pickFromGallery = () => runPicker(async (available, current) => {
     const hasPermission = await requestGalleryPermission(available, current);
@@ -133,7 +135,7 @@ export const useAttachmentPicker = (capability) => {
       };
     }
     return null;
-  }, 'Failed to pick image from gallery.');
+  }, t("Failed to pick image from gallery."));
 
   const pickDocument = () => runPicker(async (_, current) => {
     if (!current()) return null;
@@ -162,7 +164,7 @@ export const useAttachmentPicker = (capability) => {
       };
     }
     return null;
-  }, 'Failed to pick document.');
+  }, t("Failed to pick document."));
 
   return {
     pickFromCamera,

@@ -1,3 +1,4 @@
+import { useTranslation } from "../localization";
 import React, { useMemo } from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import {
@@ -38,6 +39,7 @@ import withFeatureGate from "./withFeatureGate";
 const Stack = createNativeStackNavigator();
 
 function AppNavigator() {
+  const { direction, t } = useTranslation();
   // TEMPORARY: New Home Experience experiment. On removal, delete this line and
   // pass `SelectQuickAccess` directly below.
   const { enabled: newHomeEnabled } = useHomeExperience();
@@ -102,7 +104,7 @@ function AppNavigator() {
   return (
     <Stack.Navigator
       initialRouteName="homeTab"
-      screenOptions={{ headerShown: false }}
+      screenOptions={({ route }) => ({ headerShown: false, title: t(route.name), contentStyle: { direction } })}
     >
       <Stack.Screen name="homeTab" component={HomeTabGroup} />
       <Stack.Screen

@@ -1,6 +1,8 @@
+import { t, useTranslation, translateMessage } from '../../localization';
 /* eslint-disable react/prop-types */
 import React, { useState } from 'react';
-import { Text, TextInput, View } from 'react-native';
+import { TextInput, View } from 'react-native';
+import Text from '../../localization/LocalizedText';
 import { Ionicons } from '@expo/vector-icons';
 import { ICON, RADIUS, SPACING, TYPO } from '../../constants';
 import useAppTheme from '../../hooks/useAppTheme';
@@ -31,12 +33,13 @@ export const SEARCH_BAR_HEIGHT = 44;
 function SearchBar({
   value,
   onChangeText,
-  placeholder = 'Search…',
-  accessibilityLabel = 'Search',
+  placeholder = t("Search…"),
+  accessibilityLabel = t("Search"),
   onSubmitEditing,
   autoFocus = false,
   style,
 }) {
+  const { isRTL, direction } = useTranslation();
   const { colors } = useAppTheme();
   const [focused, setFocused] = useState(false);
 
@@ -75,9 +78,9 @@ function SearchBar({
       <TextInput
         value={value}
         onChangeText={onChangeText}
-        placeholder={placeholder}
+        placeholder={translateMessage(placeholder)}
         placeholderTextColor={colors.textMuted}
-        accessibilityLabel={accessibilityLabel}
+        accessibilityLabel={translateMessage(accessibilityLabel)}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
         // "Search" on the keyboard's action key, and it dismisses rather than
@@ -110,7 +113,7 @@ function SearchBar({
         <PressableScale
           onPress={() => onChangeText('')}
           accessibilityRole="button"
-          accessibilityLabel="Clear search"
+          accessibilityLabel={t("Clear search")}
           hitSlop={8}
           style={{
             width: 28,
@@ -149,13 +152,14 @@ export function SearchCount({
   plural = `${noun}s`,
   style,
 }) {
+  const { isRTL, direction } = useTranslation();
   const { colors } = useAppTheme();
 
   return (
     <Text style={[{ ...TYPO.caption, color: colors.textMuted }, style]}>
       {matches === total
-        ? `${total} ${total === 1 ? noun : plural}`
-        : `${matches} of ${total}`}
+        ? t(noun === 'claim' ? '{{count}} claims' : noun === 'notification' ? '{{count}} notifications' : '{{count}} {{noun}}', { count: total, noun: translateMessage(total === 1 ? noun : plural) })
+        : t('{{matches}} of {{total}}', { matches, total })}
     </Text>
   );
 }

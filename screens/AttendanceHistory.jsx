@@ -1,13 +1,7 @@
+import { t, useTranslation } from '../localization';
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import {
-  ActivityIndicator,
-  Animated,
-  Easing,
-  RefreshControl,
-  SectionList,
-  Text,
-  View,
-} from "react-native";
+import { ActivityIndicator, Animated, Easing, RefreshControl, SectionList, View } from 'react-native';
+import Text from '../localization/LocalizedText';
 import { SafeAreaView } from "react-native-safe-area-context";
 import { RADIUS, SHADOWS, SPACING, TYPO } from "../constants";
 import useAppTheme from "../hooks/useAppTheme";
@@ -35,8 +29,9 @@ import {
  * row or visible seams where shadowed fragments meet.
  */
 function AttendanceHistory() {
+  const { language, direction, isRTL } = useTranslation();
   const { colors, isDark } = useAppTheme();
-  useModernScreenHeader("Attendance History");
+  useModernScreenHeader(t("Attendance History"));
 
   const {
     isLoading,
@@ -109,15 +104,15 @@ function AttendanceHistory() {
         <View style={{ padding: SPACING.lg }}>
           <StatusBanner
             tone="error"
-            title="Couldn't load your history"
-            message="Something went wrong while fetching attendance history."
+            title={t("Couldn't load your history")}
+            message={t("Something went wrong while fetching attendance history.")}
           />
           <Card style={{ marginTop: SPACING.lg }}>
             <EmptyState
               icon="refresh-outline"
-              title="Nothing to show"
-              description="Check your connection, then try again."
-              actionLabel="Try again"
+              title={t("Nothing to show")}
+              description={t("Check your connection, then try again.")}
+              actionLabel={t("Try again")}
               onActionPress={refetch}
             />
           </Card>
@@ -133,9 +128,9 @@ function AttendanceHistory() {
           <Card>
             <EmptyState
               icon="time-outline"
-              title="No attendance yet"
-              description="Your check-ins and check-outs will appear here once you start recording attendance."
-              actionLabel="Refresh"
+              title={t("No attendance yet")}
+              description={t("Your check-ins and check-outs will appear here once you start recording attendance.")}
+              actionLabel={t("Refresh")}
               onActionPress={refetch}
             />
           </Card>
@@ -159,8 +154,8 @@ function AttendanceHistory() {
             isError ? (
               <StatusBanner
                 tone="warning"
-                title="Couldn't refresh"
-                message="Showing saved records. Pull down to try again."
+                title={t("Couldn't refresh")}
+                message={t("Showing saved records. Pull down to try again.")}
                 style={{ marginTop: SPACING.lg }}
               />
             ) : null
@@ -216,9 +211,7 @@ function AttendanceHistory() {
                 <ActivityIndicator color={colors.textMuted} />
               ) : (
                 !hasNextPage && (
-                  <Text style={{ ...TYPO.caption, color: colors.textMuted }}>
-                    That&apos;s everything
-                  </Text>
+                  <Text style={{ ...TYPO.caption, color: colors.textMuted }}>{t("That's everything")}</Text>
                 )
               )}
             </View>

@@ -1,11 +1,7 @@
+import { t, getLanguage, useTranslation } from '../localization';
 import React, { useCallback, useEffect, useState } from "react";
-import {
-  Platform,
-  RefreshControl,
-  ScrollView,
-  Text,
-  View,
-} from "react-native";
+import { Platform, RefreshControl, ScrollView, View } from 'react-native';
+import Text from '../localization/LocalizedText';
 import { SafeAreaView } from "react-native-safe-area-context";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Ionicons } from "@expo/vector-icons";
@@ -68,8 +64,9 @@ const pickerValue = (value) =>
  * the hook's checks and raises its Alerts.
  */
 function LeaveRequest() {
+  useTranslation();
   const { colors, isDark } = useAppTheme();
-  useModernScreenHeader("Leave Application");
+  useModernScreenHeader(t("Leave Application"));
 
   const {
     leaveType,
@@ -147,9 +144,9 @@ function LeaveRequest() {
   const missing = !attempted
     ? null
     : typeMissing
-      ? "Choose a leave type."
+      ? t("Choose a leave type.")
       : agreementMissing
-        ? "Agree to the remote work policy."
+        ? t("Agree to the remote work policy.")
         : null;
 
   // Only a pull shows the spinner; the post-submit refetch stays silent.
@@ -216,15 +213,11 @@ function LeaveRequest() {
               <Text
                 accessibilityRole="header"
                 style={{ ...TYPO.headline, color: colors.textPrimary }}
-              >
-                Leave request
-              </Text>
+              >{t("Leave request")}</Text>
               <Text
                 style={{ ...TYPO.caption, color: colors.textMuted }}
                 numberOfLines={2}
-              >
-                Pick a leave type, dates and reason. Your manager reviews it.
-              </Text>
+              >{t("Pick a leave type, dates and reason. Your manager reviews it.")}</Text>
             </View>
           </View>
         </Card>
@@ -232,8 +225,8 @@ function LeaveRequest() {
         {/* ---------- Leave details ---------- */}
         <ModuleCard
           icon="document-text-outline"
-          title="Leave details"
-          subtitle="Type, reason and any supporting document"
+          title={t("Leave details")}
+          subtitle={t("Type, reason and any supporting document")}
           style={{ marginBottom: SPACING.md }}
         >
           <View style={cardBody}>
@@ -241,9 +234,9 @@ function LeaveRequest() {
                 grid. Opens a sheet instead of the inline wheel — the value it
                 hands back is the identical raw leave-type string. */}
             <PickerField
-              label="Leave type *"
-              value={typeChosen ? leaveType : ""}
-              placeholder="Select leave type"
+              label={t("Leave type *")}
+              value={typeChosen ? (leaveType === "Remote" ? t("Remote") : leaveType) : ""}
+              placeholder={t("Select leave type")}
               icon={typeChosen ? leaveTypeIcon(leaveType) : "list-outline"}
               onPress={openTypeSheet}
               active={isTypeSheetVisible}
@@ -251,17 +244,17 @@ function LeaveRequest() {
             />
 
             <FormField
-              label="Reason"
+              label={t("Reason")}
               value={reason}
               onChangeText={setReason}
-              placeholder="Enter reason for leave"
+              placeholder={t("Enter reason for leave")}
               multiline
               optional
               style={{ marginTop: SPACING.md }}
             />
 
             <UploadField
-              label="Attachment"
+              label={t("Attachment")}
               file={attachment}
               onPick={pickAttachment}
               onRemove={removeAttachment}
@@ -278,8 +271,8 @@ function LeaveRequest() {
         {isRemote && (
           <ModuleCard
             icon="home-outline"
-            title="Remote work policy"
-            subtitle="Required for a remote request"
+            title={t("Remote work policy")}
+            subtitle={t("Required for a remote request")}
             style={{ marginBottom: SPACING.md }}
           >
             <View style={cardBody}>
@@ -314,7 +307,7 @@ function LeaveRequest() {
                 hitSlop={0}
                 accessibilityRole="checkbox"
                 accessibilityState={{ checked: agreed }}
-                accessibilityLabel="I have read and agree to the full remote work policy."
+                accessibilityLabel={t("I have read and agree to the full remote work policy.")}
                 style={{
                   flexDirection: "row",
                   alignItems: "center",
@@ -336,9 +329,7 @@ function LeaveRequest() {
                     marginStart: SPACING.sm,
                     color: colors.textPrimary,
                   }}
-                >
-                  I have read and agree to the full remote work policy.
-                </Text>
+                >{t("I have read and agree to the full remote work policy.")}</Text>
               </PressableScale>
             </View>
           </ModuleCard>
@@ -347,13 +338,13 @@ function LeaveRequest() {
         {/* ---------- Leave period ---------- */}
         <ModuleCard
           icon="calendar-outline"
-          title="Leave period"
-          subtitle="The days this request covers"
+          title={t("Leave period")}
+          subtitle={t("The days this request covers")}
           style={{ marginBottom: SPACING.md }}
         >
           <View style={cardBody}>
             <PickerField
-              label="From date *"
+              label={t("From date *")}
               value={formatLogDate(fromDate)}
               icon="calendar-outline"
               onPress={openFromPicker}
@@ -369,7 +360,7 @@ function LeaveRequest() {
                 needsDone={needsDoneAffordance}
                 onDone={closeFromPicker}
               >
-                <DateTimePicker
+                <DateTimePicker locale={getLanguage()}
                   value={pickerValue(fromDate)}
                   mode="date"
                   display={Platform.OS === "ios" ? "spinner" : "default"}
@@ -380,7 +371,7 @@ function LeaveRequest() {
             )}
 
             <PickerField
-              label="To date *"
+              label={t("To date *")}
               value={formatLogDate(toDate)}
               icon="calendar-outline"
               onPress={openToPicker}
@@ -394,7 +385,7 @@ function LeaveRequest() {
                 needsDone={needsDoneAffordance}
                 onDone={closeToPicker}
               >
-                <DateTimePicker
+                <DateTimePicker locale={getLanguage()}
                   value={pickerValue(toDate)}
                   mode="date"
                   minimumDate={fromDate}
@@ -409,7 +400,7 @@ function LeaveRequest() {
                 open. No chevron, no press target, announced as disabled. */}
             <PickerField
               readOnly
-              label="Posting date"
+              label={t("Posting date")}
               value={formatLogDate(postingDate)}
               icon="today-outline"
               style={{ marginTop: SPACING.md }}
@@ -422,8 +413,8 @@ function LeaveRequest() {
             {dateRangeInvalid && (
               <StatusBanner
                 tone="error"
-                title="Check the date range"
-                message="To date cannot be before From date."
+                title={t("Check the date range")}
+                message={t("To date cannot be before From date.")}
                 style={{ marginTop: SPACING.md }}
               />
             )}
@@ -442,12 +433,10 @@ function LeaveRequest() {
             <View
               style={{ flexDirection: "row", alignItems: "center" }}
               accessible
-              accessibilityLabel={`Summary. ${leaveType}, ${duration}.`}
+              accessibilityLabel={t("Summary. {{type}}, {{duration}}.", { type: leaveType === "Remote" ? t("Remote") : leaveType, duration: duration })}
             >
               <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={{ ...TYPO.caption, color: colors.textMuted }}>
-                  Duration
-                </Text>
+                <Text style={{ ...TYPO.caption, color: colors.textMuted }}>{t("Duration")}</Text>
                 <Text
                   style={{
                     ...TYPO.title3,
@@ -469,14 +458,12 @@ function LeaveRequest() {
               />
 
               <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={{ ...TYPO.caption, color: colors.textMuted }}>
-                  Leave type
-                </Text>
+                <Text style={{ ...TYPO.caption, color: colors.textMuted }}>{t("Leave type")}</Text>
                 <Text
                   numberOfLines={1}
                   style={{ ...TYPO.title3, color: colors.textPrimary }}
                 >
-                  {leaveType}
+                  {leaveType === "Remote" ? t("Remote") : leaveType}
                 </Text>
               </View>
             </View>
@@ -488,7 +475,7 @@ function LeaveRequest() {
         {!!missing && (
           <StatusBanner
             tone="error"
-            title="Finish the form first"
+            title={t("Finish the form first")}
             message={missing}
             style={{ marginBottom: SPACING.md }}
           />
@@ -496,7 +483,7 @@ function LeaveRequest() {
 
         {/* ---------- Submit ---------- */}
         <ActionButton
-          label="Submit leave request"
+          label={t("Submit leave request")}
           icon="paper-plane-outline"
           variant="filled"
           size="lg"
@@ -510,32 +497,32 @@ function LeaveRequest() {
         <StatusBanner
           tone="info"
           icon="information-circle"
-          title="What happens next"
-          message="Your leave request will be sent to your manager for approval. You'll be notified once it has been approved or rejected."
+          title={t("What happens next")}
+          message={t("Your leave request will be sent to your manager for approval. You'll be notified once it has been approved or rejected.")}
           style={{ marginTop: SPACING.md }}
         />
 
         {/* ---------- History ---------- */}
         <SectionHeader
-          title="Your leave"
+          title={t("Your leave")}
           subtitle={
             leaveApplications.length > 0
-              ? `${leaveApplications.length} submitted`
+              ? t("{{count}} submitted", { count: leaveApplications.length })
               : undefined
           }
           style={{ marginTop: SPACING.xxl }}
         />
 
         {isFetchingHistory ? (
-          <ExpenseSkeleton count={2} label="Loading leave applications" />
+          <ExpenseSkeleton count={2} label={t("Loading leave applications")} />
         ) : isHistoryError ? (
           <Card>
             <EmptyState
               compact
               icon="cloud-offline-outline"
-              title="Couldn't load your leave"
-              description="Unable to load leave applications."
-              actionLabel="Retry"
+              title={t("Couldn't load your leave")}
+              description={t("Unable to load leave applications.")}
+              actionLabel={t("Retry")}
               onActionPress={refetchHistory}
             />
           </Card>
@@ -544,8 +531,8 @@ function LeaveRequest() {
             <EmptyState
               compact
               icon="calendar-outline"
-              title="No leave applications yet"
-              description="Once you submit a request it will appear here with its approval status."
+              title={t("No leave applications yet")}
+              description={t("Once you submit a request it will appear here with its approval status.")}
             />
           </Card>
         ) : (
@@ -554,23 +541,23 @@ function LeaveRequest() {
               <RecordCard
                 key={item?.name || index}
                 icon={leaveTypeIcon(item?.leave_type)}
-                title={item?.leave_type || "Leave"}
+                title={item?.leave_type === "Remote" ? t("Remote") : item?.leave_type || t("Leave")}
                 subtitle={item?.name}
                 status={describeRecordStatus(item?.status)}
                 headline={formatDateRange(item?.from_date, item?.to_date)}
                 rows={[
                   {
-                    label: "Days",
+                    label: t("Days"),
                     value:
                       item?.total_leave_days === null ||
                       item?.total_leave_days === undefined
                         ? null
                         : String(item.total_leave_days),
                   },
-                  { label: "Half day", value: item?.half_day ? "Yes" : null },
+                  { label: t("Half day"), value: item?.half_day ? t("Yes") : null },
                 ]}
                 note={item?.reason}
-                accessibilityLabel={`${item?.leave_type || "Leave"}, ${formatDateRange(
+                accessibilityLabel={`${item?.leave_type === "Remote" ? t("Remote") : item?.leave_type || t("Leave")}, ${formatDateRange(
                   item?.from_date,
                   item?.to_date,
                 )}, ${describeRecordStatus(item?.status).label}.`}
@@ -582,7 +569,7 @@ function LeaveRequest() {
               <ActionButton
                 variant="outline"
                 icon="chevron-down"
-                label="Load more"
+                label={t("Load more")}
                 onPress={showMoreLeaves}
               />
             )}
@@ -593,15 +580,16 @@ function LeaveRequest() {
       <OptionSheet
         visible={isTypeSheetVisible}
         onClose={closeTypeSheet}
-        title="Leave type"
-        subtitle="What kind of leave are you requesting?"
+        title={t("Leave type")}
+        subtitle={t("What kind of leave are you requesting?")}
         options={leaveTypes}
+        labelForOption={option => option === "Remote" ? t("Remote") : option}
         selected={leaveType}
         onSelect={selectLeaveType}
         iconForOption={leaveTypeIcon}
         emptyIcon="calendar-outline"
-        emptyTitle="No leave types"
-        emptyDescription="Your administrator hasn't configured any leave types yet."
+        emptyTitle={t("No leave types")}
+        emptyDescription={t("Your administrator hasn't configured any leave types yet.")}
       />
 
       <AttachmentSheet

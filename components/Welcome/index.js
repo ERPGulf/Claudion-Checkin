@@ -14,5 +14,4 @@ export {
   WORDMARK_ASPECT,
   AccentHalo,
   ShimmerField,
-  SignInOptions,
-};
+  SignInOptions, };

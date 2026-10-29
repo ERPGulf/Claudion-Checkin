@@ -1,6 +1,8 @@
+import { t, useTranslation } from '../../localization';
 /* eslint-disable react/prop-types */
 import React from 'react';
-import { Image, Linking, Text, View } from 'react-native';
+import { Image, Linking, View } from 'react-native';
+import Text from '../../localization/LocalizedText';
 import { Ionicons } from '@expo/vector-icons';
 import { ICON, RADIUS, SPACING, TYPO } from '../../constants';
 import useAppTheme from '../../hooks/useAppTheme';
@@ -43,6 +45,7 @@ import {
  * card made, and the URL is resolved from the same tenant `baseUrl`.
  */
 function ExpenseHistoryCard({ claim, baseUrl = '', style }) {
+  useTranslation();
   const { colors } = useAppTheme();
 
   const attachments = resolveAttachments(claim?.file_url, baseUrl);
@@ -159,7 +162,7 @@ function ExpenseHistoryCard({ claim, baseUrl = '', style }) {
               scaleTo={0.99}
               hitSlop={0}
               accessibilityRole="link"
-              accessibilityLabel={`Open ${file.name}`}
+              accessibilityLabel={t("Open {{name}}", { name: file.name })}
               style={{
                 flexDirection: 'row',
                 alignItems: 'center',

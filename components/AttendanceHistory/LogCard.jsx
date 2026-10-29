@@ -1,11 +1,14 @@
+import { translateMessage, formatDate, t, useTranslation } from '../../localization';
 import React from "react";
-import { View, Text } from "react-native";
+import { View } from 'react-native';
+import Text from '../../localization/LocalizedText';
 import PropTypes from "prop-types";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { format, parse } from "date-fns";
+import { describeLogType } from "../../utils/attendanceHistory";
 import { COLORS } from "../../constants";
 
 function LogCard({ type, time }) {
+  const { language, direction, isRTL } = useTranslation();
   
   // Fix backend time format: remove microseconds + replace space with T
   let fixedTime = time?.split(".")[0];
@@ -15,8 +18,8 @@ function LogCard({ type, time }) {
   }
 
   const formattedDate = fixedTime
-    ? format(new Date(fixedTime), "hh:mm a, dd/MM/yy")
-    : "Invalid date";
+    ? formatDate(new Date(fixedTime), { year: "2-digit", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: true })
+    : t("Invalid date");
 
   const bgColor =
     type?.toUpperCase() === "IN"
@@ -35,7 +38,7 @@ function LogCard({ type, time }) {
       className="w-full flex-row h-16 rounded-xl py-2 px-4 justify-between items-center my-1"
     >
       <Text className="text-white font-semibold text-xs">
-        CHECKED {type?.toUpperCase()} AT {formattedDate}
+        {t("{{status}} at {{time}}", { status: describeLogType(type).label, time: formattedDate })}
       </Text>
       <View
         className={`justify-center items-center rounded-full p-1 ${bgColor}`}

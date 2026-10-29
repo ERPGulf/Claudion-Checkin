@@ -1,4 +1,6 @@
-import { View, Text } from "react-native";
+import { t, useTranslation } from '../../localization';
+import { View } from 'react-native';
+import Text from '../../localization/LocalizedText';
 import { Image } from "expo-image";
 import React, { useEffect, useState, useRef } from "react";
 import { useSelector } from "react-redux";
@@ -16,6 +18,7 @@ import {
 } from "../../redux/Slices/AttendanceSlice";
 
 function WelcomeCard() {
+  const { language, direction, isRTL } = useTranslation();
   const location = useSelector(selectLocation);
   const checkin = useSelector(selectCheckin);
   const checkinTime = useSelector(selectCheckinTime);
@@ -107,39 +110,29 @@ function WelcomeCard() {
         <View className="flex-row justify-between w-full h-40 items-center">
           {checkin ? (
             <View className="w-3/5 h-40 justify-center">
-              <Text className="text-base text-white">Working from</Text>
+              <Text className="text-base text-white">{t("Working from")}</Text>
 
               <Text className="text-lg font-bold text-white pb-1">
-                {location?.locationName ?? "Office"}
+                {location?.locationName ?? t("Office")}
               </Text>
 
-              <Text className="text-base text-white">
-                You have been working for
-              </Text>
+              <Text className="text-base text-white">{t("You have been working for")}</Text>
 
               <Text className="text-lg font-bold text-white">
-                {formatMinutes(sessionMinutes)} Hours
-              </Text>
+                {formatMinutes(sessionMinutes)}{t("Hours")}</Text>
 
-              <Text className="text-sm text-orange-300 pt-1">
-                Break time:{" "}
+              <Text className="text-sm text-orange-300 pt-1">{t("Break time:")}{" "}
                 {formatMinutes((breakMinutes ?? 0) + liveBreakMinutes)}
               </Text>
 
-              <Text className="text-sm text-white pt-1">
-                Today total: {todayTotal || "--:--"} Hours
-              </Text>
+              <Text className="text-sm text-white pt-1">{t("Today total:")}{todayTotal || "--:--"}{t("Hours")}</Text>
 
-              <Text className="text-sm text-white pt-1">
-                Monthly total: {monthlyTotal || "--:--"} Hours
-              </Text>
+              <Text className="text-sm text-white pt-1">{t("Monthly total:")}{monthlyTotal || "--:--"}{t("Hours")}</Text>
             </View>
           ) : (
             <View className="w-6/12 h-40 justify-center">
-              <Text className="text-base text-white">Welcome Back!</Text>
-              <Text className="text-lg pt-2 font-bold text-white">
-                Check-In before you start working
-              </Text>
+              <Text className="text-base text-white">{t("Welcome Back!")}</Text>
+              <Text className="text-lg pt-2 font-bold text-white">{t("Check-In before you start working")}</Text>
             </View>
           )}
 

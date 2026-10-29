@@ -1,5 +1,6 @@
+import { setLanguage } from '../localization';
 import React from 'react';
-import { I18nManager, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { render, fireEvent, act } from '@testing-library/react-native';
 
 // Drives useAppTheme. Defaults to light; the dark blocks below flip it.
@@ -303,17 +304,17 @@ describe('modern Welcome sign-in options', () => {
     expect(getByLabelText('Scan QR code').props.accessibilityHint).toBe('Use the QR code from your company.');
   });
 
-  it('points the chevrons along the reading direction', () => {
+  it('points the chevrons along the selected app reading direction', async () => {
     const { getAllByText, unmount } = render(<WelcomeScreen />);
     expect(getAllByText('icon:chevron-forward')).toHaveLength(2);
     unmount();
 
-    I18nManager.isRTL = true;
+    await act(async () => { await setLanguage('ar'); });
     try {
       const rtl = render(<WelcomeScreen />);
       expect(rtl.getAllByText('icon:chevron-back')).toHaveLength(2);
     } finally {
-      I18nManager.isRTL = false;
+      await act(async () => { await setLanguage('en'); });
     }
   });
 });
@@ -436,8 +437,16 @@ describe('ShimmerField', () => {
     const { toJSON } = render(<ShimmerField />);
 
     (toJSON().children || []).forEach(child =>
-      expect(flatten(child.props.style).transform).toBeUndefined(),
+      expect(flatten(child.props.style).transform).toEqual([]),
     );
+  });
+
+  it('keeps a valid native transform array when focus pauses its animation', () => {
+    const screen = render(<ShimmerField active />);
+    screen.rerender(<ShimmerField active={false} />);
+    (screen.toJSON().children || []).forEach(child => {
+      expect(flatten(child.props.style).transform).toEqual([]);
+    });
   });
 
   it('never eats a touch and is hidden from screen readers', () => {
@@ -522,6 +531,14 @@ describe('AccentHalo', () => {
 
     expect(style.opacity).toBeUndefined();
     expect(style.transform).toBeUndefined();
+  });
+
+  it('keeps a valid native transform array when focus pauses its animation', () => {
+    const screen = render(<ShimmerField active />);
+    screen.rerender(<ShimmerField active={false} />);
+    (screen.toJSON().children || []).forEach(child => {
+      expect(flatten(child.props.style).transform).toEqual([]);
+    });
   });
 
   it('never eats a touch and is hidden from screen readers', () => {

@@ -1,6 +1,8 @@
+import { t, useTranslation, formatNumber } from '../../localization';
 /* eslint-disable react/prop-types */
 import React from 'react';
-import { View, Text } from 'react-native';
+import { View } from 'react-native';
+import Text from '../../localization/LocalizedText';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { ICON, RADIUS } from '../../constants';
 import useAppTheme from '../../hooks/useAppTheme';
@@ -11,9 +13,10 @@ import PressableScale from './PressableScale';
  * `onPress`, so this works anywhere the unread count is available.
  */
 function NotificationButton({ count = 0, onPress, size = 40 }) {
+  const { language } = useTranslation();
   const { colors } = useAppTheme();
   const hasUnread = count > 0;
-  const label = hasUnread ? `Notifications, ${count} unread` : 'Notifications';
+  const label = hasUnread ? t('Notifications, {{count}} unread', { count }) : t('Notifications');
 
   return (
     <PressableScale
@@ -38,7 +41,7 @@ function NotificationButton({ count = 0, onPress, size = 40 }) {
           style={{
             position: 'absolute',
             top: 2,
-            right: 2,
+            end: 2,
             minWidth: 18,
             height: 18,
             borderRadius: RADIUS.pill,
@@ -56,7 +59,7 @@ function NotificationButton({ count = 0, onPress, size = 40 }) {
             allowFontScaling={false}
             style={{ color: colors.white, fontSize: 10, fontWeight: '700' }}
           >
-            {count > 99 ? '99+' : count}
+            {count > 99 ? '99+' : formatNumber(count)}
           </Text>
         </View>
       )}

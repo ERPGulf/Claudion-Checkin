@@ -1,6 +1,8 @@
+import { t, useTranslation } from '../../localization';
 /* eslint-disable react/prop-types */
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Text, View } from 'react-native';
+import { Animated, Easing, View } from 'react-native';
+import Text from '../../localization/LocalizedText';
 import { Ionicons } from '@expo/vector-icons';
 import { ICON, RADIUS, SHADOWS, SPACING, TYPO } from '../../constants';
 import useAppTheme from '../../hooks/useAppTheme';
@@ -33,6 +35,7 @@ function CollapsibleCard({
   children,
   style,
 }) {
+  const { language, direction, isRTL } = useTranslation();
   const { colors, isDark } = useAppTheme();
   const [expanded, setExpanded] = useState(defaultExpanded);
 
@@ -67,7 +70,7 @@ function CollapsibleCard({
         accessibilityRole="button"
         accessibilityLabel={title}
         accessibilityState={{ expanded }}
-        accessibilityHint={expanded ? 'Collapses this section' : 'Expands this section'}
+        accessibilityHint={expanded ? t("Collapses this section") : t("Expands this section")}
         style={{
           flexDirection: 'row',
           alignItems: 'center',

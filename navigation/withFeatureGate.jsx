@@ -1,3 +1,4 @@
+import { t, useTranslation } from '../localization';
 /* eslint-disable react/prop-types */
 import React from 'react';
 import { View } from 'react-native';
@@ -22,6 +23,7 @@ import EmptyState from '../components/common/EmptyState';
  * done anything wrong, an administrator has turned the feature off.
  */
 function FeatureUnavailable({ onGoBack, canGoBack }) {
+  const { isRTL, direction } = useTranslation();
   const { colors } = useAppTheme();
 
   return (
@@ -33,9 +35,9 @@ function FeatureUnavailable({ onGoBack, canGoBack }) {
         <Card>
           <EmptyState
             icon="lock-closed-outline"
-            title="Not available"
-            description="Your administrator has turned this feature off for your account. Contact your HR administrator if you think this is a mistake."
-            actionLabel={canGoBack ? 'Go back' : undefined}
+            title={t("Not available")}
+            description={t("Your administrator has turned this feature off for your account. Contact your HR administrator if you think this is a mistake.")}
+            actionLabel={canGoBack ? t('Go back') : undefined}
             onActionPress={canGoBack ? onGoBack : undefined}
           />
         </Card>
@@ -70,6 +72,7 @@ function FeatureUnavailable({ onGoBack, canGoBack }) {
  */
 export default function withFeatureGate(routeName, ScreenComponent) {
   function FeatureGatedScreen(props) {
+  const { isRTL, direction } = useTranslation();
     const navigation = useNavigation();
     const enabled = useRouteEnabled(routeName);
 

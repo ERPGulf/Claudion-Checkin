@@ -1,4 +1,6 @@
-import { View, Text, TouchableOpacity } from "react-native";
+import Text from '../../localization/LocalizedText';
+import { t, useTranslation } from "../../localization";
+import { View, TouchableOpacity } from "react-native";
 import React from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSelector } from "react-redux";
@@ -6,6 +8,7 @@ import { useNavigation } from "@react-navigation/native";
 import { COLORS, SIZES } from "../../constants";
 
 function WelcomeCard() {
+  useTranslation();
   const navigation = useNavigation();
   const fullname = useSelector((state) => state.user.fullname);
  const unreadCount = useSelector(
@@ -20,8 +23,8 @@ function WelcomeCard() {
       <View className="flex-row justify-center items-center relative h-14">
         <TouchableOpacity
           onPress={() => navigation.navigate("Notifications")}
-          className="bg-gray-800 w-12 h-12 items-center justify-center rounded-full absolute right-1 top-1"
-        >
+          className="bg-gray-800 w-12 h-12 items-center justify-center rounded-full absolute top-1"
+         style={{ end: 4 }}>
           <MaterialCommunityIcons
             name="bell"
             color={COLORS.white}
@@ -32,7 +35,7 @@ function WelcomeCard() {
               style={{
                 position: "absolute",
                 top: 4,
-                right: 4,
+                end: 4,
                 minWidth: 18,
                 height: 18,
                 borderRadius: 9,
@@ -54,10 +57,10 @@ function WelcomeCard() {
             </View>
           )}
         </TouchableOpacity>
-        <Text className="text-xl font-bold text-white">Home</Text>
+        <Text className="text-xl font-bold text-white">{t("Home")}</Text>
       </View>
       <View>
-        <Text className="text-base font-medium text-white">Welcome,</Text>
+        <Text className="text-base font-medium text-white">{t("Welcome,")}</Text>
         <View className="flex-row items-center space-x-2 -mt-1">
           <Text
             adjustsFontSizeToFit
@@ -75,7 +78,7 @@ function WelcomeCard() {
               fontFamily: undefined,
             }}
           >
-            {fullname || "username"}
+            {fullname || t("username")}
           </Text>
           <View className="bg-gray-800 w-10 h-10 items-center justify-center rounded-full">
             <MaterialCommunityIcons name="hand-wave" color="white" size={24} />

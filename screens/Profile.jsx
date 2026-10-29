@@ -1,6 +1,8 @@
+import Text from '../localization/LocalizedText';
+import LanguageSetting from '../components/settings/LanguageSetting';
+import { t, useTranslation } from "../localization";
 import {
   View,
-  Text,
   Alert,
   Platform,
   ScrollView,
@@ -47,7 +49,7 @@ import { describeRunningUpdate } from "../utils/otaUpdate";
 
 const maskToken = (token) => {
   if (!token) {
-    return "Not generated yet";
+    return t("Not generated yet");
   }
 
   if (token.length <= 20) {
@@ -58,13 +60,12 @@ const maskToken = (token) => {
 };
 
 function Profile() {
+  const { language } = useTranslation();
   const navigation = useNavigation();
   const bottomTabBarHeight = useBottomTabBarHeight();
   const { colors, isDark } = useAppTheme();
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
-  const [updateStatus, setUpdateStatus] = useState(
-    "Ready to check for an OTA update.",
-  );
+  const [updateStatus, setUpdateStatus] = useState({ key: "Ready to check for an OTA update.", tone: "info" });
   const [clientToken, setClientToken] = useState(null);
   const [isSharingClientToken, setIsSharingClientToken] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
@@ -73,14 +74,14 @@ function Profile() {
   useLayoutEffect(() => {
     navigation.setOptions({
       headerShown: true,
-      headerTitle: "My Profile",
+      headerTitle: t("My Profile"),
       headerTitleAlign: "center",
       headerShadowVisible: false,
       headerStyle: { backgroundColor: colors.surfaceSecondary },
       headerTitleStyle: { color: colors.textPrimary },
       headerTintColor: colors.textPrimary,
     });
-  }, [navigation, colors.surfaceSecondary, colors.textPrimary]);
+  }, [navigation, colors.surfaceSecondary, colors.textPrimary, language]);
 
   const fullname = useSelector((state) => state.user.fullname);
   const appVersion =
@@ -103,9 +104,9 @@ function Profile() {
   });
   const isIosSimulator = Platform.OS === "ios" && !Device.isDevice;
   const tokenDisplayText = isIosSimulator
-    ? "Unavailable on iOS Simulator. Use a physical iPhone to generate an FCM token."
+    ? t("Unavailable on iOS Simulator. Use a physical iPhone to generate an FCM token.")
     : maskToken(clientToken);
-  const deviceName = Device.deviceName || Device.modelName || "Unknown Device";
+  const deviceName = Device.deviceName || Device.modelName || t("Unknown Device");
   const osInfo = `${Device.osName || ""} ${Device.osVersion || ""}`;
   const getStatusTone = () => {
     if (isCheckingUpdate) {
@@ -117,7 +118,7 @@ function Profile() {
       };
     }
 
-    if (updateStatus.includes("No OTA update available")) {
+    if (updateStatus.tone === "neutral") {
       return {
         backgroundColor: colors.iconBackground,
         borderColor: colors.cardBorder,
@@ -126,7 +127,7 @@ function Profile() {
       };
     }
 
-    if (updateStatus.includes("failed") || updateStatus.includes("Unable")) {
+    if (updateStatus.tone === "error") {
       return {
         backgroundColor: colors.errorSurface,
         borderColor: colors.errorBorder,
@@ -135,7 +136,7 @@ function Profile() {
       };
     }
 
-    if (updateStatus.includes("Reloading") || updateStatus.includes("found")) {
+    if (updateStatus.tone === "success") {
       return {
         backgroundColor: colors.successSurface,
         borderColor: colors.successBorder,
@@ -185,9 +186,9 @@ function Profile() {
     if (isIosSimulator) {
       Toast.show({
         type: "info",
-        text1: "FCM token unavailable on Simulator",
+        text1: t("FCM token unavailable on Simulator"),
         text2:
-          "Run this build on a physical iPhone to generate and share the client token.",
+          t("Run this build on a physical iPhone to generate and share the client token."),
         visibilityTime: 4200,
         autoHide: true,
       });
@@ -202,8 +203,8 @@ function Profile() {
       if (!token) {
         Toast.show({
           type: "error",
-          text1: "Client token unavailable",
-          text2: "Enable notification permission and try again.",
+          text1: t("Client token unavailable"),
+          text2: t("Enable notification permission and try again."),
           visibilityTime: 3500,
           autoHide: true,
         });
@@ -213,13 +214,13 @@ function Profile() {
       setClientToken(token);
 
       await Share.share({
-        title: "FCM Client Token",
-        message: `FCM client token (${Platform.OS}):\n${token}`,
+        title: t("FCM Client Token"),
+        message: t("FCM client token ({{platform}}):\n{{token}}", { platform: Platform.OS, token }),
       });
     } catch {
       Toast.show({
         type: "error",
-        text1: "Unable to share token",
+        text1: t("Unable to share token"),
         visibilityTime: 3000,
         autoHide: true,
       });
@@ -240,10 +241,10 @@ function Profile() {
 
     Toast.show({
       type: toastType,
-      text1: isAnnouncement ? "Mock announcement" : "Mock notification",
+      text1: isAnnouncement ? t("Mock announcement") : t("Mock notification"),
       text2: isAnnouncement
-        ? "Dev-only toast test for announcement payload style."
-        : "Dev-only toast test for notification payload style.",
+        ? t("Dev-only toast test for announcement payload style.")
+        : t("Dev-only toast test for notification payload style."),
       visibilityTime: 3500,
       autoHide: true,
       onPress: () => {
@@ -260,11 +261,11 @@ function Profile() {
       const message =
         "Install an EAS build to test OTA updates. Expo Go does not use your EAS update channel.";
 
-      setUpdateStatus(message);
+      setUpdateStatus({ key: message, tone: "info" });
       Toast.show({
         type: "info",
-        text1: "OTA check unavailable",
-        text2: message,
+        text1: t("OTA check unavailable"),
+        text2: t(message),
         visibilityTime: 4000,
         autoHide: true,
       });
@@ -273,46 +274,43 @@ function Profile() {
 
     try {
       setIsCheckingUpdate(true);
-      setUpdateStatus(`Checking ${updateChannel} for a new update...`);
+      setUpdateStatus({ key: "Checking {{channel}} for a new update...", values: { channel: updateChannel }, tone: "info" });
 
       const update = await Updates.checkForUpdateAsync();
 
       if (!update.isAvailable) {
-        setUpdateStatus(`No OTA update available on ${updateChannel}.`);
+        setUpdateStatus({ key: "No OTA update available on {{channel}}.", values: { channel: updateChannel }, tone: "neutral" });
         Toast.show({
           type: "info",
-          text1: "No update available",
-          text2: `Channel: ${updateChannel}`,
+          text1: t("No update available"),
+          text2: t("Channel: {{channel}}", { channel: updateChannel }),
           visibilityTime: 3000,
           autoHide: true,
         });
         return;
       }
 
-      setUpdateStatus("Update found. Downloading now...");
+      setUpdateStatus({ key: "Update found. Downloading now...", tone: "success" });
       await Updates.fetchUpdateAsync();
 
       Toast.show({
         type: "success",
-        text1: "Update downloaded",
-        text2: "The app will reload to apply it.",
+        text1: t("Update downloaded"),
+        text2: t("The app will reload to apply it."),
         visibilityTime: 2500,
         autoHide: true,
       });
 
-      setUpdateStatus("Update downloaded. Reloading app...");
+      setUpdateStatus({ key: "Update downloaded. Reloading app...", tone: "success" });
       await Updates.reloadAsync();
     } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Unable to check for OTA updates.";
+      const message = "Unable to check for OTA updates.";
 
-      setUpdateStatus(message);
+      setUpdateStatus({ key: message, tone: "error" });
       Toast.show({
         type: "error",
-        text1: "OTA check failed",
-        text2: message,
+        text1: t("OTA check failed"),
+        text2: t(message),
         visibilityTime: 4000,
         autoHide: true,
       });
@@ -360,7 +358,7 @@ function Profile() {
       hapticsMessage("error");
       Toast.show({
         type: "error",
-        text1: "Logout failed",
+        text1: t("Logout failed"),
         autoHide: true,
         visibilityTime: 3000,
       });
@@ -406,7 +404,7 @@ function Profile() {
             style={{
               position: "absolute",
               top: 0,
-              right: 0,
+              end: 0,
               width: 132,
               height: 132,
               borderRadius: 66,
@@ -433,7 +431,7 @@ function Profile() {
                 className="text-xs font-semibold uppercase tracking-widest"
                 style={{ color: BRAND_TEAL_MINT }}
               >
-                {isProductionChannel ? "Production" : updateChannel}
+                {isProductionChannel ? t("Production") : updateChannel}
               </Text>
             </View>
 
@@ -443,9 +441,7 @@ function Profile() {
                 size={16}
                 color="#F2F4F7"
               />
-              <Text className="ml-1 text-sm font-medium text-gray-200">
-                Secure account
-              </Text>
+              <Text className="text-sm font-medium text-gray-200" style={{ marginStart: 4 }}>{t("Secure account")}</Text>
             </View>
           </View>
 
@@ -482,39 +478,37 @@ function Profile() {
                   color: "rgba(255, 255, 255, 0.7)",
                   marginTop: 2,
                 }}
-              >
-                Employee account
-              </Text>
+              >{t("Employee account")}</Text>
             </View>
           </View>
         </View>
 
         {/* -------------------- BUILD -------------------- */}
-        <SectionHeader title="This device" style={{ marginTop: SPACING.xxl }} />
+        <SectionHeader title={t("This device")} style={{ marginTop: SPACING.xxl }} />
 
         <Card>
           <SettingsRow
             icon="pricetag-outline"
-            title="Version"
+            title={t("Version")}
             value={`${appVersion} (${buildNumber})`}
           />
           <RowDivider />
           <SettingsRow
             icon="phone-portrait-outline"
-            title="Device"
+            title={t("Device")}
             value={deviceName}
           />
           <RowDivider />
           <SettingsRow
             icon="hardware-chip-outline"
-            title="System"
+            title={t("System")}
             value={osInfo}
           />
         </Card>
 
         {/* -------------------- OTA -------------------- */}
         <SectionHeader
-          title="Over-the-air updates"
+          title={t("Over-the-air updates")}
           style={{ marginTop: SPACING.xxl }}
         />
 
@@ -524,24 +518,24 @@ function Profile() {
               and rendered nothing. */}
           <SettingsRow
             icon="cloud-download-outline"
-            title="Running"
+            title={t("Running")}
             value={runningUpdate.label}
             description={runningUpdate.detail}
           />
           <RowDivider />
           <SettingsRow
             icon="git-branch-outline"
-            title="Runtime version"
+            title={t("Runtime version")}
             value={runningUpdate.runtimeVersion}
-            description="Which builds this update can reach"
+            description={t("Which builds this update can reach")}
           />
           <RowDivider />
           <SettingsRow
             icon={statusTone.icon}
             iconTint={statusTone.backgroundColor}
             iconColor={statusTone.iconColor}
-            title="Update status"
-            description={updateStatus}
+            title={t("Update status")}
+            description={t(updateStatus.key, updateStatus.values)}
           />
 
           <View
@@ -553,7 +547,7 @@ function Profile() {
             <ActionButton
               icon={isCheckingUpdate ? "sync-outline" : "refresh-outline"}
               label={
-                isCheckingUpdate ? "Checking for update" : "Check for OTA update"
+                isCheckingUpdate ? t("Checking for update") : t("Check for OTA update")
               }
               onPress={handleCheckForUpdates}
               disabled={isCheckingUpdate}
@@ -561,6 +555,7 @@ function Profile() {
           </View>
         </Card>
 
+        <LanguageSetting />
         <AppearanceSetting />
 
         <OfflineSyncSetting />
@@ -581,8 +576,8 @@ function Profile() {
 
         {/* -------------------- SESSION -------------------- */}
         <SectionHeader
-          title="Session"
-          subtitle="Manage your authenticated session and sign out securely from this device."
+          title={t("Session")}
+          subtitle={t("Manage your authenticated session and sign out securely from this device.")}
           style={{ marginTop: SPACING.xxl }}
         />
 
@@ -591,7 +586,7 @@ function Profile() {
             icon="notifications-outline"
             iconTint={colors.infoSurface}
             iconColor={colors.infoText}
-            title="Client token"
+            title={t("Client token")}
             description={tokenDisplayText}
           />
 
@@ -604,7 +599,7 @@ function Profile() {
             <ActionButton
               icon="share-social-outline"
               label={
-                isSharingClientToken ? "Preparing token" : "Share client token"
+                isSharingClientToken ? t("Preparing token") : t("Share client token")
               }
               onPress={handleShareClientToken}
               disabled={isSharingClientToken}
@@ -617,8 +612,8 @@ function Profile() {
                 icon="flask-outline"
                 label={
                   mockToastCount % 2 === 0
-                    ? "Test notification toast"
-                    : "Test announcement toast"
+                    ? t("Test notification toast")
+                    : t("Test announcement toast")
                 }
                 onPress={handleMockForegroundToast}
                 style={{ marginTop: SPACING.md }}
@@ -632,23 +627,23 @@ function Profile() {
             icon={isSigningOut ? "sync-outline" : "log-out-outline"}
             iconTint={colors.errorSurface}
             iconColor={colors.errorText}
-            title={isSigningOut ? "Signing out" : "Sign out"}
+            title={isSigningOut ? t("Signing out") : t("Sign out")}
             titleColor={colors.errorText}
             description={
               isSigningOut
-                ? "Clearing this session…"
-                : "Clear local data and end this session"
+                ? t("Clearing this session…")
+                : t("Clear local data and end this session")
             }
             disabled={isSigningOut}
             onPress={() => {
-              Alert.alert("Logout", "Are you sure you want to logout?", [
+              Alert.alert(t("Logout"), t("Are you sure you want to logout?"), [
                 {
-                  text: "Cancel",
+                  text: t("Cancel"),
                   onPress: () => {
                     hapticsMessage("warning");
                     Toast.show({
                       type: "info",
-                      text1: "Logout cancelled",
+                      text1: t("Logout cancelled"),
                       visibilityTime: 3000,
                       autoHide: true,
                     });
@@ -656,7 +651,7 @@ function Profile() {
                   style: "cancel",
                 },
                 {
-                  text: "Logout",
+                  text: t("Logout"),
                   onPress: handleLogout,
                   style: "destructive",
                 },

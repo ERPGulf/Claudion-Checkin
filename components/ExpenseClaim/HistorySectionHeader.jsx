@@ -1,6 +1,8 @@
+import { t, useTranslation } from '../../localization';
 /* eslint-disable react/prop-types */
 import React from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+import Text from '../../localization/LocalizedText';
 import { SPACING, TYPO } from '../../constants';
 import useAppTheme from '../../hooks/useAppTheme';
 import SearchBar, { SearchCount } from '../common/SearchBar';
@@ -23,6 +25,7 @@ import SearchBar, { SearchCount } from '../common/SearchBar';
  * find out.
  */
 function HistorySectionHeader({ total, matches, searchQuery, onChangeSearch }) {
+  useTranslation();
   const { colors } = useAppTheme();
 
   return (
@@ -44,9 +47,7 @@ function HistorySectionHeader({ total, matches, searchQuery, onChangeSearch }) {
         <Text
           accessibilityRole="header"
           style={{ ...TYPO.title3, color: colors.textPrimary, flex: 1 }}
-        >
-          History
-        </Text>
+        >{t("History")}</Text>
 
         {total > 0 && (
           <SearchCount
@@ -63,8 +64,8 @@ function HistorySectionHeader({ total, matches, searchQuery, onChangeSearch }) {
         <SearchBar
           value={searchQuery}
           onChangeText={onChangeSearch}
-          placeholder="Search expenses…"
-          accessibilityLabel="Search expense claims"
+          placeholder={t("Search expenses…")}
+          accessibilityLabel={t("Search expense claims")}
         />
       )}
     </View>

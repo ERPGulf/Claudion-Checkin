@@ -1,12 +1,8 @@
+import { translateMessage, t, useTranslation } from '../localization';
 import React, { useState, useRef, useLayoutEffect } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  Alert,
-  ScrollView,
-} from "react-native";
+import { View, TouchableOpacity, Alert, ScrollView } from 'react-native';
+import TextInput from '../localization/LocalizedTextInput';
+import Text from '../localization/LocalizedText';
 import { useNavigation } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Entypo from "@expo/vector-icons/Entypo";
@@ -42,6 +38,7 @@ import {
  * route at `screens/Complaints.jsx` unconditionally.
  */
 const ComplaintsLegacy = () => {
+  const { language, isRTL } = useTranslation();
   const actionGeneration = useRef(getAuthSessionGeneration()).current;
   const [message, setMessage] = useState("");
   const [file, setFile] = useState(null);
@@ -57,19 +54,19 @@ const ComplaintsLegacy = () => {
     navigation.setOptions({
       headerShown: true,
       headerShadowVisible: false,
-      headerTitle: "Complaints",
+      headerTitle: t("Complaints"),
       headerTitleAlign: "center",
       headerLeft: () => (
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Entypo
-            name="chevron-left"
+            name={isRTL ? "chevron-right" : "chevron-left"}
             size={SIZES.xxxLarge - 5}
             color={COLORS.primary}
           />
         </TouchableOpacity>
       ),
     });
-  }, [navigation]);
+  }, [navigation, language, isRTL]);
 
   /**
    * Open Bottom Sheet
@@ -107,7 +104,7 @@ const ComplaintsLegacy = () => {
 
   const submitComplaint = async () => {
     if (!message.trim()) {
-      Alert.alert("Validation", "Please enter complaint message");
+      Alert.alert(t("Validation"), t("Please enter complaint message"));
       return;
     }
 
@@ -134,12 +131,12 @@ const ComplaintsLegacy = () => {
       }
 
       await getCapabilitySnapshot(capabilityScope);
-      Alert.alert("Success", "Complaint submitted successfully");
+      Alert.alert(t("Success"), t("Complaint submitted successfully"));
 
       setMessage("");
       setFile(null);
     } catch (error) {
-      Alert.alert("Error", error?.message || "Failed to submit complaint");
+      Alert.alert(t("Error"), translateMessage(error?.message || t("Failed to submit complaint")));
     } finally {
       setLoading(false);
     }
@@ -148,9 +145,7 @@ const ComplaintsLegacy = () => {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
       <ScrollView className="p-4" contentContainerStyle={{ paddingBottom: 40 }}>
-        <Text className="text-xl font-semibold mb-4 text-gray-800">
-          Complaint Details
-        </Text>
+        <Text className="text-xl font-semibold mb-4 text-gray-800">{t("Complaint Details")}</Text>
 
         {/* MESSAGE BOX */}
         <TextInput
@@ -167,7 +162,7 @@ const ComplaintsLegacy = () => {
             shadowRadius: 6,
             elevation: 3,
           }}
-          placeholder="Enter your message here..."
+          placeholder={t("Enter your message here...")}
           multiline
           value={message}
           onChangeText={setMessage}
@@ -179,7 +174,7 @@ const ComplaintsLegacy = () => {
           file={file}
           onPick={pickFile}
           onRemove={() => setFile(null)}
-          label="Attach file (optional)"
+          label={t("Attach file (optional)")}
         />
 
         {/* FOOTER */}
@@ -193,7 +188,7 @@ const ComplaintsLegacy = () => {
           }}
         ></View>
         <SubmitButton
-          title="Submit Complaint"
+          title={t("Submit Complaint")}
           loading={loading}
           onPress={submitComplaint}
         />

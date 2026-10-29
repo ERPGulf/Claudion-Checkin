@@ -1,6 +1,8 @@
+import { translateMessage, t, useTranslation } from '../../localization';
+import Text from '../../localization/LocalizedText';
 /* eslint-disable react/prop-types */
 import React, { useEffect, useState } from "react";
-import { View, Text, Linking } from "react-native";
+import { View, Linking } from "react-native";
 /* ---------------- DEFAULT FALLBACK RECORDS ---------------- */
 const DEFAULT_RECORDS = [
   {
@@ -114,10 +116,11 @@ export const HR_FEATURES = [
  * Memoized Shortcut Button (prevents re-render)
  * --------------------------------------------------- */
 const ShortcutButton = React.memo(({ shortcut, navigation }) => {
+  useTranslation();
   const handlePress = () => {
     // 🛑 Fallback record → NO navigation
     if (shortcut.isFallback) {
-      alert("No records available");
+      alert(t("No records available"));
       return;
     }
 
@@ -133,7 +136,7 @@ const ShortcutButton = React.memo(({ shortcut, navigation }) => {
   return (
     <FeatureTile
       icon={shortcut.icon}
-      label={shortcut.shortcut}
+      label={shortcut.isFallback ? translateMessage(shortcut.shortcut) : shortcut.shortcut}
       columns={COLUMNS}
       onPress={handlePress}
     />
@@ -142,6 +145,7 @@ const ShortcutButton = React.memo(({ shortcut, navigation }) => {
 
 /** Placeholder tiles that match the real grid geometry, so nothing shifts. */
 function ShortcutSkeleton() {
+  useTranslation();
   const opacity = useSkeletonPulse();
 
   return (
@@ -178,6 +182,7 @@ function ShortcutSkeleton() {
  * Main Component
  * --------------------------------------------------- */
 function LavaMenu() {
+  useTranslation();
   const navigation = useNavigation();
   const { colors } = useAppTheme();
   const [shortcuts, setShortcuts] = useState([]);
@@ -278,14 +283,14 @@ function LavaMenu() {
   return (
     <View style={{ width: "100%" }}>
       {/* -------------------- HEADER -------------------- */}
-      <SectionHeader title="Menu" />
+      <SectionHeader title={t("Menu")} />
 
       {/* -------------------- HR SECTION -------------------- */}
       <ModuleCard
         icon="people"
         iconFamily="Octicons"
-        title="Human Resources"
-        subtitle="Attendance, leave, claims"
+        title={t("Human Resources")}
+        subtitle={t("Attendance, leave, claims")}
         style={{ marginBottom: SPACING.lg }}
       >
         <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
@@ -293,7 +298,7 @@ function LavaMenu() {
             <FeatureTile
               key={item.nav + item.label}
               icon={item.icon}
-              label={item.label}
+              label={t(item.label)}
               columns={COLUMNS}
               onPress={() => navigation.navigate(item.nav)}
             />
@@ -311,11 +316,11 @@ function LavaMenu() {
       <ModuleCard
         icon={recordsEnabled ? "card-account-details-outline" : "qrcode"}
         iconFamily="MaterialCommunityIcons"
-        title={recordsEnabled ? "Your Records" : "Your Code"}
+        title={recordsEnabled ? t("Your Records") : t("Your Code")}
         subtitle={
           recordsEnabled
-            ? "Documents held by the company"
-            : "Your personal check-in code"
+            ? t("Documents held by the company")
+            : t("Your personal check-in code")
         }
       >
         <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
@@ -340,7 +345,7 @@ function LavaMenu() {
           {/* Static QR — never gated. */}
           <FeatureTile
             icon="qr-code-outline"
-            label="My QR"
+            label={t("My QR")}
             columns={COLUMNS}
             onPress={() => navigation.navigate("My QR Code")}
           />
@@ -351,7 +356,7 @@ function LavaMenu() {
       <PressableScale
         onPress={() => Linking.openURL("https://erpgulf.com")}
         accessibilityRole="link"
-        accessibilityLabel="Open ERPGulf.com"
+        accessibilityLabel={t("Open ERPGulf.com")}
         style={{
           flexDirection: "row",
           alignItems: "center",

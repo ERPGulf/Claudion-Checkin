@@ -1,3 +1,4 @@
+import { formatDate, formatNumber, t } from '../localization';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Alert, Linking, Platform } from 'react-native';
 import * as Location from 'expo-location';
@@ -39,13 +40,13 @@ export const DEV_POLICY_OPTIONS = [
 ];
 
 export const formatTimestamp = (timestamp) =>
-  timestamp ? format(new Date(timestamp), 'dd MMM yyyy, HH:mm:ss') : '—';
+  timestamp ? formatDate(new Date(timestamp), { day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) : '—';
 
 // Human-friendly distance: metres under 1 km, otherwise kilometres.
 export const formatDistance = (meters) => {
   if (!Number.isFinite(meters)) return '—';
-  if (meters < 1000) return `${Math.round(meters)} m`;
-  return `${(meters / 1000).toFixed(meters < 10000 ? 1 : 0)} km`;
+  if (meters < 1000) return t("{{value}} m", { value: formatNumber(Math.round(meters)) });
+  return t("{{value}} km", { value: formatNumber(meters / 1000, { minimumFractionDigits: meters < 10000 ? 1 : 0, maximumFractionDigits: meters < 10000 ? 1 : 0 }) });
 };
 
 // Coordinates for a cached employee_locations entry — same precedence as the
@@ -198,24 +199,24 @@ export const describeLocationAccessSteps = (access) => {
     steps.push({
       key: 'precise',
       icon: 'locate-outline',
-      title: 'Precise location',
-      description: "So the app knows when you're at your workplace.",
+      title: t("Precise location"),
+      description: t("So the app knows when you're at your workplace."),
       hint: ios
-        ? 'Choose "Allow While Using App" with Precise on.'
-        : 'Choose "Precise" and "While using the app".',
+        ? t("Choose \"Allow While Using App\" with Precise on.")
+        : t("Choose \"Precise\" and \"While using the app\"."),
     });
   }
   if (access.background !== 'granted' && (ios || version >= 29)) {
     steps.push({
       key: 'background',
       icon: 'time-outline',
-      title: 'Background location',
-      description: 'So attendance works while the app is closed.',
+      title: t("Background location"),
+      description: t("So attendance works while the app is closed."),
       hint: ios
-        ? 'Choose "Change to Always Allow".'
+        ? t("Choose \"Change to Always Allow\".")
         : version >= 30
-          ? 'Android opens this app\'s location settings. Choose "Allow all the time".'
-          : 'Choose "Allow all the time".',
+          ? t("Android opens this app's location settings. Choose \"Allow all the time\".")
+          : t("Choose \"Allow all the time\"."),
     });
   }
   return steps;
@@ -254,13 +255,13 @@ export const previewLocationAccessExplanation = (mode) =>
 // Only from a tap: the system will no longer ask, so Settings is the one way in.
 const offerLocationSettings = () => {
   Alert.alert(
-    'Location permission required',
+    t("Location permission required"),
     Platform.OS === 'ios'
-      ? 'Open Settings, tap Location, and choose "Always" with Precise Location on.'
-      : 'Open Settings, tap Permissions > Location, and choose "Allow all the time" with "Use precise location" on.',
+      ? t("Open Settings, tap Location, and choose \"Always\" with Precise Location on.")
+      : t("Open Settings, tap Permissions > Location, and choose \"Allow all the time\" with \"Use precise location\" on."),
     [
-      { text: 'Not now', style: 'cancel' },
-      { text: 'Open Settings', onPress: () => Linking.openSettings() },
+      { text: t("Not now"), style: 'cancel' },
+      { text: t("Open Settings"), onPress: () => Linking.openSettings() },
     ],
   );
 };
@@ -301,13 +302,13 @@ export const parseGeofenceInput = (latitudeText, longitudeText, radiusText) => {
   const longitude = parseNumber(longitudeText);
   const radius = parseNumber(radiusText);
   if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90) {
-    return { error: 'Latitude must be a number between -90 and 90.' };
+    return { error: t("Latitude must be a number between -90 and 90.") };
   }
   if (!Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
-    return { error: 'Longitude must be a number between -180 and 180.' };
+    return { error: t("Longitude must be a number between -180 and 180.") };
   }
   if (!Number.isFinite(radius) || radius <= 0) {
-    return { error: 'Radius must be a positive number of meters.' };
+    return { error: t("Radius must be a positive number of meters.") };
   }
   return { latitude, longitude, radius };
 };
@@ -323,8 +324,8 @@ export const parseGeofenceInput = (latitudeText, longitudeText, radiusText) => {
 /** Monitoring state → badge tone + label. */
 export const describeMonitoring = (monitoring) =>
   monitoring
-    ? { tone: 'success', label: 'Monitoring', icon: 'radio-outline' }
-    : { tone: 'neutral', label: 'Idle', icon: 'pause-circle-outline' };
+    ? { tone: 'success', label: t("Monitoring"), icon: 'radio-outline' }
+    : { tone: 'neutral', label: t("Idle"), icon: 'pause-circle-outline' };
 
 /**
  * What automatic attendance is doing, from the employer's configuration, the
@@ -332,44 +333,44 @@ export const describeMonitoring = (monitoring) =>
  * Configured alone is never "Active".
  */
 export const describeAutoAttendanceStatus = ({ configured, permitted, monitoring }) => {
-  if (!configured) return { key: 'disabled', tone: 'neutral', label: 'Disabled by administrator', icon: 'lock-closed-outline' };
+  if (!configured) return { key: 'disabled', tone: 'neutral', label: t("Disabled by administrator"), icon: 'lock-closed-outline' };
   if (permitted === false || (permitted == null && monitoring === 'permission')) {
-    return { key: 'permission', tone: 'warning', label: 'Location permission required', icon: 'location-outline' };
+    return { key: 'permission', tone: 'warning', label: t("Location permission required"), icon: 'location-outline' };
   }
-  if (monitoring === 'active') return { key: 'active', tone: 'success', label: 'Active', icon: 'radio-outline' };
-  if (monitoring === 'unavailable') return { key: 'unavailable', tone: 'error', label: 'Monitoring unavailable', icon: 'warning-outline' };
-  return { key: 'starting', tone: 'info', label: 'Initializing monitoring', icon: 'sync-outline' };
+  if (monitoring === 'active') return { key: 'active', tone: 'success', label: t("Active"), icon: 'radio-outline' };
+  if (monitoring === 'unavailable') return { key: 'unavailable', tone: 'error', label: t("Monitoring unavailable"), icon: 'warning-outline' };
+  return { key: 'starting', tone: 'info', label: t("Initializing monitoring"), icon: 'sync-outline' };
 };
 
 /** A geofence transition → badge tone + label. */
 export const describeTransition = (transition) => {
   switch (transition) {
     case 'ENTER':
-      return { tone: 'info', label: 'Entered', icon: 'enter-outline' };
+      return { tone: 'info', label: t("Entered"), icon: 'enter-outline' };
     case 'EXIT':
-      return { tone: 'accent', label: 'Exited', icon: 'exit-outline' };
+      return { tone: 'accent', label: t("Exited"), icon: 'exit-outline' };
     case 'ERROR':
-      return { tone: 'error', label: 'Error', icon: 'warning-outline' };
+      return { tone: 'error', label: t("Error"), icon: 'warning-outline' };
     default:
-      return { tone: 'neutral', label: 'None yet', icon: 'ellipse-outline' };
+      return { tone: 'neutral', label: t("None yet"), icon: 'ellipse-outline' };
   }
 };
 
 /** Whether automatic check-in/out is actually armed → badge tone + label. */
 export const describeAutomatic = (active, fullActions) =>
   active && fullActions
-    ? { tone: 'success', label: 'On', icon: 'flash-outline' }
-    : { tone: 'neutral', label: 'Off', icon: 'flash-off-outline' };
+    ? { tone: 'success', label: t("On"), icon: 'flash-outline' }
+    : { tone: 'neutral', label: t("Off"), icon: 'flash-off-outline' };
 
 /** The server policy → badge tone, for the geotagging card's header chip. */
 export const describePolicy = (geotagging) => {
   switch (geotagging) {
     case GEOTAGGING.ALL_ACTIONS:
-      return { tone: 'success', label: 'All actions', icon: 'checkmark-circle' };
+      return { tone: 'success', label: t("All actions"), icon: 'checkmark-circle' };
     case GEOTAGGING.WARNINGS_ONLY:
-      return { tone: 'warning', label: 'Warnings only', icon: 'alert-circle' };
+      return { tone: 'warning', label: t("Warnings only"), icon: 'alert-circle' };
     default:
-      return { tone: 'neutral', label: 'Disabled', icon: 'close-circle' };
+      return { tone: 'neutral', label: t("Disabled"), icon: 'close-circle' };
   }
 };
 
@@ -377,10 +378,10 @@ export const describePolicy = (geotagging) => {
 export const describePresence = (presence, loading) => {
   if (presence == null) {
     return loading
-      ? { tone: 'neutral', label: 'Locating…', icon: 'locate-outline' }
-      : { tone: 'neutral', label: 'Unknown', icon: 'help-circle-outline' };
+      ? { tone: 'neutral', label: t("Locating…"), icon: 'locate-outline' }
+      : { tone: 'neutral', label: t("Unknown"), icon: 'help-circle-outline' };
   }
   return presence.withinRadius
-    ? { tone: 'success', label: 'At the office', icon: 'business-outline' }
-    : { tone: 'warning', label: 'Away', icon: 'navigate-outline' };
+    ? { tone: 'success', label: t("At the office"), icon: 'business-outline' }
+    : { tone: 'warning', label: t("Away"), icon: 'navigate-outline' };
 };

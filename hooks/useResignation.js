@@ -1,3 +1,4 @@
+import { translateMessage, t, useTranslation } from '../localization';
 import { useCallback, useRef, useState } from 'react';
 import { Alert, Platform } from 'react-native';
 import { submitResignation as submitResignationRequest } from '../services/api/resignation.service';
@@ -22,6 +23,7 @@ import { hapticsMessage } from '../utils/HapticsMessage';
  *   confirmation banner. On failure everything the employee entered is kept.
  */
 export default function useResignation() {
+  useTranslation();
   const [resignationDate, setResignationDate] = useState(() => new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [reason, setReason] = useState('');
@@ -133,7 +135,7 @@ export default function useResignation() {
 
       if (result?.error) {
         hapticsMessage('error');
-        Alert.alert('Error', result.error);
+        Alert.alert(t("Error"), translateMessage(result.error));
         return;
       }
 
@@ -144,7 +146,7 @@ export default function useResignation() {
       setResignationDate(new Date());
 
       hapticsMessage('success');
-      Alert.alert('Success', 'Your resignation has been submitted');
+      Alert.alert(t("Success"), t("Your resignation has been submitted"));
     } finally {
       inFlight.current = false;
       setLoading(false);
@@ -153,18 +155,18 @@ export default function useResignation() {
 
   const submitResignation = useCallback(() => {
     if (!reason.trim()) {
-      Alert.alert('Validation', 'Please enter a reason for your resignation');
+      Alert.alert(t("Validation"), t("Please enter a reason for your resignation"));
       return;
     }
 
     Alert.alert(
-      'Submit resignation?',
-      `Your resignation dated ${formatLogDate(
+      t("Submit resignation?"),
+      t("Your resignation dated {{date}} will be sent for review. You can't withdraw it from the app.", { date: formatLogDate(
         resignationDate,
-      )} will be sent for review. You can't withdraw it from the app.`,
+      ) }),
       [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Submit', style: 'destructive', onPress: send },
+        { text: t("Cancel"), style: 'cancel' },
+        { text: t("Submit"), style: 'destructive', onPress: send },
       ],
     );
   }, [reason, resignationDate, send]);

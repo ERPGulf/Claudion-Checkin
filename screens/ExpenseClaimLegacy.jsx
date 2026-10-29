@@ -1,11 +1,7 @@
+import { t, useTranslation } from '../localization';
 import React, { useLayoutEffect } from "react";
-import {
-  View,
-  TouchableOpacity,
-  Text,
-  ActivityIndicator,
-  ScrollView,
-} from "react-native";
+import { View, TouchableOpacity, ActivityIndicator, ScrollView } from 'react-native';
+import Text from '../localization/LocalizedText';
 import Entypo from "@expo/vector-icons/Entypo";
 import { useNavigation } from "@react-navigation/native";
 import ClaimForm from "../components/ExpenseClaim/ClaimForm";
@@ -29,6 +25,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
  * route at `screens/ExpenseClaim.jsx` unconditionally.
  */
 export default function ExpenseClaimLegacy() {
+  const { language, isRTL } = useTranslation();
   const navigation = useNavigation();
 
   const {
@@ -46,19 +43,19 @@ export default function ExpenseClaimLegacy() {
     navigation.setOptions({
       headerShown: true,
       headerShadowVisible: false,
-      headerTitle: "Expense Claims",
+      headerTitle: t("Expense Claims"),
       headerTitleAlign: "center",
       headerLeft: () => (
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Entypo
-            name="chevron-left"
+            name={isRTL ? "chevron-right" : "chevron-left"}
             size={SIZES.xxxLarge - 5}
             color={COLORS.primary}
           />
         </TouchableOpacity>
       ),
     });
-  }, [navigation]);
+  }, [navigation, language, isRTL]);
 
   // ✅ Loading state
   if (isFetching) {
@@ -69,7 +66,7 @@ export default function ExpenseClaimLegacy() {
       >
         <View className="flex-1 justify-center items-center bg-gray-100">
           <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text className="mt-3 text-gray-600">Loading expense claims...</Text>
+          <Text className="mt-3 text-gray-600">{t("Loading expense claims...")}</Text>
         </View>
       </SafeAreaView>
     );
@@ -91,14 +88,10 @@ export default function ExpenseClaimLegacy() {
           resetSignal={resetFormFlag}
         />
 
-        <Text className="text-lg font-semibold mt-6 mb-3 text-gray-800">
-          Expense Claim History
-        </Text>
+        <Text className="text-lg font-semibold mt-6 mb-3 text-gray-800">{t("Expense Claim History")}</Text>
 
         {visibleClaims.length === 0 ? (
-          <Text className="text-gray-500 text-center mt-6">
-            No expense claims yet.
-          </Text>
+          <Text className="text-gray-500 text-center mt-6">{t("No expense claims yet.")}</Text>
         ) : (
           visibleClaims.map((item, index) => (
             <View key={item?.name || index} className="mb-4">
@@ -112,7 +105,7 @@ export default function ExpenseClaimLegacy() {
             onPress={loadMore}
             className="p-3 mb-6 rounded bg-gray-300"
           >
-            <Text className="text-center font-semibold">Load More</Text>
+            <Text className="text-center font-semibold">{t("Load More")}</Text>
           </TouchableOpacity>
         )}
       </ScrollView>

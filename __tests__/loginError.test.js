@@ -54,13 +54,14 @@ describe("getLoginErrorMessage", () => {
     expect(getLoginErrorMessage(authError).text1).toBe("Incorrect password");
   });
 
-  it("surfaces the server message for other HTTP errors", () => {
+  it("uses app-owned copy for other HTTP errors without showing backend exceptions", () => {
     const serverError = Object.assign(
       new Error("Request failed with status code 500"),
       { response: { status: 500, data: { message: "Internal Server Error" } } },
     );
     const result = getLoginErrorMessage(serverError);
     expect(result.text1).toBe("Login failed");
-    expect(result.text2).toMatch(/Internal Server Error/);
+    expect(result.text2).toMatch(/500/);
+    expect(result.text2).not.toMatch(/Internal Server Error/);
   });
 });

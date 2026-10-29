@@ -1,3 +1,5 @@
+import Text from '../localization/LocalizedText';
+import { t, useTranslation, getLanguage } from "../localization";
 import React, {
   useCallback,
   useEffect,
@@ -11,7 +13,6 @@ import {
   Easing,
   Platform,
   StyleSheet,
-  Text,
   View,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -81,6 +82,7 @@ const PREVIEW_FADE_MS = 220;
  * grouping is what fixes the "disconnected" bottom button.
  */
 function QrScanModern() {
+  const { language } = useTranslation();
   const navigation = useNavigation();
   const isFocused = useIsFocused();
   const { colors, isDark } = useAppTheme();
@@ -191,7 +193,7 @@ function QrScanModern() {
     navigation.setOptions({
       headerShadowVisible: false,
       headerShown: true,
-      headerTitle: "Scan QR Code",
+      headerTitle: t("Scan QR Code"),
       headerTitleAlign: "center",
       headerTransparent: overlayChrome,
       headerStyle: {
@@ -219,7 +221,7 @@ function QrScanModern() {
       headerLeft: () => (
         <PressableScale
           onPress={() => navigation.goBack()}
-          accessibilityLabel="Go back"
+          accessibilityLabel={t("Go back")}
           style={{
             width: 36,
             height: 36,
@@ -232,7 +234,7 @@ function QrScanModern() {
           }}
         >
           <Ionicons
-            name="chevron-back"
+            name={getLanguage() === 'ar' ? 'chevron-forward' : 'chevron-back'}
             size={ICON.md}
             color={overlayChrome ? "#FFFFFF" : colors.textPrimary}
           />
@@ -240,6 +242,7 @@ function QrScanModern() {
       ),
     });
   }, [
+    language,
     navigation,
     overlayChrome,
     colors.surfaceSecondary,
@@ -270,9 +273,9 @@ function QrScanModern() {
           <Card>
             <EmptyState
               icon="camera-outline"
-              title="Camera access needed"
-              description="Scanning your setup QR code needs the camera. Allow access, or turn it on for Claudion in your device Settings."
-              actionLabel="Try again"
+              title={t("Camera access needed")}
+              description={t("Scanning your setup QR code needs the camera. Allow access, or turn it on for Claudion in your device Settings.")}
+              actionLabel={t("Try again")}
               onActionPress={requestPermission}
             />
           </Card>
@@ -346,9 +349,7 @@ function QrScanModern() {
                 opacity: 0.7,
                 marginTop: SPACING.md,
               }}
-            >
-              Preparing camera…
-            </Text>
+            >{t("Preparing camera…")}</Text>
           </Animated.View>
         )}
 
@@ -381,7 +382,7 @@ function QrScanModern() {
             while it is on screen. Replaces "TAP TO SCAN AGAIN". */}
         {scanned && (
           <ActionButton
-            label="Scan again"
+            label={t("Scan again")}
             icon="scan-outline"
             size="lg"
             onPress={scanAgain}
@@ -393,7 +394,7 @@ function QrScanModern() {
             `outline`, not `filled`: pointing the camera is the primary path on a
             scanner, and a filled button here would outrank it. */}
         <ActionButton
-          label="Choose from Photos"
+          label={t("Choose from Photos")}
           icon="images-outline"
           variant="outline"
           size="lg"

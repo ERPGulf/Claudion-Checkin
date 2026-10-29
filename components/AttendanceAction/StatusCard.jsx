@@ -1,5 +1,7 @@
+import { t, useTranslation } from '../../localization';
 /* eslint-disable react/prop-types */
-import { View, Text } from 'react-native';
+import { View } from 'react-native';
+import Text from '../../localization/LocalizedText';
 import { Image } from 'expo-image';
 import React, { useEffect, useState, useRef } from 'react';
 import { useSelector } from 'react-redux';
@@ -35,6 +37,7 @@ import {
  * wrote — so during a real break this stat stayed frozen and untinted.
  */
 function StatusCard({ onBreak = false, breakStartTime = null }) {
+  const { language, direction, isRTL } = useTranslation();
   const { colors } = useAppTheme();
   const location = useSelector(selectLocation);
   const checkin = useSelector(selectCheckin);
@@ -154,7 +157,7 @@ function StatusCard({ onBreak = false, breakStartTime = null }) {
                 color: colors[`${badgeTone}Text`],
               }}
             >
-              {checkin ? 'CHECKED IN' : 'NOT CHECKED IN'}
+              {checkin ? t("CHECKED IN") : t("NOT CHECKED IN")}
             </Text>
           </View>
 
@@ -166,9 +169,7 @@ function StatusCard({ onBreak = false, breakStartTime = null }) {
                   color: colors.textMuted,
                   marginTop: SPACING.md,
                 }}
-              >
-                Working from
-              </Text>
+              >{t("Working from")}</Text>
               <View
                 style={{
                   flexDirection: 'row',
@@ -190,7 +191,7 @@ function StatusCard({ onBreak = false, breakStartTime = null }) {
                     flexShrink: 1,
                   }}
                 >
-                  {location?.locationName ?? 'Office'}
+                  {location?.locationName ?? t("Office")}
                 </Text>
               </View>
 
@@ -200,9 +201,7 @@ function StatusCard({ onBreak = false, breakStartTime = null }) {
                   color: colors.textMuted,
                   marginTop: SPACING.md,
                 }}
-              >
-                You have been working for
-              </Text>
+              >{t("You have been working for")}</Text>
               <Text
                 style={{
                   ...TYPO.title1,
@@ -212,7 +211,7 @@ function StatusCard({ onBreak = false, breakStartTime = null }) {
               >
                 {formatMinutes(sessionMinutes)}
                 <Text style={{ ...TYPO.subhead, color: colors.textMuted }}>
-                  {'  Hours'}
+                  {t("  Hours")}
                 </Text>
               </Text>
             </>
@@ -224,9 +223,7 @@ function StatusCard({ onBreak = false, breakStartTime = null }) {
                   color: colors.textPrimary,
                   marginTop: SPACING.md,
                 }}
-              >
-                Welcome back
-              </Text>
+              >{t("Welcome back")}</Text>
               <Text
                 style={{
                   ...TYPO.subhead,
@@ -234,9 +231,7 @@ function StatusCard({ onBreak = false, breakStartTime = null }) {
                   color: colors.textMuted,
                   marginTop: SPACING.xs,
                 }}
-              >
-                Check in before you start working.
-              </Text>
+              >{t("Check in before you start working.")}</Text>
             </>
           )}
         </View>
@@ -263,12 +258,12 @@ function StatusCard({ onBreak = false, breakStartTime = null }) {
           <View style={{ flexDirection: 'row' }}>
             {[
               {
-                label: 'Break',
+                label: t("Break"),
                 value: formatMinutes((breakMinutes ?? 0) + liveBreakMinutes),
                 tone: onBreak ? colors.warningText : colors.textPrimary,
               },
-              { label: "Today's total", value: todayTotal || '--:--' },
-              { label: 'Monthly total', value: monthlyTotal || '--:--' },
+              { label: t("Today's total"), value: todayTotal || '--:--' },
+              { label: t("Monthly total"), value: monthlyTotal || '--:--' },
             ].map(stat => (
               <View key={stat.label} style={{ flex: 1 }}>
                 <Text

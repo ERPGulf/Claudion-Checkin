@@ -1,6 +1,8 @@
+import { t, useTranslation } from '../../localization';
 /* eslint-disable react/prop-types */
 import React, { useEffect, useState } from 'react';
-import { AccessibilityInfo, Platform, Text, TextInput, View } from 'react-native';
+import { AccessibilityInfo, Platform, TextInput, View } from 'react-native';
+import Text from '../../localization/LocalizedText';
 import { Ionicons } from '@expo/vector-icons';
 import { ICON, RADIUS, SPACING, TYPO } from '../../constants';
 import useAppTheme from '../../hooks/useAppTheme';
@@ -68,7 +70,7 @@ function FormField({
   invalid = false,
   optional = false,
   compact = false,
-  align = 'left',
+  align = 'locale',
   secureTextEntry = false,
   errorText,
   disabled = false,
@@ -88,6 +90,7 @@ function FormField({
   accessibilityHint,
   style,
 }) {
+  const { isRTL, direction } = useTranslation();
   const { colors } = useAppTheme();
   const [focused, setFocused] = useState(false);
   const [revealed, setRevealed] = useState(false);
@@ -108,7 +111,8 @@ function FormField({
     Math.max(0, Math.round(minLines) - BASE_MULTILINE_LINES) *
     TYPO.body.lineHeight;
 
-  const textAlign = align === 'auto' ? resolveTextAlign(value) : align;
+  const machineValue = secureTextEntry || ['email-address', 'url', 'phone-pad', 'number-pad', 'numeric', 'decimal-pad'].includes(keyboardType) || ['username', 'oneTimeCode', 'telephoneNumber', 'emailAddress', 'URL'].includes(textContentType);
+  const textAlign = machineValue ? (align === 'right' ? 'right' : 'left') : align === 'auto' ? resolveTextAlign(value, isRTL ? 'right' : 'left') : align === 'locale' ? (isRTL ? 'right' : 'left') : align;
 
   const borderColor = isInvalid
     ? colors.errorBorder
@@ -138,15 +142,13 @@ function FormField({
         >
           <Text
             style={{ ...TYPO.caption, color: colors.textSecondary, flex: 1 }}
-            numberOfLines={1}
+            numberOfLines={2}
           >
             {label}
           </Text>
 
           {optional && (
-            <Text style={{ ...TYPO.caption2, color: colors.textMuted }}>
-              Optional
-            </Text>
+            <Text style={{ ...TYPO.caption2, color: colors.textMuted }}>{t("Optional")}</Text>
           )}
         </View>
       )}
@@ -237,6 +239,8 @@ function FormField({
             flex: 1,
             color: colors.textPrimary,
             textAlign,
+            direction: 'ltr',
+            writingDirection: machineValue ? 'ltr' : 'auto',
             // A tabular amount lines up digit for digit with the figures in the
             // history cards below it.
             ...(align === 'right'
@@ -244,7 +248,8 @@ function FormField({
               : null),
             // Android adds the font's own ascent/descent on top of the line box,
             // which pushes a single-line value off centre in a fixed-height row.
-            includeFontPadding: false,
+            includeFontPadding: isRTL,
+            ...(isRTL ? { letterSpacing: 0, lineHeight: Math.ceil(TYPO.body.fontSize * 1.5) } : null),
             textAlignVertical: multiline ? 'top' : 'center',
             // A multiline box grows from `minLines` lines; a single-line field
             // must not inherit that height.
@@ -259,7 +264,7 @@ function FormField({
           <PressableScale
             onPress={() => setRevealed(previous => !previous)}
             disabled={disabled}
-            accessibilityLabel={revealed ? 'Hide password' : 'Show password'}
+            accessibilityLabel={revealed ? t('Hide password') : t('Show password')}
             // The glyph is 16pt; the target around it is not. Without this the
             // reveal toggle is the smallest tap target on the screen.
             hitSlop={SPACING.md}

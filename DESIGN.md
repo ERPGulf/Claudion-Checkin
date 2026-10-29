@@ -396,3 +396,25 @@ hook's logic tests next to it. Run with `npx jest __tests__/featureUi.test.jsx`.
 - [ ] Route registered with the exact name, feature-gated if server-controlled, and a Home tile if needed.
 - [ ] No new native dependency.
 - [ ] UI test covers light and dark. Checked on Android **and** iOS, in both themes.
+
+
+## Localization and RTL
+
+Use `useTranslation()` from `localization` for app-owned copy and reactive locale
+changes. Add each English source phrase and its Arabic translation to the matching
+feature catalogue. Use interpolation for complete sentences and all six Arabic
+plural forms when quantity changes wording. Run `npm run validate:localization`.
+
+Import `Text` from `localization/LocalizedText` so Arabic shaping, line height and
+physical alignment are handled consistently. Its callers may use `resolveTextAlign`
+for server text; the wrapper converts physical alignment to RN's logical alignment.
+Do not reverse rows or use I18nManager for selected app language. Use start/end
+spacing, including native logical styles in legacy NativeWind layouts.
+
+Use `FormField` or `localization/LocalizedTextInput` for inputs. Keep credentials,
+phone/OTP/URL/numeric values LTR and unchanged. Format display dates/numbers through
+`localization`; keep API wire helpers independent. Unknown tenant/server copy goes
+through `translateMessage` rather than being used as a translation key. New native
+modals need a root with `direction` from `useTranslation()`. Keep layout roots and
+navigation direction coordinated; changing language must not remount attendance
+bootstraps. See [the implementation and verification report](docs/localization.md).

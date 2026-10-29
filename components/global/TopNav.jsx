@@ -1,9 +1,12 @@
-import { View, Text, TouchableOpacity } from 'react-native';
+import { useTranslation } from '../../localization';
+import { View, TouchableOpacity } from 'react-native';
+import Text from '../../localization/LocalizedText';
 import React from 'react';
 import { Entypo } from '@expo/vector-icons';
 import { COLORS, SIZES } from '../../constants';
 
 function TopNav({ navigation, title }) {
+  const { language, direction, isRTL } = useTranslation();
   return (
     <View
       style={{
@@ -12,11 +15,12 @@ function TopNav({ navigation, title }) {
     >
       <View className="flex-row pb-4 pt-2 items-center justify-center relative">
         <TouchableOpacity
-          className="absolute left-0  pb-4 pt-2 "
+          className="absolute pb-4 pt-2"
+          style={{ start: 0 }}
           onPress={() => navigation.goBack()}
         >
           <Entypo
-            name="chevron-left"
+            name={isRTL ? "chevron-right" : "chevron-left"}
             size={SIZES.xxxLarge - 5}
             color={COLORS.primary}
           />

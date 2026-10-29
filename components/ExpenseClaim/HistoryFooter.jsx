@@ -1,6 +1,8 @@
+import { t, useTranslation } from '../../localization';
 /* eslint-disable react/prop-types */
 import React from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+import Text from '../../localization/LocalizedText';
 import { Ionicons } from '@expo/vector-icons';
 import { ICON, RADIUS, SPACING, TYPO } from '../../constants';
 import useAppTheme from '../../hooks/useAppTheme';
@@ -27,13 +29,14 @@ import ExpenseSkeleton from './ExpenseSkeleton';
  * nothing     — an empty list; <ListEmptyComponent> is speaking instead.
  */
 function HistoryFooter({ hasMore, isEmpty, showRetry, onRetry }) {
+  useTranslation();
   const { colors } = useAppTheme();
 
   if (showRetry) {
     return (
       <View
         accessible
-        accessibilityLabel="Couldn't load more expenses"
+        accessibilityLabel={t("Couldn't load more expenses")}
         style={{
           flexDirection: 'row',
           alignItems: 'center',
@@ -58,14 +61,12 @@ function HistoryFooter({ hasMore, isEmpty, showRetry, onRetry }) {
             marginStart: SPACING.sm,
             color: colors.textSecondary,
           }}
-        >
-          Couldn&apos;t load more expenses.
-        </Text>
+        >{t("Couldn't load more expenses.")}</Text>
 
         <PressableScale
           onPress={onRetry}
           accessibilityRole="button"
-          accessibilityLabel="Retry"
+          accessibilityLabel={t("Retry")}
           hitSlop={8}
           style={{
             paddingHorizontal: SPACING.md,
@@ -83,16 +84,14 @@ function HistoryFooter({ hasMore, isEmpty, showRetry, onRetry }) {
               fontWeight: '600',
               color: colors.errorText,
             }}
-          >
-            Retry
-          </Text>
+          >{t("Retry")}</Text>
         </PressableScale>
       </View>
     );
   }
 
   if (hasMore) {
-    return <ExpenseSkeleton count={2} label="Loading more expenses" />;
+    return <ExpenseSkeleton count={2} label={t("Loading more expenses")} />;
   }
 
   if (isEmpty) return null;
@@ -113,9 +112,7 @@ function HistoryFooter({ hasMore, isEmpty, showRetry, onRetry }) {
           color: colors.textMuted,
           marginHorizontal: SPACING.md,
         }}
-      >
-        You&apos;ve reached the end
-      </Text>
+      >{t("You've reached the end")}</Text>
       <View style={{ flex: 1, height: 1, backgroundColor: colors.cardBorder }} />
     </View>
   );

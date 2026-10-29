@@ -1,5 +1,7 @@
+import { t, useTranslation } from '../localization';
 import React, { useCallback, useMemo } from "react";
-import { Platform, RefreshControl, SectionList, Text, View } from "react-native";
+import { Platform, RefreshControl, SectionList, View } from 'react-native';
+import Text from '../localization/LocalizedText';
 import { SafeAreaView } from "react-native-safe-area-context";
 import { RADIUS, SPACING, TYPO } from "../constants";
 import useAppTheme from "../hooks/useAppTheme";
@@ -46,8 +48,9 @@ const LIST_CONTENT = {
  * <NotificationSheet>) — nothing here navigates.
  */
 function Notifications() {
+  const { language, direction, isRTL } = useTranslation();
   const { colors } = useAppTheme();
-  useModernScreenHeader("Notifications");
+  useModernScreenHeader(t("Notifications"));
 
   const {
     sections,
@@ -148,8 +151,8 @@ function Notifications() {
             style={{ ...TYPO.caption, color: colors.textMuted, flex: 1 }}
           >
             {unreadCount > 0
-              ? `Stay up to date with your latest activity. ${unreadCount} unread.`
-              : "Stay up to date with your latest activity."}
+              ? t("Stay up to date with your latest activity. {{count}} unread.", { count: unreadCount })
+              : t("Stay up to date with your latest activity.")}
           </Text>
 
           {total > 0 && (
@@ -166,8 +169,8 @@ function Notifications() {
           <SearchBar
             value={searchQuery}
             onChangeText={setSearchQuery}
-            placeholder="Search notifications…"
-            accessibilityLabel="Search notifications"
+            placeholder={t("Search notifications…")}
+            accessibilityLabel={t("Search notifications")}
           />
         )}
       </View>
@@ -180,6 +183,7 @@ function Notifications() {
       showSearch,
       total,
       unreadCount,
+      language,
     ],
   );
 
@@ -200,9 +204,9 @@ function Notifications() {
           <Card>
             <EmptyState
               icon="cloud-offline-outline"
-              title="Unable to load notifications"
-              description="Please check your connection and try again."
-              actionLabel="Try again"
+              title={t("Unable to load notifications")}
+              description={t("Please check your connection and try again.")}
+              actionLabel={t("Try again")}
               onActionPress={refresh}
             />
           </Card>
@@ -219,9 +223,9 @@ function Notifications() {
           <Card>
             <EmptyState
               icon="search-outline"
-              title="No matching notifications"
-              description="Try another keyword — search looks at both the title and the message."
-              actionLabel="Clear search"
+              title={t("No matching notifications")}
+              description={t("Try another keyword — search looks at both the title and the message.")}
+              actionLabel={t("Clear search")}
               onActionPress={() => setSearchQuery("")}
             />
           </Card>
@@ -234,8 +238,8 @@ function Notifications() {
         <Card>
           <EmptyState
             icon="notifications-outline"
-            title="No notifications yet"
-            description="We'll notify you when something important happens."
+            title={t("No notifications yet")}
+            description={t("We'll notify you when something important happens.")}
           />
         </Card>
       </View>
@@ -262,8 +266,8 @@ function Notifications() {
               <View style={GUTTER}>
                 <StatusBanner
                   tone="warning"
-                  title="Couldn't refresh notifications"
-                  message="Showing saved notifications. Pull down to try again."
+                  title={t("Couldn't refresh notifications")}
+                  message={t("Showing saved notifications. Pull down to try again.")}
                 />
               </View>
             )}

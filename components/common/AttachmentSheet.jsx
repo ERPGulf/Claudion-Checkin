@@ -1,3 +1,4 @@
+import { t, useTranslation } from '../../localization';
 /* eslint-disable react/prop-types */
 import React from 'react';
 import { View } from 'react-native';
@@ -55,6 +56,7 @@ function AttachmentSheet({
   onSelectGallery,
   onSelectDocument,
 }) {
+  const { isRTL, direction } = useTranslation();
   const handlers = {
     camera: onSelectCamera,
     gallery: onSelectGallery,
@@ -65,9 +67,9 @@ function AttachmentSheet({
     <BottomSheet
       visible={visible}
       onClose={onClose}
-      title="Add Attachment"
-      subtitle="Choose how you want to attach a receipt."
-      closeLabel="Close"
+      title={t("Add Attachment")}
+      subtitle={t("Choose how you want to attach a receipt.")}
+      closeLabel={t("Close")}
     >
       <View style={{ paddingVertical: SPACING.xs }}>
         {OPTIONS.map((option, index) => (
@@ -77,9 +79,9 @@ function AttachmentSheet({
             <SettingsRow
               size="comfortable"
               icon={option.icon}
-              title={option.title}
-              description={option.description}
-              accessibilityLabel={`${option.title}. ${option.description}`}
+              title={t(option.title)}
+              description={t(option.description)}
+              accessibilityLabel={`${t(option.title)}. ${t(option.description)}`}
               onPress={handlers[option.key]}
             />
           </View>

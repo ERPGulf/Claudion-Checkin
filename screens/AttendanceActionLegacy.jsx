@@ -1,17 +1,8 @@
+import { t, useTranslation } from '../localization';
 import React, { useLayoutEffect, useState } from "react";
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  ActivityIndicator,
-  ScrollView,
-  RefreshControl,
-  StyleSheet,
-  Modal,
-  TextInput,
-  Platform,
-  KeyboardAvoidingView,
-} from "react-native";
+import { View, TouchableOpacity, ActivityIndicator, ScrollView, RefreshControl, StyleSheet, Modal, Platform, KeyboardAvoidingView } from 'react-native';
+import TextInput from '../localization/LocalizedTextInput';
+import Text from '../localization/LocalizedText';
 import { Entypo, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import {
@@ -32,6 +23,7 @@ import useAttendanceAction from "../hooks/useAttendanceAction";
  * Delete alongside the other *Legacy screens when the experiment ends.
  */
 function AttendanceActionLegacy() {
+  const { language, direction, isRTL } = useTranslation();
   // Asked for when a break is *started* only; ending one stays a single tap.
   const [breakReasonModalVisible, setBreakReasonModalVisible] = useState(false);
   const [breakReasonInput, setBreakReasonInput] = useState("");
@@ -72,20 +64,20 @@ function AttendanceActionLegacy() {
     navigation.setOptions({
       headerShadowVisible: false,
       headerShown: true,
-      headerTitle: "Attendance Action",
+      headerTitle: t("Attendance Action"),
       headerTitleAlign: "center",
       statusBarTranslucent: false,
       headerLeft: () => (
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Entypo
-            name="chevron-left"
+            name={isRTL ? "chevron-right" : "chevron-left"}
             size={SIZES.xxxLarge - 5}
             color={COLORS.primary}
           />
         </TouchableOpacity>
       ),
     });
-  }, [navigation]);
+  }, [navigation, language, isRTL]);
 
   // Temporary loading screen
   if (!restrictionLoaded) {
@@ -94,9 +86,9 @@ function AttendanceActionLegacy() {
         style={{ flex: 1, backgroundColor: "white" }}
         edges={["bottom", "left", "right"]}
       >
-        <View className="flex-1 items-center justify-center bg-white">
+        <View style={{ direction }} className="flex-1 items-center justify-center bg-white">
           <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text className="mt-2 text-gray-600">Loading settings...</Text>
+          <Text className="mt-2 text-gray-600">{t("Loading settings...")}</Text>
         </View>
       </SafeAreaView>
     );
@@ -121,7 +113,7 @@ function AttendanceActionLegacy() {
           className="items-center justify-center"
         >
           <ActivityIndicator size="large" color="white" />
-          <Text className="text-white mt-2 text-base">Processing...</Text>
+          <Text className="text-white mt-2 text-base">{t("Processing...")}</Text>
         </View>
       )}
 
@@ -147,18 +139,14 @@ function AttendanceActionLegacy() {
         <View style={{ width: "100%" }} className="flex-1 px-3">
           {onBreak && (
             <View className="mb-3 rounded-2xl bg-amber-500 px-4 py-1">
-              <Text className="text-center text-xs font-semibold tracking-widest text-amber-100">
-                BREAK IN PROGRESS
-              </Text>
+              <Text className="text-center text-xs font-semibold tracking-widest text-amber-100">{t("BREAK IN PROGRESS")}</Text>
               <Text
                 className="mt-1 text-center text-2xl font-extrabold text-white"
                 style={{ fontVariant: ["tabular-nums"] }}
               >
                 <BreakClock startTime={breakStartTime} />
               </Text>
-              <Text className="mt-1 text-center text-xs text-amber-100">
-                Auto-ends at 02:00:00
-              </Text>
+              <Text className="mt-1 text-center text-xs text-amber-100">{t("Auto-ends at 02:00:00")}</Text>
             </View>
           )}
           <WelcomeCard />
@@ -166,8 +154,8 @@ function AttendanceActionLegacy() {
             <View className="mt-3 rounded-2xl bg-emerald-50 border border-emerald-200 px-4 py-2">
               <Text className="text-center text-xs text-emerald-800">
                 {sessionOrigin === SESSION_ORIGIN.AUTO
-                  ? "Checked in automatically. You'll be checked out when you leave the office."
-                  : "You'll be checked out automatically when you leave the office."}
+                  ? t("Checked in automatically. You'll be checked out when you leave the office.")
+                  : t("You'll be checked out automatically when you leave the office.")}
               </Text>
             </View>
           )}
@@ -177,14 +165,10 @@ function AttendanceActionLegacy() {
                 className="rounded-2xl bg-red-600 px-4 py-3 items-center"
                 onPress={handleInvalidateAccessToken}
               >
-                <Text className="text-white font-bold">
-                  DEV: Invalidate access token
-                </Text>
+                <Text className="text-white font-bold">{t("DEV: Invalidate access token")}</Text>
               </TouchableOpacity>
 
-              <Text className="mt-3 text-xs font-bold uppercase tracking-wide text-red-700">
-                DEV: Break UI presets
-              </Text>
+              <Text className="mt-3 text-xs font-bold uppercase tracking-wide text-red-700">{t("DEV: Break UI presets")}</Text>
 
               <TouchableOpacity
                 className={`mt-2 rounded-xl px-3 py-2 ${
@@ -192,64 +176,51 @@ function AttendanceActionLegacy() {
                 }`}
                 onPress={() => setDevBreakMockMode((prev) => !prev)}
               >
-                <Text className="text-xs font-semibold text-white">
-                  DEV local break flow: {devBreakMockMode ? "ON" : "OFF"}
+                <Text className="text-xs font-semibold text-white">{t("DEV local break flow:")}{devBreakMockMode ? t("ON") : t("OFF")}
                 </Text>
               </TouchableOpacity>
 
               <View className="mt-2 flex-row flex-wrap">
                 <TouchableOpacity
-                  className="mb-2 mr-2 rounded-xl bg-slate-700 px-3 py-2"
+                  className="mb-2 rounded-xl bg-slate-700 px-3 py-2"
                   onPress={() => applyDevBreakPreset("idle-0")}
-                >
-                  <Text className="text-xs font-semibold text-white">
-                    Idle 00:00
-                  </Text>
+                 style={{ marginEnd: 8 }}>
+                  <Text className="text-xs font-semibold text-white">{t("Idle 00:00")}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  className="mb-2 mr-2 rounded-xl bg-slate-700 px-3 py-2"
+                  className="mb-2 rounded-xl bg-slate-700 px-3 py-2"
                   onPress={() => applyDevBreakPreset("idle-45")}
-                >
-                  <Text className="text-xs font-semibold text-white">
-                    Idle 00:45
-                  </Text>
+                 style={{ marginEnd: 8 }}>
+                  <Text className="text-xs font-semibold text-white">{t("Idle 00:45")}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  className="mb-2 mr-2 rounded-xl bg-amber-700 px-3 py-2"
+                  className="mb-2 rounded-xl bg-amber-700 px-3 py-2"
                   onPress={() => applyDevBreakPreset("running-30")}
-                >
-                  <Text className="text-xs font-semibold text-white">
-                    Running +30m
-                  </Text>
+                 style={{ marginEnd: 8 }}>
+                  <Text className="text-xs font-semibold text-white">{t("Running +30m")}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  className="mb-2 mr-2 rounded-xl bg-gray-700 px-3 py-2"
+                  className="mb-2 rounded-xl bg-gray-700 px-3 py-2"
                   onPress={() => applyDevBreakPreset("cap-120")}
-                >
-                  <Text className="text-xs font-semibold text-white">
-                    Cap 02:00
-                  </Text>
+                 style={{ marginEnd: 8 }}>
+                  <Text className="text-xs font-semibold text-white">{t("Cap 02:00")}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  className="mb-2 mr-2 rounded-xl bg-indigo-700 px-3 py-2"
+                  className="mb-2 rounded-xl bg-indigo-700 px-3 py-2"
                   onPress={() => applyDevBreakPreset("completed")}
-                >
-                  <Text className="text-xs font-semibold text-white">
-                    Completed 1/day
-                  </Text>
+                 style={{ marginEnd: 8 }}>
+                  <Text className="text-xs font-semibold text-white">{t("Completed 1/day")}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  className="mb-2 mr-2 rounded-xl bg-rose-700 px-3 py-2"
+                  className="mb-2 rounded-xl bg-rose-700 px-3 py-2"
                   onPress={() => applyDevBreakPreset("monthly-cap")}
-                >
-                  <Text className="text-xs font-semibold text-white">
-                    Monthly Cap 8h
-                  </Text>
+                 style={{ marginEnd: 8 }}>
+                  <Text className="text-xs font-semibold text-white">{t("Monthly Cap 8h")}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -257,9 +228,7 @@ function AttendanceActionLegacy() {
           <View className="h-72 mt-4 mb-24">
             <View className="p-3">
               {/* DATE & TIME */}
-              <Text className="text-base text-gray-500 font-semibold">
-                DATE AND TIME *
-              </Text>
+              <Text className="text-base text-gray-500 font-semibold">{t("DATE AND TIME *")}</Text>
               <View className="flex-row items-end border-b border-gray-400 pb-2 mb-6 justify-between">
                 <Text className="text-sm font-medium text-gray-500">
                   {dateTime}
@@ -271,20 +240,18 @@ function AttendanceActionLegacy() {
                 />
               </View>
               {/* LOCATION */}
-              <Text className="text-base text-gray-500 font-semibold">
-                LOCATION *
-              </Text>
+              <Text className="text-base text-gray-500 font-semibold">{t("LOCATION *")}</Text>
               <View className="flex-row items-end border-b border-gray-400 pb-2 mb-4 justify-between">
                 <Text className="text-sm font-medium text-gray-500">
                   {restrictLocation === 0
-                    ? "Not Required"
+                    ? t("Not Required")
                     : !ready
-                      ? "Getting Location..."
+                      ? t("Getting Location...")
                       : // : distanceInfo?.locationName
                         //   ? distanceInfo.locationName
                         inTarget
-                        ? "In bound"
-                        : "Out of bound"}
+                        ? t("In bound")
+                        : t("Out of bound")}
                 </Text>
 
                 <MaterialCommunityIcons
@@ -296,8 +263,7 @@ function AttendanceActionLegacy() {
               {restrictLocation === 1 && distanceInfo && (
                 <View className="mb-3">
                   <Text className="text-xs text-gray-400">
-                    Distance: {distanceInfo.distance} m | Allowed:{" "}
-                    {distanceInfo.radius} m
+                    {t("Distance: {{distance}} m | Allowed: {{radius}} m", { distance: distanceInfo.distance, radius: distanceInfo.radius })}
                   </Text>
                 </View>
               )}
@@ -320,7 +286,7 @@ function AttendanceActionLegacy() {
                 onPress={handlePrimaryAction}
               >
                 <Text className="text-xl font-bold text-white">
-                  {checkin ? "CHECK-OUT" : "CHECK-IN"}
+                  {checkin ? t("CHECK-OUT") : t("CHECK-IN")}
                 </Text>
               </TouchableOpacity>
               {/* BREAK BUTTON */}
@@ -360,10 +326,10 @@ function AttendanceActionLegacy() {
                       (restrictLocation === 1 && !inTarget) ||
                       breakCompleted ||
                       breakMinutes >= 120
-                        ? "BREAK NOT ALLOWED"
+                        ? t("BREAK NOT ALLOWED")
                         : onBreak
-                          ? "END BREAK"
-                          : "TAKE BREAK"}
+                          ? t("END BREAK")
+                          : t("TAKE BREAK")}
                     </Text>
                   </TouchableOpacity>
 
@@ -392,30 +358,24 @@ function AttendanceActionLegacy() {
           style={{ flex: 1 }}
           behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
-          <View className="flex-1 items-center justify-center bg-black/40 px-6">
+          <View style={{ direction }} className="flex-1 items-center justify-center bg-black/40 px-6">
             <View className="w-full rounded-2xl bg-white p-5">
-              <Text className="text-lg font-bold text-gray-900 mb-1">
-                Take a break
-              </Text>
-              <Text className="text-sm text-gray-500 mb-3">
-                Add a reason for this break (optional)
-              </Text>
+              <Text className="text-lg font-bold text-gray-900 mb-1">{t("Take a break")}</Text>
+              <Text className="text-sm text-gray-500 mb-3">{t("Add a reason for this break (optional)")}</Text>
               <TextInput
                 value={breakReasonInput}
                 onChangeText={setBreakReasonInput}
-                placeholder="Enter reason"
+                placeholder={t("Enter reason")}
                 placeholderTextColor="#6B7280"
                 multiline
                 className="border border-gray-300 rounded-lg px-3 py-2 mb-4 text-gray-900"
               />
               <View className="flex-row justify-end">
                 <TouchableOpacity
-                  className="px-4 py-2 mr-2 rounded-xl"
+                  className="px-4 py-2 rounded-xl"
                   onPress={() => setBreakReasonModalVisible(false)}
-                >
-                  <Text className="text-base font-semibold text-gray-500">
-                    Cancel
-                  </Text>
+                 style={{ marginEnd: 8 }}>
+                  <Text className="text-base font-semibold text-gray-500">{t("Cancel")}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   className="px-4 py-2 rounded-xl bg-blue-400"
@@ -424,9 +384,7 @@ function AttendanceActionLegacy() {
                     handleBreak(breakReasonInput.trim());
                   }}
                 >
-                  <Text className="text-base font-semibold text-white">
-                    Start Break
-                  </Text>
+                  <Text className="text-base font-semibold text-white">{t("Start Break")}</Text>
                 </TouchableOpacity>
               </View>
             </View>

@@ -1,6 +1,8 @@
+import { useTranslation } from '../../localization';
 /* eslint-disable react/prop-types */
 import React from 'react';
-import { View, Text } from 'react-native';
+import { View } from 'react-native';
+import Text from '../../localization/LocalizedText';
 import {
   Ionicons,
   MaterialCommunityIcons,
@@ -36,6 +38,7 @@ function ModuleCard({
   dense = false,
   style,
 }) {
+  const { isRTL } = useTranslation();
   const { colors, isDark } = useAppTheme();
   const IconSet = FAMILIES[iconFamily] || Ionicons;
 
@@ -83,7 +86,7 @@ function ModuleCard({
 
       {!!onPress && (
         <Ionicons
-          name="chevron-forward"
+          name={isRTL ? 'chevron-back' : 'chevron-forward'}
           size={ICON.md}
           color={colors.textMuted}
         />

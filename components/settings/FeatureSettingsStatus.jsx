@@ -1,3 +1,4 @@
+import { t, useTranslation } from "../../localization";
 import React from 'react';
 import { SPACING } from '../../constants';
 import useAppTheme from '../../hooks/useAppTheme';
@@ -21,19 +22,20 @@ import ActionButton from '../common/ActionButton';
  * do on a loop — see components/FeatureSettingsBootstrap.jsx.
  */
 function FeatureSettingsStatus() {
+  useTranslation();
   const { colors } = useAppTheme();
   const { isError, isLoading, refresh, lastFetchedAt } = useFeatureSettings();
 
   if (!isError) return null;
 
   const description = lastFetchedAt
-    ? "Couldn't check which features are available, so the app is using what it last knew. Nothing has been lost."
-    : "Couldn't check which features are available. Some options may not appear correctly until this succeeds.";
+    ? t("Couldn't check which features are available, so the app is using what it last knew. Nothing has been lost.")
+    : t("Couldn't check which features are available. Some options may not appear correctly until this succeeds.");
 
   return (
     <>
       <SectionHeader
-        title="Available features"
+        title={t("Available features")}
         style={{ marginTop: SPACING.xxl }}
       />
 
@@ -42,13 +44,13 @@ function FeatureSettingsStatus() {
           icon="cloud-offline-outline"
           iconTint={colors.errorSurface}
           iconColor={colors.errorText}
-          title="Feature list out of date"
+          title={t("Feature list out of date")}
           description={description}
         />
 
         <ActionButton
           icon={isLoading ? 'sync-outline' : 'refresh-outline'}
-          label={isLoading ? 'Checking' : 'Check again'}
+          label={isLoading ? t("Checking") : t("Check again")}
           onPress={refresh}
           disabled={isLoading}
           style={{

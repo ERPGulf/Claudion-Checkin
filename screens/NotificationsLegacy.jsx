@@ -1,11 +1,6 @@
-import {
-  View,
-  Text,
-  FlatList,
-  TouchableOpacity,
-  Modal,
-  ScrollView,
-} from "react-native";
+import { formatDate, t, useTranslation } from '../localization';
+import { View, FlatList, TouchableOpacity, Modal, ScrollView } from 'react-native';
+import Text from '../localization/LocalizedText';
 import React, { useState, useLayoutEffect, useEffect } from "react";
 import { useNavigation } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -49,10 +44,10 @@ const formatDateLabel = (dateString) => {
     a.getMonth() === b.getMonth() &&
     a.getFullYear() === b.getFullYear();
 
-  if (isSameDay(date, today)) return "Today";
-  if (isSameDay(date, yesterday)) return "Yesterday";
+  if (isSameDay(date, today)) return t("Today");
+  if (isSameDay(date, yesterday)) return t("Yesterday");
 
-  return date.toLocaleDateString("en-GB", {
+  return formatDate(date, {
     day: "2-digit",
     month: "short",
     year: "numeric",
@@ -96,6 +91,7 @@ const getIconByType = (type) => {
  * route at `screens/Notifications.jsx` unconditionally.
  */
 function NotificationsLegacy() {
+  const { language, direction, isRTL } = useTranslation();
   const [list, setList] = useState([]);
   const [selected, setSelected] = useState(null);
 
@@ -122,19 +118,19 @@ function NotificationsLegacy() {
     navigation.setOptions({
       headerShown: true,
       headerShadowVisible: false,
-      headerTitle: "Notifications",
+      headerTitle: t("Notifications"),
       headerTitleAlign: "center",
       headerLeft: () => (
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Entypo
-            name="chevron-left"
+            name={isRTL ? "chevron-right" : "chevron-left"}
             size={SIZES.xxxLarge - 5}
             color={COLORS.primary}
           />
         </TouchableOpacity>
       ),
     });
-  }, [navigation]);
+  }, [navigation, language, isRTL]);
 
   /* ---------- Empty state ---------- */
   if (list.length === 0) {
@@ -147,7 +143,7 @@ function NotificationsLegacy() {
           alignItems: "center",
         }}
       >
-        <Text>No notifications</Text>
+        <Text>{t("No notifications")}</Text>
       </View>
     );
   }
@@ -228,7 +224,7 @@ function NotificationsLegacy() {
                       padding: 16,
                       borderRadius: 12,
                       backgroundColor: isUnread ? "#1F2937" : "#F9FAFB",
-                      borderLeftWidth: isUnread ? 4 : 0,
+                      borderStartWidth: isUnread ? 4 : 0,
                       borderLeftColor: isUnread ? bg : "transparent",
                       shadowColor: isUnread ? "#000" : "transparent",
                       shadowOffset: { width: 0, height: 1 },
@@ -246,7 +242,7 @@ function NotificationsLegacy() {
                         backgroundColor: bg,
                         justifyContent: "center",
                         alignItems: "center",
-                        marginRight: 14,
+                        marginEnd: 14,
                         flexShrink: 0,
                       }}
                     >
@@ -290,7 +286,7 @@ function NotificationsLegacy() {
                           height: 10,
                           borderRadius: 5,
                           backgroundColor: bg,
-                          marginLeft: 12,
+                          marginStart: 12,
                           marginTop: 2,
                         }}
                       />
@@ -319,8 +315,8 @@ function NotificationsLegacy() {
             onPress={() => {}}
             style={{
               backgroundColor: "#FFFFFF",
-              borderTopLeftRadius: 24,
-              borderTopRightRadius: 24,
+              borderTopStartRadius: 24,
+              borderTopEndRadius: 24,
               paddingHorizontal: 20,
               paddingTop: 16,
               paddingBottom: 32,
@@ -354,7 +350,7 @@ function NotificationsLegacy() {
                 marginBottom: 16,
               }}
             >
-              <View style={{ flex: 1, marginRight: 12 }}>
+              <View style={{ flex: 1, marginEnd: 12 }}>
                 <Text
                   numberOfLines={2}
                   style={{
@@ -364,7 +360,7 @@ function NotificationsLegacy() {
                     marginBottom: 4,
                   }}
                 >
-                  {selected?.title || "Notification"}
+                  {selected?.title || t("Notification")}
                 </Text>
                 <Text
                   numberOfLines={1}
@@ -414,7 +410,7 @@ function NotificationsLegacy() {
                   lineHeight: 24,
                   color: "#374151",
                   fontWeight: "400",
-                  paddingRight: 8,
+                  paddingEnd: 8,
                 }}
               >
                 {selected?.notification}

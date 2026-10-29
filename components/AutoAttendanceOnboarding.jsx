@@ -1,3 +1,4 @@
+import { useTranslation } from '../localization';
 import { useEffect, useState } from "react";
 import { AppState } from "react-native";
 import { useDispatch, useSelector } from "react-redux";
@@ -33,6 +34,7 @@ import LocationAccessExplainer from "./AutoAttendance/LocationAccessExplainer";
  * ineligible forgets that, so becoming eligible again is evaluated afresh.
  */
 export default function AutoAttendanceOnboarding() {
+  const { language, direction, isRTL } = useTranslation();
   const dispatch = useDispatch();
   const [startedAt] = useState(Date.now);
   const [appState, setAppState] = useState(AppState.currentState);

@@ -1,3 +1,6 @@
+import Text from '../localization/LocalizedText';
+import LanguageSetting from '../components/settings/LanguageSetting';
+import { t, useTranslation } from "../localization";
 import React, { useEffect, useRef, useState } from "react";
 import {
   AppState,
@@ -5,7 +8,6 @@ import {
   Easing,
   ScrollView,
   StyleSheet,
-  Text,
   View,
   useWindowDimensions,
 } from "react-native";
@@ -83,6 +85,7 @@ const BLUR_INTENSITY = 40;
  * string's line count.
  */
 function WelcomeScreenModern() {
+  useTranslation();
   const { colors, isDark } = useAppTheme();
   const { width } = useWindowDimensions();
   const reduceMotion = useReducedMotion();
@@ -232,9 +235,7 @@ function WelcomeScreenModern() {
                   color: colors.textPrimary,
                   textAlign: "center",
                 }}
-              >
-                Welcome
-              </Text>
+              >{t("Welcome")}</Text>
 
               <Text
                 style={{
@@ -247,7 +248,7 @@ function WelcomeScreenModern() {
                   maxWidth: 300,
                 }}
               >
-                {"Everything you need for work,\nin one secure place."}
+                {t("Everything you need for work,\nin one secure place.")}
               </Text>
             </View>
           </Animated.View>
@@ -262,6 +263,7 @@ function WelcomeScreenModern() {
             <View style={{ paddingVertical: SPACING.xl }}>
               <View style={{ paddingHorizontal: SPACING.xl }}>
                 <SignInOptions />
+                <LanguageSetting compact />
               </View>
             </View>
 
@@ -270,11 +272,11 @@ function WelcomeScreenModern() {
                 dimmed further: at 11pt another opacity step would push it under
                 the 3:1 floor, and it already recedes on size alone. */}
             <Text
-              style={{
+              style={[{
                 ...TYPO.caption2,
                 color: colors.textMuted,
                 textAlign: "center",
-              }}
+              }, { writingDirection: 'ltr' }]}
             >
               {BUILD_TAG}
             </Text>

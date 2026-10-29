@@ -1,6 +1,8 @@
+import Text from '../../localization/LocalizedText';
+import { t, useTranslation, getLanguage } from "../../localization";
 /* eslint-disable react/prop-types */
 import React from 'react';
-import { I18nManager, Text, View } from 'react-native';
+import { View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { ICON, RADIUS, SHADOWS, SPACING, TYPO } from '../../constants';
@@ -18,18 +20,19 @@ import PressableScale from '../common/PressableScale';
  * to a hard rectangle.
  */
 function SignInOptions() {
+  useTranslation();
   const navigation = useNavigation();
   const { colors, isDark } = useAppTheme();
   const options = [
     {
-      label: 'Scan QR code',
-      hint: 'Use the QR code from your company.',
+      label: t("Scan QR code"),
+      hint: t('Use the QR code from your company.'),
       icon: 'qr-code-outline',
       route: 'Qrscan',
     },
     isMobileAuthAvailable() && {
-      label: 'Sign in with mobile number',
-      hint: 'Use your company code and mobile number.',
+      label: t("Sign in with mobile number"),
+      hint: t('Use your company code and mobile number.'),
       icon: 'phone-portrait-outline',
       route: 'mobile login',
     },
@@ -76,7 +79,7 @@ function SignInOptions() {
             </Text>
           </View>
           <Ionicons
-            name={I18nManager.isRTL ? 'chevron-back' : 'chevron-forward'}
+            name={getLanguage() === 'ar' ? 'chevron-back' : 'chevron-forward'}
             size={ICON.md}
             color={colors.textMuted}
             style={{ marginStart: SPACING.sm }}

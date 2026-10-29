@@ -1,6 +1,8 @@
+import { t, useTranslation } from '../../localization';
 /* eslint-disable react/prop-types */
 import React from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
+import Text from '../../localization/LocalizedText';
 import { Ionicons } from '@expo/vector-icons';
 import { ICON, RADIUS, SPACING, TYPO } from '../../constants';
 import useAppTheme from '../../hooks/useAppTheme';
@@ -38,11 +40,13 @@ function OptionSheet({
   selected,
   onSelect,
   iconForOption,
+  labelForOption = option => option,
   emptyIcon = 'list-outline',
-  emptyTitle = 'Nothing to choose from',
+  emptyTitle = t('Nothing to choose from'),
   emptyDescription,
   maxHeightRatio = 0.6,
 }) {
+  const { isRTL, direction } = useTranslation();
   const { colors } = useAppTheme();
 
   return (
@@ -51,7 +55,7 @@ function OptionSheet({
       onClose={onClose}
       title={title}
       subtitle={subtitle}
-      closeLabel="Close"
+      closeLabel={t("Close")}
       maxHeightRatio={maxHeightRatio}
     >
       {options.length === 0 ? (
@@ -89,7 +93,7 @@ function OptionSheet({
                   hitSlop={0}
                   accessibilityRole="radio"
                   accessibilityState={{ selected: isSelected }}
-                  accessibilityLabel={option}
+                  accessibilityLabel={labelForOption(option)}
                   style={{
                     flexDirection: 'row',
                     alignItems: 'center',
@@ -118,7 +122,7 @@ function OptionSheet({
                   </View>
 
                   <Text
-                    numberOfLines={1}
+                    numberOfLines={2}
                     style={{
                       ...TYPO.headline,
                       flex: 1,
@@ -127,7 +131,7 @@ function OptionSheet({
                       color: colors.textPrimary,
                     }}
                   >
-                    {option}
+                    {labelForOption(option)}
                   </Text>
 
                   {isSelected && (

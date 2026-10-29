@@ -1,6 +1,8 @@
+import { t, useTranslation } from '../../localization';
 /* eslint-disable react/prop-types */
 import React from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+import Text from '../../localization/LocalizedText';
 import { SPACING, TYPO } from '../../constants';
 import useAppTheme from '../../hooks/useAppTheme';
 import PressableScale from './PressableScale';
@@ -15,6 +17,7 @@ import PressableScale from './PressableScale';
  * the finger. The spinner now stays open and this is how it is closed.
  */
 function PickerWithDone({ needsDone, onDone, children }) {
+  const { isRTL, direction } = useTranslation();
   const { colors } = useAppTheme();
 
   if (!needsDone) return children;
@@ -26,7 +29,7 @@ function PickerWithDone({ needsDone, onDone, children }) {
       <PressableScale
         onPress={onDone}
         accessibilityRole="button"
-        accessibilityLabel="Done"
+        accessibilityLabel={t("Done")}
         hitSlop={8}
         style={{
           alignSelf: 'flex-end',
@@ -38,9 +41,7 @@ function PickerWithDone({ needsDone, onDone, children }) {
       >
         <Text
           style={{ ...TYPO.body, fontWeight: '600', color: colors.primary2 }}
-        >
-          Done
-        </Text>
+        >{t("Done")}</Text>
       </PressableScale>
     </View>
   );

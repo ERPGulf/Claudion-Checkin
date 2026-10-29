@@ -1,12 +1,8 @@
+import { t, formatDate, getLanguage, useTranslation } from '../localization';
 import React, { useLayoutEffect } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  ScrollView,
-  Platform,
-} from "react-native";
+import { View, TouchableOpacity, ScrollView, Platform } from 'react-native';
+import TextInput from '../localization/LocalizedTextInput';
+import Text from '../localization/LocalizedText';
 import { useNavigation } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Entypo from "@expo/vector-icons/Entypo";
@@ -20,7 +16,6 @@ import AttachmentBottomSheet from "../components/attachment/AttachmentBottomShee
 import useResignation from "../hooks/useResignation";
 import {
   earliestResignationDate,
-  formatResignationDayLabel,
 } from "../utils/resignation";
 
 /**
@@ -36,6 +31,7 @@ import {
  * route at `screens/Resignation.jsx` unconditionally.
  */
 const ResignationLegacy = () => {
+  const { language, isRTL } = useTranslation();
   const navigation = useNavigation();
 
   const {
@@ -66,19 +62,19 @@ const ResignationLegacy = () => {
     navigation.setOptions({
       headerShown: true,
       headerShadowVisible: false,
-      headerTitle: "Resignation",
+      headerTitle: t("Resignation"),
       headerTitleAlign: "center",
       headerLeft: () => (
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Entypo
-            name="chevron-left"
+            name={isRTL ? "chevron-right" : "chevron-left"}
             size={SIZES.xxxLarge - 5}
             color={COLORS.primary}
           />
         </TouchableOpacity>
       ),
     });
-  }, [navigation]);
+  }, [navigation, language, isRTL]);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
@@ -87,25 +83,21 @@ const ResignationLegacy = () => {
         contentContainerStyle={{ paddingBottom: 40 }}
         keyboardShouldPersistTaps="handled"
       >
-        <Text className="text-xl font-semibold mb-4 text-gray-800">
-          Resignation Details
-        </Text>
+        <Text className="text-xl font-semibold mb-4 text-gray-800">{t("Resignation Details")}</Text>
 
         {/* RESIGNATION DATE */}
-        <Text className="text-sm font-medium text-gray-700 mb-1">
-          Resignation Date
-        </Text>
+        <Text className="text-sm font-medium text-gray-700 mb-1">{t("Resignation Date")}</Text>
         <TouchableOpacity
           onPress={openDatePicker}
           className="border border-gray-300 rounded-lg px-3 py-2 mb-4"
           accessibilityRole="button"
-          accessibilityLabel={`Resignation date: ${formatResignationDayLabel(resignationDate)}`}
+          accessibilityLabel={t("Resignation date: {{date}}", { date: formatDate(resignationDate) })}
         >
-          <Text>{formatResignationDayLabel(resignationDate)}</Text>
+          <Text>{formatDate(resignationDate)}</Text>
         </TouchableOpacity>
         {showDatePicker && (
           <>
-            <DateTimePicker
+            <DateTimePicker locale={getLanguage()}
               value={resignationDate}
               mode="date"
               minimumDate={earliestResignationDate()}
@@ -117,14 +109,14 @@ const ResignationLegacy = () => {
                 onPress={closeDatePicker}
                 className="self-end px-3 py-2 mb-2"
               >
-                <Text className="text-blue-600 font-medium">Done</Text>
+                <Text className="text-blue-600 font-medium">{t("Done")}</Text>
               </TouchableOpacity>
             )}
           </>
         )}
 
         {/* REASON */}
-        <Text className="text-sm font-medium text-gray-700 mb-1">Reason</Text>
+        <Text className="text-sm font-medium text-gray-700 mb-1">{t("Reason")}</Text>
         <TextInput
           style={{
             minHeight: 160,
@@ -139,12 +131,12 @@ const ResignationLegacy = () => {
             shadowRadius: 6,
             elevation: 3,
           }}
-          placeholder="Enter your reason for resigning..."
+          placeholder={t("Enter your reason for resigning...")}
           multiline
           value={reason}
           onChangeText={setReason}
           textAlignVertical="top"
-          accessibilityLabel="Resignation reason"
+          accessibilityLabel={t("Resignation reason")}
         />
 
         {/* Attachment 1 */}
@@ -152,7 +144,7 @@ const ResignationLegacy = () => {
           file={file1}
           onPick={pickFile1}
           onRemove={removeFile1}
-          label="Attachment 1 (optional)"
+          label={t("Attachment 1 (optional)")}
         />
 
         {/* Attachment 2 */}
@@ -160,7 +152,7 @@ const ResignationLegacy = () => {
           file={file2}
           onPick={pickFile2}
           onRemove={removeFile2}
-          label="Attachment 2 (optional)"
+          label={t("Attachment 2 (optional)")}
         />
 
         {/* FOOTER */}
@@ -174,7 +166,7 @@ const ResignationLegacy = () => {
           }}
         ></View>
         <SubmitButton
-          title="Submit Resignation"
+          title={t("Submit Resignation")}
           loading={loading}
           onPress={submitResignation}
         />

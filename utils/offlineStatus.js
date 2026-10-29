@@ -1,3 +1,4 @@
+import { isolateBidi, getLanguage, formatTime, t } from '../localization';
 import { format } from "date-fns";
 
 /**
@@ -154,15 +155,15 @@ export const describeOfflineStatus = (
         icon: "cloud-offline-outline",
         // Amber, not red: being offline is a condition to be aware of, not a
         // failure. Nothing has gone wrong and nothing is lost.
-        title: "You're offline",
+        title: t("You're offline"),
         // With nothing queued this used to promise "attendance will sync
         // automatically", which is now only true of the geofence. A tapped punch
         // is online-only: it either reaches the server or it did not happen. An
         // employee reading the old line could tap Check In, see it fail, and
         // reasonably believe it had been saved anyway.
         subtitle: pending
-          ? `${records(pending)} waiting to sync`
-          : "Check in or out needs a connection. Automatic punches sync later.",
+          ? t("{{count}} attendance records waiting to sync", { count: pending })
+          : t("Check in or out needs a connection. Automatic punches sync later."),
         trailingIcon: "cloud-upload-outline",
         motion: "pulse",
         actionable: false,
@@ -172,8 +173,8 @@ export const describeOfflineStatus = (
       return {
         tone: "info",
         icon: "cloud-upload-outline",
-        title: "Syncing attendance…",
-        subtitle: pending ? `${plural(pending, "record")} remaining` : null,
+        title: t("Syncing attendance…"),
+        subtitle: pending ? t("{{count}} records remaining", { count: pending }) : null,
         trailingIcon: "sync-outline",
         motion: "spin",
         actionable: false,
@@ -183,7 +184,7 @@ export const describeOfflineStatus = (
       return {
         tone: "success",
         icon: "checkmark-circle",
-        title: "All attendance synced",
+        title: t("All attendance synced"),
         subtitle: null,
         trailingIcon: null,
         motion: "none",
@@ -198,8 +199,8 @@ export const describeOfflineStatus = (
         // done anything wrong. What this state adds over silence is simply that
         // the app knows they are still here — and a way in to the detail, which
         // is where the diagnostics that make a support report possible live.
-        title: "Attendance still waiting to sync",
-        subtitle: `${records(pending)} saved on your device. Tap for details.`,
+        title: t("Attendance still waiting to sync"),
+        subtitle: t("{{count}} attendance records saved on your device. Tap for details.", { count: pending }),
         trailingIcon: "chevron-forward",
         motion: "none",
         actionable: true,
@@ -216,13 +217,13 @@ export const describeOfflineStatus = (
         // The count moved to the subtitle after seeing it on a device: with it
         // in the title the line truncated mid-word at "administrat…", which
         // reads like a broken string rather than a status.
-        title: "Waiting for your administrator",
+        title: t("Waiting for your administrator"),
         // Counts everything the server has not taken, not just the row that
         // happened to be claimed when the drain halted. A blocked row stops the
         // run, so every punch behind it is waiting on the same fix — reporting
         // "1" while six sit in the sheet is the kind of small lie that costs
         // trust in the whole indicator.
-        subtitle: `${records(Math.max(awaitingServer, blocked))} saved on your device — we'll keep trying automatically.`,
+        subtitle: t("{{count}} attendance records saved on your device — we'll keep trying automatically.", { count: Math.max(awaitingServer, blocked) }),
         trailingIcon: "chevron-forward",
         motion: "none",
         actionable: true,
@@ -232,8 +233,8 @@ export const describeOfflineStatus = (
       return {
         tone: "error",
         icon: "alert-circle",
-        title: `${records(rejected)} ${rejected === 1 ? "needs" : "need"} correction`,
-        subtitle: "Tap to review and submit an attendance request.",
+        title: t("{{count}} attendance records need correction", { count: rejected }),
+        subtitle: t("Tap to review and submit an attendance request."),
         trailingIcon: "chevron-forward",
         motion: "none",
         actionable: true,
@@ -252,8 +253,8 @@ export const describeQueueRow = (row) => {
   const failureClass = row?.failureClass;
 
   if (row?.status === "needs_review") return {
-    tone: "warning", label: "Needs review",
-    reason: "The server outcome could not be verified. Open Profile attendance recovery to check the saved record.",
+    tone: "warning", label: t("Needs review"),
+    reason: t("The server outcome could not be verified. Open Profile attendance recovery to check the saved record."),
     willRetry: false, needsAdmin: false, needsEmployee: false, canCorrect: false,
   };
 
@@ -269,13 +270,13 @@ export const describeQueueRow = (row) => {
 
     return {
       tone: "error",
-      label: "Needs correction",
+      label: t("Needs correction"),
       // A cascade is not a rejection of this punch — it is collateral from the
       // other half of the session, and saying so stops it reading as two
       // separate problems.
       reason: dependent
-        ? "Its check-in was rejected, so this check-out was held back to keep the session consistent."
-        : "Your organization's system couldn't accept this attendance record.",
+        ? t("Its check-in was rejected, so this check-out was held back to keep the session consistent.")
+        : t("Your organization's system couldn't accept this attendance record."),
       willRetry: false,
       needsAdmin: false,
       needsEmployee: true,
@@ -286,15 +287,15 @@ export const describeQueueRow = (row) => {
   if (status === "blocked") {
     return {
       tone: "warning",
-      label: "Waiting for administrator",
+      label: t("Waiting for administrator"),
       reason:
         failureClass === "endpoint-missing"
-          ? "Your organization's server isn't set up to accept offline attendance yet."
+          ? t("Your organization's server isn't set up to accept offline attendance yet.")
           : failureClass === "auth"
-            ? "Your session needs to be re-established before this can be sent."
+            ? t("Your session needs to be re-established before this can be sent.")
             : failureClass === "configuration"
-              ? "Something is missing in your organization's server configuration."
-              : "Your organization's server can't accept this attendance right now.",
+              ? t("Something is missing in your organization's server configuration.")
+              : t("Your organization's server can't accept this attendance right now."),
       willRetry: true,
       needsAdmin: failureClass !== "auth",
       needsEmployee: false,
@@ -305,8 +306,8 @@ export const describeQueueRow = (row) => {
   if (status === "syncing") {
     return {
       tone: "info",
-      label: "Syncing",
-      reason: "Being sent to the server now.",
+      label: t("Syncing"),
+      reason: t("Being sent to the server now."),
       willRetry: true,
       needsAdmin: false,
       needsEmployee: false,
@@ -317,10 +318,10 @@ export const describeQueueRow = (row) => {
   if (status === "resolved") {
     return {
       tone: "neutral",
-      label: "Correction submitted",
+      label: t("Correction submitted"),
       reason: row?.resolutionDocname
-        ? `Covered by attendance request ${row.resolutionDocname}.`
-        : "Covered by an attendance request.",
+        ? t("Covered by attendance request {{reference}}.", { reference: getLanguage() === 'ar' ? isolateBidi(row.resolutionDocname) : row.resolutionDocname })
+        : t("Covered by an attendance request."),
       willRetry: false,
       needsAdmin: false,
       needsEmployee: false,
@@ -330,12 +331,12 @@ export const describeQueueRow = (row) => {
 
   return {
     tone: "warning",
-    label: "Pending sync",
+    label: t("Pending sync"),
     // No `row.error` here, on purpose. It holds whatever the server or the
     // network last said — Frappe returns multi-line Python exception text — and
     // showing that to an employee is noise they cannot act on. It stays on the
     // row for logs and support.
-    reason: "Saved on your device, waiting to be sent.",
+    reason: t("Saved on your device, waiting to be sent."),
     willRetry: true,
     needsAdmin: false,
     needsEmployee: false,
@@ -369,7 +370,7 @@ export const describeQueueDiagnostics = (row, { now = Date.now() } = {}) => {
   if (state) parts.push(state);
 
   const attempts = Number(row.retryCount) || 0;
-  parts.push(attempts === 0 ? "no attempts yet" : plural(attempts, "attempt"));
+  parts.push(attempts === 0 ? t("no attempts yet") : t("{{count}} attempts", { count: attempts }));
 
   // Only where a next attempt is a real thing. A rejected row is never retried
   // and a resolved one is history, so a due time there would be a lie.
@@ -377,8 +378,8 @@ export const describeQueueDiagnostics = (row, { now = Date.now() } = {}) => {
     const nextAttemptAt = Number(row.nextAttemptAt) || 0;
     parts.push(
       nextAttemptAt > now
-        ? `next ${format(new Date(nextAttemptAt), "HH:mm")}`
-        : "due now",
+        ? t("next {{time}}", { time: formatTime(new Date(nextAttemptAt), { hour12: false }) })
+        : t("due now"),
     );
   }
 
