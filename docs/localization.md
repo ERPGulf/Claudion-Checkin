@@ -89,7 +89,7 @@ Local notifications await the persisted locale inside the delivery service, inde
 | System fonts/vector icons | Arabic uses system glyph coverage. Universal icons/QR/logo are not mirrored. No new font/native drawing dependency. |
 | Expo notifications/FCM | Local copy and fallback copy localized. Remote push title/body and persisted inbox text are server supplied. |
 
-Permission descriptions in `localization/native/{en,ar}.json` mirror committed `en.lproj`/`ar.lproj/InfoPlist.strings`. iOS declares English and Arabic in Info.plist and Xcode regions. Expo localization config declares supported locales; `withLocalization` retains `android:supportsRtl="true"` in generated manifests. Native OS dialogs use the OS's language resolution, which can differ from the application's custom preference.
+Permission descriptions in `localization/native/{en,ar}.json` mirror committed `en.lproj`/`ar.lproj/InfoPlist.strings`. Keep these descriptions under each file's `ios` object: Expo copies top-level locale entries to both platforms, which makes Android release lint fail with `ExtraTranslation` for iOS permission keys lacking Android defaults. iOS declares English and Arabic in Info.plist and Xcode regions. Expo localization config declares supported locales; `withLocalization` retains `android:supportsRtl="true"` in generated manifests. Native OS dialogs use the OS's language resolution, which can differ from the application's custom preference.
 
 ## Verification record
 

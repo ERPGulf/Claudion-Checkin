@@ -1,10 +1,12 @@
 {
-  "NSBarcodeScannerUsageDescription": "اسمح لـ $(PRODUCT_NAME) بالوصول إلى الكاميرا لمسح رموز QR والتقاط صور التحقق من حضور الموظفين.",
-  "NSCameraUsageDescription": "اسمح لـ $(PRODUCT_NAME) بالوصول إلى الكاميرا لمسح رموز QR والتقاط صور التحقق من حضور الموظفين.",
-  "NSLocationAlwaysAndWhenInUseUsageDescription": "اسمح لـ $(PRODUCT_NAME) باستخدام موقعك لتتبّع تسجيل الحضور والانصراف وتحديث مواقع السائقين آنيًا أثناء الرحلات.",
-  "NSLocationAlwaysUsageDescription": "اسمح لـ $(PRODUCT_NAME) بالوصول إلى موقعك.",
-  "NSLocationWhenInUseUsageDescription": "اسمح لـ $(PRODUCT_NAME) باستخدام موقعك لتتبّع تسجيل الحضور والانصراف وتحديث مواقع السائقين آنيًا أثناء الرحلات.",
-  "NSMicrophoneUsageDescription": "اسمح لـ $(PRODUCT_NAME) بالوصول إلى الميكروفون.",
-  "NSMotionUsageDescription": "اسمح لـ $(PRODUCT_NAME) باستخدام نشاط الحركة لدعم تسجيل الحضور والانصراف التلقائي بناءً على الموقع.",
-  "NSPhotoLibraryUsageDescription": "اسمح لـ $(PRODUCT_NAME) بالوصول إلى صورك."
+  "ios": {
+    "NSBarcodeScannerUsageDescription": "اسمح لـ $(PRODUCT_NAME) بالوصول إلى الكاميرا لمسح رموز QR والتقاط صور التحقق من حضور الموظفين.",
+    "NSCameraUsageDescription": "اسمح لـ $(PRODUCT_NAME) بالوصول إلى الكاميرا لمسح رموز QR والتقاط صور التحقق من حضور الموظفين.",
+    "NSLocationAlwaysAndWhenInUseUsageDescription": "اسمح لـ $(PRODUCT_NAME) باستخدام موقعك لتتبّع تسجيل الحضور والانصراف وتحديث مواقع السائقين آنيًا أثناء الرحلات.",
+    "NSLocationAlwaysUsageDescription": "اسمح لـ $(PRODUCT_NAME) بالوصول إلى موقعك.",
+    "NSLocationWhenInUseUsageDescription": "اسمح لـ $(PRODUCT_NAME) باستخدام موقعك لتتبّع تسجيل الحضور والانصراف وتحديث مواقع السائقين آنيًا أثناء الرحلات.",
+    "NSMicrophoneUsageDescription": "اسمح لـ $(PRODUCT_NAME) بالوصول إلى الميكروفون.",
+    "NSMotionUsageDescription": "اسمح لـ $(PRODUCT_NAME) باستخدام نشاط الحركة لدعم تسجيل الحضور والانصراف التلقائي بناءً على الموقع.",
+    "NSPhotoLibraryUsageDescription": "اسمح لـ $(PRODUCT_NAME) بالوصول إلى صورك."
+  }
 }
