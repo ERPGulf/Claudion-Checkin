@@ -27,6 +27,30 @@ export const logAttendanceDiagnostic = (prefix, label, details) => {
 
 export const isoTime = (ms) => (Number(ms) > 0 ? new Date(Number(ms)).toISOString() : null);
 
+// Persistent Android diagnostics contain lifecycle metadata only. Never pass
+// payloads, server messages, employee/tenant identifiers or location fixes here.
+const LIFECYCLE_FIELDS = new Set([
+  "timestamp", "occurredAt", "queueRowId", "status", "httpStatus", "retry", "retryable",
+  "attempt", "attemptAt", "nextAttemptAt", "durationMs", "networkAvailable",
+  "serverReachable", "appState", "count", "reason",
+]);
+export const recordAttendanceLifecycle = (stage, details = {}) => {
+  if (!__DEV__) return;
+  try {
+    const safe = Object.fromEntries(Object.entries(details).filter(([key, value]) =>
+      LIFECYCLE_FIELDS.has(key) && (value == null || typeof value === "boolean" ||
+        (typeof value === "number" && Number.isFinite(value)) ||
+        (typeof value === "string" && /^[a-zA-Z0-9_-]{1,64}$/.test(value)))));
+    // Native event IDs are UUIDs. Legacy IDs can embed identifiers and are
+    // deliberately excluded from this privacy-limited journal.
+    const eventId = /^[a-f0-9-]{36}$/i.test(details.eventId ?? "") ? details.eventId : "";
+    logAttendanceDiagnostic("[AttendanceLifecycle]", stage, { eventId, ...safe });
+    require("../../modules/expo-auto-attendance").recordBackgroundSyncDiagnostic?.(stage, eventId, safe);
+  } catch {
+    // Instrumentation cannot change attendance outcomes or acknowledgement.
+  }
+};
+
 /**
  * What an Axios failure actually proves. Without an HTTP response nothing is
  * invented: the body is reported as NO_HTTP_RESPONSE, and a dispatched request

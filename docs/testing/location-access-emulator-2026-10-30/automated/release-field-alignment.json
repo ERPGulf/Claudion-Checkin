@@ -1,0 +1,18 @@
+{
+  "appVersion": "1.2.1",
+  "runtime": "1.2.1-sdk57-location-cutoff-v1",
+  "androidVersionCode": 24,
+  "iosBuild": "16",
+  "infoVersion": "1.2.1",
+  "infoBuild": "16",
+  "updatesRuntime": "1.2.1-sdk57-location-cutoff-v1",
+  "xcodeBuildVersions": [
+    "16",
+    "16"
+  ],
+  "xcodeMarketingVersions": [
+    "1.2.1",
+    "1.2.1"
+  ],
+  "aligned": true
+}

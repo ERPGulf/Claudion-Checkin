@@ -1,0 +1,5226 @@
+
+> claudion-checkin@1.2.1 test
+> jest __tests__/autoAttendanceEventProcessor.test.js --runInBand --watchman=false
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'accepted-before-tenant-geo',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:02.914Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: true,
+      serverConfirmed: false,
+      queueRowId: 1,
+      serverRecord: null,
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'disabled',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:02.928Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'employee-mode-0',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:02.942Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'employee-mode-1',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:02.949Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'new-employee-response',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:02.963Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'accepted-before-revocation',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:02.971Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: true,
+      serverConfirmed: false,
+      queueRowId: 1,
+      serverRecord: null,
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'refused-before-transport',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:02.974Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'enter-1',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:02.982Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'enter-2',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:04.852Z',
+      receivedAt: '2026-10-30T15:42:02.983Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'skipped',
+      reason: null,
+      queued: false,
+      serverConfirmed: false,
+      queueRowId: null,
+      serverRecord: null,
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:02.988Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'exit',
+      transition: 'EXIT',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:04.852Z',
+      receivedAt: '2026-10-30T15:42:02.990Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_OUT'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'exit-repeat',
+      transition: 'EXIT',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:05.852Z',
+      receivedAt: '2026-10-30T15:42:02.990Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'skipped',
+      reason: null,
+      queued: false,
+      serverConfirmed: false,
+      queueRowId: null,
+      serverRecord: null,
+      session: 'CHECKED_OUT'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AttendanceQueueService] Queued IN
+    {
+      "employeeCode": "EMP-001",
+      "timestamp": "2026-10-30 20:12:03",
+      "attendanceType": "auto",
+      "id": 1
+    }
+
+      at log (services/offline/attendanceDiagnostics.js:22:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:02.997Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: true,
+      serverConfirmed: false,
+      queueRowId: 1,
+      serverRecord: null,
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AttendanceQueueService] Paired check-out #2 with check-in #1
+
+      at log (services/offline/AttendanceQueueService.js:358:17)
+
+  console.log
+    [AttendanceQueueService] Queued OUT
+    {
+      "employeeCode": "EMP-001",
+      "timestamp": "2026-10-30 20:12:04",
+      "attendanceType": "auto",
+      "id": 2
+    }
+
+      at log (services/offline/attendanceDiagnostics.js:22:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'exit',
+      transition: 'EXIT',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:04.852Z',
+      receivedAt: '2026-10-30T15:42:02.999Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: true,
+      serverConfirmed: false,
+      queueRowId: 2,
+      serverRecord: null,
+      session: 'CHECKED_OUT'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AttendanceQueueService] Queued IN
+    {
+      "employeeCode": "EMP-001",
+      "timestamp": "2026-10-30 20:12:03",
+      "attendanceType": "auto",
+      "id": 1
+    }
+
+      at log (services/offline/attendanceDiagnostics.js:22:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'firewall-enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:03.011Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: true,
+      serverConfirmed: false,
+      queueRowId: 1,
+      serverRecord: null,
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AttendanceQueueService] Paired check-out #2 with check-in #1
+
+      at log (services/offline/AttendanceQueueService.js:358:17)
+
+  console.log
+    [AttendanceQueueService] Queued OUT
+    {
+      "employeeCode": "EMP-001",
+      "timestamp": "2026-10-30 20:12:04",
+      "attendanceType": "auto",
+      "id": 2
+    }
+
+      at log (services/offline/attendanceDiagnostics.js:22:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'firewall-exit',
+      transition: 'EXIT',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:04.852Z',
+      receivedAt: '2026-10-30T15:42:03.013Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: true,
+      serverConfirmed: false,
+      queueRowId: 2,
+      serverRecord: null,
+      session: 'CHECKED_OUT'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AttendanceQueueService] Queued IN
+    {
+      "employeeCode": "EMP-001",
+      "timestamp": "2026-10-30 14:42:03",
+      "attendanceType": "auto",
+      "id": 1
+    }
+
+      at log (services/offline/attendanceDiagnostics.js:22:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'frozen',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:03.020Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: true,
+      serverConfirmed: false,
+      queueRowId: 1,
+      serverRecord: null,
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AttendanceQueueService] Queued IN
+    {
+      "employeeCode": "EMP-001",
+      "timestamp": "2026-10-30 20:12:03",
+      "attendanceType": "auto",
+      "id": 1
+    }
+
+      at log (services/offline/attendanceDiagnostics.js:22:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:03.030Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: true,
+      serverConfirmed: false,
+      queueRowId: 1,
+      serverRecord: null,
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AttendanceQueueService] Paired check-out #2 with check-in #1
+
+      at log (services/offline/AttendanceQueueService.js:358:17)
+
+  console.log
+    [AttendanceQueueService] Queued OUT
+    {
+      "employeeCode": "EMP-001",
+      "timestamp": "2026-10-30 20:12:04",
+      "attendanceType": "auto",
+      "id": 2
+    }
+
+      at log (services/offline/attendanceDiagnostics.js:22:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'exit',
+      transition: 'EXIT',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:04.852Z',
+      receivedAt: '2026-10-30T15:42:03.035Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: true,
+      serverConfirmed: false,
+      queueRowId: 2,
+      serverRecord: null,
+      session: 'CHECKED_OUT'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:03.039Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AttendanceQueueService] Queued OUT
+    {
+      "employeeCode": "EMP-001",
+      "timestamp": "2026-10-30 20:12:04",
+      "attendanceType": "auto",
+      "id": 1
+    }
+
+      at log (services/offline/attendanceDiagnostics.js:22:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'exit',
+      transition: 'EXIT',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:04.852Z',
+      receivedAt: '2026-10-30T15:42:03.043Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: true,
+      serverConfirmed: false,
+      queueRowId: 1,
+      serverRecord: null,
+      session: 'CHECKED_OUT'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AttendanceQueue] #1 pending → syncing
+    {
+      "action": "checkout",
+      "timestamp": "2026-10-30 20:12:04",
+      "reason": "claimed (manual); no older unresolved row holds it",
+      "attemptCount": 1,
+      "retryCount": 0,
+      "lastError": null,
+      "uploadDispatchedAt": null
+    }
+
+      at log (services/offline/attendanceDiagnostics.js:22:13)
+
+  console.log
+    [AttendanceQueue] #1 syncing → uploading
+    {
+      "reason": "uploadAttemptAt recorded before the POST. From here a failure without proof of the outcome is settled only by server history.",
+      "attemptCount": 1,
+      "retryCount": 0
+    }
+
+      at log (services/offline/attendanceDiagnostics.js:22:13)
+
+  console.log
+    [AttendanceUpload] #1 sending
+    {
+      "method": "POST",
+      "endpoint": "https://attendance.example.com/api/method/employee_app.attendance_api.add_offline_employee_checkins",
+      "queueRowId": 1,
+      "queueState": {
+        "status": "syncing",
+        "attemptCount": 1,
+        "retryCount": 0
+      },
+      "network": null,
+      "startedAt": "2026-10-30T15:42:03.052Z",
+      "payload": {
+        "logs": [
+          {
+            "employee": "HR-EMP-001",
+            "timestamp": "2026-10-30 20:12:04",
+            "device_id": "MobileAPP",
+            "log_type": "OUT",
+            "over_time": 0
+          }
+        ]
+      }
+    }
+
+      at log (services/offline/attendanceDiagnostics.js:22:13)
+
+  console.log
+    [AttendanceUpload] #1 HTTP 200
+    {
+      "status": 200,
+      "durationMs": 2,
+      "body": {
+        "message": {
+          "inserted": [
+            "SERVER-OUT"
+          ],
+          "failed": []
+        }
+      },
+      "backendReturned": {
+        "status": null,
+        "inserted": [
+          "SERVER-OUT"
+        ],
+        "failed": []
+      },
+      "interpretedAs": {
+        "result": "inserted",
+        "serverCheckinId": "SERVER-OUT",
+        "failureClass": null,
+        "message": "Attendance recorded"
+      }
+    }
+
+      at log (services/offline/attendanceDiagnostics.js:22:13)
+
+  console.log
+    [AttendanceSyncService] Synced #1
+    {
+      "serverCheckinId": "SERVER-OUT"
+    }
+
+      at log (services/offline/attendanceDiagnostics.js:22:13)
+
+  console.log
+    [offlineCapability] Offline sync supported: true
+
+      at log (services/offline/offlineCapability.js:117:11)
+
+  console.log
+    [AttendanceQueue] #1 syncing → synced
+    {
+      "action": "checkout",
+      "timestamp": "2026-10-30 20:12:04",
+      "outcome": "synced",
+      "reason": "synced",
+      "attemptCount": 1,
+      "retryCount": 0,
+      "failureClass": null,
+      "verificationIssue": null,
+      "uploadDispatchedAt": "2026-10-30T15:42:03.051Z",
+      "retryEligibility": "Final; no further attempts.",
+      "holdsLaterRows": false
+    }
+
+      at log (services/offline/attendanceDiagnostics.js:22:13)
+
+  console.log
+    [AttendanceSyncService] Run (manual)
+    {
+      "ran": true,
+      "reason": null,
+      "scope": "EMP-001",
+      "synced": 1,
+      "duplicates": 0,
+      "blocked": 0,
+      "rejected": 0,
+      "needsReview": 0,
+      "woken": 0,
+      "wokenPending": 0,
+      "remaining": 0,
+      "head": null
+    }
+
+      at log (services/offline/attendanceDiagnostics.js:22:13)
+
+  console.log
+    [AttendanceQueueService] Queued IN
+    {
+      "employeeCode": "EMP-001",
+      "timestamp": "2026-10-30 20:12:03",
+      "attendanceType": "auto",
+      "id": 1
+    }
+
+      at log (services/offline/attendanceDiagnostics.js:22:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:03.058Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: true,
+      serverConfirmed: false,
+      queueRowId: 1,
+      serverRecord: null,
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'exit',
+      transition: 'EXIT',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:03.065Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_OUT'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:03.070Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'exit',
+      transition: 'EXIT',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:04.852Z',
+      receivedAt: '2026-10-30T15:42:03.073Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'skipped',
+      reason: null,
+      queued: false,
+      serverConfirmed: false,
+      queueRowId: null,
+      serverRecord: null,
+      session: 'CHECKED_OUT'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'first',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:03.076Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'second',
+      transition: 'EXIT',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:04.852Z',
+      receivedAt: '2026-10-30T15:42:03.076Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_OUT'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'third',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:05.852Z',
+      receivedAt: '2026-10-30T15:42:03.075Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'fourth',
+      transition: 'EXIT',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:06.852Z',
+      receivedAt: '2026-10-30T15:42:03.076Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_OUT'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:03.088Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:03.092Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Native acknowledgement retained { code: undefined }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:110:17)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:03.096Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Native acknowledgement retained { code: undefined }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:110:17)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'in-1',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:02.100Z',
+      receivedAt: '2026-10-30T15:42:03.102Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'out-1',
+      transition: 'EXIT',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:02.200Z',
+      receivedAt: '2026-10-30T15:42:03.104Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_OUT'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'mine',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:04.852Z',
+      receivedAt: '2026-10-30T15:42:03.113Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:03.129Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'EXISTING-SERVER',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:03.138Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'review-retry',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:03.148Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'REVIEW-FOUND',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'review-clock',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:03.155Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'FOUND-AFTER-CLOCK-CHANGE',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'genuine-enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:04.852Z',
+      receivedAt: '2026-10-30T15:42:03.168Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'genuine-enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:04.852Z',
+      receivedAt: '2026-10-30T15:42:03.173Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'genuine-enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:04.852Z',
+      receivedAt: '2026-10-30T15:42:03.177Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'genuine-enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:04.852Z',
+      receivedAt: '2026-10-30T15:42:03.182Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'genuine-enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:04.852Z',
+      receivedAt: '2026-10-30T15:42:03.187Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'genuine-enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:04.852Z',
+      receivedAt: '2026-10-30T15:42:03.192Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'genuine-enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:04.852Z',
+      receivedAt: '2026-10-30T15:42:03.196Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'genuine-enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:04.852Z',
+      receivedAt: '2026-10-30T15:42:03.201Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'genuine-enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:04.852Z',
+      receivedAt: '2026-10-30T15:42:03.205Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'valid-enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:03.208Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'valid-enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:03.212Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'valid-enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:03.216Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'next-genuine-enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:05.852Z',
+      receivedAt: '2026-10-30T15:42:03.222Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'new-office',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:04.852Z',
+      receivedAt: '2026-10-30T15:42:03.229Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:03.232Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'access-loss',
+      transition: null,
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:04.852Z',
+      receivedAt: '2026-10-30T15:42:03.236Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_OUT'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:03.239Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'access-loss',
+      transition: null,
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:04.852Z',
+      receivedAt: '2026-10-30T15:42:03.243Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_OUT'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:03.246Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'access-loss',
+      transition: null,
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:04.852Z',
+      receivedAt: '2026-10-30T15:42:03.249Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_OUT'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:03.252Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'access-loss',
+      transition: null,
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:04.852Z',
+      receivedAt: '2026-10-30T15:42:03.255Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_OUT'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:03.258Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:03.264Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:03.268Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:03.273Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:03.277Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:03.282Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:03.287Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'access-recovery',
+      transition: null,
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:05.852Z',
+      receivedAt: '2026-10-30T15:42:03.293Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'skipped',
+      reason: null,
+      queued: false,
+      serverConfirmed: false,
+      queueRowId: null,
+      serverRecord: null,
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'access-recovery',
+      transition: null,
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:05.852Z',
+      receivedAt: '2026-10-30T15:42:03.297Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'skipped',
+      reason: null,
+      queued: false,
+      serverConfirmed: false,
+      queueRowId: null,
+      serverRecord: null,
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'access-recovery',
+      transition: null,
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:05.852Z',
+      receivedAt: '2026-10-30T15:42:03.300Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'skipped',
+      reason: null,
+      queued: false,
+      serverConfirmed: false,
+      queueRowId: null,
+      serverRecord: null,
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:03.302Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'access-loss',
+      transition: null,
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:04.852Z',
+      receivedAt: '2026-10-30T15:42:03.304Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_OUT'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'access-recovery',
+      transition: null,
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:05.852Z',
+      receivedAt: '2026-10-30T15:42:03.304Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:03.311Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'access-loss',
+      transition: null,
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:04.852Z',
+      receivedAt: '2026-10-30T15:42:03.312Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_OUT'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:03.319Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'access-loss',
+      transition: null,
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:04.852Z',
+      receivedAt: '2026-10-30T15:42:03.320Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_OUT'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:03.326Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'access-loss',
+      transition: null,
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:04.852Z',
+      receivedAt: '2026-10-30T15:42:03.327Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_OUT'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:03.333Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'access-loss',
+      transition: null,
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:04.852Z',
+      receivedAt: '2026-10-30T15:42:03.334Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_OUT'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:03.340Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'access-loss',
+      transition: null,
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:04.852Z',
+      receivedAt: '2026-10-30T15:42:03.341Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_OUT'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:03.347Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'access-loss',
+      transition: null,
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:04.852Z',
+      receivedAt: '2026-10-30T15:42:03.348Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_OUT'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:03.353Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'access-loss',
+      transition: null,
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:04.852Z',
+      receivedAt: '2026-10-30T15:42:03.355Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_OUT'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:03.361Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'access-loss',
+      transition: null,
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:04.852Z',
+      receivedAt: '2026-10-30T15:42:03.362Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_OUT'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:03.369Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'access-loss',
+      transition: null,
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:04.852Z',
+      receivedAt: '2026-10-30T15:42:03.371Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_OUT'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:03.377Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'access-loss',
+      transition: null,
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:04.852Z',
+      receivedAt: '2026-10-30T15:42:03.378Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_OUT'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:03.385Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'access-loss',
+      transition: null,
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:04.852Z',
+      receivedAt: '2026-10-30T15:42:03.387Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_OUT'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:03.394Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'access-loss',
+      transition: null,
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:04.852Z',
+      receivedAt: '2026-10-30T15:42:03.395Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_OUT'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:03.401Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'access-loss',
+      transition: null,
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:04.852Z',
+      receivedAt: '2026-10-30T15:42:03.402Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_OUT'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'genuine-return-enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:07.852Z',
+      receivedAt: '2026-10-30T15:42:03.408Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:03.412Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'access-loss',
+      transition: null,
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:04.852Z',
+      receivedAt: '2026-10-30T15:42:03.413Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_OUT'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:03.421Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AttendanceQueueService] Queued OUT
+    {
+      "employeeCode": "EMP-001",
+      "timestamp": "2026-10-30 20:12:04",
+      "attendanceType": "auto",
+      "id": 1
+    }
+
+      at log (services/offline/attendanceDiagnostics.js:22:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'access-loss',
+      transition: null,
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:04.852Z',
+      receivedAt: '2026-10-30T15:42:03.426Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: true,
+      serverConfirmed: false,
+      queueRowId: 1,
+      serverRecord: null,
+      session: 'CHECKED_OUT'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AttendanceQueue] #1 pending → syncing
+    {
+      "action": "checkout",
+      "timestamp": "2026-10-30 20:12:04",
+      "reason": "claimed (manual); no older unresolved row holds it",
+      "attemptCount": 1,
+      "retryCount": 0,
+      "lastError": null,
+      "uploadDispatchedAt": null
+    }
+
+      at log (services/offline/attendanceDiagnostics.js:22:13)
+
+  console.log
+    [AttendanceQueue] #1 syncing → uploading
+    {
+      "reason": "uploadAttemptAt recorded before the POST. From here a failure without proof of the outcome is settled only by server history.",
+      "attemptCount": 1,
+      "retryCount": 0
+    }
+
+      at log (services/offline/attendanceDiagnostics.js:22:13)
+
+  console.log
+    [AttendanceUpload] #1 sending
+    {
+      "method": "POST",
+      "endpoint": "https://attendance.example.com/api/method/employee_app.attendance_api.add_offline_employee_checkins",
+      "queueRowId": 1,
+      "queueState": {
+        "status": "syncing",
+        "attemptCount": 1,
+        "retryCount": 0
+      },
+      "network": null,
+      "startedAt": "2026-10-30T15:42:03.431Z",
+      "payload": {
+        "logs": [
+          {
+            "employee": "HR-EMP-001",
+            "timestamp": "2026-10-30 20:12:04",
+            "device_id": "MobileAPP",
+            "log_type": "OUT",
+            "over_time": 0
+          }
+        ]
+      }
+    }
+
+      at log (services/offline/attendanceDiagnostics.js:22:13)
+
+  console.log
+    [AttendanceUpload] #1 HTTP 200
+    {
+      "status": 200,
+      "durationMs": 0,
+      "body": {
+        "message": {
+          "inserted": [
+            "DELAYED-OUT"
+          ],
+          "failed": []
+        }
+      },
+      "backendReturned": {
+        "status": null,
+        "inserted": [
+          "DELAYED-OUT"
+        ],
+        "failed": []
+      },
+      "interpretedAs": {
+        "result": "inserted",
+        "serverCheckinId": "DELAYED-OUT",
+        "failureClass": null,
+        "message": "Attendance recorded"
+      }
+    }
+
+      at log (services/offline/attendanceDiagnostics.js:22:13)
+
+  console.log
+    [AttendanceSyncService] Synced #1
+    {
+      "serverCheckinId": "DELAYED-OUT"
+    }
+
+      at log (services/offline/attendanceDiagnostics.js:22:13)
+
+  console.log
+    [offlineCapability] Offline sync supported: true
+
+      at log (services/offline/offlineCapability.js:117:11)
+
+  console.log
+    [AttendanceQueue] #1 syncing → synced
+    {
+      "action": "checkout",
+      "timestamp": "2026-10-30 20:12:04",
+      "outcome": "synced",
+      "reason": "synced",
+      "attemptCount": 1,
+      "retryCount": 0,
+      "failureClass": null,
+      "verificationIssue": null,
+      "uploadDispatchedAt": "2026-10-30T15:42:03.430Z",
+      "retryEligibility": "Final; no further attempts.",
+      "holdsLaterRows": false
+    }
+
+      at log (services/offline/attendanceDiagnostics.js:22:13)
+
+  console.log
+    [AttendanceSyncService] Run (manual)
+    {
+      "ran": true,
+      "reason": null,
+      "scope": "EMP-001",
+      "synced": 1,
+      "duplicates": 0,
+      "blocked": 0,
+      "rejected": 0,
+      "needsReview": 0,
+      "woken": 0,
+      "wokenPending": 0,
+      "remaining": 0,
+      "head": null
+    }
+
+      at log (services/offline/attendanceDiagnostics.js:22:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:03.434Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'access-loss',
+      transition: null,
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:04.852Z',
+      receivedAt: '2026-10-30T15:42:03.438Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'PREVIOUS-OUT',
+      session: 'CHECKED_OUT'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'access-recovery',
+      transition: null,
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:05.852Z',
+      receivedAt: '2026-10-30T15:42:03.441Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:03.444Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'access-loss',
+      transition: null,
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:04.852Z',
+      receivedAt: '2026-10-30T15:42:03.446Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_OUT'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'access-loss',
+      transition: null,
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:04.852Z',
+      receivedAt: '2026-10-30T15:42:03.446Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'skipped',
+      reason: null,
+      queued: false,
+      serverConfirmed: false,
+      queueRowId: null,
+      serverRecord: null,
+      session: 'CHECKED_OUT'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'access-recovery',
+      transition: null,
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:05.852Z',
+      receivedAt: '2026-10-30T15:42:03.451Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:03.454Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'access-loss',
+      transition: null,
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:04.852Z',
+      receivedAt: '2026-10-30T15:42:03.455Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_OUT'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'access-recovery',
+      transition: null,
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:05.852Z',
+      receivedAt: '2026-10-30T15:42:03.459Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:03.463Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'access-loss',
+      transition: null,
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:04.852Z',
+      receivedAt: '2026-10-30T15:42:03.465Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_OUT'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.234Z',
+      receivedAt: '2026-10-30T15:42:03.473Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'access-loss',
+      transition: null,
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:04.852Z',
+      receivedAt: '2026-10-30T15:42:03.477Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_OUT'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'access-recovery',
+      transition: null,
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:05.852Z',
+      receivedAt: '2026-10-30T15:42:03.477Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+  console.log
+    [AutoAttendance] Event processed {
+      eventId: 'enter',
+      transition: 'ENTER',
+      geofence: 'office-main',
+      detectedAt: '2026-10-30T14:42:03.852Z',
+      receivedAt: '2026-10-30T15:42:03.482Z',
+      appState: [Function: mockConstructor] {
+        _isMockFunction: true,
+        getMockImplementation: [Function (anonymous)],
+        mock: [Getter/Setter],
+        mockClear: [Function (anonymous)],
+        mockReset: [Function (anonymous)],
+        mockRestore: [Function (anonymous)],
+        mockReturnValueOnce: [Function (anonymous)],
+        mockResolvedValueOnce: [Function (anonymous)],
+        mockRejectedValueOnce: [Function (anonymous)],
+        mockReturnValue: [Function (anonymous)],
+        mockResolvedValue: [Function (anonymous)],
+        mockRejectedValue: [Function (anonymous)],
+        mockImplementationOnce: [Function (anonymous)],
+        withImplementation: [Function: bound withImplementation],
+        mockImplementation: [Function (anonymous)],
+        mockReturnThis: [Function (anonymous)],
+        mockName: [Function (anonymous)],
+        getMockName: [Function (anonymous)]
+      },
+      transport: true,
+      status: 'completed',
+      reason: null,
+      queued: false,
+      serverConfirmed: true,
+      queueRowId: null,
+      serverRecord: 'SERVER-1',
+      session: 'CHECKED_IN'
+    }
+
+      at log (services/offline/AutoAttendanceEventProcessor.js:193:13)
+
+PASS __tests__/autoAttendanceEventProcessor.test.js
+  ✓ retains a background ENTER receipt without a new punch under tenant geo_tagging false / employee mode 2 (31 ms)
+  ✓ retains a background EXIT receipt without a new punch under tenant geo_tagging false / employee mode 2 (9 ms)
+  ✓ rechecks tenant geo_tagging false received during a pending event server-clock request (7 ms)
+  ✓ does not adopt another tenant's geo authorization for an event pending during tenant switching (6 ms)
+  ✓ recovers an accepted source event after tenant geo is disabled (19 ms)
+  ✓ retains native receipts without creating punches when automatic attendance is disabled (10 ms)
+  ✓ rechecks a received automatic denial during timestamp resolution (4 ms)
+  ✓ retains new native attendance when employee mode is 0, then accepts a legitimate re-enable (7 ms)
+  ✓ retains new native attendance when employee mode is 1, then accepts a legitimate re-enable (7 ms)
+  ✓ rechecks employee mode 0 received during pending server-clock work (4 ms)
+  ✓ rechecks employee mode 1 received during pending server-clock work (4 ms)
+  ✓ does not let an older cached mode 0 override a newly received employee mode 2 (5 ms)
+  ✓ recovers an already accepted source queue row after employee mode is revoked (5 ms)
+  ✓ retains a local service denial without requiring evidence for a request never dispatched (8 ms)
+  ✓ valid ENTER and repeated ENTER create exactly one IN (7 ms)
+  ✓ valid EXIT and repeated EXIT create exactly one OUT with the captured timestamp (9 ms)
+  ✓ retains and queues offline ENTER/EXIT in order without native overwrite (14 ms)
+  ✓ queues both firewall-blocked crossings without online or upload dispatch evidence (8 ms)
+  ✓ checks the instance again before dispatch when a prior safe attempt froze the timestamp (5 ms)
+  ✓ retains an explicit authentication refusal without an attendance dispatch marker (3 ms)
+  ✓ does not dispatch or enqueue into a new account when ownership changes during the health read (3 ms)
+  ✓ online OUT remains behind an earlier queued IN when the app reopens (8 ms)
+  ✓ online ENTER then offline EXIT: the check-out is kept locally and delivered exactly once (19 ms)
+  ✓ does not submit an orphan OUT after the queued IN was rejected (8 ms)
+  ✓ manual check-in followed by auto EXIT closes the shared manual session (4 ms)
+  ✓ auto check-in followed by manual checkout makes subsequent EXIT a no-op (5 ms)
+  ✓ processes rapid boundary transitions once in native sequence (11 ms)
+  ✓ does not acknowledge native events when durable SQLite insertion fails (6 ms)
+  ✓ native ack failure and repeated delivery cannot reset an earlier outcome (5 ms)
+  ✓ a throwing native ack retains native evidence and still processes the committed receipt (5 ms)
+  ✓ same-second distinct IN events need review rather than duplicate server attendance (9 ms)
+  ✓ tenant switching never processes another tenant's captured event (6 ms)
+  ✓ logout during HTTP submission cannot commit into the next account session (8 ms)
+  ✓ warnings-only native events never create attendance (2 ms)
+  ✓ unknown legacy ownership is retained for review without a punch (2 ms)
+  ✓ an interrupted POST requires positive server evidence before session recovery (5 ms)
+  ✓ uncertain interrupted IN is not resent and prevents its OUT from overtaking (3 ms)
+  ✓ does not steal another runtime's live claim before its POST evidence exists (2 ms)
+  ✓ expired claim without a POST can safely resume once after restart (5 ms)
+  ✓ a rejected source queue row is never treated as an accepted IN (2 ms)
+  ✓ review verification needs positive history evidence and never sends attendance (3 ms)
+  ✓ automatically rechecks review receipts with bounded history reads and never resends their POST (7 ms)
+  ✓ does not strand review verification behind a check time left in the future by a clock correction (4 ms)
+  ✓ bounds a review pass to five receipts and keeps later receipts for another pass (5 ms)
+  ✓ invalid registration fingerprints are retained for review without attendance (3 ms)
+  ✓ retains malformed string initial marker for review and permits the next genuine ENTER (4 ms)
+  ✓ retains malformed numeric initial marker for review and permits the next genuine ENTER (5 ms)
+  ✓ retains malformed null initial marker for review and permits the next genuine ENTER (4 ms)
+  ✓ retains malformed missing registration start for review and permits the next genuine ENTER (5 ms)
+  ✓ retains malformed string registration start for review and permits the next genuine ENTER (5 ms)
+  ✓ retains malformed zero registration start for review and permits the next genuine ENTER (4 ms)
+  ✓ retains malformed negative registration start for review and permits the next genuine ENTER (4 ms)
+  ✓ retains malformed nonfinite registration start for review and permits the next genuine ENTER (4 ms)
+  ✓ retains malformed registration after observation for review and permits the next genuine ENTER (4 ms)
+  ✓ accepts valid initial observation without changing attendance contracts (4 ms)
+  ✓ accepts valid explicit genuine marker without changing attendance contracts (5 ms)
+  ✓ accepts valid older receipt without metadata without changing attendance contracts (3 ms)
+  ✓ late initial ENTER cannot reopen manual checkout and a subsequent genuine ENTER remains eligible (6 ms)
+  ✓ a callback from a removed office after configuration refresh cannot create attendance (2 ms)
+  ✓ a rejected stale registration receipt cannot suppress the next valid office ENTER (5 ms)
+  ✓ confirmed OS services-disabled closes exactly one AUTO session at the first observed time (7 ms)
+  ✓ confirmed OS foreground-permission-lost closes exactly one AUTO session at the first observed time (6 ms)
+  ✓ confirmed OS background-permission-lost closes exactly one AUTO session at the first observed time (7 ms)
+  ✓ confirmed OS precise-permission-lost closes exactly one AUTO session at the first observed time (6 ms)
+  ✓ weak-gps cannot masquerade as an OS access revocation or close an indoor AUTO session (5 ms)
+  ✓ inaccurate-coordinates cannot masquerade as an OS access revocation or close an indoor AUTO session (5 ms)
+  ✓ indoor-signal-loss cannot masquerade as an OS access revocation or close an indoor AUTO session (5 ms)
+  ✓ location-timeout cannot masquerade as an OS access revocation or close an indoor AUTO session (4 ms)
+  ✓ battery-saver cannot masquerade as an OS access revocation or close an indoor AUTO session (5 ms)
+  ✓ network-disconnected cannot masquerade as an OS access revocation or close an indoor AUTO session (5 ms)
+  ✓ GEOFENCE_NOT_AVAILABLE cannot masquerade as an OS access revocation or close an indoor AUTO session (5 ms)
+  ✓ access loss preserves an existing MANUAL session and cannot authorize recovery IN (3 ms)
+  ✓ access loss preserves an existing UNKNOWN session and cannot authorize recovery IN (3 ms)
+  ✓ unproven legacy AUTO registration cannot authorize an access cutoff (4 ms)
+  ✓ restoration inside starts one new session only after the matched cutoff and ignores replay (8 ms)
+  ✓ different generation recovery cannot reopen the cut-off session (8 ms)
+  ✓ different loss recovery cannot reopen the cut-off session (7 ms)
+  ✓ another employee recovery cannot reopen the cut-off session (6 ms)
+  ✓ another tenant recovery cannot reopen the cut-off session (7 ms)
+  ✓ pre-loss request recovery cannot reopen the cut-off session (6 ms)
+  ✓ cached fix recovery cannot reopen the cut-off session (7 ms)
+  ✓ imprecise fix recovery cannot reopen the cut-off session (7 ms)
+  ✓ malformed accuracy recovery cannot reopen the cut-off session (9 ms)
+  ✓ same office fingerprint under a replacement registration cannot authorize stale recovery (7 ms)
+  ✓ a registration replacement during recovery timestamp work prevents submission (8 ms)
+  ✓ manual activity between cutoff and recovery permanently refuses the recovery check-in (8 ms)
+  ✓ outside recovery adds no punch (7 ms)
+  ✓ a genuine ENTER after outside recovery starts exactly one fresh AUTO session across replay (11 ms)
+  ✓ recovery-era initial ENTER never becomes a delayed punch, including after restart (9 ms)
+  ✓ delayed offline cutoff keeps its original timestamp through restart and upload (13 ms)
+  ✓ an ambiguous access-loss POST is verified after restart without a second OUT (11 ms)
+  ✓ a crash after committing the cutoff but before settlement retains exact session identity (9 ms)
+  ✓ unknown access before recovery dispatch waits safely, and a later confirmed read permits one IN (9 ms)
+  ✓ a newer confirmed access-loss episode supersedes an unsubmitted recovery (8 ms)
+  ✓ recovery persistence retains structural position fields only (2 ms)
+  ✓ exact server-second reconciliation preserves the receipt identity needed for cutoff and recovery (8 ms)
+  ✓ a different server timestamp cannot inherit the previous AUTO receipt generation (5 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       97 passed, 97 total
+Snapshots:   0 total
+Time:        2.731 s, estimated 6 s
+Ran all test suites matching /__tests__\/autoAttendanceEventProcessor.test.js/i.

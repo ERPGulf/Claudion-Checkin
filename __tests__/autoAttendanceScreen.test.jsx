@@ -1,10 +1,11 @@
 import React from 'react';
 import { Switch } from 'react-native';
-import { fireEvent, render } from '@testing-library/react-native';
+import { act, fireEvent, render } from '@testing-library/react-native';
 
+let mockScheme = 'light';
 jest.mock('react-native/Libraries/Utilities/useColorScheme', () => ({
   __esModule: true,
-  default: () => 'light',
+  default: () => mockScheme,
 }));
 jest.mock('@expo/vector-icons', () => {
   const { Text } = require('react-native');
@@ -37,7 +38,8 @@ jest.mock('../hooks/useAutoAttendance', () => ({ __esModule: true, default: () =
 import AutoAttendance from '../screens/AutoAttendance';
 import AutoAttendanceLegacy from '../screens/AutoAttendanceLegacy';
 import { GEOTAGGING_LABELS } from '../redux/Slices/AutoAttendanceSlice';
-import { describeAutoAttendanceStatus } from '../utils/autoAttendance';
+import { describeAutoAttendanceStatus, describeLocationVerification } from '../utils/autoAttendance';
+import { setLanguage, t } from '../localization';
 /* eslint-enable import/first */
 
 const hook = ({ configured = true, permitted = true, monitoring = 'active' } = {}) => {
@@ -54,6 +56,13 @@ const hook = ({ configured = true, permitted = true, monitoring = 'active' } = {
     handleSimulatePolicy: jest.fn(), handleResetPolicy: jest.fn(),
   };
 };
+
+beforeEach(async () => {
+  mockScheme = 'light';
+  await act(async () => { await setLanguage('en'); });
+});
+
+afterEach(async () => { await act(async () => { await setLanguage('en'); }); });
 
 describe.each([
   ['modern', AutoAttendance],
@@ -92,5 +101,36 @@ describe.each([
 
     expect(screen.getAllByText('Monitoring unavailable').length).toBeGreaterThan(0);
     expect(screen.getByText(/could not start/)).toBeTruthy();
+  });
+
+  it.each([['light', 'en'], ['dark', 'en'], ['light', 'ar'], ['dark', 'ar']])(
+    'shows safe recovery and preserved-session messages in %s/%s', async (scheme, language) => {
+      mockScheme = scheme;
+      await act(async () => { await setLanguage(language); });
+      const locationAccess = { state: 'confirmed_available', recoveryPending: true };
+      mockHook = { ...hook(),
+        status: describeAutoAttendanceStatus({ configured: true, permitted: true, monitoring: 'active', locationAccess }),
+        verificationNotice: describeLocationVerification({ locationAccess }),
+      };
+      const screen = render(<Screen />);
+      expect(screen.getByText(t('Waiting for an accurate location. We’ll retry automatically.'))).toBeTruthy();
+      expect(screen.queryByText(t('Grant location access'))).toBeNull();
+      expect(screen.queryByText(t('Location signal is weak. Your check-in remains active.'))).toBeNull();
+
+      mockHook = { ...hook(), verificationNotice: describeLocationVerification({
+        autoSessionActive: true, presenceObserved: true, presence: { verification: 'uncertain' },
+      }) };
+      screen.rerender(<Screen />);
+      expect(screen.getByText(t('Location signal is weak. Your check-in remains active.'))).toBeTruthy();
+      expect(screen.queryByText(t('Waiting for an accurate location. We’ll retry automatically.'))).toBeNull();
+    },
+  );
+
+  it('distinguishes disabled device services from missing app permission', () => {
+    const locationAccess = { state: 'confirmed_disabled', reason: 'services-disabled' };
+    mockHook = { ...hook(), status: describeAutoAttendanceStatus({ configured: true, locationAccess }) };
+    const screen = render(<Screen />);
+    expect(screen.getByText('Turn on location services in your device settings to resume automatic attendance.')).toBeTruthy();
+    expect(screen.queryByText('Grant location access')).toBeNull();
   });
 });

@@ -13,7 +13,7 @@ import { readAttendanceConfig, refreshAttendanceConfig } from "../services/offli
 import { addReconnectListener, fetchShouldAttemptRequest } from "../services/offline/NetworkListener";
 import { captureAttendanceQueueScope, assertAttendanceQueueScope } from "../services/offline/attendanceQueueProvenance";
 import { drainAutoAttendanceEvents, ingestPendingNativeEvents } from "../services/offline/AutoAttendanceEventProcessor";
-import { reconcileAutoAttendanceRegistration } from "../utils/autoAttendanceRegistration";
+import { reconcileAutoAttendanceRegistration, registrationStillConfigured } from "../utils/autoAttendanceRegistration";
 import { readLocationAccess } from "../utils/autoAttendance";
 import { isSessionActive, publishCurrentSession, TRANSITION_RESULT } from "../utils/attendanceSessionState";
 import { presentLocalNotification } from "../services/notifications/localNotifications";
@@ -21,6 +21,7 @@ import { useFeatureEnabled } from "../hooks/useFeatureSettings";
 import { ATTENDANCE_FEATURES } from "../utils/featureSettings";
 import { getEmployeeAutoAttendancePolicy } from "../services/employeeAutoAttendancePolicy";
 import { assertCapabilityCurrent } from "../services/capabilityPolicy";
+import { LOCATION_ACCESS_KIND } from "../utils/locationAccessState";
 
 /** Journal replay needs neither a fresh GPS fix nor permission to register again. */
 export default function DurableAutoAttendanceBootstrap() {
@@ -33,6 +34,10 @@ export default function DurableAutoAttendanceBootstrap() {
   const enabled = useSelector(selectAutoAttendanceConfigured);
   const settingsScope = useSelector(selectAutoAttendanceScope);
   const employeeMode = useSelector(selectAutoAttendanceGeotagging);
+  const employeePolicyReady = useSelector(state => {
+    const policy = state.autoAttendance?.employeePolicy;
+    return policy?.scope === selectAutoAttendanceScope(state) && policy?.mode != null;
+  });
   const capabilityAllowed = useFeatureEnabled(ATTENDANCE_FEATURES.AUTO_ATTENDANCE);
   const syncRequestId = useSelector(selectAutoAttendanceSyncRequestId);
   const work = useRef(Promise.resolve());
@@ -41,15 +46,18 @@ export default function DurableAutoAttendanceBootstrap() {
   // settings/tenant geo revocation. Captured receipts remain durable and
   // attributable; automatic monitoring cannot outlive its authorization.
   useEffect(() => {
-    if (!capabilityAllowed || employeeMode === 0 || !enabled || !loggedIn) Native.stopGeofence().catch(() => {});
-  }, [capabilityAllowed, employeeMode, enabled, loggedIn]);
+    // An unhydrated employee policy is not an employer revocation. New native
+    // binaries may already hold a loss episode captured before JS started.
+    const hydrating = Native.supportsLocationAccessEvents?.() && !employeePolicyReady && capabilityAllowed && loggedIn;
+    if (!hydrating && (!capabilityAllowed || employeeMode === 0 || !enabled || !loggedIn)) Native.stopGeofence().catch(() => {});
+  }, [capabilityAllowed, employeeMode, enabled, loggedIn, employeePolicyReady]);
 
   useEffect(() => {
     let cancelled = false;
     const report = (error) => {
       if (!cancelled) console.log("[AutoAttendance] Work retained", { code: error?.code });
     };
-    const onTransition = async (result, scope) => {
+    const onTransition = async (result, scope, event) => {
       if (cancelled || !result?.session) return;
       await publishCurrentSession({
         assertCurrent: () => assertAttendanceQueueScope(scope),
@@ -63,7 +71,9 @@ export default function DurableAutoAttendanceBootstrap() {
       if (result.status === TRANSITION_RESULT.COMPLETED && result.session.closedBy === "AUTO") {
         await presentLocalNotification({ title: result.queued ? "Checked out offline" : "Checked out",
           body: result.queued ? "Your automatic checkout is saved on this device. Check Attendance recovery for synchronization status."
-            : "Your check-in was closed automatically after leaving the office.",
+            : event?.kind === LOCATION_ACCESS_KIND.LOST
+              ? "Your automatic check-in was closed because required location access was turned off."
+              : "Your check-in was closed automatically after leaving the office.",
           data: { type: "auto-checkout", pendingSync: result.queued } });
       }
     };
@@ -75,6 +85,9 @@ export default function DurableAutoAttendanceBootstrap() {
     };
     const run = ({ refresh = false } = {}) => {
       work.current = work.current.catch(() => {}).then(async () => {
+        // Positive OS access evidence is captured before registration repair or
+        // policy/network awaits. Unknown reads never create an interruption.
+        let access = Native.supportsLocationAccessEvents?.() ? Native.refreshLocationAccess() : null;
         // Capture first, including after logout. Receipts keep their original owner.
         await ingestPendingNativeEvents();
         if (cancelled) return;
@@ -85,6 +98,8 @@ export default function DurableAutoAttendanceBootstrap() {
         const scope = { ...await captureAttendanceQueueScope(employeeId), isCancelled: () => cancelled };
         let config = await readAttendanceConfig();
         await assertAttendanceQueueScope(scope);
+        const drain = () => drainAutoAttendanceEvents({ scope,
+          onTransition: (result, event) => onTransition(result, scope, event) });
         // Connected launch/foreground/reconnect refreshes authority before any
         // replay. Offline delivery uses the scoped cache without a network wait.
         if (refresh && await fetchShouldAttemptRequest()) {
@@ -105,9 +120,33 @@ export default function DurableAutoAttendanceBootstrap() {
         if ((policy?.mode ?? 0) !== employeeMode) return;
         config = { ...config, rules: { ...config.rules, geotagging: policy?.mode ?? 0 } };
         assertCapabilityCurrent(ATTENDANCE_FEATURES.AUTO_ATTENDANCE, scope);
+        if (access?.registration && !registrationStillConfigured(access.registration, scope, config)) {
+          // Configuration replacement is a true cancellation, unlike temporary
+          // access loss. Old receipts retain their original attribution.
+          await Native.stopGeofence();
+          access = Native.refreshLocationAccess();
+        }
         // New configuration may unblock receipts retained at initial hydration.
-        if (enabled) await drainAutoAttendanceEvents({ scope, onTransition: result => onTransition(result, scope) });
+        if (enabled) await drain();
         assertCapabilityCurrent(ATTENDANCE_FEATURES.AUTO_ATTENDANCE, scope);
+        if (enabled && access) {
+          access = Native.refreshLocationAccess();
+          if (access.state === "confirmed_available" && access.recoveryPending) {
+            publish("waiting_for_accurate_location");
+            await Native.retryLocationAccessRecovery();
+            if (cancelled) return;
+            await assertAttendanceQueueScope(scope);
+            await drain();
+            access = Native.getLocationAccessState();
+          }
+          // Retain desired registration/episode through access loss. Only a
+          // real eligibility/scope cancellation uses destructive stopGeofence.
+          if (access.state !== "confirmed_available" || access.recoveryPending) {
+            publish(access.state === "confirmed_disabled" ? "permission"
+              : access.recoveryPending ? "waiting_for_accurate_location" : "unavailable");
+            return;
+          }
+        }
         const registered = await reconcileAutoAttendanceRegistration(enabled ? scope : null, enabled ? config : null)
           .catch((error) => {
             publish("unavailable");
@@ -123,6 +162,8 @@ export default function DurableAutoAttendanceBootstrap() {
       Native.addGeofenceEnterListener(() => { run(); }),
       Native.addGeofenceExitListener(() => { run(); }),
       Native.addErrorListener(() => { run(); }),
+      ...(typeof Native.addLocationAccessChangedListener === "function"
+        ? [Native.addLocationAccessChangedListener(() => { run(); })] : []),
       AppState.addEventListener("change", state => { if (state === "active") run({ refresh: true }); }),
     ];
     const reconnect = addReconnectListener(() => { run({ refresh: true }); });

@@ -9,15 +9,14 @@ import android.util.Log
 import com.google.android.gms.location.Geofence
 import com.google.android.gms.location.GeofenceStatusCodes
 import com.google.android.gms.location.GeofencingEvent
-import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Receives geofence transition broadcasts from the Play Services geofencing engine.
  *
  * Every capture is durably appended before delivery. This receiver never submits
- * authenticated attendance or starts another React runtime; the host consumes
- * the journal through its existing SQLite ingress and attendance processor.
+ * authenticated attendance. Network-constrained WorkManager work starts the
+ * host's shared runtime to consume its existing SQLite ingress and processor.
  */
 class GeofenceBroadcastReceiver : BroadcastReceiver() {
   override fun onReceive(context: Context, intent: Intent) {
@@ -29,7 +28,13 @@ class GeofenceBroadcastReceiver : BroadcastReceiver() {
 
     if (geofencingEvent.hasError()) {
       val message = GeofenceStatusCodes.getStatusCodeString(geofencingEvent.errorCode)
+      // The error itself is advisory. A successful OS read may independently
+      // capture confirmed revocation, including a receiver wake with no JS.
+      runCatching { LocationAccessMonitor.refresh(context) }
       if (geofencingEvent.errorCode == GeofenceStatusCodes.GEOFENCE_NOT_AVAILABLE) {
+        // A provider error can also mean network/service trouble. Only explicit
+        // OS access readings below may create a loss receipt.
+        runCatching { LocationAccessMonitor.refresh(context) }
         runCatching { GeofenceStore.markMonitoringUnavailable(context) }
       }
       Log.e(GeofenceManager.TAG, "Geofencing error: $message (code=${geofencingEvent.errorCode})")
@@ -57,6 +62,9 @@ class GeofenceBroadcastReceiver : BroadcastReceiver() {
       if (transition == Geofence.GEOFENCE_TRANSITION_ENTER) "ENTER" else "EXIT"
     val identifiers = geofencingEvent.triggeringGeofences?.map { it.requestId }.orEmpty()
     val timestamp = System.currentTimeMillis()
+    AttendanceSyncDiagnostics.record(context, "native.received", details = mapOf(
+      "transition" to transitionLabel, "capturedAt" to timestamp,
+    ))
     // Snapshot identity on callback receipt, before async persistence can race a
     // logout, opt-out, or replacement registration on the main queue.
     val captures = identifiers.ifEmpty { listOf("") }.map { nativeIdentifier ->
@@ -77,7 +85,7 @@ class GeofenceBroadcastReceiver : BroadcastReceiver() {
       }
     }
     handler.postDelayed(timeout, BROADCAST_BUDGET_MS)
-    executor.execute {
+    GeofenceCaptureQueue.execute {
       try {
         // Keep even unexpected/stale callback evidence. Missing registration
         // identity is explicit and is never filled from current credentials.
@@ -86,6 +94,7 @@ class GeofenceBroadcastReceiver : BroadcastReceiver() {
           GeofenceEventBus.emit(eventName, event + mapOf("identifiers" to listOf(event["identifier"])))
         }
       } catch (error: Exception) {
+        AttendanceSyncDiagnostics.record(context, "native.persist_failed")
         Log.e(GeofenceManager.TAG, "Native transition capture could not be persisted")
         GeofenceEventBus.emit(
           ExpoAutoAttendanceModule.EVENT_ERROR,
@@ -101,6 +110,5 @@ class GeofenceBroadcastReceiver : BroadcastReceiver() {
   companion object {
     private const val BROADCAST_BUDGET_MS = 8000L
     private val handler = Handler(Looper.getMainLooper())
-    private val executor = Executors.newSingleThreadExecutor()
   }
 }

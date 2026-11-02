@@ -1,0 +1,10 @@
+{
+  "accessEvents": true,
+  "durableEvents": true,
+  "employee": "QA-IOS-001",
+  "loggedIn": false,
+  "nativeAvailable": true,
+  "note": "QR provisioning fixture only; authenticate through the actual Login UI next.",
+  "platform": "ios",
+  "tenant": "http://localhost:8765"
+}

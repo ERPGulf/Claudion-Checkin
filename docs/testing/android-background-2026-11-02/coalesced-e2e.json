@@ -1,0 +1,172 @@
+{
+  "date": "2026-11-02",
+  "emulator": "ClaudionBackgroundQA20261102 (disposable, /private/tmp AVD), serial emulator-5570, Android 15 / API 35, google_apis_playstore arm64",
+  "application": "com.bazim.claudioncheckin debug (JS from local Metro), versionCode 24",
+  "backend": "test-utils/locationAccessQa/mock_backend.py on 127.0.0.1:8765 (emulator 10.0.2.2), synthetic employee QA-ANDROID-001; no production tenant or attendance data",
+  "authentication": "Synthetic QR fixture, then the real Login UI and generate_token_secure; no session or server record seeded",
+  "method": [
+    "Location access granted (fine, coarse, background) and POST_NOTIFICATIONS before sign-in; geofence registered by the app (mode 2, tenant geo_tagging true).",
+    "Crossings: adb emu geo fix between office (25.2854, 51.5310, r=100 m) and outside (25.29, 51.54). Google Maps held a foreground location request so the emulator's fused provider consumed injected fixes; the attendance app stayed in the background.",
+    "Before every crossing the app process was killed with adb shell am kill (not force-stop). Offline = svc wifi disable + svc data disable (Active default network: none). Server outage = mock control network:503.",
+    "Evidence read after the fact: bounded native diagnostics journal and WorkManager DB via run-as, app SQLite via run-as copy, backend state, logcat events buffer. No inspector attached to the headless runtime."
+  ],
+  "beforeDesign": {
+    "native": "Codex build sha256 41683b89..., APPEND_OR_REPLACE + Result.retry() with exponential 30 s backoff",
+    "observation": "EXIT 12:48:13 captured during 503 and queued; pass 6629b8b8 retried at 12:48:16, 12:49:15, 12:51:00, 12:53:08 (ENQUEUED, attempts=4). Backend restored 12:53:16. ENTER captured 12:53:20; its pass 258b45ec was BLOCKED behind 212642d5, itself BLOCKED behind 6629b8b8.",
+    "result": "ENTER accepted at 12:57:12, 3 min 52 s after capture with a healthy network and server, only because of the parent's backoff (WorkManager caps it at 5 h)."
+  },
+  "afterDesign": {
+    "native": "Coalesced chain (pass never returns retry) + separate AttendanceSyncRetryWorker timer",
+    "scenarios": [
+      {
+        "name": "Authenticated background upload, app unopened",
+        "capture": "EXIT 12:58:24 (process absent; started by GeofenceBroadcastReceiver)",
+        "accepted": "12:58:27 online, QA-CHECKIN-00004 timestamp 07:28:24Z",
+        "result": "PASS"
+      },
+      {
+        "name": "Offline EXIT, connectivity restored, warm process",
+        "capture": "EXIT 12:59:13 with no default network; pass ENQUEUED attempts=0 for 90 s, no request",
+        "restored": "13:00:51",
+        "accepted": "13:00:58, QA-CHECKIN-00006 timestamp 07:29:12Z",
+        "result": "PASS"
+      },
+      {
+        "name": "Offline ENTER, process killed, connectivity restored (cold)",
+        "capture": "ENTER 13:01:21 offline; process killed before restore",
+        "restored": "13:01:31; process started 13:01:35 by SystemJobService",
+        "accepted": "13:01:38, QA-CHECKIN-00007 timestamp 07:31:21Z",
+        "result": "PASS"
+      },
+      {
+        "name": "Multiple transitions while an older record retries",
+        "steps": [
+          "Backend 503 at 13:01:55; EXIT 13:01:57 queued as row 2; retry timer armed 30 s, 60 s, 120 s (fired ~90 s late), 300 s",
+          "ENTER 13:06:59 during the outage: pass ran by 13:07:03 despite the 300 s timer; IN queued as row 3 behind row 2; timer re-armed at 900 s",
+          "Backend restored 13:07:22; EXIT captured 13:07:24, pass started 13:07:24",
+          "13:07:28: row 2 OUT 07:31:56Z (QA-CHECKIN-00008), row 3 IN 07:36:58Z (QA-CHECKIN-00009), new OUT 07:37:24Z online (QA-CHECKIN-00010); retry timer CANCELLED"
+        ],
+        "result": "PASS: delivered 4 s after capture instead of waiting up to 15 min for the timer; FIFO order kept"
+      }
+    ],
+    "duplicateProtection": "Package replacement repaired the registration and produced an initial ENTER while already checked in (event 4): handled with no punch. Backend dedupe never needed; all names unique.",
+    "concurrency": "worker.start/worker.complete strictly alternate; follow-ups start only after the previous pass completes."
+  },
+  "backendRecords": [
+    {
+      "name": "QA-CHECKIN-00001",
+      "log_type": "IN",
+      "timestamp": "2026-11-02 07:10:47",
+      "receivedAt": "2026-11-02T07:10:48.376+00:00",
+      "endpoint": "online"
+    },
+    {
+      "name": "QA-CHECKIN-00002",
+      "log_type": "OUT",
+      "timestamp": "2026-11-02 07:18:13",
+      "receivedAt": "2026-11-02T07:27:11.789+00:00",
+      "endpoint": "offline"
+    },
+    {
+      "name": "QA-CHECKIN-00003",
+      "log_type": "IN",
+      "timestamp": "2026-11-02 07:23:20",
+      "receivedAt": "2026-11-02T07:27:12.008+00:00",
+      "endpoint": "online"
+    },
+    {
+      "name": "QA-CHECKIN-00004",
+      "log_type": "OUT",
+      "timestamp": "2026-11-02 07:28:24",
+      "receivedAt": "2026-11-02T07:28:27.588+00:00",
+      "endpoint": "online"
+    },
+    {
+      "name": "QA-CHECKIN-00005",
+      "log_type": "IN",
+      "timestamp": "2026-11-02 07:28:49",
+      "receivedAt": "2026-11-02T07:28:52.475+00:00",
+      "endpoint": "online"
+    },
+    {
+      "name": "QA-CHECKIN-00006",
+      "log_type": "OUT",
+      "timestamp": "2026-11-02 07:29:12",
+      "receivedAt": "2026-11-02T07:30:58.488+00:00",
+      "endpoint": "online"
+    },
+    {
+      "name": "QA-CHECKIN-00007",
+      "log_type": "IN",
+      "timestamp": "2026-11-02 07:31:21",
+      "receivedAt": "2026-11-02T07:31:38.933+00:00",
+      "endpoint": "online"
+    },
+    {
+      "name": "QA-CHECKIN-00008",
+      "log_type": "OUT",
+      "timestamp": "2026-11-02 07:31:56",
+      "receivedAt": "2026-11-02T07:37:28.342+00:00",
+      "endpoint": "offline"
+    },
+    {
+      "name": "QA-CHECKIN-00009",
+      "log_type": "IN",
+      "timestamp": "2026-11-02 07:36:58",
+      "receivedAt": "2026-11-02T07:37:28.388+00:00",
+      "endpoint": "offline"
+    },
+    {
+      "name": "QA-CHECKIN-00010",
+      "log_type": "OUT",
+      "timestamp": "2026-11-02 07:37:24",
+      "receivedAt": "2026-11-02T07:37:28.521+00:00",
+      "endpoint": "online"
+    },
+    {
+      "name": "QA-CHECKIN-00011",
+      "log_type": "IN",
+      "timestamp": "2026-11-02 07:41:42",
+      "receivedAt": "2026-11-02T07:45:38.509+00:00",
+      "endpoint": "offline"
+    }
+  ],
+  "backendRecordCount": 11,
+  "uniqueNames": true,
+  "strictlyAlternating": true,
+  "processEvents": [
+    "am_kill : [0,7601,com.bazim.claudioncheckin,700,kill background,683480]",
+    "am_proc_start: [0,8576,10207,com.bazim.claudioncheckin,broadcast,{com.bazim.claudioncheckin/expo.modules.autoattendance.GeofenceBroadcastReceiver}]",
+    "am_kill : [0,8576,com.bazim.claudioncheckin,905,stop com.bazim.claudioncheckin due to installPackageLI,159528]",
+    "am_proc_start: [0,8943,10207,com.bazim.claudioncheckin,broadcast,{com.bazim.claudioncheckin/expo.modules.autoattendance.GeofenceBootReceiver}]",
+    "am_kill : [0,8943,com.bazim.claudioncheckin,905,kill background,159856]",
+    "am_proc_start: [0,9139,10207,com.bazim.claudioncheckin,broadcast,{com.bazim.claudioncheckin/expo.modules.autoattendance.GeofenceBroadcastReceiver}]",
+    "am_kill : [0,9139,com.bazim.claudioncheckin,905,kill background,573168]",
+    "am_proc_start: [0,9260,10207,com.bazim.claudioncheckin,broadcast,{com.bazim.claudioncheckin/expo.modules.autoattendance.GeofenceBroadcastReceiver}]",
+    "am_kill : [0,9260,com.bazim.claudioncheckin,905,kill background,571876]",
+    "am_proc_start: [0,9375,10207,com.bazim.claudioncheckin,broadcast,{com.bazim.claudioncheckin/expo.modules.autoattendance.GeofenceBroadcastReceiver}]",
+    "am_kill : [0,9375,com.bazim.claudioncheckin,905,kill background,160272]",
+    "am_proc_start: [0,9578,10207,com.bazim.claudioncheckin,broadcast,{com.bazim.claudioncheckin/expo.modules.autoattendance.GeofenceBroadcastReceiver}]",
+    "am_kill : [0,9578,com.bazim.claudioncheckin,905,kill background,187416]",
+    "am_proc_start: [0,9674,10207,com.bazim.claudioncheckin,service,{com.bazim.claudioncheckin/androidx.work.impl.background.systemjob.SystemJobService}]",
+    "am_kill : [0,9674,com.bazim.claudioncheckin,905,kill background,158536]",
+    "am_proc_start: [0,9773,10207,com.bazim.claudioncheckin,broadcast,{com.bazim.claudioncheckin/expo.modules.autoattendance.GeofenceBroadcastReceiver}]",
+    "am_kill : [0,9773,com.bazim.claudioncheckin,905,kill background,159384]",
+    "am_proc_start: [0,10128,10207,com.bazim.claudioncheckin,broadcast,{com.bazim.claudioncheckin/expo.modules.autoattendance.GeofenceBroadcastReceiver}]",
+    "am_kill : [0,10128,com.bazim.claudioncheckin,905,kill background,570660]",
+    "am_proc_start: [0,10249,10207,com.bazim.claudioncheckin,broadcast,{com.bazim.claudioncheckin/expo.modules.autoattendance.GeofenceBroadcastReceiver}]"
+  ],
+  "notEstablished": [
+    "Android 11 / Samsung One UI 3.1 behaviour, Sleeping/Deep sleeping apps, Doze and App Standby buckets",
+    "Swipe from Recents and explicit force-stop",
+    "Geofence delivery without another app holding a location request (emulator needed Maps in foreground)",
+    "Live Frappe/staging timestamp handling and duplicate protection",
+    "Authenticated release-mode upload (needs an HTTPS test tenant)"
+  ],
+  "releaseSmoke": {
+    "build": "assembleRelease -PreactNativeArchitectures=arm64-v8a (embedded Hermes bundle, debug-keystore signed, not debuggable); lintVitalRelease: No issues found",
+    "observation": "ENTER 13:11:42 started the process via GeofenceBroadcastReceiver; WorkManager ran AttendanceSyncWorker, the headless JS ran from the embedded bundle and the pass reported SUCCESS; AttendanceSyncRetryWorker fired at 13:13:02 and requested a follow-up pass.",
+    "limitation": "Release builds block cleartext HTTP and the mock tenant is http://10.0.2.2:8765, so every request failed with Network Error and the backend received none. Production tenants are HTTPS; an authenticated release-mode upload was not established here.",
+    "retention": "After reinstalling the debug build, the receipt captured under release was delivered at 13:15:38 with its original time 07:41:42Z (QA-CHECKIN-00011), app unopened."
+  }
+}

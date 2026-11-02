@@ -1,0 +1,44 @@
+{
+  "accessEpisode": {
+    "firstObservedAt": 1793355556993,
+    "lossEventId": "38C17DE2-E318-4E08-B6CF-9F3DFCACDEBC",
+    "originalRegistrationSnapshot": {
+      "employeeId": "QA-IOS-001",
+      "geotagging": 2,
+      "identifier": "office-main",
+      "latitude": 25.2854,
+      "longitude": 51.531,
+      "nativeIdentifier": "claudion-auto-attendance:office-main:07075577-5213-4109-AD8F-4420323154A7",
+      "radius": 100,
+      "registrationGeneration": "053914FD-EF47-4261-85D9-366045512DD5",
+      "registrationId": "[\"http://localhost:8765\",\"QA-IOS-001\",\"office-main\",25.2854,51.531,100,2]",
+      "registrationStartedAt": 1793355495029,
+      "requestedRadius": 100,
+      "tenantKey": "http://localhost:8765"
+    },
+    "registrationGeneration": "053914FD-EF47-4261-85D9-366045512DD5"
+  },
+  "events": [],
+  "lastAccessRecovery": null,
+  "nextSequence": 3,
+  "registration": {
+    "configuration": {
+      "employeeId": "QA-IOS-001",
+      "geotagging": 2,
+      "identifier": "office-main",
+      "latitude": 25.2854,
+      "longitude": 51.531,
+      "nativeIdentifier": "claudion-auto-attendance:office-main:07075577-5213-4109-AD8F-4420323154A7",
+      "radius": 100,
+      "registrationGeneration": "053914FD-EF47-4261-85D9-366045512DD5",
+      "registrationId": "[\"http://localhost:8765\",\"QA-IOS-001\",\"office-main\",25.2854,51.531,100,2]",
+      "registrationStartedAt": 1793355495029,
+      "requestedRadius": 100,
+      "tenantKey": "http://localhost:8765"
+    },
+    "initialPresencePending": false,
+    "initialPresenceRetryAfter": 1793355555050,
+    "status": "monitoring"
+  },
+  "version": 1
+}

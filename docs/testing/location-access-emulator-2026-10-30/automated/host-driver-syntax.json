@@ -1,0 +1,6 @@
+{
+  "passed": true,
+  "hostJavaScriptFiles": 9,
+  "bodyTemplatesParsedInAsyncFunction": true,
+  "shellCollectorSyntax": true
+}

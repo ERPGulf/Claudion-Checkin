@@ -1,0 +1,36 @@
+[
+  {
+    "name": "QA-CHECKIN-00001",
+    "employee": "QA-ANDROID-001",
+    "employee_name": "Disposable QA-ANDROID-001",
+    "time": "2026-10-30 10:16:30",
+    "timestamp": "2026-10-30 10:16:30",
+    "log_type": "IN",
+    "custom_in": 1,
+    "device_id": "MobileAPP",
+    "auto": true,
+    "location": "Disposable QA Doha Office",
+    "latitude": 25.2854,
+    "longitude": 51.531,
+    "receivedAt": "2026-10-30T10:16:36.376+00:00",
+    "storedAt": "2026-10-30T10:16:36.385+00:00",
+    "endpoint": "online"
+  },
+  {
+    "name": "QA-CHECKIN-00002",
+    "employee": "QA-ANDROID-001",
+    "employee_name": "Disposable QA-ANDROID-001",
+    "time": "2026-10-30 10:17:53",
+    "timestamp": "2026-10-30 10:17:53",
+    "log_type": "OUT",
+    "custom_in": 0,
+    "device_id": "MobileAPP",
+    "auto": true,
+    "location": "Disposable QA Doha Office",
+    "latitude": 25.2854,
+    "longitude": 51.531,
+    "receivedAt": "2026-10-30T10:18:05.961+00:00",
+    "storedAt": "2026-10-30T10:18:05.965+00:00",
+    "endpoint": "online"
+  }
+]

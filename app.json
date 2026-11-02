@@ -97,7 +97,7 @@
         ],
         "ExpoLocalization_supportsRTL": true
       },
-      "buildNumber": "15",
+      "buildNumber": "16",
       "appleTeamId": "VWL956UDWG"
     },
     "android": {
@@ -107,7 +107,7 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.bazim.claudioncheckin",
-      "versionCode": 23,
+      "versionCode": 24,
       "googleServicesFile": "./google-services.json",
       "permissions": [
         "android.permission.CAMERA",
@@ -131,7 +131,7 @@
       }
     },
     "owner": "erpgulf",
-    "runtimeVersion": "1.2.1-sdk57-localization-v3",
+    "runtimeVersion": "1.2.1-sdk57-location-cutoff-v1",
     "updates": {
       "url": "https://u.expo.dev/ee37c3a6-1da3-43ae-ad14-6b34a26c92ac",
       "enabled": true,

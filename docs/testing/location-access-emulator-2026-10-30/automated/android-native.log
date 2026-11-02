@@ -1,0 +1,26 @@
+PASS ENTER and EXIT survive restart without a JavaScript listener
+PASS acknowledgment consumes only the exact transferred capture
+PASS display clearing and monitoring stop preserve all pending captures
+PASS pending registration scopes initial ENTER before registration success
+PASS legacy scoped fractional radius retains exact requested geometry across restart and capture
+PASS legacy integer requested radius migration preserves original native identity
+PASS radius migration refuses geometry or scope inconsistent with its own fingerprint
+PASS stale native identifier is retained without current employee attribution
+PASS scope snapshot remains the original registration during replacement
+PASS old active fence becomes untrusted once a replacement is pending
+PASS legacy last event migrates once and remains unattributed
+PASS sequence stays monotonic after all captures are acknowledged
+PASS rapid concurrent captures are retained without eviction
+PASS corrupt journal fails explicitly and is never replaced with an empty journal
+PASS runtime monitor failure keeps reboot recovery intent until explicit stop
+PASS failed persistence cannot acknowledge or return a newly captured event
+PASS OS access is tri-state and never inferred from unknown or GPS failures
+PASS accuracy-aware recovery has strict inside and outside boundaries
+PASS first observable access loss is atomic and deduplicated after restart or acknowledgment
+PASS recovery validates original loss and generation and tags repair ENTER until a real EXIT
+PASS intentional stop cancels recovery without erasing receipts
+PASS legacy registration generation is assigned once without rewriting prior receipts
+PASS same-intent repair retains loss while genuine generation replacement cancels it
+PASS failed loss and recovery writes cannot advance episode state
+PASS verified outside recovery admits a genuine ENTER without repair synthesizing one
+25 Android journal JVM regression cases passed; Android OS/build behavior was not executed.

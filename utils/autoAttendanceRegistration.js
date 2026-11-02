@@ -38,6 +38,17 @@ export const registeredOfficeMatches = (registered, desired) =>
   registered?.latitude === desired?.latitude && registered?.longitude === desired?.longitude &&
   registeredRadiusMatches(registered, desired?.radius) && registered?.geotagging === desired?.geotagging;
 
+/** A pending recovery cannot pin monitoring to a previous owner or removed office. */
+export const registrationStillConfigured = (registration, scope, config) =>
+  registration?.tenantKey === scope.tenantKey && registration?.employeeId === scope.employeeId &&
+  Number(registration.geotagging) === Number(config.rules?.geotagging) &&
+  (config.locations ?? []).some(location => {
+    const coordinates = resolveLocationCoordinates(location);
+    const radius = Number(location.reporting_radius) > 0 ? Number(location.reporting_radius) : 100;
+    return coordinates?.latitude === registration.latitude && coordinates?.longitude === registration.longitude &&
+      registeredRadiusMatches(registration, radius);
+  });
+
 const boundedPosition = async () => {
   let timer;
   try {
@@ -100,6 +111,11 @@ export const reconcileAutoAttendanceRegistration = (scope, config) => {
       return null;
     }
     if (config.tenantKey !== scope.tenantKey || config.employeeId !== scope.employeeId) return null;
+    const accessEvents = Native.supportsLocationAccessEvents?.() === true;
+    if (accessEvents) {
+      const access = Native.refreshLocationAccess();
+      if (access.state !== "confirmed_available" || access.recoveryPending) return null;
+    }
     const [foreground, background] = await Promise.all([
       Location.getForegroundPermissionsAsync(), Location.getBackgroundPermissionsAsync(),
     ]);
@@ -109,7 +125,8 @@ export const reconcileAutoAttendanceRegistration = (scope, config) => {
       return null;
     }
     if (foreground.status !== "granted" || background.status !== "granted" || !Native.hasFullAccuracy()) {
-      await Native.stopGeofence();
+      if (accessEvents) Native.refreshLocationAccess();
+      else await Native.stopGeofence();
       return null;
     }
     const registered = Native.getRegisteredGeofences() ?? [];
@@ -154,7 +171,9 @@ export const reconcileAutoAttendanceRegistration = (scope, config) => {
       }
       return desired;
     }
-    await Native.stopGeofence();
+    // New native managers preserve the logical generation for same-intent
+    // repairs, and replace it themselves for a different configuration.
+    if (!accessEvents) await Native.stopGeofence();
     await assertAttendanceQueueScope(scope);
     try {
       await assertAllowed();
@@ -171,7 +190,8 @@ export const reconcileAutoAttendanceRegistration = (scope, config) => {
       ]);
     } catch (error) {
       // Native stop invalidates pending starts before a delayed callback can win.
-      await Native.stopGeofence();
+      const access = accessEvents ? Native.getLocationAccessState() : null;
+      if (!access || (access.state === "confirmed_available" && !access.recoveryPending)) await Native.stopGeofence();
       throw error;
     } finally {
       clearTimeout(timeout);

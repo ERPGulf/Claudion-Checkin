@@ -1,4 +1,5 @@
 import { hydrateLocale } from "./localization";
+import "./services/offline/AndroidAttendanceBackgroundTask";
 import LocaleRoot from "./localization/LocaleRoot";
 import { Provider } from "react-redux";
 import { store, persistor } from "./redux/Store";

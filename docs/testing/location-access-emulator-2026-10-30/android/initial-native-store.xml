@@ -1,0 +1,6 @@
+<?xml version='1.0' encoding='utf-8' standalone='yes' ?>
+<map>
+    <boolean name="monitoring_requested" value="false" />
+    <string name="event_journal_v1">{&quot;version&quot;:1,&quot;nextSequence&quot;:0,&quot;legacyMigrated&quot;:true,&quot;events&quot;:[],&quot;accessEpisode&quot;:null,&quot;recoveryBarrier&quot;:null}</string>
+    <boolean name="monitoring" value="false" />
+</map>

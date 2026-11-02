@@ -1,0 +1,47 @@
+{
+  "capturedUtc": "2026-10-30T10:06:38.316240+00:00",
+  "deviceName": "Claudion Location Access QA iOS26 2026-10-30",
+  "udid": "FC19E559-3811-4ACF-B5E9-0933E113C411",
+  "model": "iPhone 17 Pro",
+  "os": "iOS 26.5 (23F77)",
+  "xcode": "27.0 (27A266a)",
+  "bundleIdentifier": "com.bazim.claudioncheckin",
+  "configuration": "Debug ARM64 simulator",
+  "bundlePath": "/Volumes/DevSSD/Xcode-Work/DerivedData/Build/Products/Debug-iphonesimulator/ClaudionCheckin.app",
+  "runtimeVersion": "1.2.1-sdk57-location-cutoff-v1",
+  "iosBuildNumber": "16",
+  "metro": "http://localhost:8081/.expo/.virtual-metro-entry.bundle",
+  "backend": "http://localhost:8765",
+  "backendType": "isolated local mock; not staging",
+  "privacyCommandsSupported": [
+    "grant/revoke location",
+    "grant/revoke location-always"
+  ],
+  "precisionCliSupported": false,
+  "locationCommandsSupported": [
+    "set",
+    "clear",
+    "start waypoints",
+    "run scenario"
+  ],
+  "uiAutomation": "installed Maestro XCUITest driver",
+  "primaryScenarioDevice": {
+    "name": "Claudion Location Access QA iOS26 2026-10-30",
+    "udid": "FC19E559-3811-4ACF-B5E9-0933E113C411",
+    "model": "iPhone 17 Pro",
+    "os": "iOS 26.5 (23F77)",
+    "regionMonitoringAvailable": true
+  },
+  "initialIOS27DeviceOutcome": "Native isMonitoringAvailable(for: CLCircularRegion.self) returned false; app safely refused registration. Always authorization restored, simulated location cleared, app terminated and simulator shut down; data preserved.",
+  "initialDiagnosticDevice": {
+    "deviceName": "Claudion Location Access QA 2026-10-30",
+    "udid": "16213346-0CCC-4888-B3C9-475CCD71768C",
+    "model": "iPhone 18 Pro",
+    "os": "iOS 27.0 (24A434)",
+    "regionMonitoringAvailable": false,
+    "finalState": "Shutdown; app data preserved"
+  },
+  "regionMonitoringAvailable": true,
+  "updatedUtc": "2026-10-30T16:01:32.668832+00:00",
+  "finalDeviceState": "Shutdown; app data preserved"
+}

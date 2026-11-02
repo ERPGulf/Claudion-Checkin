@@ -1,0 +1,25 @@
+{
+  "elapsedMs": 15011,
+  "endedAt": 1793375441309,
+  "startedAt": 1793375426298,
+  "state": {
+    "lossEventId": "936bf97d-63a3-4c60-b730-458c5f65fef3",
+    "reason": null,
+    "recoveryPending": true,
+    "registration": {
+      "employeeId": "QA-ANDROID-001",
+      "geotagging": 2,
+      "identifier": "office-main",
+      "latitude": 25.2854,
+      "longitude": 51.531,
+      "nativeIdentifier": "attendance:e699866a-9efd-4a29-9505-7fc85f472d89",
+      "radius": 100,
+      "registrationGeneration": "e859ea60-ad0a-4374-8466-819fe9397911",
+      "registrationId": "[\"http://10.0.2.2:8765\",\"QA-ANDROID-001\",\"office-main\",25.2854,51.531,100,2]",
+      "requestedRadius": 100,
+      "tenantKey": "http://10.0.2.2:8765"
+    },
+    "registrationGeneration": "e859ea60-ad0a-4374-8466-819fe9397911",
+    "state": "confirmed_available"
+  }
+}

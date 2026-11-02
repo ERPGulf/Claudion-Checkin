@@ -10,8 +10,13 @@ trap 'rm -rf "$output_dir"' EXIT HUP INT TERM
 
 kotlinc -classpath "$json_jar" \
   "$source_dir/GeofenceEventJournal.kt" \
+  "$source_dir/LocationAccessPolicy.kt" \
   "$source_dir/GeofenceStore.kt" \
+  "$source_dir/AttendanceSyncDiagnostics.kt" \
   "$test_dir/AndroidStorageTestAdapter.kt" \
+  "$test_dir/ApplicationInfoTestAdapter.kt" \
+  "$test_dir/AndroidLogTestAdapter.kt" \
+  "$test_dir/BackgroundSyncTestAdapter.kt" \
   "$test_dir/GeofenceJournalHarness.kt" \
   -include-runtime -d "$output_dir/journal-tests.jar"
 java -cp "$output_dir/journal-tests.jar:$json_jar" expo.modules.autoattendance.GeofenceJournalHarnessKt

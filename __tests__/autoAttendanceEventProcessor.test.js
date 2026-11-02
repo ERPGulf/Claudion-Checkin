@@ -2,6 +2,7 @@
 jest.mock("expo-sqlite", () => require("../test-utils/expoSqliteMock"));
 jest.mock("../modules/expo-auto-attendance", () => ({
   OFFICE_GEOFENCE_IDENTIFIER: "office-main", getPendingEvents: jest.fn(), acknowledgeEvent: jest.fn(),
+  getLocationAccessState: jest.fn(),
 }));
 jest.mock("../services/api/attendance.service", () => ({
   autoCheckInOut: jest.fn(), getAttendanceStatus: jest.fn(), resolveServerTimestampAt: jest.fn(),
@@ -33,7 +34,8 @@ import { verifyQueuedAttendance } from "../services/offline/AttendanceVerificati
 import { resetOfflineCapability } from "../services/offline/offlineCapability";
 import { captureAttendanceQueueScope } from "../services/offline/attendanceQueueProvenance";
 import { loginQueueEmployee, TEST_TENANT } from "../test-utils/attendanceScope";
-import { applySessionOwner, performSessionTransition, readSession, SESSION_ORIGIN } from "../utils/attendanceSessionState";
+import { applySessionOwner, performSessionTransition, readSession, reconcileSessionFromServer, SESSION_ORIGIN } from "../utils/attendanceSessionState";
+import { rememberServerOffset } from "../utils/serverClock";
 import { createRegistrationId } from "../utils/autoAttendanceRegistration";
 import { store } from "../redux/Store";
 import { settingsReceived, settingsInvalidated } from "../redux/Slices/FeatureSettingsSlice";
@@ -50,6 +52,7 @@ const wallClock = at => new Date(at).toISOString().slice(0, 19).replace("T", " "
 const event = (eventId, sequence, transition = "ENTER", overrides = {}) => {
   const snapshot = { tenantKey: TEST_TENANT, employeeId, latitude: 25.28, longitude: 51.52, radius: 100, geotagging: 2 };
   const result = { ...snapshot, eventId, sequence, transition, identifier: "office-main", nativeIdentifier: "physical-1",
+    registrationGeneration: "registration-1",
     registrationId: createRegistrationId(snapshot), timestamp: started + sequence * 1000, ...overrides };
   result.registrationId = overrides.registrationId ?? createRegistrationId(result);
   return result;
@@ -71,6 +74,7 @@ beforeEach(async () => {
   journal = [];
   jest.clearAllMocks();
   Native.getPendingEvents.mockImplementation(() => [...journal]);
+  Native.getLocationAccessState.mockReturnValue({ state: "confirmed_available", registrationGeneration: "registration-1" });
   Native.acknowledgeEvent.mockImplementation(id => { journal = journal.filter(item => item.eventId !== id); return true; });
   fetchShouldAttemptRequest.mockResolvedValue(true);
   checkInstanceAvailability.mockImplementation(async () => await fetchShouldAttemptRequest()
@@ -455,6 +459,21 @@ it("an interrupted POST requires positive server evidence before session recover
   expect((await Events.findEvent("enter")).outcome.serverConfirmed).toBe(true);
 });
 
+it("reconciles an uncertain dispatched event after tenant and employee revocation without sending another punch", async () => {
+  const receipt = event("dispatched-before-revocation", 1);
+  await Events.ingestNativeEvent(receipt);
+  await Events.claimEvent(receipt.eventId, { ownerId: "crashed-background-worker", now: Date.now() - 200000 });
+  await Events.updateEvent(receipt.eventId, { onlineAttemptAt: started, punchTimestamp: wallClock(receipt.timestamp) });
+  receiveAutomaticAvailability(false);
+  await receiveMode(0);
+  verifyQueuedAttendance.mockResolvedValue({ verified: true, evidence: { name: "SYNTHETIC-EXISTING-SERVER" } });
+  await drain();
+  expect(verifyQueuedAttendance).toHaveBeenCalledTimes(1);
+  expect(autoCheckInOut).not.toHaveBeenCalled();
+  expect(await Events.findEvent(receipt.eventId)).toMatchObject({ status: "handled", outcome: { serverConfirmed: true } });
+  expect(await readSession()).toMatchObject({ status: "CHECKED_IN", startedAt: receipt.timestamp });
+});
+
 it("uncertain interrupted IN is not resent and prevents its OUT from overtaking", async () => {
   await Events.ingestNativeEvent(event("enter", 1));
   await Events.claimEvent("enter", { ownerId: "crashed", now: Date.now() - 200000 });
@@ -637,4 +656,258 @@ it("a rejected stale registration receipt cannot suppress the next valid office 
   expect(autoCheckInOut.mock.calls[0][0].office.latitude).toBe(26);
   expect((await Events.findEvent("old-office")).status).toBe("needs_review");
   expect((await Events.findEvent("new-office")).status).toBe("handled");
+});
+
+const accessLoss = (overrides = {}) => event("access-loss", 2, null, {
+  kind: "LOCATION_ACCESS_LOST", reason: "services-disabled", ...overrides,
+});
+const accessRecovery = (overrides = {}) => event("access-recovery", 3, null, {
+  kind: "LOCATION_ACCESS_RECOVERED", lossEventId: "access-loss", presence: "inside",
+  fixRequestedAt: started + 2500,
+  position: { latitude: 25.28, longitude: 51.52, horizontalAccuracy: 10, timestamp: started + 3000 },
+  ...overrides,
+});
+
+it.each(["services-disabled", "foreground-permission-lost", "background-permission-lost", "precise-permission-lost"])(
+  "confirmed OS %s closes exactly one AUTO session at the first observed time", async reason => {
+    journal = [event("enter", 1)]; await drain();
+    const loss = accessLoss({ reason });
+    journal = [loss];
+    await Promise.all([drain(), drain()]);
+    journal = [loss]; await drain();
+    expect(autoCheckInOut.mock.calls.map(([input]) => input.type)).toEqual(["IN", "OUT"]);
+    expect(autoCheckInOut.mock.calls[1][0]).toMatchObject({ occurredAt: loss.timestamp, timestamp: wallClock(loss.timestamp) });
+    expect(await readSession()).toMatchObject({ status: "CHECKED_OUT", origin: "AUTO", closedByEventId: loss.eventId,
+      registrationGeneration: "registration-1", endedAt: loss.timestamp });
+    expect(await Events.findEvent(loss.eventId)).toMatchObject({ status: "handled", outcome: { cutoffAccepted: true,
+      targetSession: { sourceEventId: "enter", registrationGeneration: "registration-1" } } });
+  },
+);
+
+it.each(["weak-gps", "inaccurate-coordinates", "indoor-signal-loss", "location-timeout", "battery-saver", "network-disconnected", "GEOFENCE_NOT_AVAILABLE"])(
+  "%s cannot masquerade as an OS access revocation or close an indoor AUTO session", async reason => {
+    journal = [event("enter", 1)]; await drain();
+    const before = await readSession();
+    journal = [accessLoss({ reason })]; await drain();
+    expect(await readSession()).toEqual(before);
+    expect(autoCheckInOut).toHaveBeenCalledTimes(1);
+    expect(await listAll()).toEqual([]);
+    expect(await Events.findEvent("access-loss")).toMatchObject({ status: "needs_review", reason: "invalid-native-event" });
+  },
+);
+
+it.each(["MANUAL", "UNKNOWN"])("access loss preserves an existing %s session and cannot authorize recovery IN", async origin => {
+  await performSessionTransition({ type: "IN", origin, at: started, execute: async () => ({ allowed: true }) });
+  journal = [accessLoss(), accessRecovery()]; await drain();
+  expect(await readSession()).toMatchObject({ status: "CHECKED_IN", origin, startedAt: started });
+  expect(autoCheckInOut).not.toHaveBeenCalled();
+  expect((await Events.findEvent("access-loss")).outcome?.cutoffAccepted).not.toBe(true);
+});
+
+it("unproven legacy AUTO registration cannot authorize an access cutoff", async () => {
+  await performSessionTransition({ type: "IN", origin: "AUTO", sourceEventId: "legacy-enter", at: started,
+    execute: async () => ({ allowed: true }) });
+  journal = [accessLoss(), accessRecovery()]; await drain();
+  expect(await readSession()).toMatchObject({ status: "CHECKED_IN", sourceEventId: "legacy-enter" });
+  expect(autoCheckInOut).not.toHaveBeenCalled();
+});
+
+it("restoration inside starts one new session only after the matched cutoff and ignores replay", async () => {
+  journal = [event("enter", 1), accessLoss(), accessRecovery()];
+  await drain(); resetDatabaseHandle();
+  journal = [accessLoss(), accessRecovery()];
+  await Promise.all([drain(), drain()]);
+  expect(autoCheckInOut.mock.calls.map(([input]) => input.type)).toEqual(["IN", "OUT", "IN"]);
+  expect(await readSession()).toMatchObject({ status: "CHECKED_IN", sourceEventId: "access-recovery",
+    registrationGeneration: "registration-1", startedAt: started + 3000 });
+});
+
+it.each([
+  ["different generation", { registrationGeneration: "registration-other" }],
+  ["different loss", { lossEventId: "missing-loss" }],
+  ["another employee", { employeeId: "EMP-OTHER" }],
+  ["another tenant", { tenantKey: "https://other.example.test" }],
+  ["pre-loss request", { fixRequestedAt: started + 1000 }],
+  ["cached fix", { fixRequestedAt: started + 3001 }],
+  ["imprecise fix", { position: { latitude: 25.28, longitude: 51.52, horizontalAccuracy: 1000, timestamp: started + 3000 } }],
+  ["malformed accuracy", { position: { latitude: 25.28, longitude: 51.52, horizontalAccuracy: -1, timestamp: started + 3000 } }],
+])("%s recovery cannot reopen the cut-off session", async (_name, overrides) => {
+  journal = [event("enter", 1), accessLoss()]; await drain();
+  journal = [accessRecovery(overrides)]; await drain();
+  expect(autoCheckInOut.mock.calls.map(([input]) => input.type)).toEqual(["IN", "OUT"]);
+  expect(await readSession()).toMatchObject({ status: "CHECKED_OUT", closedByEventId: "access-loss" });
+});
+
+it("same office fingerprint under a replacement registration cannot authorize stale recovery", async () => {
+  journal = [event("enter", 1), accessLoss()]; await drain();
+  Native.getLocationAccessState.mockReturnValue({ state: "confirmed_available", registrationGeneration: "replacement" });
+  journal = [accessRecovery()]; await drain();
+  expect(autoCheckInOut).toHaveBeenCalledTimes(2);
+  expect(await Events.findEvent("access-recovery")).toMatchObject({ status: "handled", reason: "access-recovery-registration-changed" });
+});
+
+it("a registration replacement during recovery timestamp work prevents submission", async () => {
+  journal = [event("enter", 1), accessLoss()]; await drain();
+  resolveServerTimestampAt.mockImplementationOnce(async at => {
+    Native.getLocationAccessState.mockReturnValue({ state: "confirmed_available", registrationGeneration: "replacement" });
+    return wallClock(at);
+  });
+  journal = [accessRecovery()]; await drain();
+  expect(autoCheckInOut).toHaveBeenCalledTimes(2);
+  expect(await readSession()).toMatchObject({ status: "CHECKED_OUT" });
+});
+
+it("manual activity between cutoff and recovery permanently refuses the recovery check-in", async () => {
+  journal = [event("enter", 1), accessLoss()]; await drain();
+  await performSessionTransition({ type: "IN", origin: "MANUAL", at: started + 2100, execute: async () => ({ allowed: true }) });
+  await performSessionTransition({ type: "OUT", origin: "MANUAL", at: started + 2200, execute: async () => ({ allowed: true }) });
+  journal = [accessRecovery()]; await drain();
+  expect(autoCheckInOut).toHaveBeenCalledTimes(2);
+  expect(await readSession()).toMatchObject({ status: "CHECKED_OUT", closedBy: "MANUAL", endedAt: started + 2200 });
+});
+
+it("outside recovery adds no punch", async () => {
+  journal = [event("enter", 1), accessLoss()]; await drain();
+  journal = [accessRecovery({ presence: "outside",
+    position: { latitude: 26, longitude: 52, horizontalAccuracy: 10, timestamp: started + 3000 } })];
+  await drain();
+  expect(autoCheckInOut).toHaveBeenCalledTimes(2);
+  expect(await Events.findEvent("access-recovery")).toMatchObject({ status: "handled", reason: "access-recovery-outside" });
+});
+
+it("a genuine ENTER after outside recovery starts exactly one fresh AUTO session across replay", async () => {
+  journal = [event("enter", 1), accessLoss()]; await drain();
+  const outside = accessRecovery({ presence: "outside",
+    position: { latitude: 26, longitude: 52, horizontalAccuracy: 10, timestamp: started + 3000 } });
+  // A repair callback captured during the episode remains evidence forever.
+  const repair = event("repair-enter", 4, "ENTER", { lossEventId: "access-loss" });
+  journal = [outside, repair]; await drain();
+  expect(autoCheckInOut.mock.calls.map(([input]) => input.type)).toEqual(["IN", "OUT"]);
+  expect(await readSession()).toMatchObject({ status: "CHECKED_OUT", closedByEventId: "access-loss" });
+
+  // A subsequent genuine crossing has no recovery barrier and may open a new
+  // session even though no additional EXIT was captured after outside proof.
+  resetDatabaseHandle();
+  const crossing = event("genuine-return-enter", 5);
+  journal = [outside, repair, crossing]; await drain();
+  resetDatabaseHandle();
+  journal = [accessLoss(), outside, repair, crossing];
+  await Promise.all([drain(), drain()]);
+
+  expect(autoCheckInOut.mock.calls.map(([input]) => input.type)).toEqual(["IN", "OUT", "IN"]);
+  expect(autoCheckInOut.mock.calls[2][0]).toMatchObject({ occurredAt: crossing.timestamp,
+    timestamp: wallClock(crossing.timestamp) });
+  expect(await readSession()).toMatchObject({ status: "CHECKED_IN", origin: "AUTO",
+    sourceEventId: crossing.eventId, registrationGeneration: "registration-1", startedAt: crossing.timestamp });
+  expect(await Events.findEvent(repair.eventId)).toMatchObject({ status: "handled", reason: "access-recovery-enter-evidence" });
+  expect(await listAll()).toEqual([]);
+});
+
+it("recovery-era initial ENTER never becomes a delayed punch, including after restart", async () => {
+  journal = [event("enter", 1), accessLoss(), event("repair-enter", 3, "ENTER", { lossEventId: "access-loss" })];
+  await drain(); resetDatabaseHandle();
+  journal = [event("repair-enter", 3, "ENTER", { lossEventId: "access-loss" })]; await drain();
+  expect(autoCheckInOut).toHaveBeenCalledTimes(2);
+  expect(await readSession()).toMatchObject({ status: "CHECKED_OUT" });
+  expect(await Events.findEvent("repair-enter")).toMatchObject({ status: "handled", reason: "access-recovery-enter-evidence" });
+});
+
+it("delayed offline cutoff keeps its original timestamp through restart and upload", async () => {
+  journal = [event("enter", 1)]; await drain();
+  fetchShouldAttemptRequest.mockResolvedValue(false);
+  journal = [accessLoss()]; await drain(); resetDatabaseHandle();
+  const [queued] = await listAll();
+  expect(queued).toMatchObject({ action: "checkout", sourceEventId: "access-loss", status: "pending" });
+  expect(await readSession()).toMatchObject({ status: "CHECKED_OUT", endedAt: started + 2000 });
+  const http = new MockAdapter(apiClient);
+  http.onPost(/add_offline_employee_checkins/).reply(200, { message: { inserted: ["DELAYED-OUT"], failed: [] } });
+  try {
+    fetchShouldAttemptRequest.mockResolvedValue(true); resetSyncService();
+    await syncPendingAttendance({ employeeId, wakeAllPending: true });
+    await syncPendingAttendance({ employeeId, wakeAllPending: true });
+    expect(http.history.post).toHaveLength(1);
+    const { logs } = JSON.parse(http.history.post[0].data);
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toMatchObject({ timestamp: queued.timestamp, log_type: "OUT" });
+  } finally { http.restore(); resetSyncService(); }
+});
+
+it("an ambiguous access-loss POST is verified after restart without a second OUT", async () => {
+  journal = [event("enter", 1)]; await drain();
+  autoCheckInOut.mockImplementationOnce(async () => { throw new Error("Connection lost after dispatch"); });
+  journal = [accessLoss()]; await drain();
+  const database = await getDatabase();
+  await database.runAsync("UPDATE auto_attendance_events SET claimExpiresAt = ? WHERE eventId = ?;", [0, "access-loss"]);
+  resetDatabaseHandle();
+  verifyQueuedAttendance.mockResolvedValue({ verified: true, evidence: { name: "PREVIOUS-OUT" } });
+  await drain();
+  expect(autoCheckInOut).toHaveBeenCalledTimes(2);
+  expect(await readSession()).toMatchObject({ status: "CHECKED_OUT", closedByEventId: "access-loss" });
+  expect(await Events.findEvent("access-loss")).toMatchObject({ status: "handled", outcome: { cutoffAccepted: true } });
+  journal = [accessRecovery()]; await drain();
+  expect(autoCheckInOut).toHaveBeenCalledTimes(3);
+});
+
+it("a crash after committing the cutoff but before settlement retains exact session identity", async () => {
+  journal = [event("enter", 1), accessLoss()]; await drain();
+  const closed = await readSession();
+  await Events.updateEvent("access-loss", { status: "pending" });
+  resetDatabaseHandle();
+  verifyQueuedAttendance.mockResolvedValue({ verified: true, evidence: { name: "RECORDED-OUT" } });
+  await drain();
+  expect(await readSession()).toEqual(closed);
+  expect(autoCheckInOut).toHaveBeenCalledTimes(2);
+  expect(await Events.findEvent("access-loss")).toMatchObject({ outcome: { cutoffAccepted: true } });
+  journal = [accessRecovery()]; await drain();
+  expect(autoCheckInOut.mock.calls.map(([input]) => input.type)).toEqual(["IN", "OUT", "IN"]);
+});
+
+it("unknown access before recovery dispatch waits safely, and a later confirmed read permits one IN", async () => {
+  journal = [event("enter", 1), accessLoss()]; await drain();
+  Native.getLocationAccessState.mockReturnValue({ state: "unknown", registrationGeneration: "registration-1" });
+  journal = [accessRecovery()]; await drain();
+  expect(autoCheckInOut).toHaveBeenCalledTimes(2);
+  expect(await Events.findEvent("access-recovery")).toMatchObject({ status: "pending", reason: "access-recovery-access-unverified" });
+  Native.getLocationAccessState.mockReturnValue({ state: "confirmed_available", registrationGeneration: "registration-1" });
+  await drain(); await drain();
+  expect(autoCheckInOut).toHaveBeenCalledTimes(3);
+});
+
+it("a newer confirmed access-loss episode supersedes an unsubmitted recovery", async () => {
+  journal = [event("enter", 1), accessLoss()]; await drain();
+  Native.getLocationAccessState.mockReturnValue({ state: "confirmed_disabled", registrationGeneration: "registration-1",
+    lossEventId: "newer-loss", recoveryPending: true });
+  journal = [accessRecovery()]; await drain();
+  expect(autoCheckInOut).toHaveBeenCalledTimes(2);
+  expect(await Events.findEvent("access-recovery")).toMatchObject({ status: "handled", reason: "access-recovery-superseded" });
+});
+
+it("recovery persistence retains structural position fields only", async () => {
+  const proof = accessRecovery();
+  proof.position.unexpected = "not-location-data";
+  const stored = await Events.ingestNativeEvent(proof);
+  expect(stored.event.position).toEqual({ latitude: 25.28, longitude: 51.52, horizontalAccuracy: 10, timestamp: started + 3000 });
+});
+
+it("exact server-second reconciliation preserves the receipt identity needed for cutoff and recovery", async () => {
+  const at = Math.floor(started / 1000) * 1000 + 1234;
+  await rememberServerOffset(wallClock(Math.floor(at / 1000) * 1000), Math.floor(at / 1000) * 1000, { tenantKey: TEST_TENANT });
+  journal = [event("enter", 1, "ENTER", { timestamp: at })]; await drain();
+  await reconcileSessionFromServer({ activeStartedAt: Math.floor(at / 1000) * 1000, fetchedAt: Date.now() + 1000 });
+  expect(await readSession()).toMatchObject({ status: "CHECKED_IN", sourceEventId: "enter", startedAt: at,
+    registrationGeneration: "registration-1", sourceTimestamp: wallClock(at) });
+  journal = [accessLoss(), accessRecovery()]; await drain();
+  expect(autoCheckInOut.mock.calls.map(([input]) => input.type)).toEqual(["IN", "OUT", "IN"]);
+});
+
+it("a different server timestamp cannot inherit the previous AUTO receipt generation", async () => {
+  journal = [event("enter", 1)]; await drain();
+  await reconcileSessionFromServer({ activeStartedAt: started + 15000, fetchedAt: Date.now() + 1000 });
+  const reconciled = await readSession();
+  expect(reconciled.sourceEventId).toBeUndefined();
+  expect(reconciled.registrationGeneration).toBeUndefined();
+  expect(reconciled.sourceTimestamp).toBeUndefined();
+  journal = [accessLoss({ timestamp: started + 20000 })]; await drain();
+  expect(autoCheckInOut).toHaveBeenCalledTimes(1);
+  expect(await readSession()).toMatchObject({ status: "CHECKED_IN", startedAt: started + 15000 });
 });

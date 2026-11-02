@@ -1,0 +1,20 @@
+{
+  "capturedAt": "2026-10-30T16:05:40.632271+00:00",
+  "permissions": [
+    "android.permission.ACCESS_NETWORK_STATE: granted=true",
+    "android.permission.ACCESS_WIFI_STATE: granted=true",
+    "android.permission.ACCESS_FINE_LOCATION: granted=true, flags=[ USER_SENSITIVE_WHEN_GRANTED|USER_SENSITIVE_WHEN_DENIED]",
+    "android.permission.ACCESS_COARSE_LOCATION: granted=true, flags=[ USER_SENSITIVE_WHEN_GRANTED|USER_SENSITIVE_WHEN_DENIED]",
+    "android.permission.ACCESS_BACKGROUND_LOCATION: granted=true, flags=[ USER_SENSITIVE_WHEN_GRANTED|USER_SENSITIVE_WHEN_DENIED|RESTRICTION_INSTALLER_EXEMPT]"
+  ],
+  "services": "true",
+  "mockAppOp": "Uid mode: MOCK_LOCATION: default\nMOCK_LOCATION: default; time=+3m22s656ms ago",
+  "batterySaver": "0",
+  "wifi": [
+    "Wifi is enabled",
+    "Wifi scanning is only available when wifi is enabled",
+    "==== Primary ClientModeManager instance ====",
+    "Wifi is connected to \"AndroidWifi\""
+  ],
+  "mobileData": "1"
+}

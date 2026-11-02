@@ -1,0 +1,16 @@
+{
+  "files": 327,
+  "namespaces": [
+    "attendance",
+    "auth",
+    "common",
+    "hr"
+  ],
+  "englishKeys": 1458,
+  "arabicKeys": 1458,
+  "resourceErrors": 0,
+  "conflictingTranslations": 0,
+  "missingLiteralKeys": 0,
+  "unlocalizedSourceSites": 0,
+  "dynamicTranslationCalls": 57
+}

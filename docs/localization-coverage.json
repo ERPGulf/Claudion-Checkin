@@ -1,14 +1,14 @@
 {
   "summary": {
-    "files": 326,
+    "files": 327,
     "namespaces": [
       "attendance",
       "auth",
       "common",
       "hr"
     ],
-    "englishKeys": 1449,
-    "arabicKeys": 1449,
+    "englishKeys": 1458,
+    "arabicKeys": 1458,
     "resourceErrors": 0,
     "conflictingTranslations": 0,
     "missingLiteralKeys": 0,
@@ -809,12 +809,12 @@
     },
     {
       "file": "hooks/useAutoAttendance.js",
-      "line": 94,
+      "line": 101,
       "expression": "policySource.title"
     },
     {
       "file": "hooks/useAutoAttendance.js",
-      "line": 94,
+      "line": 101,
       "expression": "policySource.description"
     },
     {
@@ -904,12 +904,12 @@
     },
     {
       "file": "screens/AutoAttendance.jsx",
-      "line": 471,
+      "line": 492,
       "expression": "GEOTAGGING_LABELS[value].title"
     },
     {
       "file": "screens/AutoAttendance.jsx",
-      "line": 472,
+      "line": 493,
       "expression": "GEOTAGGING_LABELS[value].description"
     },
     {

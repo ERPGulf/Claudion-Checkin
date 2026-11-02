@@ -12,7 +12,7 @@ import {
   captureAttendanceQueueScope,
   createAttendanceScopeChangedError,
 } from "./attendanceQueueProvenance";
-import { describeHttpFailure, isoTime, logAttendanceDiagnostic } from "./attendanceDiagnostics";
+import { describeHttpFailure, isoTime, logAttendanceDiagnostic, recordAttendanceLifecycle } from "./attendanceDiagnostics";
 import { getNetworkState } from "./NetworkListener";
 
 const LOG_PREFIX = "[AttendanceUpload]";
@@ -211,6 +211,11 @@ export const pushCheckin = async (row, { syncScope = null } = {}) => {
 
   const endpoint = `${baseUrl}/api/method/${OFFLINE_CHECKIN_METHOD}`;
   const startedAt = Date.now();
+  recordAttendanceLifecycle("upload.attempt", {
+    eventId: row.sourceEventId, queueRowId: row.id, status: row.status,
+    attemptAt: startedAt, attempt: row.attemptCount,
+    networkAvailable: getNetworkState?.()?.isConnected,
+  });
   logAttendanceDiagnostic(LOG_PREFIX, `#${row.id} sending`, {
     method: "POST", endpoint, queueRowId: row.id,
     queueState: { status: row.status, attemptCount: row.attemptCount, retryCount: row.retryCount },
@@ -232,6 +237,11 @@ export const pushCheckin = async (row, { syncScope = null } = {}) => {
       },
     );
   } catch (error) {
+    recordAttendanceLifecycle("upload.failed", {
+      eventId: row.sourceEventId, queueRowId: row.id,
+      httpStatus: error?.response?.status, durationMs: Date.now() - startedAt,
+      reason: describeHttpFailure(error).failureType,
+    });
     logAttendanceDiagnostic(LOG_PREFIX, `#${row.id} failed`, {
       durationMs: Date.now() - startedAt, ...describeHttpFailure(error),
     });
@@ -239,6 +249,10 @@ export const pushCheckin = async (row, { syncScope = null } = {}) => {
   }
 
   const outcome = interpretPushResponse(response.data);
+  recordAttendanceLifecycle("upload.response", {
+    eventId: row.sourceEventId, queueRowId: row.id, httpStatus: response.status,
+    durationMs: Date.now() - startedAt, status: outcome.result,
+  });
   const body = unwrap(response.data);
   logAttendanceDiagnostic(LOG_PREFIX, `#${row.id} HTTP ${response.status}`, {
     status: response.status, durationMs: Date.now() - startedAt, body: response.data,

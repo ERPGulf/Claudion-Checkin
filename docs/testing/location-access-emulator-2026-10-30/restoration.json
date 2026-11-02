@@ -1,0 +1,22 @@
+{
+  "capturedAt": "2026-10-30T16:10:14.362272+00:00",
+  "note": "Only newly created disposable QA devices/services stopped; data and records retained",
+  "commands": {
+    "androidDevices": {
+      "exitCode": 0,
+      "output": "List of devices attached"
+    },
+    "bootedIos": {
+      "exitCode": 0,
+      "output": "== Devices ==\n-- iOS 18.6 --\n-- iOS 26.5 --\n-- iOS 27.0 --"
+    },
+    "backendPort": {
+      "exitCode": 1,
+      "output": ""
+    },
+    "metroPort": {
+      "exitCode": 1,
+      "output": ""
+    }
+  }
+}

@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.location.LocationManager
 import android.os.Build
 import android.os.PowerManager
 import android.util.Log
@@ -57,6 +58,36 @@ class ExpoAutoAttendanceModule : Module() {
   // advisory banner for JS while the app process is alive — the geofence
   // transition itself is still delivered independently via GeofenceBroadcastReceiver.
   private var powerSaveReceiver: BroadcastReceiver? = null
+  private var locationAccessReceiver: BroadcastReceiver? = null
+  private var deferredForegroundRestore = false
+
+  private fun observeLocationAccess(reactContext: Context) {
+    runCatching {
+      val state = LocationAccessMonitor.refresh(reactContext)
+      if (state["state"] == "confirmed_available") {
+        // An actual fresh fix, not the service toggle itself, can settle recovery.
+        LocationAccessMonitor.retryRecovery(reactContext) { }
+      }
+    }.onFailure {
+      GeofenceEventBus.emit(EVENT_ERROR, mapOf("code" to -4, "message" to "Native geofence storage failed"))
+    }
+  }
+
+  private fun registerLocationAccessObservers(reactContext: Context) {
+    val receiver = object : BroadcastReceiver() {
+      override fun onReceive(receiverContext: Context, intent: Intent) {
+        observeLocationAccess(receiverContext)
+      }
+    }
+    val filter = IntentFilter().apply {
+      addAction(LocationManager.MODE_CHANGED_ACTION)
+      addAction(LocationManager.PROVIDERS_CHANGED_ACTION)
+    }
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+      reactContext.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
+    } else reactContext.registerReceiver(receiver, filter)
+    locationAccessReceiver = receiver
+  }
 
   private fun registerPowerSaveReceiver(reactContext: Context) {
     val receiver = object : BroadcastReceiver() {
@@ -90,16 +121,27 @@ class ExpoAutoAttendanceModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("ExpoAutoAttendance")
 
-    Events(EVENT_ENTER, EVENT_EXIT, EVENT_ERROR)
+    Events(EVENT_ENTER, EVENT_EXIT, EVENT_ERROR, EVENT_ACCESS)
 
     OnCreate {
       GeofenceEventBus.attach { eventName, payload -> sendEvent(eventName, payload) }
       appContext.reactContext?.let {
         registerPowerSaveReceiver(it)
+        registerLocationAccessObservers(it)
+        // Probe first: a permission downgrade may have restarted this process.
+        // The earlier revocation time cannot be reconstructed on relaunch.
+        val workerOnly = AttendanceSyncWorker.isRunning() && appContext.currentActivity == null
+        deferredForegroundRestore = workerOnly
+        if (workerOnly) {
+          // Upload wakes consume original evidence only. Do not request GPS or
+          // repair a registration with INITIAL_TRIGGER_ENTER during headless
+          // module creation; either could create fresh foreground-style work.
+          runCatching { LocationAccessMonitor.refresh(it) }
+        } else observeLocationAccess(it)
         // Play Services has no registration query. A saved flag cannot prove
         // PendingIntents survived a force-stop/service reset; repair on cold JS
         // creation using the original scoped config, without GPS or HTTP.
-        GeofenceManager.restoreFromStore(it)
+        if (!workerOnly) GeofenceManager.restoreFromStore(it)
       }
     }
 
@@ -109,6 +151,21 @@ class ExpoAutoAttendanceModule : Module() {
         appContext.reactContext?.unregisterReceiver(receiver)
       }
       powerSaveReceiver = null
+      locationAccessReceiver?.let { receiver ->
+        appContext.reactContext?.unregisterReceiver(receiver)
+      }
+      locationAccessReceiver = null
+      appContext.reactContext?.let { LocationAccessMonitor.cancel(it) }
+    }
+
+    OnActivityEntersForeground {
+      appContext.reactContext?.let {
+        observeLocationAccess(it)
+        if (deferredForegroundRestore) {
+          deferredForegroundRestore = false
+          GeofenceManager.restoreFromStore(it)
+        }
+      }
     }
 
     AsyncFunction("startGeofence") { options: GeofenceOptions, promise: Promise ->
@@ -184,6 +241,14 @@ class ExpoAutoAttendanceModule : Module() {
       GeofenceStore.isMonitoring(context)
     }
 
+    Function("getLocationAccessState") { LocationAccessMonitor.getState(context) }
+
+    Function("refreshLocationAccess") { LocationAccessMonitor.refresh(context) }
+
+    AsyncFunction("retryLocationAccessRecovery") { promise: Promise ->
+      LocationAccessMonitor.retryRecovery(context) { state -> promise.resolve(state) }
+    }
+
     // Status queries the JS screen can poll (e.g. on focus, before Start) to warn
     // the user proactively — mirrors the iOS module's equivalent functions.
     Function("hasFullAccuracy") {
@@ -217,6 +282,22 @@ class ExpoAutoAttendanceModule : Module() {
       GeofenceStore.getPendingEvents(context)
     }
 
+    AsyncFunction("scheduleBackgroundSync") {
+      AttendanceSyncScheduler.schedule(context, awaitCommit = true)
+    }
+
+    Function("completeBackgroundSync") { runId: String, retry: Boolean ->
+      AttendanceSyncWorker.complete(runId, retry)
+    }
+
+    Function("recordBackgroundSyncDiagnostic") { stage: String, eventId: String?, details: Map<String, Any?> ->
+      AttendanceSyncDiagnostics.record(context, stage, eventId, details)
+    }
+
+    Function("getBackgroundSyncDiagnostics") {
+      AttendanceSyncDiagnostics.entries(context)
+    }
+
     Function("acknowledgeEvent") { eventId: String ->
       GeofenceStore.acknowledgeEvent(context, eventId)
     }
@@ -231,5 +312,6 @@ class ExpoAutoAttendanceModule : Module() {
     const val EVENT_ENTER = "onGeofenceEnter"
     const val EVENT_EXIT = "onGeofenceExit"
     const val EVENT_ERROR = "onError"
+    const val EVENT_ACCESS = "onLocationAccessChanged"
   }
 }

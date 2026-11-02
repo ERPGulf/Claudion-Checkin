@@ -1,0 +1,13 @@
+--------- beginning of main
+10-30 15:39:16.100  3904  4190 I ExpoAutoAttendance: No persisted geofence to restore
+10-30 15:39:18.944  3904  3904 I ExpoAutoAttendance: Monitoring stopped
+10-30 15:39:18.956  3904  3904 I ExpoAutoAttendance: Monitoring stopped
+10-30 15:40:18.965  3904  3904 I ExpoAutoAttendance: Monitoring stopped
+10-30 15:41:15.567  3904  3904 I ExpoAutoAttendance: Monitoring stopped
+10-30 15:42:15.569  3904  3904 I ExpoAutoAttendance: Monitoring stopped
+10-30 15:42:46.568  3904  3904 I ExpoAutoAttendance: Monitoring stopped
+10-30 15:42:46.801  3904  3904 I ExpoAutoAttendance: Monitoring stopped
+10-30 15:42:47.205  3904  4196 I ExpoAutoAttendance: Permission granted, registering geofence
+10-30 15:42:47.220  3904  3904 I ExpoAutoAttendance: Geofence registered
+10-30 15:48:44.188  3904  4196 I ExpoAutoAttendance: Permission granted, registering geofence
+10-30 15:48:44.223  3904  3904 I ExpoAutoAttendance: Geofence registered

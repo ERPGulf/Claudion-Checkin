@@ -1,0 +1,25 @@
+{
+  "kind": "LOCAL_MOCK_BACKEND_ONLY",
+  "sourceEventId": "1eff8e1a-2bff-4ff6-b1db-8851174fe109",
+  "originalQueuedTimestamp": "2026-10-30 15:44:10",
+  "storedRecords": [
+    {
+      "name": "QA-CHECKIN-00016",
+      "employee": "QA-ANDROID-001",
+      "employee_name": "Disposable QA-ANDROID-001",
+      "time": "2026-10-30 15:44:10",
+      "timestamp": "2026-10-30 15:44:10",
+      "log_type": "OUT",
+      "custom_in": 0,
+      "device_id": "MobileAPP",
+      "auto": null,
+      "location": null,
+      "latitude": null,
+      "longitude": null,
+      "receivedAt": "2026-10-30T15:44:46.870+00:00",
+      "storedAt": "2026-10-30T15:44:46.871+00:00",
+      "endpoint": "offline"
+    }
+  ],
+  "exactMatch": true
+}

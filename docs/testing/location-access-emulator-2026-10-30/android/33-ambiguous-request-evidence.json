@@ -1,0 +1,36 @@
+[
+  {
+    "method": "POST",
+    "path": "/api/method/employee_app.attendance_api.add_log_based_on_employee_field",
+    "employee": "QA-ANDROID-001",
+    "params": {
+      "device_id": "MobileAPP",
+      "employee_field_value": "QA-ANDROID-001",
+      "log_type": "OUT",
+      "timestamp": "2026-10-30 15:52:47",
+      "auto": true,
+      "latitude": 25.2854,
+      "longitude": 51.531,
+      "location": "Disposable QA Doha Office"
+    },
+    "sequence": 193,
+    "receivedAt": "2026-10-30T15:52:48.396+00:00"
+  },
+  {
+    "method": "POST",
+    "path": "/api/method/employee_app.attendance_api.add_log_based_on_employee_field",
+    "employee": "QA-ANDROID-001",
+    "params": {
+      "device_id": "MobileAPP",
+      "employee_field_value": "QA-ANDROID-001",
+      "log_type": "OUT",
+      "timestamp": "2026-10-30 15:52:47",
+      "auto": true,
+      "latitude": 25.2854,
+      "longitude": 51.531,
+      "location": "Disposable QA Doha Office"
+    },
+    "sequence": 194,
+    "receivedAt": "2026-10-30T15:52:48.402+00:00"
+  }
+]

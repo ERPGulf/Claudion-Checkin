@@ -1,0 +1,38 @@
+Location service commands:
+  help or -h
+    Print this help text.
+  is-location-enabled [--user <USER_ID>]
+    Gets the master location switch enabled state. If no user is specified,
+    the current user is assumed.
+  set-location-enabled true|false [--user <USER_ID>]
+    Sets the master location switch enabled state. If no user is specified,
+    the current user is assumed.
+  providers
+    The providers command is followed by a subcommand, as listed below:
+
+    add-test-provider <PROVIDER> [--requiresNetwork] [--requiresSatellite]
+      [--requiresCell] [--hasMonetaryCost] [--supportsAltitude]
+      [--supportsSpeed] [--supportsBearing]
+      [--powerRequirement <POWER_REQUIREMENT>]
+      [--extraAttributionTags <TAG>,<TAG>,...]
+      Add the given test provider. Requires MOCK_LOCATION permissions which
+      can be enabled by running "adb shell appops set <uid>
+      android:mock_location allow". There are optional flags that can be
+      used to configure the provider properties and additional arguments. If
+      no flags are included, then default values will be used.
+    remove-test-provider <PROVIDER>
+      Remove the given test provider.
+    set-test-provider-enabled <PROVIDER> true|false
+      Sets the given test provider enabled state.
+    set-test-provider-location <PROVIDER> --location <LATITUDE>,<LONGITUDE>
+      [--accuracy <ACCURACY>] [--time <TIME>]
+      Set location for given test provider. Accuracy and time are optional.
+    send-extra-command <PROVIDER> <COMMAND>
+      Sends the given extra command to the given provider.
+
+      Common commands that may be supported by the gps provider, depending on
+      hardware and software configurations:
+        delete_aiding_data - requests deletion of any predictive aiding data
+        force_time_injection - requests NTP time injection
+        force_psds_injection - requests predictive aiding data injection
+        request_power_stats - requests GNSS power stats update

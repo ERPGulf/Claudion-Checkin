@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.UUID
 
 /**
  * Shared registration metadata and unacknowledged native transition captures.
@@ -25,9 +26,15 @@ object GeofenceStore {
     check(editor.commit()) { "Native geofence storage could not be persisted" }
   }
 
+  private fun bridgeValue(value: Any?): Any? = when (value) {
+    null, JSONObject.NULL -> null
+    is JSONObject -> asMap(value)
+    is JSONArray -> (0 until value.length()).map { bridgeValue(value.get(it)) }
+    else -> value
+  }
+
   fun asMap(json: JSONObject): Map<String, Any?> = json.keys().asSequence().associateWith { key ->
-    val value = json.get(key)
-    if (value == JSONObject.NULL) null else value
+    bridgeValue(json.get(key))
   }
 
   private fun storedJson(context: Context, key: String): JSONObject? =
@@ -35,6 +42,10 @@ object GeofenceStore {
 
   private fun storedRegistration(context: Context, key: String): JSONObject? {
     val registration = storedJson(context, key) ?: return null
+    if (!registration.has("registrationGeneration")) {
+      registration.put("registrationGeneration", UUID.randomUUID().toString())
+      commit(prefs(context).edit().putString(key, registration.toString()))
+    }
     if (registration.has("requestedRadius")) return registration
     // Prior scoped Android registrations persisted only the rounded OS Float.
     // Recover the original Double from their own immutable fingerprint, never
@@ -63,6 +74,10 @@ object GeofenceStore {
 
   @Synchronized
   fun savePendingGeofence(context: Context, registration: Map<String, Any?>) {
+    val episode = journal(context).captureBarrier()
+    if (episode != null && episode["registrationGeneration"] != registration["registrationGeneration"]) {
+      journal(context).cancelAccessEpisode()
+    }
     commit(prefs(context).edit()
       .putString(KEY_PENDING_GEOFENCE, JSONObject(registration).toString())
       .putBoolean(KEY_MONITORING_REQUESTED, true))
@@ -86,6 +101,7 @@ object GeofenceStore {
 
   @Synchronized
   fun clearGeofence(context: Context) {
+    journal(context).cancelAccessEpisode()
     // Disable attribution before asynchronous OS removal. Late callbacks remain
     // untrusted evidence instead of inheriting the next authenticated scope.
     commit(prefs(context).edit()
@@ -125,6 +141,8 @@ object GeofenceStore {
           nextSequence = json.getLong("nextSequence"),
           legacyMigrated = json.getBoolean("legacyMigrated"),
           events = (0 until captures.length()).map { asMap(captures.getJSONObject(it)) },
+          accessEpisode = json.optJSONObject("accessEpisode")?.let { asMap(it) },
+          recoveryBarrier = json.optJSONObject("recoveryBarrier")?.let { asMap(it) },
         )
       }
     },
@@ -136,6 +154,8 @@ object GeofenceStore {
         .put("nextSequence", state.nextSequence)
         .put("legacyMigrated", state.legacyMigrated)
         .put("events", events)
+        .put("accessEpisode", state.accessEpisode?.let { JSONObject(it) } ?: JSONObject.NULL)
+        .put("recoveryBarrier", state.recoveryBarrier?.let { JSONObject(it) } ?: JSONObject.NULL)
       commit(prefs(context).edit().putString(KEY_EVENT_JOURNAL, json.toString()))
     },
     readLegacyEvent = { getLastEvent(context)?.let { asMap(it) } },
@@ -150,9 +170,13 @@ object GeofenceStore {
     }
     return registration?.let {
       val metadata = asMap(it)
-      if (pending != null && pending.optString("nativeIdentifier") != nativeIdentifier) {
-        metadata + mapOf("captureIssue" to "stale-registration")
+      val episode = journal(context).captureBarrier()
+      val scopedMetadata = if (episode?.get("registrationGeneration") == metadata["registrationGeneration"]) {
+        metadata + mapOf("lossEventId" to episode?.get("lossEventId"))
       } else metadata
+      if (pending != null && pending.optString("nativeIdentifier") != nativeIdentifier) {
+        scopedMetadata + mapOf("captureIssue" to "stale-registration")
+      } else scopedMetadata
     } ?: mapOf(
       "identifier" to nativeIdentifier,
       "nativeIdentifier" to nativeIdentifier,
@@ -171,7 +195,11 @@ object GeofenceStore {
     timestamp: Long,
     metadata: Map<String, Any?>,
   ): Map<String, Any?> {
-    val event = journal(context).append(metadata + mapOf(
+    val episode = journal(context).captureBarrier()
+    val scopedMetadata = if (episode?.get("registrationGeneration") == metadata["registrationGeneration"]) {
+      metadata + mapOf("lossEventId" to episode?.get("lossEventId"))
+    } else metadata
+    val event = journal(context).append(scopedMetadata + mapOf(
       "transition" to transition,
       "timestamp" to timestamp,
     ))
@@ -180,6 +208,7 @@ object GeofenceStore {
     runCatching {
       commit(prefs(context).edit().putString(KEY_LAST_EVENT, JSONObject(event).toString()))
     }
+    GeofenceCaptureQueue.onPersisted(context, event)
     return event
   }
 
@@ -188,6 +217,31 @@ object GeofenceStore {
 
   @Synchronized
   fun acknowledgeEvent(context: Context, eventId: String): Boolean = journal(context).acknowledge(eventId)
+
+  @Synchronized
+  fun getAccessEpisode(context: Context): Map<String, Any?>? = journal(context).accessEpisode()
+
+  @Synchronized
+  fun suppressInitialEnter(context: Context): Boolean = journal(context).suppressInitialEnter()
+
+  @Synchronized
+  fun recordAccessLoss(context: Context, reason: String, at: Long): Map<String, Any?>? {
+    if (!shouldRestoreGeofence(context)) return null
+    val registration = getPendingGeofence(context) ?: getGeofence(context) ?: return null
+    val metadata = asMap(registration)
+    if (metadata["tenantKey"] !is String || metadata["employeeId"] !is String ||
+      metadata["registrationId"] !is String || metadata["registrationGeneration"] !is String) return null
+    return journal(context).recordAccessLoss(metadata, reason, at)?.also {
+      GeofenceCaptureQueue.onPersisted(context, it)
+    }
+  }
+
+  @Synchronized
+  fun completeAccessRecovery(context: Context, lossEventId: String, generation: String,
+    proof: Map<String, Any?>): Map<String, Any?>? =
+    journal(context).completeAccessRecovery(lossEventId, generation, proof)?.also {
+      GeofenceCaptureQueue.onPersisted(context, it)
+    }
 
   fun getLastEvent(context: Context): JSONObject? = storedJson(context, KEY_LAST_EVENT)
 

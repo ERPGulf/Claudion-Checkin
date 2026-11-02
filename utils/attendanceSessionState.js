@@ -8,6 +8,7 @@ import {
   persistCheckoutTime,
   toTimestampMs,
 } from "./attendanceSession";
+import { formatOfflineTimestamp } from "./serverClock";
 
 /**
  * Durable attendance-session state machine.
@@ -89,6 +90,15 @@ const normalizeSession = (raw) => {
   const endedAt = toTimestampMs(raw.endedAt);
   const source = typeof raw.sourceEventId === "string" && raw.sourceEventId
     ? { sourceEventId: raw.sourceEventId } : {};
+  if (typeof raw.registrationGeneration === "string" && raw.registrationGeneration) {
+    source.registrationGeneration = raw.registrationGeneration;
+  }
+  if (typeof raw.sourceTimestamp === "string" && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(raw.sourceTimestamp)) {
+    source.sourceTimestamp = raw.sourceTimestamp;
+  }
+  if (raw.status === SESSION_STATUS.CHECKED_OUT && typeof raw.closedByEventId === "string" && raw.closedByEventId) {
+    source.closedByEventId = raw.closedByEventId;
+  }
   const committedAt = toTimestampMs(raw.committedAt);
   if (Number.isFinite(committedAt)) source.committedAt = committedAt;
 
@@ -238,12 +248,14 @@ export const canTransition = (session, type) =>
     ? !isSessionActive(session)
     : type === "OUT" && isSessionActive(session);
 
-const commitCheckIn = async ({ origin, at, sourceEventId, assertCurrent }) => {
+const commitCheckIn = async ({ origin, at, sourceEventId, registrationGeneration, sourceTimestamp, assertCurrent }) => {
   const startedAt = await persistCheckinStartTime(at ?? Date.now());
   if (assertCurrent) await assertCurrent();
 
   return writeSession({
     ...(sourceEventId ? { sourceEventId } : {}),
+    ...(registrationGeneration ? { registrationGeneration } : {}),
+    ...(sourceTimestamp ? { sourceTimestamp } : {}),
     status: SESSION_STATUS.CHECKED_IN,
     origin: normalizeOrigin(origin, SESSION_ORIGIN.UNKNOWN),
     startedAt,
@@ -253,7 +265,7 @@ const commitCheckIn = async ({ origin, at, sourceEventId, assertCurrent }) => {
   }, { assertCurrent });
 };
 
-const commitCheckOut = async ({ session, origin, at, assertCurrent }) => {
+const commitCheckOut = async ({ session, origin, at, sourceEventId, assertCurrent }) => {
   const endedAt = await persistCheckoutTime(at ?? Date.now());
   if (assertCurrent) await assertCurrent();
 
@@ -261,6 +273,9 @@ const commitCheckOut = async ({ session, origin, at, assertCurrent }) => {
   // "your manual check-in was closed automatically" from a fully automatic day.
   return writeSession({
     ...(session?.sourceEventId ? { sourceEventId: session.sourceEventId } : {}),
+    ...(session?.registrationGeneration ? { registrationGeneration: session.registrationGeneration } : {}),
+    ...(session?.sourceTimestamp ? { sourceTimestamp: session.sourceTimestamp } : {}),
+    ...(sourceEventId ? { closedByEventId: sourceEventId } : {}),
     status: SESSION_STATUS.CHECKED_OUT,
     origin: session?.origin ?? null,
     startedAt: session?.startedAt ?? null,
@@ -309,6 +324,8 @@ export const performSessionTransition = async ({
   rejectStale = false,
   strictRead = false,
   sourceEventId,
+  registrationGeneration,
+  resolveSourceTimestamp,
   withSessionContext = false,
 }) => {
   if (type !== "IN" && type !== "OUT") {
@@ -357,10 +374,12 @@ export const performSessionTransition = async ({
     // A request already sent cannot be recalled. Its durable source receipt
     // records the outcome; it must not mutate a newer account's session.
     if (assertCurrent) await assertCurrent();
+    const sourceTimestamp = type === "IN" && resolveSourceTimestamp ? await resolveSourceTimestamp() : null;
+    if (assertCurrent) await assertCurrent();
     onWrite();
     const session = type === "IN"
-      ? await commitCheckIn({ origin, at: transitionAt, sourceEventId, assertCurrent })
-      : await commitCheckOut({ session: previousSession, origin, at: transitionAt, assertCurrent });
+      ? await commitCheckIn({ origin, at: transitionAt, sourceEventId, registrationGeneration, sourceTimestamp, assertCurrent })
+      : await commitCheckOut({ session: previousSession, origin, at: transitionAt, sourceEventId, assertCurrent });
 
     const queued = !!response?.queued;
 
@@ -406,7 +425,7 @@ export const reconcileSessionFromServer = async ({
   withScopedSessionLock(async (onWrite) => {
     if (assertCurrent) await assertCurrent();
     const session = await readSessionUnlocked({ assertCurrent, onWrite });
-    const startedAt = toTimestampMs(activeStartedAt);
+    let startedAt = toTimestampMs(activeStartedAt);
 
     // A local transition accepted after this GET began cannot be described by
     // that response. Logical startedAt/endedAt may precede a slow upload, so use
@@ -425,6 +444,19 @@ export const reconcileSessionFromServer = async ({
         (isSessionActive(session) && Number.isFinite(session.startedAt) && session.startedAt >= fetchedAtMs))
     ) {
       return session;
+    }
+
+    // A backend status rounds the accepted timestamp to seconds. Keep the
+    // native causal identity only when the scoped server wall-clock digits
+    // exactly match that receipt's frozen timestamp; proximity is not proof.
+    if (startedAt && isSessionActive(session) && session.origin === SESSION_ORIGIN.AUTO &&
+      session.sourceEventId && session.registrationGeneration && session.sourceTimestamp &&
+      startedAt !== session.startedAt) {
+      const owner = parseSessionOwner(await AsyncStorage.getItem(SESSION_OWNER_KEY));
+      if (owner?.tenantKey && await formatOfflineTimestamp(startedAt, { tenantKey: owner.tenantKey }) === session.sourceTimestamp) {
+        startedAt = session.startedAt;
+      }
+      if (assertCurrent) await assertCurrent();
     }
 
     // The status this was resolved from was fetched before the lock was taken,
@@ -453,6 +485,10 @@ export const reconcileSessionFromServer = async ({
       return writeSession({
         ...(isSessionActive(session) && session.startedAt === startedAt && session.sourceEventId
           ? { sourceEventId: session.sourceEventId } : {}),
+        ...(isSessionActive(session) && session.startedAt === startedAt && session.registrationGeneration
+          ? { registrationGeneration: session.registrationGeneration } : {}),
+        ...(isSessionActive(session) && session.startedAt === startedAt && session.sourceTimestamp
+          ? { sourceTimestamp: session.sourceTimestamp } : {}),
         status: SESSION_STATUS.CHECKED_IN,
         origin: resolvedOrigin,
         startedAt,

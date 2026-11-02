@@ -3,10 +3,12 @@ package android.content
 import java.io.File
 import java.io.FileOutputStream
 import java.util.Properties
+import android.content.pm.ApplicationInfo
 
 /** JVM adapter only. It does not emulate Android receiver or process lifecycle. */
-open class Context(val directory: File) {
+open class Context(val directory: File, debuggable: Boolean = true) {
   val applicationContext: Context get() = this
+  val applicationInfo = ApplicationInfo().apply { flags = if (debuggable) ApplicationInfo.FLAG_DEBUGGABLE else 0 }
 
   fun getSharedPreferences(name: String, mode: Int): SharedPreferences =
     FilePreferences(File(directory, "$name.properties"))

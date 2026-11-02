@@ -563,5 +563,14 @@
   "ACCESS_FINE_LOCATION permission is not granted": "ACCESS_FINE_LOCATION permission is not granted",
   "ACCESS_BACKGROUND_LOCATION (\"Allow all the time\") is required on Android 10+": "ACCESS_BACKGROUND_LOCATION (\"Allow all the time\") is required on Android 10+",
   "Failed to register geofence": "Failed to register geofence",
-  "Failed to remove geofence": "Failed to remove geofence"
+  "Failed to remove geofence": "Failed to remove geofence",
+  "Location services are off": "Location services are off",
+  "Checking location access": "Checking location access",
+  "Waiting for accurate location": "Waiting for accurate location",
+  "Waiting for an accurate location. We’ll retry automatically.": "Waiting for an accurate location. We’ll retry automatically.",
+  "Location signal is weak": "Location signal is weak",
+  "Location signal is weak. Your check-in remains active.": "Location signal is weak. Your check-in remains active.",
+  "Turn on location services in your device settings to resume automatic attendance.": "Turn on location services in your device settings to resume automatic attendance.",
+  "Your automatic check-in was closed because required location access was turned off.": "Your automatic check-in was closed because required location access was turned off.",
+  "Your location is not accurate enough to verify office presence yet.": "Your location is not accurate enough to verify office presence yet."
 }

@@ -1,0 +1,12 @@
+{
+  "fix": {
+    "accuracy": 200,
+    "altitude": 0,
+    "altitudeAccuracy": 0,
+    "heading": 0,
+    "latitude": 25.2854,
+    "longitude": 51.531,
+    "speed": 0,
+    "timestamp": 1793375323869
+  }
+}

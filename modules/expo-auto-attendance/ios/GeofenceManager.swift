@@ -40,6 +40,9 @@ final class GeofenceManager: NSObject, CLLocationManagerDelegate {
   }
 
   private var pendingStart: PendingStart?
+  private let accessAttemptGate = LocationAccessAttemptGate()
+  private var accessRequest: LocationAccessRequest?
+  private var accessRequestCompletion: (([String: Any]) -> Void)?
 
   /// Identifier of the region whose initial state we asked for, or nil when no
   /// request is outstanding. Deliberately not a Bool: `didDetermineState` also
@@ -108,7 +111,9 @@ final class GeofenceManager: NSObject, CLLocationManagerDelegate {
   }
 
   @objc private func applicationDidBecomeActive() {
+    _ = refreshLocationAccess()
     restoreMonitoringIfNeeded()
+    retryLocationAccessRecovery { _ in }
   }
 
   private func beginMonitoring(_ pending: PendingStart) {
@@ -143,8 +148,10 @@ final class GeofenceManager: NSObject, CLLocationManagerDelegate {
    */
   func primeOnLaunch() {
     _ = locationManager
+    _ = refreshLocationAccess()
     NSLog("%@ Location manager primed (monitoring=%d)", Self.logTag, GeofenceStore.shared.isMonitoring)
     restoreMonitoringIfNeeded()
+    retryLocationAccessRecovery { _ in }
   }
 
   /// Core Location normally retains regions. Repair missing registrations from
@@ -152,6 +159,9 @@ final class GeofenceManager: NSObject, CLLocationManagerDelegate {
   private func restoreMonitoringIfNeeded() {
     guard pendingStart == nil else { return }
     do {
+      let access = refreshLocationAccess()
+      guard access["state"] as? String == "confirmed_available",
+        access["recoveryPending"] as? Bool == false else { return }
       let saved = try GeofenceStore.shared.getRegistrationState()
       guard let registration = saved,
         ["pending", "monitoring"].contains(registration["status"] as? String ?? "") else {
@@ -244,6 +254,150 @@ final class GeofenceManager: NSObject, CLLocationManagerDelegate {
     return locationManager.accuracyAuthorization == .fullAccuracy
   }
 
+  /// Successful OS authorization reads only. Coordinate quality, Core Location
+  /// failures, power state and network connectivity never participate here.
+  private func observedAccess() -> (state: String, reason: String?) {
+    if !CLLocationManager.locationServicesEnabled() { return ("confirmed_disabled", "services-disabled") }
+    switch locationManager.authorizationStatus {
+    case .denied, .restricted:
+      return ("confirmed_disabled", "foreground-permission-lost")
+    case .authorizedWhenInUse:
+      return ("confirmed_disabled", "background-permission-lost")
+    case .authorizedAlways:
+      switch locationManager.accuracyAuthorization {
+      case .fullAccuracy: return ("confirmed_available", nil)
+      case .reducedAccuracy: return ("confirmed_disabled", "precise-permission-lost")
+      @unknown default: return ("unknown", nil)
+      }
+    case .notDetermined:
+      return ("unknown", nil)
+    @unknown default:
+      return ("unknown", nil)
+    }
+  }
+
+  func getLocationAccessState() -> [String: Any] {
+    // A screen/status read can precede the authorization callback. Retain that
+    // first confirmed observation instead of stamping a later foreground poll.
+    return refreshLocationAccess()
+  }
+
+  private func snapshotLocationAccessState() -> [String: Any] {
+    let access = observedAccess()
+    do {
+      let episode = try GeofenceStore.shared.getAccessEpisode()
+      let registration = try GeofenceStore.shared.getRegistrationState()
+      let configuration = registration?["configuration"] as? [String: Any]
+      var result: [String: Any] = ["state": access.state, "recoveryPending": episode != nil]
+      result["reason"] = access.reason
+      result["lossEventId"] = episode?["lossEventId"]
+      result["registrationGeneration"] = configuration?["registrationGeneration"]
+      result["registration"] = configuration
+      return result
+    } catch {
+      // Storage/read failures cannot invent affirmative revocation evidence.
+      return ["state": "unknown", "recoveryPending": true]
+    }
+  }
+
+  @discardableResult
+  func refreshLocationAccess() -> [String: Any] {
+    if !Thread.isMainThread { return DispatchQueue.main.sync { self.refreshLocationAccess() } }
+    let access = observedAccess()
+    if access.state == "confirmed_disabled", let reason = access.reason {
+      cancelAccessRequest()
+      do {
+        if let event = try GeofenceStore.shared.observeAccessLoss(reason: reason,
+          at: Int64(Date().timeIntervalSince1970 * 1000)) {
+          clearInitialStateRequest()
+          GeofenceEventBus.shared.emit(GeofenceEvents.accessChanged, event.mapValues { Optional($0) })
+        }
+      } catch {
+        reportStorageFailure()
+        return ["state": "unknown", "recoveryPending": true]
+      }
+    }
+    return snapshotLocationAccessState()
+  }
+
+  /// One cancellable current-fix request per episode. A dedicated manager per
+  /// attempt prevents a cancelled manager's late callback from satisfying retry.
+  func retryLocationAccessRecovery(resolve: @escaping ([String: Any]) -> Void) {
+    let state = refreshLocationAccess()
+    guard state["state"] as? String == "confirmed_available", accessAttemptGate.current == nil else {
+      resolve(state)
+      return
+    }
+    do {
+      guard let episode = try GeofenceStore.shared.getAccessEpisode(),
+        let lossEventId = episode["lossEventId"] as? String,
+        let generation = episode["registrationGeneration"] as? String,
+        let firstObservedAt = episode["firstObservedAt"] as? NSNumber,
+        let office = episode["originalRegistrationSnapshot"] as? [String: Any] else {
+        resolve(state)
+        return
+      }
+      let requestedAt = Int64(Date().timeIntervalSince1970 * 1000)
+      guard requestedAt >= firstObservedAt.int64Value,
+        let attempt = accessAttemptGate.begin(lossEventId: lossEventId,
+          registrationGeneration: generation, requestedAt: requestedAt) else {
+        resolve(state)
+        return
+      }
+      accessRequestCompletion = resolve
+      let request = LocationAccessRequest(accept: { location in
+        let position: [String: Any] = ["latitude": location.coordinate.latitude,
+          "longitude": location.coordinate.longitude, "horizontalAccuracy": location.horizontalAccuracy,
+          "timestamp": Int64(location.timestamp.timeIntervalSince1970 * 1000)]
+        return LocationAccessGeometry.classify(position: position, office: office,
+          requestedAt: attempt.requestedAt, firstObservedAt: firstObservedAt.int64Value,
+          observedAt: Int64(Date().timeIntervalSince1970 * 1000)) != nil
+      }, completion: { [weak self] location in
+        self?.finishAccessRequest(attempt: attempt, location: location)
+      })
+      accessRequest = request
+      request.start()
+    } catch {
+      resolve(["state": "unknown", "recoveryPending": true])
+    }
+  }
+
+  private func cancelAccessRequest() {
+    if let attempt = accessAttemptGate.current { _ = accessAttemptGate.finish(attempt.id) }
+    accessRequest?.cancel()
+    accessRequest = nil
+    let completion = accessRequestCompletion
+    accessRequestCompletion = nil
+    completion?(snapshotLocationAccessState())
+  }
+
+  private func finishAccessRequest(attempt: LocationAccessAttemptGate.Attempt, location: CLLocation?) {
+    guard accessAttemptGate.finish(attempt.id) != nil else { return }
+    accessRequest?.cancel()
+    accessRequest = nil
+    let completion = accessRequestCompletion
+    accessRequestCompletion = nil
+    defer { completion?(snapshotLocationAccessState()) }
+    // Suspension can delay the main-queue timeout. A late provider callback
+    // still cannot authorize recovery after the monotonic 15-second deadline.
+    guard let location, attempt.isWithinDeadline(at: ProcessInfo.processInfo.systemUptime),
+      observedAccess().state == "confirmed_available" else { return }
+    let observedAt = Int64(Date().timeIntervalSince1970 * 1000)
+    let position: [String: Any] = ["latitude": location.coordinate.latitude,
+      "longitude": location.coordinate.longitude, "horizontalAccuracy": location.horizontalAccuracy,
+      "timestamp": Int64(location.timestamp.timeIntervalSince1970 * 1000)]
+    do {
+      if let event = try GeofenceStore.shared.completeAccessRecovery(lossEventId: attempt.lossEventId,
+        registrationGeneration: attempt.registrationGeneration, requestedAt: attempt.requestedAt,
+        position: position, observedAt: observedAt) {
+        GeofenceEventBus.shared.emit(GeofenceEvents.accessChanged, event.mapValues { Optional($0) })
+        restoreMonitoringIfNeeded()
+      }
+    } catch {
+      reportStorageFailure()
+    }
+  }
+
   /**
    Registers a single circular geofence reporting ENTER and EXIT transitions.
    Any previously registered fence (same or stored identifier) is replaced.
@@ -288,7 +442,8 @@ final class GeofenceManager: NSObject, CLLocationManagerDelegate {
       "identifier": identifier, "nativeIdentifier": nativeIdentifier,
       "latitude": latitude, "longitude": longitude,
       "radius": clampedRadius, "requestedRadius": radius,
-      "registrationStartedAt": Int64(Date().timeIntervalSince1970 * 1000)
+      "registrationStartedAt": Int64(Date().timeIntervalSince1970 * 1000),
+      "registrationGeneration": UUID().uuidString
     ]
     configuration["tenantKey"] = tenantKey
     configuration["employeeId"] = employeeId
@@ -298,12 +453,27 @@ final class GeofenceManager: NSObject, CLLocationManagerDelegate {
     let previousConfiguration: [String: Any]?
     do {
       previousConfiguration = try GeofenceStore.shared.getRegistrationState()?["configuration"] as? [String: Any]
+      // Re-registering the same authorized intent repairs the OS registration;
+      // it must not erase a pending interruption or invent a new generation.
+      if let previous = previousConfiguration,
+        let registrationId, !registrationId.isEmpty,
+        previous["registrationId"] as? String == registrationId,
+        previous["tenantKey"] as? String == tenantKey,
+        previous["employeeId"] as? String == employeeId,
+        (previous["latitude"] as? NSNumber)?.doubleValue == latitude,
+        (previous["longitude"] as? NSNumber)?.doubleValue == longitude,
+        (previous["requestedRadius"] as? NSNumber)?.doubleValue == radius,
+        let generation = previous["registrationGeneration"] as? String {
+        configuration["registrationGeneration"] = generation
+        configuration["registrationStartedAt"] = previous["registrationStartedAt"]
+      }
       // Ownership must reach stable storage before the OS can deliver a callback.
       try GeofenceStore.shared.savePendingRegistration(configuration)
     } catch {
       reject("ERR_NATIVE_STORAGE", "Geofence registration could not be persisted")
       return
     }
+    cancelAccessRequest()
     clearInitialStateRequest()
     // Replace instead of accumulating regions (iOS allows max 20 per app).
     stopMonitoredRegions(configuration: previousConfiguration)
@@ -321,6 +491,7 @@ final class GeofenceManager: NSObject, CLLocationManagerDelegate {
     let previousConfiguration = try GeofenceStore.shared.getRegistrationState()?["configuration"] as? [String: Any]
     // Durable cancellation wins against a process death or late OS confirmation.
     try GeofenceStore.shared.cancelRegistration()
+    cancelAccessRequest()
     // Cancel any outstanding initial-state retry: monitoring is going away, so a
     // late `.inside` must not produce a check-in after the user opted out.
     clearInitialStateRequest()
@@ -498,6 +669,7 @@ final class GeofenceManager: NSObject, CLLocationManagerDelegate {
   }
 
   func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+    let access = refreshLocationAccess()
     let status = manager.authorizationStatus
     NSLog("%@ Authorization changed: %d", Self.logTag, status.rawValue)
     do {
@@ -518,7 +690,65 @@ final class GeofenceManager: NSObject, CLLocationManagerDelegate {
         "message": "Precise Location was turned off; automatic check-in/out may be unreliable until it's turned back on for this app."
       ])
     } else {
-      restoreMonitoringIfNeeded()
+      if access["recoveryPending"] as? Bool == true {
+        retryLocationAccessRecovery { _ in }
+      } else {
+        restoreMonitoringIfNeeded()
+      }
     }
+  }
+}
+
+/// Core Location may first deliver cached/inaccurate data. The durable store
+/// validates freshness and the accuracy-aware circle before accepting recovery.
+private final class LocationAccessRequest: NSObject, CLLocationManagerDelegate {
+  private let manager = CLLocationManager()
+  private let accept: (CLLocation) -> Bool
+  private var completion: ((CLLocation?) -> Void)?
+  private var timeout: DispatchWorkItem?
+
+  init(accept: @escaping (CLLocation) -> Bool, completion: @escaping (CLLocation?) -> Void) {
+    self.accept = accept
+    self.completion = completion
+    super.init()
+    manager.delegate = self
+    manager.desiredAccuracy = kCLLocationAccuracyBest
+  }
+
+  func start() {
+    let timeout = DispatchWorkItem { [weak self] in self?.finish(nil) }
+    self.timeout = timeout
+    DispatchQueue.main.asyncAfter(deadline: .now() + 15, execute: timeout)
+    // Core Location can return a cached fix immediately from requestLocation().
+    // Keep this single bounded request alive until a fresh, decisive fix arrives;
+    // stale, malformed and uncertain observations leave its 15-second slot open.
+    manager.startUpdatingLocation()
+  }
+
+  func cancel() {
+    completion = nil
+    timeout?.cancel()
+    timeout = nil
+    manager.stopUpdatingLocation()
+    manager.delegate = nil
+  }
+
+  private func finish(_ location: CLLocation?) {
+    guard let completion else { return }
+    self.completion = nil
+    timeout?.cancel()
+    timeout = nil
+    manager.stopUpdatingLocation()
+    manager.delegate = nil
+    completion(location)
+  }
+
+  func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+    guard let location = locations.reversed().first(where: accept) else { return }
+    finish(location)
+  }
+
+  func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+    finish(nil)
   }
 }

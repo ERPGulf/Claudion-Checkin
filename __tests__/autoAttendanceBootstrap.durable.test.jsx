@@ -1,6 +1,7 @@
 /** @jest-environment jsdom */
 jest.mock("expo-sqlite", () => require("../test-utils/expoSqliteMock"));
-const mockListeners = { enter: new Set(), exit: new Set(), error: new Set() };
+const mockListeners = { enter: new Set(), exit: new Set(), error: new Set(), access: new Set() };
+let mockAccessState;
 let mockJournal = [];
 let mockReconnect;
 let mockStore;
@@ -13,6 +14,9 @@ jest.mock("../redux/Store", () => ({
 }));
 jest.mock("../modules/expo-auto-attendance", () => ({
   OFFICE_GEOFENCE_IDENTIFIER: "office-main", isAvailable: () => true, supportsDurableEvents: () => true,
+  supportsLocationAccessEvents: jest.fn(() => false),
+  refreshLocationAccess: jest.fn(() => mockAccessState), getLocationAccessState: jest.fn(() => mockAccessState),
+  retryLocationAccessRecovery: jest.fn(async () => mockAccessState),
   getPendingEvents: jest.fn(() => [...mockJournal]),
   acknowledgeEvent: jest.fn(id => { mockJournal = mockJournal.filter(event => event.eventId !== id); return true; }),
   getRegisteredGeofences: jest.fn(() => []), isMonitoring: () => mockMonitoring, hasFullAccuracy: () => true,
@@ -20,6 +24,7 @@ jest.mock("../modules/expo-auto-attendance", () => ({
   addGeofenceEnterListener: listener => { mockListeners.enter.add(listener); return { remove: () => mockListeners.enter.delete(listener) }; },
   addGeofenceExitListener: listener => { mockListeners.exit.add(listener); return { remove: () => mockListeners.exit.delete(listener) }; },
   addErrorListener: listener => { mockListeners.error.add(listener); return { remove: () => mockListeners.error.delete(listener) }; },
+  addLocationAccessChangedListener: listener => { mockListeners.access.add(listener); return { remove: () => mockListeners.access.delete(listener) }; },
 }));
 jest.mock("expo-location", () => ({
   Accuracy: { Balanced: 3 }, getForegroundPermissionsAsync: jest.fn(async () => ({ status: "granted" })),
@@ -69,6 +74,7 @@ import {
   beginEmployeeAutoAttendancePolicyReception,
   receiveEmployeeAutoAttendancePolicy,
 } from "../services/employeeAutoAttendancePolicy";
+import { applySessionOwner, performSessionTransition, readSession } from "../utils/attendanceSessionState";
 const { __resetAll } = require("../test-utils/expoSqliteMock");
 let config;
 let store;
@@ -78,6 +84,8 @@ const event = (id, transition, sequence, policy = 2) => {
     identifier: "office-main", nativeIdentifier: "physical-1", registrationId: createRegistrationId(snapshot) };
 };
 const mount = () => render(<Provider store={store}><AutoAttendanceBootstrap /></Provider>);
+const accessSnapshot = (overrides = {}) => ({ state: "confirmed_available", recoveryPending: false,
+  registrationGeneration: "generation-1", ...overrides });
 const receiveTenantGeo = (value, tenant = TEST_TENANT) => store.dispatch(settingsReceived({
   scope: buildSettingsScope(tenant, "EMP-001"),
   settings: normalizeFeatureSettings({ attendance_action: { geo_tagging: value } }),
@@ -92,6 +100,11 @@ beforeEach(async () => {
   await AsyncStorage.clear(); await loginQueueEmployee("EMP-001");
   mockJournal = []; mockMonitoring = false; Object.values(mockListeners).forEach(listeners => listeners.clear());
   jest.clearAllMocks();
+  Native.supportsLocationAccessEvents.mockReturnValue(false);
+  mockAccessState = { state: "confirmed_available", recoveryPending: false, registrationGeneration: "generation-1" };
+  Native.refreshLocationAccess.mockImplementation(() => mockAccessState);
+  Native.getLocationAccessState.mockImplementation(() => mockAccessState);
+  Native.retryLocationAccessRecovery.mockReset().mockImplementation(async () => mockAccessState);
   fetchShouldAttemptRequest.mockResolvedValue(false);
   Location.getBackgroundPermissionsAsync.mockResolvedValue({ status: "granted" });
   config = { employeeId: "EMP-001", tenantKey: TEST_TENANT, employeeDocname: "HR-EMP-001",
@@ -105,6 +118,95 @@ beforeEach(async () => {
     autoAttendance: { geotagging: 2, syncRequestId: 0 },
   } });
   mockStore = store;
+});
+
+describe("native location-access episodes", () => {
+  const seedAutomaticSession = async () => {
+    await applySessionOwner("EMP-001", { tenantKey: TEST_TENANT });
+    return performSessionTransition({ type: "IN", origin: "AUTO",
+      sourceEventId: "original-auto-in", registrationGeneration: "generation-1", at: Date.now() - 300000,
+      execute: async () => ({ allowed: true }) });
+  };
+  const loss = () => ({ ...event("observed-loss", "EXIT", 1), transition: null,
+    kind: "LOCATION_ACCESS_LOST", registrationGeneration: "generation-1", reason: "services-disabled",
+    timestamp: Date.now() - 2000 });
+
+  it.each(["indoor signal loss", "inaccurate coordinates", "location timeout", "battery saver", "network disconnection", "failed OS access read"])(
+    "%s preserves an existing AUTO session without checkout or queue work", async condition => {
+      await seedAutomaticSession();
+      const before = await readSession();
+      Native.supportsLocationAccessEvents.mockReturnValue(true);
+      mockAccessState = accessSnapshot({ state: condition === "failed OS access read" ? "unknown" : "confirmed_available" });
+      Location.getCurrentPositionAsync.mockRejectedValue(new Error(condition));
+      const view = mount();
+      try {
+        await waitFor(() => expect(Native.refreshLocationAccess).toHaveBeenCalled());
+        await waitFor(() => expect(store.getState().autoAttendance.monitoring?.state)
+          .toBe(condition === "failed OS access read" ? "unavailable" : "active"));
+        expect(await readSession()).toEqual(before);
+        expect(await listAll()).toEqual([]);
+        expect(mockJournal).toEqual([]);
+        expect(Native.retryLocationAccessRecovery).not.toHaveBeenCalled();
+      } finally { view.unmount(); }
+    },
+  );
+
+  it("processes OS-confirmed loss without clearing the native recovery episode", async () => {
+    await seedAutomaticSession();
+    Native.supportsLocationAccessEvents.mockReturnValue(true);
+    mockAccessState = accessSnapshot({ state: "confirmed_disabled", recoveryPending: true, lossEventId: "observed-loss" });
+    const observed = loss(); mockJournal = [observed];
+    Native.stopGeofence.mockClear();
+    const view = mount();
+    try {
+      await waitFor(async () => expect(await readSession()).toMatchObject({ status: "CHECKED_OUT", endedAt: observed.timestamp }));
+      expect(Native.stopGeofence).not.toHaveBeenCalled();
+      expect(Native.retryLocationAccessRecovery).not.toHaveBeenCalled();
+      expect(await listAll()).toEqual([expect.objectContaining({ action: "checkout", sourceEventId: "observed-loss" })]);
+      expect(await findEvent("observed-loss")).toMatchObject({ outcome: { cutoffAccepted: true } });
+    } finally { view.unmount(); }
+  });
+
+  it("uncertain recovery keeps waiting and retries on the next native access callback", async () => {
+    await seedAutomaticSession();
+    Native.supportsLocationAccessEvents.mockReturnValue(true);
+    mockAccessState = accessSnapshot({ recoveryPending: true, lossEventId: "observed-loss" });
+    mockJournal = [loss()];
+    const view = mount();
+    try {
+      await waitFor(() => expect(Native.retryLocationAccessRecovery).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(store.getState().autoAttendance.monitoring?.state).toBe("waiting_for_accurate_location"));
+      expect(await readSession()).toMatchObject({ status: "CHECKED_OUT" });
+      expect((await listAll()).map(row => row.action)).toEqual(["checkout"]);
+      Native.retryLocationAccessRecovery.mockImplementationOnce(async () => {
+        const timestamp = Date.now();
+        mockJournal = [{ ...event("verified-recovery", "ENTER", 2), transition: null,
+          kind: "LOCATION_ACCESS_RECOVERED", registrationGeneration: "generation-1", lossEventId: "observed-loss",
+          fixRequestedAt: timestamp, timestamp, presence: "inside",
+          position: { latitude: 25.28, longitude: 51.52, horizontalAccuracy: 10, timestamp } }];
+        mockAccessState = accessSnapshot();
+        return mockAccessState;
+      });
+      await act(async () => { mockListeners.access.forEach(listener => listener(mockAccessState)); });
+      await waitFor(async () => expect(await readSession()).toMatchObject({ status: "CHECKED_IN", sourceEventId: "verified-recovery" }));
+      expect((await listAll()).sort((a, b) => a.id - b.id).map(row => row.action)).toEqual(["checkout", "checkin"]);
+    } finally { view.unmount(); }
+  });
+
+  it("replaces a foreign pending recovery without waiting for GPS", async () => {
+    Native.supportsLocationAccessEvents.mockReturnValue(true);
+    mockAccessState = accessSnapshot({ recoveryPending: true, lossEventId: "foreign-loss",
+      registration: { ...event("foreign", "ENTER", 1), employeeId: "EMP-OTHER" } });
+    const originalStop = Native.stopGeofence.getMockImplementation();
+    Native.stopGeofence.mockImplementation(async () => { mockMonitoring = false; mockAccessState = accessSnapshot(); });
+    const view = mount();
+    try {
+      await waitFor(() => expect(Native.startGeofence).toHaveBeenCalled());
+      expect(Native.stopGeofence).toHaveBeenCalled();
+      expect(Native.retryLocationAccessRecovery).not.toHaveBeenCalled();
+      expect(await listAll()).toEqual([]);
+    } finally { view.unmount(); Native.stopGeofence.mockImplementation(originalStop); }
+  });
 });
 
 it("restores a denied automatic capability without registering or submitting a captured event", async () => {

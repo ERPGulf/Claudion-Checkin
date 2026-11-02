@@ -59,6 +59,10 @@ final class GeofenceStore {
     return try locked { try readJournal()["registration"] as? [String: Any] }
   }
 
+  func getAccessEpisode() throws -> [String: Any]? {
+    return try locked { try readJournal()["accessEpisode"] as? [String: Any] }
+  }
+
   /// Commit ownership before asking the OS to register. A same-ID restoration
   /// keeps completed presence/cooldown; only a new registration starts it anew.
   func savePendingRegistration(_ configuration: [String: Any]) throws {
@@ -68,10 +72,21 @@ final class GeofenceStore {
       let previousConfiguration = previous?["configuration"] as? [String: Any]
       let previousIdentifier = previousConfiguration.flatMap { registrationIdentifier($0) }
       let sameIdentifier = previousIdentifier != nil && previousIdentifier == registrationIdentifier(configuration)
+      var configuration = configuration
+      if configuration["registrationGeneration"] == nil {
+        configuration["registrationGeneration"] = sameIdentifier
+          ? previousConfiguration?["registrationGeneration"] as? String ?? UUID().uuidString
+          : UUID().uuidString
+      }
+      let sameGeneration = configuration["registrationGeneration"] as? String == previousConfiguration?["registrationGeneration"] as? String
+      if configuration["registrationGeneration"] as? String != previousConfiguration?["registrationGeneration"] as? String {
+        journal["accessEpisode"] = NSNull()
+        journal["lastAccessRecovery"] = NSNull()
+      }
       journal["registration"] = [
         "configuration": configuration, "status": "pending",
-        "initialPresencePending": sameIdentifier ? previous?["initialPresencePending"] as? Bool ?? false : true,
-        "initialPresenceRetryAfter": sameIdentifier ? previous?["initialPresenceRetryAfter"] as? NSNumber ?? 0 : 0
+        "initialPresencePending": sameIdentifier || sameGeneration ? previous?["initialPresencePending"] as? Bool ?? false : true,
+        "initialPresenceRetryAfter": sameIdentifier || sameGeneration ? previous?["initialPresenceRetryAfter"] as? NSNumber ?? 0 : 0
       ] as [String: Any]
       try writeJournal(journal)
       defaults.set(configuration, forKey: geofenceKey)
@@ -100,6 +115,8 @@ final class GeofenceStore {
     try locked {
       var journal = try readJournal()
       journal["registration"] = NSNull()
+      journal["accessEpisode"] = NSNull()
+      journal["lastAccessRecovery"] = NSNull()
       try writeJournal(journal)
       clearGeofence()
     }
@@ -196,6 +213,16 @@ final class GeofenceStore {
         throw NSError(domain: "ExpoAutoAttendance", code: 2,
           userInfo: [NSLocalizedDescriptionKey: "Native registration journal is invalid"])
       }
+      // Add a logical generation only to the current registration. Historical
+      // receipts retain their original provenance, IDs, and sequence numbers.
+      if var registration = journal["registration"] as? [String: Any],
+        var configuration = registration["configuration"] as? [String: Any],
+        configuration["registrationGeneration"] == nil {
+        configuration["registrationGeneration"] = UUID().uuidString
+        registration["configuration"] = configuration
+        journal["registration"] = registration
+        try writeJournal(journal)
+      }
       return journal
     }
 
@@ -208,8 +235,14 @@ final class GeofenceStore {
       legacy["captureIssue"] = "legacy-unattributed"
       events.append(legacy)
     }
-    let journal: [String: Any] = ["version": 1, "nextSequence": events.count, "events": events,
+    var journal: [String: Any] = ["version": 1, "nextSequence": events.count, "events": events,
       "registration": legacyRegistration()]
+    if var registration = journal["registration"] as? [String: Any],
+      var configuration = registration["configuration"] as? [String: Any] {
+      configuration["registrationGeneration"] = UUID().uuidString
+      registration["configuration"] = configuration
+      journal["registration"] = registration
+    }
     try writeJournal(journal)
     return journal
   }
@@ -238,6 +271,12 @@ final class GeofenceStore {
       var events = journal["events"] as! [[String: Any]]
       let sequence = (journal["nextSequence"] as! NSNumber).int64Value + 1
       var event = payload
+      if event["transition"] as? String == "ENTER",
+        let episode = journal["accessEpisode"] as? [String: Any] ??
+          (event["initialPresence"] as? Bool == true ? journal["lastAccessRecovery"] as? [String: Any] : nil),
+        episode["registrationGeneration"] as? String == event["registrationGeneration"] as? String {
+        event["lossEventId"] = episode["lossEventId"]
+      }
       event["eventId"] = UUID().uuidString
       event["sequence"] = sequence
       events.append(event)
@@ -247,6 +286,80 @@ final class GeofenceStore {
       try writeJournal(journal)
       // Legacy getLastEvent is display/old-JS compatibility, never the journal.
       defaults.set(event, forKey: lastEventKey)
+      return event
+    }
+  }
+
+  /// The first positive OS revocation and its episode share one durable write.
+  /// Poor reception and failed access reads must never call this method.
+  func observeAccessLoss(reason: String, at timestamp: Int64) throws -> [String: Any]? {
+    return try locked {
+      let allowedReasons = ["services-disabled", "foreground-permission-lost", "background-permission-lost", "precise-permission-lost"]
+      guard allowedReasons.contains(reason), timestamp > 0 else { return nil }
+      var journal = try readJournal()
+      guard let registration = journal["registration"] as? [String: Any],
+        let configuration = registration["configuration"] as? [String: Any],
+        let generation = configuration["registrationGeneration"] as? String, !generation.isEmpty,
+        let tenant = configuration["tenantKey"] as? String, !tenant.isEmpty,
+        let employee = configuration["employeeId"] as? String, !employee.isEmpty,
+        let fingerprint = configuration["registrationId"] as? String, !fingerprint.isEmpty else { return nil }
+      if let existing = journal["accessEpisode"] as? [String: Any],
+        existing["registrationGeneration"] as? String == generation { return nil }
+      var event = configuration
+      event["kind"] = "LOCATION_ACCESS_LOST"
+      event["reason"] = reason
+      event["timestamp"] = timestamp
+      event["eventId"] = UUID().uuidString
+      let sequence = (journal["nextSequence"] as! NSNumber).int64Value + 1
+      event["sequence"] = sequence
+      var events = journal["events"] as! [[String: Any]]
+      events.append(event)
+      journal["events"] = events
+      journal["nextSequence"] = sequence
+      journal["accessEpisode"] = ["lossEventId": event["eventId"]!, "registrationGeneration": generation,
+        "firstObservedAt": timestamp, "originalRegistrationSnapshot": configuration]
+      journal["lastAccessRecovery"] = NSNull()
+      try writeJournal(journal)
+      defaults.set(false, forKey: monitoringKey)
+      return event
+    }
+  }
+
+  /// Fresh presence is evidence only; JS decides whether the matched AUTO
+  /// session was actually closed and whether a replacement IN is permitted.
+  func completeAccessRecovery(lossEventId: String, registrationGeneration: String,
+    requestedAt: Int64, position: [String: Any], observedAt: Int64) throws -> [String: Any]? {
+    return try locked {
+      var journal = try readJournal()
+      guard let episode = journal["accessEpisode"] as? [String: Any],
+        episode["lossEventId"] as? String == lossEventId,
+        episode["registrationGeneration"] as? String == registrationGeneration,
+        let office = episode["originalRegistrationSnapshot"] as? [String: Any],
+        let registration = journal["registration"] as? [String: Any],
+        let current = registration["configuration"] as? [String: Any],
+        current["registrationGeneration"] as? String == registrationGeneration,
+        ["tenantKey", "employeeId", "registrationId"].allSatisfy({ current[$0] as? String == office[$0] as? String }),
+        let firstObservedAt = episode["firstObservedAt"] as? NSNumber,
+        let presence = LocationAccessGeometry.classify(position: position, office: office,
+          requestedAt: requestedAt, firstObservedAt: firstObservedAt.int64Value, observedAt: observedAt) else { return nil }
+      var event = office
+      event["kind"] = "LOCATION_ACCESS_RECOVERED"
+      event["lossEventId"] = lossEventId
+      event["fixRequestedAt"] = requestedAt
+      event["timestamp"] = position["timestamp"]
+      event["position"] = position
+      event["presence"] = presence
+      event["eventId"] = UUID().uuidString
+      let sequence = (journal["nextSequence"] as! NSNumber).int64Value + 1
+      event["sequence"] = sequence
+      var events = journal["events"] as! [[String: Any]]
+      events.append(event)
+      journal["events"] = events
+      journal["nextSequence"] = sequence
+      journal["accessEpisode"] = NSNull()
+      journal["lastAccessRecovery"] = ["lossEventId": lossEventId, "registrationGeneration": registrationGeneration]
+      try writeJournal(journal)
+      // Never replace the compatibility geofence slot with a control receipt.
       return event
     }
   }

@@ -1,0 +1,76 @@
+{
+  "date": "2026-11-02",
+  "emulator": "ClaudionBackgroundQA20261102",
+  "serial": "emulator-5570",
+  "androidRelease": "15",
+  "api": 35,
+  "image": "google_apis_playstore/arm64-v8a",
+  "application": "com.bazim.claudioncheckin",
+  "setup": "Final APK installed over signed-out synthetic QR provisioning while network absent. Native MY_PACKAGE_REPLACED receiver scheduled work without Activity/JS. Native-only process killed with am kill, then network restored. No attendance event injected.",
+  "offlineBeforeKill": [
+    {
+      "stage": "worker.scheduled",
+      "at": 1793600644438
+    }
+  ],
+  "processBeforeKill": 6857,
+  "processAbsentAfterAmKill": true,
+  "processAfterNetworkRestoration": 7032,
+  "topResumedActivityAfterWorker": "com.google.android.apps.nexuslauncher/.NexusLauncherActivity",
+  "inspectorAttachedAfterKill": false,
+  "diagnosticsAfterColdWorker": [
+    {
+      "stage": "worker.scheduled",
+      "at": 1793600644438
+    },
+    {
+      "stage": "worker.start",
+      "at": 1793600660792,
+      "eventId": "1dd19721-03b5-413d-a4df-3221df137cb2",
+      "attempt": 0,
+      "networkAvailable": true
+    },
+    {
+      "stage": "worker.js-start",
+      "at": 1793600662669
+    },
+    {
+      "stage": "worker.js-complete",
+      "at": 1793600662673,
+      "retryable": false
+    },
+    {
+      "stage": "worker.complete",
+      "at": 1793600662676,
+      "eventId": "1dd19721-03b5-413d-a4df-3221df137cb2",
+      "retryable": false
+    }
+  ],
+  "workSpecAfter": [
+    {
+      "id": "eae9e26b-0176-4f1f-a389-cec48b764417",
+      "state": 2,
+      "workerClass": "expo.modules.autoattendance.AttendanceSyncWorker",
+      "runAttemptCount": 1
+    },
+    {
+      "id": "9e92ac0d-beab-4bc1-99dd-feb67a2601bb",
+      "state": 2,
+      "workerClass": "expo.modules.autoattendance.AttendanceSyncWorker",
+      "runAttemptCount": 1
+    }
+  ],
+  "workStateLegend": {
+    "2": "SUCCEEDED"
+  },
+  "result": "PASS cold Headless JS startup, hydration, explicit completion and WorkManager success after offline scheduling and network restoration without Activity launch.",
+  "notEstablished": [
+    "Authenticated backend upload",
+    "Native Play Services ENTER/EXIT delivery",
+    "Historical attendance timestamps on device",
+    "Android 11/Samsung One UI behavior",
+    "Doze, swipe-away and force-stop behavior"
+  ],
+  "apkSha256": "41683b89347008e3e63cc594716958f2c9ff65910bf969f8ea457477e9d89b85",
+  "finalNativeSourceVerified": "Worker run UUID differs from WorkSpec ID; final per-execution UUID change confirmed by root javap before install."
+}

@@ -1,5 +1,6 @@
 import { AUTO_EVENT_TABLE, getDatabase } from "./AttendanceDatabase";
 import { normalizeAttendanceTenantKey } from "./attendanceQueueProvenance";
+import { LOCATION_ACCESS_KIND, autoEventAttendanceType } from "../../utils/locationAccessState";
 
 export const AUTO_EVENT_STATUS = {
   PENDING: "pending",
@@ -14,6 +15,7 @@ const EVENT_FIELDS = [
   "timestamp", "tenantKey", "employeeId", "registrationId", "geotagging",
   "latitude", "longitude", "radius", "requestedRadius", "captureIssue",
   "initialPresence", "registrationStartedAt",
+  "kind", "reason", "registrationGeneration", "lossEventId", "fixRequestedAt", "position", "presence",
 ];
 
 const nonblank = (value) => typeof value === "string" && !!value.trim();
@@ -35,7 +37,9 @@ const hydrate = (row) => row ? {
 /** Preserve structural native data only; never persist arbitrary bridge fields. */
 const sanitizeEvent = (event) => Object.fromEntries(EVENT_FIELDS
   .filter((key) => event?.[key] !== undefined)
-  .map((key) => [key, event[key]]));
+  .map((key) => [key, key === "position" && event[key] && typeof event[key] === "object"
+    ? Object.fromEntries(["latitude", "longitude", "horizontalAccuracy", "timestamp"]
+      .filter(field => event[key][field] !== undefined).map(field => [field, event[key][field]])) : event[key]]));
 
 export const findEvent = async (eventId) => {
   const database = await getDatabase();
@@ -63,7 +67,8 @@ export const ingestNativeEvent = async (input, { now = Date.now() } = {}) => {
   if (!hasEventId) reason = "legacy-event-identity";
   else if (event.captureIssue) reason = "native-capture-issue";
   else if (!tenantKey || !employeeId || !nonblank(event.registrationId)) reason = "native-provenance-missing";
-  else if (!["ENTER", "EXIT"].includes(event.transition) || !occurredAt || !nonblank(event.identifier)) reason = "invalid-native-event";
+  else if ((!autoEventAttendanceType(event) && event.kind !== LOCATION_ACCESS_KIND.RECOVERED) ||
+    !occurredAt || !nonblank(event.identifier)) reason = "invalid-native-event";
   const status = reason ? AUTO_EVENT_STATUS.NEEDS_REVIEW : AUTO_EVENT_STATUS.PENDING;
 
   const database = await getDatabase();
@@ -90,6 +95,22 @@ export const listPendingEvents = async ({ tenantKey, employeeId }) => {
     [tenantKey, employeeId, AUTO_EVENT_STATUS.PENDING, AUTO_EVENT_STATUS.PROCESSING],
   );
   return rows.map(hydrate);
+};
+
+/** An uncertain POST remains history-verifiable even after automatic policy is revoked. */
+export const hasBackgroundEventWork = async ({ tenantKey, employeeId }, { allowNewAttendance = true } = {}) => {
+  if (!tenantKey || !employeeId) return false;
+  const database = await getDatabase();
+  const verification = await database.getFirstAsync(
+    `SELECT 1 AS pending FROM ${AUTO_EVENT_TABLE} WHERE tenantKey = ? AND employeeId = ?
+      AND status = ? AND onlineAttemptAt IS NOT NULL LIMIT 1;`,
+    [tenantKey, employeeId, AUTO_EVENT_STATUS.NEEDS_REVIEW],
+  );
+  if (verification) return true;
+  for (const row of await listPendingEvents({ tenantKey, employeeId })) {
+    if ((allowNewAttendance || row.onlineAttemptAt) && !await hasEarlierUnresolvedEvent(row)) return true;
+  }
+  return false;
 };
 
 /** A dispatched input needs positive evidence before a conflicting manual punch. */
@@ -226,10 +247,18 @@ export const listReviewEventsForVerification = async ({ tenantKey, employeeId },
 
 /** Seconds-resolution backend timestamps cannot identify two distinct same-type inputs. */
 export const findPunchTimestampCollision = async (row, timestamp) => {
+  const type = autoEventAttendanceType(row.event);
+  if (!type) return null;
   const database = await getDatabase();
   return hydrate(await database.getFirstAsync(
     `SELECT * FROM ${AUTO_EVENT_TABLE} WHERE tenantKey = ? AND employeeId = ?
-      AND eventId <> ? AND transition = ? AND punchTimestamp = ? LIMIT 1;`,
-    [row.tenantKey, row.employeeId, row.eventId, row.transition, timestamp],
+      AND eventId <> ? AND punchTimestamp = ?
+      AND (CASE
+        WHEN json_valid(event) AND json_extract(event, '$.kind') = 'LOCATION_ACCESS_LOST' THEN 'OUT'
+        WHEN json_valid(event) AND json_extract(event, '$.kind') = 'LOCATION_ACCESS_RECOVERED'
+          AND json_extract(event, '$.presence') = 'inside' THEN 'IN'
+        WHEN transition = 'ENTER' THEN 'IN' WHEN transition = 'EXIT' THEN 'OUT'
+      END) = ? LIMIT 1;`,
+    [row.tenantKey, row.employeeId, row.eventId, timestamp, type],
   ));
 };

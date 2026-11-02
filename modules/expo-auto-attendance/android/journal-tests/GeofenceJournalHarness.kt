@@ -233,5 +233,186 @@ fun main() {
     check(state.events.size == 1)
   }
 
+  checkCase("OS access is tri-state and never inferred from unknown or GPS failures") {
+    check(LocationAccessPolicy.access(true, true, true, true).state == "confirmed_available")
+    check(LocationAccessPolicy.access(null, true, true, true).state == "unknown")
+    check(LocationAccessPolicy.access(true, null, true, true).state == "unknown")
+    check(LocationAccessPolicy.access(false, true, true, true).reason == "services-disabled")
+    check(LocationAccessPolicy.access(true, false, false, false).reason == "foreground-permission-lost")
+    check(LocationAccessPolicy.access(true, true, false, true).reason == "background-permission-lost")
+    check(LocationAccessPolicy.access(true, true, true, false).reason == "precise-permission-lost")
+  }
+
+  checkCase("accuracy-aware recovery has strict inside and outside boundaries") {
+    check(kotlin.math.abs(LocationAccessPolicy.distance(0.0, 0.0, 0.0, 180.0 / Math.PI * 100.0 / 6371000.0) - 100.0) < 1e-9)
+    check(LocationAccessPolicy.distance(91.0, 0.0, 0.0, 0.0).isNaN())
+    check(LocationAccessPolicy.presence(80.0, 20.0, 100.0) == "inside")
+    check(LocationAccessPolicy.presence(80.1, 20.0, 100.0) == "uncertain")
+    check(LocationAccessPolicy.presence(120.0, 20.0, 100.0) == "uncertain")
+    check(LocationAccessPolicy.presence(120.1, 20.0, 100.0) == "outside")
+    check(LocationAccessPolicy.presence(0.0, 500.0, 100.0) == "uncertain")
+    check(LocationAccessPolicy.presence(0.0, -1.0, 100.0) == "uncertain")
+    check(LocationAccessPolicy.presence(Double.NaN, 1.0, 100.0) == "uncertain")
+  }
+
+  checkCase("first observable access loss is atomic and deduplicated after restart or acknowledgment") {
+    val context = context()
+    GeofenceStore.saveGeofence(context, registration() + mapOf("registrationGeneration" to "intent-one"))
+    val enter = capture(context, "ENTER")
+    val lost = GeofenceStore.recordAccessLoss(context, "services-disabled", 3000)!!
+    check(lost["kind"] == "LOCATION_ACCESS_LOST" && lost["transition"] == null)
+    check(lost["timestamp"] == 3000L && lost["sequence"] == 2L)
+    check(GeofenceStore.getLastEvent(context)!!.getString("eventId") == enter["eventId"])
+    val restarted = Context(context.directory)
+    check(GeofenceStore.recordAccessLoss(restarted, "precise-permission-lost", 9000) == null)
+    check(GeofenceStore.acknowledgeEvent(restarted, lost["eventId"] as String))
+    check(GeofenceStore.getAccessEpisode(restarted)!!["firstObservedAt"] == 3000)
+    check(GeofenceStore.recordAccessLoss(restarted, "services-disabled", 10000) == null)
+    check(GeofenceStore.getAccessEpisode(restarted)!!["lossEventId"] == lost["eventId"])
+  }
+
+  checkCase("recovery validates original loss and generation and tags repair ENTER until a real EXIT") {
+    val context = context()
+    val configuration = registration() + mapOf("registrationGeneration" to "intent-one")
+    GeofenceStore.saveGeofence(context, configuration)
+    val lost = GeofenceStore.recordAccessLoss(context, "services-disabled", 2000)!!
+    val lossId = lost["eventId"] as String
+    check(GeofenceStore.completeAccessRecovery(context, "other-loss", "intent-one", emptyMap()) == null)
+    check(GeofenceStore.completeAccessRecovery(context, lossId, "other-intent", emptyMap()) == null)
+    check(capture(context, "ENTER")["lossEventId"] == lossId)
+    val recovered = GeofenceStore.completeAccessRecovery(context, lossId, "intent-one", mapOf(
+      "timestamp" to 4000L, "fixRequestedAt" to 3500L, "presence" to "inside",
+      "position" to mapOf("latitude" to 10.0, "longitude" to 20.0, "horizontalAccuracy" to 5.0, "timestamp" to 4000L)))!!
+    check(recovered["kind"] == "LOCATION_ACCESS_RECOVERED")
+    check(GeofenceStore.getAccessEpisode(context) == null)
+    check(GeofenceStore.completeAccessRecovery(context, lossId, "intent-one", emptyMap()) == null)
+    val afterRestart = Context(context.directory)
+    check(capture(afterRestart, "ENTER")["lossEventId"] == lossId)
+    val persistedProof = GeofenceStore.getPendingEvents(afterRestart).first { it["eventId"] == recovered["eventId"] }
+    check(((persistedProof["position"] as Map<*, *>)["horizontalAccuracy"] as Number).toDouble() == 5.0)
+    capture(afterRestart, "EXIT")
+    check(capture(afterRestart, "ENTER")["lossEventId"] == null)
+  }
+
+  checkCase("intentional stop cancels recovery without erasing receipts") {
+    val context = context()
+    GeofenceStore.saveGeofence(context, registration() + mapOf("registrationGeneration" to "intent-one"))
+    val lost = GeofenceStore.recordAccessLoss(context, "services-disabled", 2000)!!
+    GeofenceStore.clearGeofence(context)
+    check(GeofenceStore.getAccessEpisode(context) == null)
+    check(GeofenceStore.getPendingEvents(context).single()["eventId"] == lost["eventId"])
+    check(GeofenceStore.recordAccessLoss(context, "services-disabled", 4000) == null)
+  }
+
+  checkCase("legacy registration generation is assigned once without rewriting prior receipts") {
+    val context = context()
+    GeofenceStore.saveGeofence(context, registration())
+    val captured = capture(context, "ENTER")
+    val generation = captured["registrationGeneration"] as String
+    check(generation.isNotBlank())
+    val restarted = Context(context.directory)
+    check(GeofenceStore.getGeofence(restarted)!!.getString("registrationGeneration") == generation)
+    check(GeofenceStore.getPendingEvents(restarted).single()["eventId"] == captured["eventId"])
+    check(GeofenceStore.getPendingEvents(restarted).single()["registrationGeneration"] == generation)
+  }
+
+  checkCase("same-intent repair retains loss while genuine generation replacement cancels it") {
+    val context = context()
+    val original = registration() + mapOf("registrationGeneration" to "intent-one")
+    GeofenceStore.saveGeofence(context, original)
+    val loss = GeofenceStore.recordAccessLoss(context, "services-disabled", 2000)!!
+    GeofenceStore.savePendingGeofence(context, original + mapOf("nativeIdentifier" to "physical-repaired"))
+    check(GeofenceStore.getAccessEpisode(context)!!["lossEventId"] == loss["eventId"])
+    GeofenceStore.savePendingGeofence(context, original + mapOf("registrationGeneration" to "intent-two"))
+    check(GeofenceStore.getAccessEpisode(context) == null)
+    check(GeofenceStore.getPendingEvents(context).single()["eventId"] == loss["eventId"])
+  }
+
+  checkCase("failed loss and recovery writes cannot advance episode state") {
+    var state = GeofenceEventJournal.State(legacyMigrated = true)
+    var failWrite = true
+    val journal = GeofenceEventJournal(readState = { state }, writeState = { next ->
+      check(!failWrite) { "simulated disk failure" }; state = next
+    }, readLegacyEvent = { null })
+    val metadata = registration() + mapOf("registrationGeneration" to "intent-one")
+    check(runCatching { journal.recordAccessLoss(metadata, "services-disabled", 2000) }.isFailure)
+    check(state.events.isEmpty() && state.accessEpisode == null && state.nextSequence == 0L)
+    failWrite = false
+    val lost = journal.recordAccessLoss(metadata, "services-disabled", 3000)!!
+    failWrite = true
+    val proof = mapOf("fixRequestedAt" to 4000L, "timestamp" to 5000L,
+      "presence" to "inside", "position" to mapOf("latitude" to 10.0, "longitude" to 20.0,
+        "horizontalAccuracy" to 5.0, "timestamp" to 5000L))
+    check(runCatching { journal.completeAccessRecovery(lost["eventId"] as String, "intent-one", proof) }.isFailure)
+    check(state.events.size == 1 && state.accessEpisode?.get("lossEventId") == lost["eventId"])
+  }
+
+  checkCase("verified outside recovery admits a genuine ENTER without repair synthesizing one") {
+    val context = context()
+    val configuration = registration() + mapOf("registrationGeneration" to "outside-intent")
+    GeofenceStore.saveGeofence(context, configuration)
+    val lost = GeofenceStore.recordAccessLoss(context, "services-disabled", 2000)!!
+    check(GeofenceStore.suppressInitialEnter(context))
+    val recovered = GeofenceStore.completeAccessRecovery(context, lost["eventId"] as String, "outside-intent", mapOf(
+      "fixRequestedAt" to 3000L, "timestamp" to 4000L, "presence" to "outside",
+      "position" to mapOf("latitude" to 10.01, "longitude" to 20.0, "horizontalAccuracy" to 5.0, "timestamp" to 4000L)))!!
+    check(recovered["presence"] == "outside")
+    val restarted = Context(context.directory)
+    check(GeofenceStore.getAccessEpisode(restarted) == null)
+    check(GeofenceStore.suppressInitialEnter(restarted))
+    GeofenceStore.savePendingGeofence(restarted, configuration + mapOf("nativeIdentifier" to "outside-repair"))
+    GeofenceStore.saveGeofence(restarted, configuration + mapOf("nativeIdentifier" to "outside-repair"))
+    val entered = capture(restarted, "ENTER", "outside-repair", 5000)
+    check(entered["lossEventId"] == null)
+    check(GeofenceStore.suppressInitialEnter(restarted))
+    capture(restarted, "EXIT", "outside-repair", 6000)
+    check(!GeofenceStore.suppressInitialEnter(restarted))
+  }
+
+  checkCase("every durable capture requests background delivery after persistence with original identity") {
+    val context = context()
+    GeofenceCaptureQueue.persisted.clear()
+    GeofenceStore.saveGeofence(context, registration() + mapOf("registrationGeneration" to "sync-intent"))
+    val enter = capture(context, "ENTER", at = 1000L)
+    val exit = capture(context, "EXIT", at = 2000L)
+    val loss = GeofenceStore.recordAccessLoss(context, "services-disabled", 3000L)!!
+    check(GeofenceStore.recordAccessLoss(context, "services-disabled", 3500L) == null)
+    val recovery = GeofenceStore.completeAccessRecovery(context, loss["eventId"] as String, "sync-intent", mapOf(
+      "fixRequestedAt" to 4000L, "timestamp" to 5000L, "presence" to "outside"))!!
+    check(GeofenceCaptureQueue.persisted.map { it["eventId"] } == listOf(enter, exit, loss, recovery).map { it["eventId"] })
+    check(GeofenceCaptureQueue.persisted.map { (it["timestamp"] as Number).toLong() } == listOf(1000L, 2000L, 3000L, 5000L))
+  }
+
+  checkCase("background diagnostics are bounded, expire, and redact unknown/private fields") {
+    val context = context()
+    val stableId = "00000000-1111-2222-3333-444444444444"
+    repeat(205) { index -> AttendanceSyncDiagnostics.record(context, "upload.attempt", stableId, mapOf(
+      "queueRowId" to index, "httpStatus" to 503, "networkAvailable" to true,
+      "password" to "synthetic-secret", "token" to "synthetic-token", "employeeId" to "synthetic-employee",
+      "reason" to "https://private.example.test/endpoint")) }
+    val rows = AttendanceSyncDiagnostics.entries(Context(context.directory))
+    check(rows.size == 200 && rows.first()["queueRowId"] == 5)
+    check(rows.all { it["eventId"] == stableId && it["httpStatus"] == 503 && it["networkAvailable"] == true })
+    check(rows.all { it.keys == setOf("at", "stage", "eventId", "queueRowId", "httpStatus", "networkAvailable") })
+    val stale = JSONObject().put("at", System.currentTimeMillis() - 8L * 24 * 60 * 60 * 1000).put("stage", "stale")
+    context.getSharedPreferences("attendance_background_diagnostics", Context.MODE_PRIVATE).edit()
+      .putString("entries", JSONArray().put(stale).toString()).commit()
+    AttendanceSyncDiagnostics.record(context, "worker.start", "legacy-employee-id")
+    val fresh = AttendanceSyncDiagnostics.entries(context)
+    check(fresh.size == 1 && fresh.single()["stage"] == "worker.start" && fresh.single()["eventId"] == null)
+    check(!context.getSharedPreferences("attendance_background_diagnostics", Context.MODE_PRIVATE)
+      .getString("entries", "")!!.contains("stale"))
+  }
+
+  checkCase("release builds neither persist nor expose background diagnostics") {
+    val context = context()
+    val release = Context(context.directory, debuggable = false)
+    AttendanceSyncDiagnostics.record(release, "worker.start")
+    check(release.getSharedPreferences("attendance_background_diagnostics", Context.MODE_PRIVATE).getString("entries", null) == null)
+    AttendanceSyncDiagnostics.record(context, "worker.start")
+    check(AttendanceSyncDiagnostics.entries(context).size == 1)
+    check(AttendanceSyncDiagnostics.entries(release).isEmpty())
+  }
+
   println("$passed Android journal JVM regression cases passed; Android OS/build behavior was not executed.")
 }

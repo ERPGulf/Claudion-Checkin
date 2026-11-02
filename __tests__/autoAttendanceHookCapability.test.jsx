@@ -14,7 +14,7 @@ jest.mock('@react-navigation/native', () => ({ useNavigation: () => mockNavigati
 jest.mock('../modules/expo-auto-attendance', () => ({
   OFFICE_GEOFENCE_IDENTIFIER: 'office-main', isAvailable: () => true,
   isMonitoring: jest.fn(() => false), getLastEvent: () => null,
-  getRegisteredGeofences: () => [], hasFullAccuracy: () => true,
+  getRegisteredGeofences: jest.fn(() => []), hasFullAccuracy: () => true,
   isLowPowerModeEnabled: () => false, isIgnoringBatteryOptimizations: () => true,
   startGeofence: jest.fn(async () => {}), stopGeofence: jest.fn(async () => {}),
   addGeofenceEnterListener: () => ({ remove: jest.fn() }),
@@ -35,18 +35,20 @@ jest.mock('../services/api/employee.service', () => ({ fetchEmployeeData: jest.f
 jest.mock('../services/notifications/localNotifications', () => ({ ensureNotificationSetup: jest.fn(async () => {}) }));
 jest.mock('../utils/autoAttendance', () => ({
   ...jest.requireActual('../utils/autoAttendance'), waitForMonitoring: jest.fn(async () => true),
+  readDevicePosition: jest.fn(async () => null),
 }));
 
 import * as Location from 'expo-location';
 import useAutoAttendance from '../hooks/useAutoAttendance';
 import RootReducer from '../redux/RootReducer';
 import { getOfficeLocation } from '../services/api/attendance.service';
-import { startGeofence, stopGeofence } from '../modules/expo-auto-attendance';
+import { getRegisteredGeofences, startGeofence, stopGeofence } from '../modules/expo-auto-attendance';
 import { automaticAttendanceSettings, loginQueueEmployee, TEST_TENANT } from '../test-utils/attendanceScope';
 import { autoAttendanceMonitoringChanged } from '../redux/Slices/AutoAttendanceSlice';
 import { settingsReceived } from '../redux/Slices/FeatureSettingsSlice';
 import { buildSettingsScope, normalizeFeatureSettings } from '../utils/featureSettings';
-import { setLocationAccessExplainer } from '../utils/autoAttendance';
+import { readDevicePosition, setLocationAccessExplainer } from '../utils/autoAttendance';
+import { setCheckin, setCheckout } from '../redux/Slices/AttendanceSlice';
 import { captureAttendanceQueueScope } from '../services/offline/attendanceQueueProvenance';
 import { beginEmployeeAutoAttendancePolicyReception, receiveEmployeeAutoAttendancePolicy } from '../services/employeeAutoAttendancePolicy';
 
@@ -74,6 +76,8 @@ afterEach(() => unregisterExplainer());
 
 beforeEach(async () => {
   jest.clearAllMocks();
+  getRegisteredGeofences.mockReturnValue([]);
+  readDevicePosition.mockResolvedValue(null);
   Location.getForegroundPermissionsAsync.mockResolvedValue({ status: 'granted', canAskAgain: true });
   Location.getBackgroundPermissionsAsync.mockResolvedValue({ status: 'granted', canAskAgain: true });
   await AsyncStorage.clear();
@@ -179,6 +183,36 @@ describe('location permission recovery', () => {
     await act(async () => { onChange('active'); });
 
     await waitFor(() => expect(screen.getByTestId('permission').props.children).toBe('true'));
+  });
+
+  it('keeps a failed access read unknown instead of claiming permission was revoked', async () => {
+    Location.getForegroundPermissionsAsync.mockRejectedValue(new Error('Synthetic OS read failure'));
+    const screen = mountPermission();
+    await waitFor(() => expect(Location.getForegroundPermissionsAsync).toHaveBeenCalled());
+    expect(screen.getByTestId('permission').props.children).toBe('null');
+    expect(screen.getByTestId('status').props.children).not.toBe('Location permission required');
+  });
+});
+
+describe('weak GPS presentation', () => {
+  const WeakGpsHarness = () => {
+    const policy = useAutoAttendance();
+    return <Text testID="verification">{policy.verificationNotice?.message ?? ''}</Text>;
+  };
+
+  it.each(['missing', 'inaccurate'])('keeps an AUTO check-in active with %s indoor GPS', async quality => {
+    getRegisteredGeofences.mockReturnValue([{ latitude: 25.28, longitude: 51.52, radius: 100 }]);
+    if (quality === 'inaccurate') readDevicePosition.mockImplementation(async () => ({
+      coords: { latitude: 25.28, longitude: 51.52, accuracy: 500 }, timestamp: Date.now(),
+    }));
+    mockStore.dispatch(setCheckin({ checkinTime: 1000, sessionOrigin: 'AUTO' }));
+    const screen = render(<Provider store={mockStore}><WeakGpsHarness /></Provider>);
+    await waitFor(() => expect(screen.getByTestId('verification').props.children)
+      .toBe('Location signal is weak. Your check-in remains active.'));
+    expect(mockStore.getState().attendance).toMatchObject({ checkin: true, checkinTime: 1000, sessionOrigin: 'AUTO' });
+
+    await act(async () => { mockStore.dispatch(setCheckout({ checkoutTime: 2000 })); });
+    expect(screen.getByTestId('verification').props.children).toBe('');
   });
 });
 

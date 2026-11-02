@@ -1612,6 +1612,26 @@ export const hasWorkDue = async (
   return !!row;
 };
 
+/**
+ * Scheduling only: final refusals and manual review alone must not keep a worker alive.
+ * Neither does `endpoint-missing` — only a deployment fixes it, so it would retry
+ * forever. The row is kept and still attempted by every pass that does run, and
+ * it does not hold newer rows back (OLDER_DEPENDENCY_SQL), so they still count.
+ */
+export const hasBackgroundSyncWork = async ({ tenantKey, employeeId }) => {
+  if (!tenantKey || !employeeId) return false;
+  const database = await getDatabase();
+  return !!await database.getFirstAsync(
+    `SELECT 1 AS pending FROM ${QUEUE_TABLE} AS candidate WHERE tenantKey = ? AND employeeId = ?
+      AND (((status IN ('pending', 'syncing')
+          OR (status = 'blocked' AND IFNULL(failureClass, '') <> 'endpoint-missing')) AND ${CLAIM_DEPENDENCIES_SQL}) OR
+        (status = 'needs_review' AND failureClass = 'verification-required'
+          AND (verificationIssue IS NULL OR verificationIssue = ''
+            OR verificationIssue IN (${placeholdersFor(REVIEW_RECHECK_ISSUES)})))) LIMIT 1;`,
+    [tenantKey, employeeId, ...REVIEW_RECHECK_ISSUES],
+  );
+};
+
 export default {
   BLOCKED_DELAYS_MS,
   MAX_RETRIES,

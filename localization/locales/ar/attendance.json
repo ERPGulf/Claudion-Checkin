@@ -563,5 +563,14 @@
   "ACCESS_FINE_LOCATION permission is not granted": "لم يُمنح إذن الموقع الدقيق",
   "ACCESS_BACKGROUND_LOCATION (\"Allow all the time\") is required on Android 10+": "يلزم إذن الموقع في الخلفية («السماح طوال الوقت») في Android 10 والأحدث",
   "Failed to register geofence": "تعذّر تسجيل النطاق الجغرافي",
-  "Failed to remove geofence": "تعذّرت إزالة النطاق الجغرافي"
+  "Failed to remove geofence": "تعذّرت إزالة النطاق الجغرافي",
+  "Location services are off": "خدمات الموقع متوقفة",
+  "Checking location access": "جارٍ التحقق من صلاحية الوصول إلى الموقع",
+  "Waiting for accurate location": "بانتظار موقع دقيق",
+  "Waiting for an accurate location. We’ll retry automatically.": "بانتظار موقع دقيق. سنعيد المحاولة تلقائيًا.",
+  "Location signal is weak": "إشارة الموقع ضعيفة",
+  "Location signal is weak. Your check-in remains active.": "إشارة الموقع ضعيفة. لا يزال تسجيل حضورك ساريًا.",
+  "Turn on location services in your device settings to resume automatic attendance.": "فعّل خدمات الموقع في إعدادات جهازك لاستئناف الحضور التلقائي.",
+  "Your automatic check-in was closed because required location access was turned off.": "أُغلق تسجيل حضورك التلقائي لأن صلاحية الوصول المطلوبة إلى الموقع أُوقفت.",
+  "Your location is not accurate enough to verify office presence yet.": "دقة موقعك غير كافية بعد للتحقق من وجودك في المكتب."
 }

@@ -1,0 +1,12 @@
+{
+  "access": {
+    "reason": "background-permission-lost",
+    "recoveryPending": false,
+    "state": "confirmed_disabled"
+  },
+  "fullAccuracy": true,
+  "monitoring": false,
+  "observedAt": "2026-10-30T10:14:52.043Z",
+  "platform": "ios",
+  "registered": []
+}

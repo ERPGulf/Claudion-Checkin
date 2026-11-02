@@ -43,12 +43,13 @@ async function ensureAndroidChannel() {
  * foreground (e.g. when the user enables automatic attendance) so the OS prompt
  * can actually appear. Returns whether notifications are permitted.
  */
-export async function ensureNotificationSetup() {
+export async function ensureNotificationSetup({ requestPermission = true } = {}) {
   try {
     await hydrateLocale();
     await ensureAndroidChannel();
     const current = await Notifications.getPermissionsAsync();
     if (current.granted) return true;
+    if (!requestPermission) return false;
     if (current.canAskAgain === false) return false;
     const requested = await Notifications.requestPermissionsAsync();
     return requested.granted;
@@ -63,9 +64,9 @@ export async function ensureNotificationSetup() {
  * notifications aren't permitted — a missing alert must never break check-out.
  * @param {{title: string, body: string, data?: object}} options
  */
-export async function presentLocalNotification({ title, body, bodyKey, values, data = {} }) {
+export async function presentLocalNotification({ title, body, bodyKey, values, data = {}, requestPermission = true }) {
   try {
-    const granted = await ensureNotificationSetup();
+    const granted = await ensureNotificationSetup({ requestPermission });
     if (!granted) {
       console.log(`${LOG_PREFIX} Notifications not permitted; skipping alert`);
       return;

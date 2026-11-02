@@ -19,6 +19,9 @@ class GeofenceBootReceiver : BroadcastReceiver() {
     if (action != Intent.ACTION_BOOT_COMPLETED && action != Intent.ACTION_MY_PACKAGE_REPLACED) {
       return
     }
+    // Repair delivery even if captures were already copied/acknowledged into
+    // SQLite before process death. Existing WorkManager work also survives reboot.
+    runCatching { AttendanceSyncScheduler.schedule(context) }
     val result = goAsync()
     val finished = AtomicBoolean(false)
     val handler = Handler(Looper.getMainLooper())

@@ -35,7 +35,7 @@ import {
 import { classifyAttendanceError, FAILURE_KIND } from "./attendanceErrors";
 import { fetchShouldAttemptRequest, isOnline } from "./NetworkListener";
 import { checkInstanceAvailability, invalidateInstanceAvailability } from "./InstanceAvailabilityService";
-import { logAttendanceDiagnostic } from "./attendanceDiagnostics";
+import { logAttendanceDiagnostic, recordAttendanceLifecycle } from "./attendanceDiagnostics";
 import { evaluateOfflineAttendance } from "./offlineAttendanceGate";
 import {
   clearOfflineCapability,
@@ -179,6 +179,13 @@ export const registerQueueDrainHandler = (handler) => {
 };
 
 export const requestQueueDrain = (context) => {
+  // WorkManager survives the JS timer/runtime. Keep this lazy: the bridge's
+  // policy imports lead back to the queue, and older binaries have no worker.
+  try {
+    Promise.resolve(require("../../modules/expo-auto-attendance").scheduleBackgroundSync?.()).catch(() => {});
+  } catch {
+    // The durable row remains retryable by the existing foreground triggers.
+  }
   if (!queueDrainHandler) return;
 
   try {
@@ -377,6 +384,9 @@ const queueAttendance = async ({
   // does not immediately re-attempt a request that just failed and burn a step
   // of the row's retry ladder.
   if (inserted) {
+    recordAttendanceLifecycle("queue.persisted", {
+      eventId: sourceEventId, queueRowId: row?.id, status: row?.status, occurredAt,
+    });
     requestQueueDrain({ employeeId: employeeCode, action: logTypeToAction(type) });
   }
 
@@ -620,6 +630,10 @@ export const submitAttendance = async ({
 
   const preflightOnline = async () => {
     const availability = await checkInstanceAvailability({ syncScope: sourceScope });
+    recordAttendanceLifecycle("server.reachability", {
+      eventId: sourceEventId, status: availability.status,
+      serverReachable: availability.status === "available", httpStatus: availability.httpStatus,
+    });
     if (sourceScope) await assertAttendanceQueueScope(sourceScope);
     if (availability.status === "available") {
       serverClock = { serverTime: availability.serverTime, observedAt: availability.observedAt };
@@ -745,7 +759,14 @@ export const submitAttendance = async ({
         assertAutomaticCapabilityCurrent(sourceScope);
       }
       invoked = true;
+      recordAttendanceLifecycle("upload.direct_attempt", {
+        eventId: sourceEventId, queueRowId: directReceipt?.id, attemptAt: Date.now(),
+      });
       const result = await online({ serverClock, timestamp: preparedOnlineTimestamp });
+      recordAttendanceLifecycle("upload.direct_response", {
+        eventId: sourceEventId, queueRowId: directReceipt?.id,
+        status: result?.allowed ? "accepted" : "unconfirmed", httpStatus: result?.error?.response?.status,
+      });
       if (sourceScope) await assertAttendanceQueueScope(sourceScope);
 
       if (result?.allowed && (!directReceipt || (typeof result.name === "string" && !!result.name.trim()))) {

@@ -1,0 +1,15 @@
+{
+  "allowed": true,
+  "queued": false,
+  "serverConfirmed": true,
+  "serverRecord": "QA-CHECKIN-00032",
+  "session": {
+    "closedBy": "MANUAL",
+    "committedAt": 1793375921507,
+    "endedAt": 1793375918388,
+    "origin": "MANUAL",
+    "startedAt": 1793375862144,
+    "status": "CHECKED_OUT"
+  },
+  "status": "completed"
+}

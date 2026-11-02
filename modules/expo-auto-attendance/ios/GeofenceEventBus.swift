@@ -5,6 +5,7 @@ enum GeofenceEvents {
   static let enter = "onGeofenceEnter"
   static let exit = "onGeofenceExit"
   static let error = "onError"
+  static let accessChanged = "onLocationAccessChanged"
 }
 
 /**
@@ -23,7 +24,7 @@ final class GeofenceEventBus {
   private init() {}
 
   func emit(_ eventName: String, _ payload: [String: Any?]) {
-    if eventName == GeofenceEvents.enter || eventName == GeofenceEvents.exit {
+    if eventName == GeofenceEvents.enter || eventName == GeofenceEvents.exit || eventName == GeofenceEvents.accessChanged {
       // Persistence happens before emit. A scene-less native wake must start
       // the app's existing JS replay/submission path, even with no listener yet.
       NotificationCenter.default.post(name: Notification.Name("ClaudionGeofenceTransition"), object: nil)

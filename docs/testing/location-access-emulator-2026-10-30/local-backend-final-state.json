@@ -1,0 +1,3802 @@
+{
+  "kind": "LOCAL_MOCK_BACKEND_ONLY",
+  "startedAt": "2026-10-30T10:08:05.846+00:00",
+  "configs": {
+    "QA-ANDROID-001": {
+      "network": "online",
+      "geoTagging": true,
+      "geotagging": 2,
+      "offlineEnabled": true,
+      "restrictLocation": 1,
+      "unrestrictedCheckoutLocation": 0,
+      "photo": 0,
+      "geometry": {
+        "latitude": 25.2854,
+        "longitude": 51.531,
+        "radius": 100
+      },
+      "nextAttendance": null
+    },
+    "QA-IOS-001": {
+      "network": "online",
+      "geoTagging": true,
+      "geotagging": 2,
+      "offlineEnabled": true,
+      "restrictLocation": 1,
+      "unrestrictedCheckoutLocation": 0,
+      "photo": 0,
+      "geometry": {
+        "latitude": 25.2854,
+        "longitude": 51.531,
+        "radius": 100
+      },
+      "nextAttendance": null
+    },
+    "QA-AUTO-001": {
+      "network": "online",
+      "geoTagging": true,
+      "geotagging": 2,
+      "offlineEnabled": true,
+      "restrictLocation": 1,
+      "unrestrictedCheckoutLocation": 0,
+      "photo": 0,
+      "geometry": {
+        "latitude": 25.2854,
+        "longitude": 51.531,
+        "radius": 100
+      },
+      "nextAttendance": null
+    }
+  },
+  "records": [
+    {
+      "name": "QA-CHECKIN-00001",
+      "employee": "QA-ANDROID-001",
+      "employee_name": "Disposable QA-ANDROID-001",
+      "time": "2026-10-30 10:16:30",
+      "timestamp": "2026-10-30 10:16:30",
+      "log_type": "IN",
+      "custom_in": 1,
+      "device_id": "MobileAPP",
+      "auto": true,
+      "location": "Disposable QA Doha Office",
+      "latitude": 25.2854,
+      "longitude": 51.531,
+      "receivedAt": "2026-10-30T10:16:36.376+00:00",
+      "storedAt": "2026-10-30T10:16:36.385+00:00",
+      "endpoint": "online"
+    },
+    {
+      "name": "QA-CHECKIN-00002",
+      "employee": "QA-ANDROID-001",
+      "employee_name": "Disposable QA-ANDROID-001",
+      "time": "2026-10-30 10:17:53",
+      "timestamp": "2026-10-30 10:17:53",
+      "log_type": "OUT",
+      "custom_in": 0,
+      "device_id": "MobileAPP",
+      "auto": true,
+      "location": "Disposable QA Doha Office",
+      "latitude": 25.2854,
+      "longitude": 51.531,
+      "receivedAt": "2026-10-30T10:18:05.961+00:00",
+      "storedAt": "2026-10-30T10:18:05.965+00:00",
+      "endpoint": "online"
+    },
+    {
+      "name": "QA-CHECKIN-00003",
+      "employee": "QA-IOS-001",
+      "employee_name": "Disposable QA-IOS-001",
+      "time": "2026-10-30 10:18:45",
+      "timestamp": "2026-10-30 10:18:45",
+      "log_type": "IN",
+      "custom_in": 1,
+      "device_id": "MobileAPP",
+      "auto": true,
+      "location": "Disposable QA Doha Office",
+      "latitude": 25.2854,
+      "longitude": 51.531,
+      "receivedAt": "2026-10-30T10:18:46.866+00:00",
+      "storedAt": "2026-10-30T10:18:46.868+00:00",
+      "endpoint": "online"
+    },
+    {
+      "name": "QA-CHECKIN-00004",
+      "employee": "QA-IOS-001",
+      "employee_name": "Disposable QA-IOS-001",
+      "time": "2026-10-30 10:19:16",
+      "timestamp": "2026-10-30 10:19:16",
+      "log_type": "OUT",
+      "custom_in": 0,
+      "device_id": "MobileAPP",
+      "auto": true,
+      "location": "Disposable QA Doha Office",
+      "latitude": 25.2854,
+      "longitude": 51.531,
+      "receivedAt": "2026-10-30T10:19:17.029+00:00",
+      "storedAt": "2026-10-30T10:19:17.031+00:00",
+      "endpoint": "online"
+    },
+    {
+      "name": "QA-CHECKIN-00005",
+      "employee": "QA-ANDROID-001",
+      "employee_name": "Disposable QA-ANDROID-001",
+      "time": "2026-10-30 10:23:07",
+      "timestamp": "2026-10-30 10:23:07",
+      "log_type": "IN",
+      "custom_in": 1,
+      "device_id": "MobileAPP",
+      "auto": true,
+      "location": "Disposable QA Doha Office",
+      "latitude": 25.2854,
+      "longitude": 51.531,
+      "receivedAt": "2026-10-30T10:23:08.672+00:00",
+      "storedAt": "2026-10-30T10:23:08.673+00:00",
+      "endpoint": "online"
+    },
+    {
+      "name": "QA-CHECKIN-00006",
+      "employee": "QA-ANDROID-001",
+      "employee_name": "Disposable QA-ANDROID-001",
+      "time": "2026-10-30 15:40:13",
+      "timestamp": "2026-10-30 15:40:13",
+      "log_type": "OUT",
+      "custom_in": 0,
+      "device_id": "MobileAPP",
+      "auto": true,
+      "location": "Disposable QA Doha Office",
+      "latitude": 25.2854,
+      "longitude": 51.531,
+      "receivedAt": "2026-10-30T15:40:14.331+00:00",
+      "storedAt": "2026-10-30T15:40:14.332+00:00",
+      "endpoint": "online"
+    },
+    {
+      "name": "QA-CHECKIN-00007",
+      "employee": "QA-IOS-001",
+      "employee_name": "Disposable QA-IOS-001",
+      "time": "2026-10-30 15:40:13",
+      "timestamp": "2026-10-30 15:40:13",
+      "log_type": "IN",
+      "custom_in": 1,
+      "device_id": "MobileAPP",
+      "auto": true,
+      "location": "Disposable QA Doha Office",
+      "latitude": 25.2854,
+      "longitude": 51.531,
+      "receivedAt": "2026-10-30T15:40:14.811+00:00",
+      "storedAt": "2026-10-30T15:40:14.812+00:00",
+      "endpoint": "online"
+    },
+    {
+      "name": "QA-CHECKIN-00008",
+      "employee": "QA-ANDROID-001",
+      "employee_name": "Disposable QA-ANDROID-001",
+      "time": "2026-10-30 15:41:05",
+      "timestamp": "2026-10-30 15:41:05",
+      "log_type": "IN",
+      "custom_in": 1,
+      "device_id": "MobileAPP",
+      "auto": true,
+      "location": "Disposable QA Doha Office",
+      "latitude": 25.2854,
+      "longitude": 51.531,
+      "receivedAt": "2026-10-30T15:41:06.524+00:00",
+      "storedAt": "2026-10-30T15:41:06.524+00:00",
+      "endpoint": "online"
+    },
+    {
+      "name": "QA-CHECKIN-00009",
+      "employee": "QA-IOS-001",
+      "employee_name": "Disposable QA-IOS-001",
+      "time": "2026-10-30 15:41:41",
+      "timestamp": "2026-10-30 15:41:41",
+      "log_type": "OUT",
+      "custom_in": 0,
+      "device_id": "MobileAPP",
+      "auto": true,
+      "location": "Disposable QA Doha Office",
+      "latitude": 25.2854,
+      "longitude": 51.531,
+      "receivedAt": "2026-10-30T15:41:42.046+00:00",
+      "storedAt": "2026-10-30T15:41:42.049+00:00",
+      "endpoint": "online"
+    },
+    {
+      "name": "QA-CHECKIN-00010",
+      "employee": "QA-IOS-001",
+      "employee_name": "Disposable QA-IOS-001",
+      "time": "2026-10-30 15:42:03",
+      "timestamp": "2026-10-30 15:42:03",
+      "log_type": "IN",
+      "custom_in": 1,
+      "device_id": "MobileAPP",
+      "auto": true,
+      "location": "Disposable QA Doha Office",
+      "latitude": 25.2854,
+      "longitude": 51.531,
+      "receivedAt": "2026-10-30T15:42:04.356+00:00",
+      "storedAt": "2026-10-30T15:42:04.358+00:00",
+      "endpoint": "online"
+    },
+    {
+      "name": "QA-CHECKIN-00011",
+      "employee": "QA-ANDROID-001",
+      "employee_name": "Disposable QA-ANDROID-001",
+      "time": "2026-10-30 15:42:36",
+      "timestamp": "2026-10-30 15:42:36",
+      "log_type": "OUT",
+      "custom_in": 0,
+      "device_id": "MobileAPP",
+      "auto": true,
+      "location": "Disposable QA Doha Office",
+      "latitude": 25.2854,
+      "longitude": 51.531,
+      "receivedAt": "2026-10-30T15:42:37.073+00:00",
+      "storedAt": "2026-10-30T15:42:37.074+00:00",
+      "endpoint": "online"
+    },
+    {
+      "name": "QA-CHECKIN-00012",
+      "employee": "QA-ANDROID-001",
+      "employee_name": "Disposable QA-ANDROID-001",
+      "time": "2026-10-30 15:42:51",
+      "timestamp": "2026-10-30 15:42:51",
+      "log_type": "IN",
+      "custom_in": 1,
+      "device_id": "MobileAPP",
+      "auto": true,
+      "location": "Disposable QA Doha Office",
+      "latitude": 25.2854,
+      "longitude": 51.531,
+      "receivedAt": "2026-10-30T15:42:52.074+00:00",
+      "storedAt": "2026-10-30T15:42:52.075+00:00",
+      "endpoint": "online"
+    },
+    {
+      "name": "QA-CHECKIN-00013",
+      "employee": "QA-IOS-001",
+      "employee_name": "Disposable QA-IOS-001",
+      "time": "2026-10-30 15:42:56",
+      "timestamp": "2026-10-30 15:42:56",
+      "log_type": "OUT",
+      "custom_in": 0,
+      "device_id": "MobileAPP",
+      "auto": true,
+      "location": "Disposable QA Doha Office",
+      "latitude": 25.2854,
+      "longitude": 51.531,
+      "receivedAt": "2026-10-30T15:42:57.562+00:00",
+      "storedAt": "2026-10-30T15:42:57.563+00:00",
+      "endpoint": "online"
+    },
+    {
+      "name": "QA-CHECKIN-00014",
+      "employee": "QA-ANDROID-001",
+      "employee_name": "Disposable QA-ANDROID-001",
+      "time": "2026-10-30 15:43:10",
+      "timestamp": "2026-10-30 15:43:10",
+      "log_type": "OUT",
+      "custom_in": 0,
+      "device_id": "MobileAPP",
+      "auto": true,
+      "location": "Disposable QA Doha Office",
+      "latitude": 25.2854,
+      "longitude": 51.531,
+      "receivedAt": "2026-10-30T15:43:12.957+00:00",
+      "storedAt": "2026-10-30T15:43:12.959+00:00",
+      "endpoint": "online"
+    },
+    {
+      "name": "QA-CHECKIN-00015",
+      "employee": "QA-ANDROID-001",
+      "employee_name": "Disposable QA-ANDROID-001",
+      "time": "2026-10-30 15:43:37",
+      "timestamp": "2026-10-30 15:43:37",
+      "log_type": "IN",
+      "custom_in": 1,
+      "device_id": "MobileAPP",
+      "auto": true,
+      "location": "Disposable QA Doha Office",
+      "latitude": 25.2854,
+      "longitude": 51.531,
+      "receivedAt": "2026-10-30T15:43:38.427+00:00",
+      "storedAt": "2026-10-30T15:43:38.428+00:00",
+      "endpoint": "online"
+    },
+    {
+      "name": "QA-CHECKIN-00016",
+      "employee": "QA-ANDROID-001",
+      "employee_name": "Disposable QA-ANDROID-001",
+      "time": "2026-10-30 15:44:10",
+      "timestamp": "2026-10-30 15:44:10",
+      "log_type": "OUT",
+      "custom_in": 0,
+      "device_id": "MobileAPP",
+      "auto": null,
+      "location": null,
+      "latitude": null,
+      "longitude": null,
+      "receivedAt": "2026-10-30T15:44:46.870+00:00",
+      "storedAt": "2026-10-30T15:44:46.871+00:00",
+      "endpoint": "offline"
+    },
+    {
+      "name": "QA-CHECKIN-00017",
+      "employee": "QA-IOS-001",
+      "employee_name": "Disposable QA-IOS-001",
+      "time": "2026-10-30 15:44:54",
+      "timestamp": "2026-10-30 15:44:54",
+      "log_type": "IN",
+      "custom_in": 1,
+      "device_id": "MobileAPP",
+      "auto": true,
+      "location": "Disposable QA Doha Office",
+      "latitude": 25.2854,
+      "longitude": 51.531,
+      "receivedAt": "2026-10-30T15:44:55.825+00:00",
+      "storedAt": "2026-10-30T15:44:55.826+00:00",
+      "endpoint": "online"
+    },
+    {
+      "name": "QA-CHECKIN-00018",
+      "employee": "QA-ANDROID-001",
+      "employee_name": "Disposable QA-ANDROID-001",
+      "time": "2026-10-30 15:45:17",
+      "timestamp": "2026-10-30 15:45:17",
+      "log_type": "IN",
+      "custom_in": 1,
+      "device_id": "MobileAPP",
+      "auto": true,
+      "location": "Disposable QA Doha Office",
+      "latitude": 25.2854,
+      "longitude": 51.531,
+      "receivedAt": "2026-10-30T15:45:18.147+00:00",
+      "storedAt": "2026-10-30T15:45:18.148+00:00",
+      "endpoint": "online"
+    },
+    {
+      "name": "QA-CHECKIN-00019",
+      "employee": "QA-ANDROID-001",
+      "employee_name": "Disposable QA-ANDROID-001",
+      "time": "2026-10-30 15:45:45",
+      "timestamp": "2026-10-30 15:45:45",
+      "log_type": "OUT",
+      "custom_in": 0,
+      "device_id": "MobileAPP",
+      "auto": true,
+      "location": "Disposable QA Doha Office",
+      "latitude": 25.2854,
+      "longitude": 51.531,
+      "receivedAt": "2026-10-30T15:45:49.533+00:00",
+      "storedAt": "2026-10-30T15:45:49.534+00:00",
+      "endpoint": "online"
+    },
+    {
+      "name": "QA-CHECKIN-00020",
+      "employee": "QA-ANDROID-001",
+      "employee_name": "Disposable QA-ANDROID-001",
+      "time": "2026-10-30 15:48:23",
+      "timestamp": "2026-10-30 15:48:23",
+      "log_type": "IN",
+      "custom_in": 1,
+      "device_id": "MobileAPP",
+      "auto": true,
+      "location": "Disposable QA Doha Office",
+      "latitude": 25.2854,
+      "longitude": 51.531,
+      "receivedAt": "2026-10-30T15:48:24.476+00:00",
+      "storedAt": "2026-10-30T15:48:24.477+00:00",
+      "endpoint": "online"
+    },
+    {
+      "name": "QA-CHECKIN-00021",
+      "employee": "QA-ANDROID-001",
+      "employee_name": "Disposable QA-ANDROID-001",
+      "time": "2026-10-30 15:49:41",
+      "timestamp": "2026-10-30 15:49:41",
+      "log_type": "OUT",
+      "custom_in": 0,
+      "device_id": "MobileAPP",
+      "auto": true,
+      "location": "Disposable QA Doha Office",
+      "latitude": 25.2854,
+      "longitude": 51.531,
+      "receivedAt": "2026-10-30T15:49:44.356+00:00",
+      "storedAt": "2026-10-30T15:49:44.358+00:00",
+      "endpoint": "online"
+    },
+    {
+      "name": "QA-CHECKIN-00022",
+      "employee": "QA-ANDROID-001",
+      "employee_name": "Disposable QA-ANDROID-001",
+      "time": "2026-10-30 15:50:44",
+      "timestamp": "2026-10-30 15:50:44",
+      "log_type": "IN",
+      "custom_in": 1,
+      "device_id": "MobileAPP",
+      "auto": true,
+      "location": "Disposable QA Doha Office",
+      "latitude": 25.2854,
+      "longitude": 51.531,
+      "receivedAt": "2026-10-30T15:50:45.105+00:00",
+      "storedAt": "2026-10-30T15:50:45.107+00:00",
+      "endpoint": "online"
+    },
+    {
+      "name": "QA-CHECKIN-00023",
+      "employee": "QA-IOS-001",
+      "employee_name": "Disposable QA-IOS-001",
+      "time": "2026-10-30 15:49:45",
+      "timestamp": "2026-10-30 15:49:45",
+      "log_type": "OUT",
+      "custom_in": 0,
+      "device_id": "MobileAPP",
+      "auto": null,
+      "location": null,
+      "latitude": null,
+      "longitude": null,
+      "receivedAt": "2026-10-30T15:51:05.859+00:00",
+      "storedAt": "2026-10-30T15:51:05.863+00:00",
+      "endpoint": "offline"
+    },
+    {
+      "name": "QA-CHECKIN-00024",
+      "employee": "QA-ANDROID-001",
+      "employee_name": "Disposable QA-ANDROID-001",
+      "time": "2026-10-30 15:51:41",
+      "timestamp": "2026-10-30 15:51:41",
+      "log_type": "OUT",
+      "custom_in": 0,
+      "device_id": "MobileAPP",
+      "auto": true,
+      "location": "Disposable QA Doha Office",
+      "latitude": 25.2854,
+      "longitude": 51.531,
+      "receivedAt": "2026-10-30T15:51:44.092+00:00",
+      "storedAt": "2026-10-30T15:51:44.094+00:00",
+      "endpoint": "online"
+    },
+    {
+      "name": "QA-CHECKIN-00025",
+      "employee": "QA-ANDROID-001",
+      "employee_name": "Disposable QA-ANDROID-001",
+      "time": "2026-10-30 15:52:08",
+      "timestamp": "2026-10-30 15:52:08",
+      "log_type": "IN",
+      "custom_in": 1,
+      "device_id": "MobileAPP",
+      "auto": true,
+      "location": "Disposable QA Doha Office",
+      "latitude": 25.2854,
+      "longitude": 51.531,
+      "receivedAt": "2026-10-30T15:52:10.996+00:00",
+      "storedAt": "2026-10-30T15:52:10.998+00:00",
+      "endpoint": "online"
+    },
+    {
+      "name": "QA-CHECKIN-00026",
+      "employee": "QA-IOS-001",
+      "employee_name": "Disposable QA-IOS-001",
+      "time": "2026-10-30 15:52:22",
+      "timestamp": "2026-10-30 15:52:22",
+      "log_type": "IN",
+      "custom_in": 1,
+      "device_id": "MobileAPP",
+      "auto": true,
+      "location": "Disposable QA Doha Office",
+      "latitude": 25.2854,
+      "longitude": 51.531,
+      "receivedAt": "2026-10-30T15:52:24.044+00:00",
+      "storedAt": "2026-10-30T15:52:24.048+00:00",
+      "endpoint": "online"
+    },
+    {
+      "name": "QA-CHECKIN-00027",
+      "employee": "QA-ANDROID-001",
+      "employee_name": "Disposable QA-ANDROID-001",
+      "time": "2026-10-30 15:52:47",
+      "timestamp": "2026-10-30 15:52:47",
+      "log_type": "OUT",
+      "custom_in": 0,
+      "device_id": "MobileAPP",
+      "auto": true,
+      "location": "Disposable QA Doha Office",
+      "latitude": 25.2854,
+      "longitude": 51.531,
+      "receivedAt": "2026-10-30T15:52:48.396+00:00",
+      "storedAt": "2026-10-30T15:52:48.398+00:00",
+      "endpoint": "online"
+    },
+    {
+      "name": "QA-CHECKIN-00028",
+      "employee": "QA-ANDROID-001",
+      "employee_name": "Disposable QA-ANDROID-001",
+      "time": "2026-10-30 15:55:34",
+      "timestamp": "2026-10-30 15:55:34",
+      "log_type": "IN",
+      "custom_in": 1,
+      "device_id": "MobileAPP",
+      "auto": true,
+      "location": "Disposable QA Doha Office",
+      "latitude": 25.2854,
+      "longitude": 51.531,
+      "receivedAt": "2026-10-30T15:55:35.305+00:00",
+      "storedAt": "2026-10-30T15:55:35.307+00:00",
+      "endpoint": "online"
+    },
+    {
+      "name": "QA-CHECKIN-00029",
+      "employee": "QA-IOS-001",
+      "employee_name": "Disposable QA-IOS-001",
+      "time": "2026-10-30 15:55:34",
+      "timestamp": "2026-10-30 15:55:34",
+      "log_type": "OUT",
+      "custom_in": 0,
+      "device_id": "MobileAPP",
+      "auto": true,
+      "location": "Disposable QA Doha Office",
+      "latitude": 25.2854,
+      "longitude": 51.531,
+      "receivedAt": "2026-10-30T15:55:35.752+00:00",
+      "storedAt": "2026-10-30T15:55:35.758+00:00",
+      "endpoint": "online"
+    },
+    {
+      "name": "QA-CHECKIN-00030",
+      "employee": "QA-ANDROID-001",
+      "employee_name": "Disposable QA-ANDROID-001",
+      "time": "2026-10-30 15:57:22",
+      "timestamp": "2026-10-30 15:57:22",
+      "log_type": "OUT",
+      "custom_in": 0,
+      "device_id": "MobileAPP",
+      "auto": false,
+      "location": "Disposable QA Doha Office",
+      "latitude": 25.2854,
+      "longitude": 51.531,
+      "receivedAt": "2026-10-30T15:57:26.248+00:00",
+      "storedAt": "2026-10-30T15:57:26.250+00:00",
+      "endpoint": "online"
+    },
+    {
+      "name": "QA-CHECKIN-00031",
+      "employee": "QA-ANDROID-001",
+      "employee_name": "Disposable QA-ANDROID-001",
+      "time": "2026-10-30 15:57:42",
+      "timestamp": "2026-10-30 15:57:42",
+      "log_type": "IN",
+      "custom_in": 1,
+      "device_id": "MobileAPP",
+      "auto": false,
+      "location": "Disposable QA Doha Office",
+      "latitude": 25.2854,
+      "longitude": 51.531,
+      "receivedAt": "2026-10-30T15:57:46.350+00:00",
+      "storedAt": "2026-10-30T15:57:46.352+00:00",
+      "endpoint": "online"
+    },
+    {
+      "name": "QA-CHECKIN-00032",
+      "employee": "QA-ANDROID-001",
+      "employee_name": "Disposable QA-ANDROID-001",
+      "time": "2026-10-30 15:58:38",
+      "timestamp": "2026-10-30 15:58:38",
+      "log_type": "OUT",
+      "custom_in": 0,
+      "device_id": "MobileAPP",
+      "auto": false,
+      "location": "Disposable QA Doha Office",
+      "latitude": 25.2854,
+      "longitude": 51.531,
+      "receivedAt": "2026-10-30T15:58:42.051+00:00",
+      "storedAt": "2026-10-30T15:58:42.053+00:00",
+      "endpoint": "online"
+    },
+    {
+      "name": "QA-CHECKIN-00033",
+      "employee": "QA-ANDROID-001",
+      "employee_name": "Disposable QA-ANDROID-001",
+      "time": "2026-10-30 15:59:06",
+      "timestamp": "2026-10-30 15:59:06",
+      "log_type": "IN",
+      "custom_in": 1,
+      "device_id": "MobileAPP",
+      "auto": true,
+      "location": "Disposable QA Doha Office",
+      "latitude": 25.2854,
+      "longitude": 51.531,
+      "receivedAt": "2026-10-30T15:59:07.317+00:00",
+      "storedAt": "2026-10-30T15:59:07.319+00:00",
+      "endpoint": "online"
+    },
+    {
+      "name": "QA-CHECKIN-00034",
+      "employee": "QA-ANDROID-001",
+      "employee_name": "Disposable QA-ANDROID-001",
+      "time": "2026-10-30 15:59:20",
+      "timestamp": "2026-10-30 15:59:20",
+      "log_type": "OUT",
+      "custom_in": 0,
+      "device_id": "MobileAPP",
+      "auto": true,
+      "location": "Disposable QA Doha Office",
+      "latitude": 25.2854,
+      "longitude": 51.531,
+      "receivedAt": "2026-10-30T15:59:21.378+00:00",
+      "storedAt": "2026-10-30T15:59:21.380+00:00",
+      "endpoint": "online"
+    },
+    {
+      "name": "QA-CHECKIN-00035",
+      "employee": "QA-ANDROID-001",
+      "employee_name": "Disposable QA-ANDROID-001",
+      "time": "2026-10-30 16:01:58",
+      "timestamp": "2026-10-30 16:01:58",
+      "log_type": "IN",
+      "custom_in": 1,
+      "device_id": "MobileAPP",
+      "auto": false,
+      "location": "Disposable QA Doha Office",
+      "latitude": 25.2854,
+      "longitude": 51.531,
+      "receivedAt": "2026-10-30T16:02:02.785+00:00",
+      "storedAt": "2026-10-30T16:02:02.787+00:00",
+      "endpoint": "online"
+    },
+    {
+      "name": "QA-CHECKIN-00036",
+      "employee": "QA-ANDROID-001",
+      "employee_name": "Disposable QA-ANDROID-001",
+      "time": "2026-10-30 16:02:17",
+      "timestamp": "2026-10-30 16:02:17",
+      "log_type": "OUT",
+      "custom_in": 0,
+      "device_id": "MobileAPP",
+      "auto": false,
+      "location": "Disposable QA Doha Office",
+      "latitude": 25.2854,
+      "longitude": 51.531,
+      "receivedAt": "2026-10-30T16:02:19.861+00:00",
+      "storedAt": "2026-10-30T16:02:19.863+00:00",
+      "endpoint": "online"
+    },
+    {
+      "name": "QA-CHECKIN-00037",
+      "employee": "QA-ANDROID-001",
+      "employee_name": "Disposable QA-ANDROID-001",
+      "time": "2026-10-30 16:02:58",
+      "timestamp": "2026-10-30 16:02:58",
+      "log_type": "IN",
+      "custom_in": 1,
+      "device_id": "MobileAPP",
+      "auto": true,
+      "location": "Disposable QA Doha Office",
+      "latitude": 25.286,
+      "longitude": 51.532,
+      "receivedAt": "2026-10-30T16:02:59.467+00:00",
+      "storedAt": "2026-10-30T16:02:59.469+00:00",
+      "endpoint": "online"
+    },
+    {
+      "name": "QA-CHECKIN-00038",
+      "employee": "QA-ANDROID-001",
+      "employee_name": "Disposable QA-ANDROID-001",
+      "time": "2026-10-30 16:04:55",
+      "timestamp": "2026-10-30 16:04:55",
+      "log_type": "OUT",
+      "custom_in": 0,
+      "device_id": "MobileAPP",
+      "auto": false,
+      "location": "Disposable QA Doha Office",
+      "latitude": 25.2854,
+      "longitude": 51.531,
+      "receivedAt": "2026-10-30T16:05:02.021+00:00",
+      "storedAt": "2026-10-30T16:05:02.025+00:00",
+      "endpoint": "online"
+    }
+  ],
+  "requests": [
+    {
+      "method": "POST",
+      "path": "/api/method/employee_app.gauth.generate_token_secure",
+      "employee": null,
+      "params": {
+        "api_key": "QA-IOS-001",
+        "app_key": "cWEtYXBw==",
+        "api_secret": "[redacted]"
+      },
+      "sequence": 1,
+      "receivedAt": "2026-10-30T10:12:43.258+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/whatsapp_saudi.whatsapp_saudi.doctype.whatsapp_saudi.whatsapp_saudi.get_or_update_employee_token",
+      "employee": "QA-IOS-001",
+      "params": {},
+      "sequence": 2,
+      "receivedAt": "2026-10-30T10:12:43.410+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.gauth.employee_checkin_setting",
+      "employee": "QA-IOS-001",
+      "params": {},
+      "sequence": 3,
+      "receivedAt": "2026-10-30T10:12:43.420+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_notification",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee": "QA-IOS-001"
+      },
+      "sequence": 4,
+      "receivedAt": "2026-10-30T10:12:43.427+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee_id": "QA-IOS-001"
+      },
+      "sequence": 5,
+      "receivedAt": "2026-10-30T10:12:43.433+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_shortcut_1",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee": "QA-IOS-001"
+      },
+      "sequence": 6,
+      "receivedAt": "2026-10-30T10:12:43.447+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_shortcut_2",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee": "QA-IOS-001"
+      },
+      "sequence": 7,
+      "receivedAt": "2026-10-30T10:12:43.450+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_shortcut_3",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee": "QA-IOS-001"
+      },
+      "sequence": 8,
+      "receivedAt": "2026-10-30T10:12:43.452+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee_id": "QA-IOS-001"
+      },
+      "sequence": 9,
+      "receivedAt": "2026-10-30T10:12:43.529+00:00"
+    },
+    {
+      "method": "POST",
+      "path": "/api/method/employee_app.gauth.generate_token_secure",
+      "employee": null,
+      "params": {
+        "api_key": "QA-ANDROID-001",
+        "app_key": "cWEtYXBw==",
+        "api_secret": "[redacted]"
+      },
+      "sequence": 10,
+      "receivedAt": "2026-10-30T10:12:46.156+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/whatsapp_saudi.whatsapp_saudi.doctype.whatsapp_saudi.whatsapp_saudi.get_or_update_employee_token",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 11,
+      "receivedAt": "2026-10-30T10:12:46.489+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.gauth.employee_checkin_setting",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 12,
+      "receivedAt": "2026-10-30T10:12:46.508+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_notification",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee": "QA-ANDROID-001"
+      },
+      "sequence": 13,
+      "receivedAt": "2026-10-30T10:12:46.717+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 14,
+      "receivedAt": "2026-10-30T10:12:46.737+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 15,
+      "receivedAt": "2026-10-30T10:12:46.818+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 16,
+      "receivedAt": "2026-10-30T10:13:17.637+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_notification",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee": "QA-ANDROID-001"
+      },
+      "sequence": 17,
+      "receivedAt": "2026-10-30T10:13:17.655+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_notification",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee": "QA-IOS-001"
+      },
+      "sequence": 18,
+      "receivedAt": "2026-10-30T10:13:20.366+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee_id": "QA-IOS-001"
+      },
+      "sequence": 19,
+      "receivedAt": "2026-10-30T10:13:20.714+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 20,
+      "receivedAt": "2026-10-30T10:13:39.277+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 21,
+      "receivedAt": "2026-10-30T10:13:39.280+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 22,
+      "receivedAt": "2026-10-30T10:16:35.427+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_server_time",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 23,
+      "receivedAt": "2026-10-30T10:16:35.837+00:00"
+    },
+    {
+      "method": "POST",
+      "path": "/api/method/employee_app.attendance_api.add_log_based_on_employee_field",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "device_id": "MobileAPP",
+        "employee_field_value": "QA-ANDROID-001",
+        "log_type": "IN",
+        "timestamp": "2026-10-30 10:16:30",
+        "auto": true,
+        "latitude": 25.2854,
+        "longitude": 51.531,
+        "location": "Disposable QA Doha Office"
+      },
+      "sequence": 24,
+      "receivedAt": "2026-10-30T10:16:36.376+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_server_time",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 25,
+      "receivedAt": "2026-10-30T10:18:03.494+00:00"
+    },
+    {
+      "method": "POST",
+      "path": "/api/method/employee_app.attendance_api.add_log_based_on_employee_field",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "device_id": "MobileAPP",
+        "employee_field_value": "QA-ANDROID-001",
+        "log_type": "OUT",
+        "timestamp": "2026-10-30 10:17:53",
+        "auto": true,
+        "latitude": 25.2854,
+        "longitude": 51.531,
+        "location": "Disposable QA Doha Office"
+      },
+      "sequence": 26,
+      "receivedAt": "2026-10-30T10:18:05.961+00:00"
+    },
+    {
+      "method": "POST",
+      "path": "/api/method/employee_app.gauth.generate_token_secure",
+      "employee": null,
+      "params": {
+        "api_key": "QA-IOS-001",
+        "app_key": "cWEtYXBw==",
+        "api_secret": "[redacted]"
+      },
+      "sequence": 27,
+      "receivedAt": "2026-10-30T10:18:14.454+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/whatsapp_saudi.whatsapp_saudi.doctype.whatsapp_saudi.whatsapp_saudi.get_or_update_employee_token",
+      "employee": "QA-IOS-001",
+      "params": {},
+      "sequence": 28,
+      "receivedAt": "2026-10-30T10:18:14.784+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.gauth.employee_checkin_setting",
+      "employee": "QA-IOS-001",
+      "params": {},
+      "sequence": 29,
+      "receivedAt": "2026-10-30T10:18:14.799+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee_id": "QA-IOS-001"
+      },
+      "sequence": 30,
+      "receivedAt": "2026-10-30T10:18:14.807+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_notification",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee": "QA-IOS-001"
+      },
+      "sequence": 31,
+      "receivedAt": "2026-10-30T10:18:14.832+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_shortcut_1",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee": "QA-IOS-001"
+      },
+      "sequence": 32,
+      "receivedAt": "2026-10-30T10:18:14.858+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_shortcut_2",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee": "QA-IOS-001"
+      },
+      "sequence": 33,
+      "receivedAt": "2026-10-30T10:18:14.861+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_shortcut_3",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee": "QA-IOS-001"
+      },
+      "sequence": 34,
+      "receivedAt": "2026-10-30T10:18:14.863+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee_id": "QA-IOS-001"
+      },
+      "sequence": 35,
+      "receivedAt": "2026-10-30T10:18:14.990+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_server_time",
+      "employee": "QA-IOS-001",
+      "params": {},
+      "sequence": 36,
+      "receivedAt": "2026-10-30T10:18:46.821+00:00"
+    },
+    {
+      "method": "POST",
+      "path": "/api/method/employee_app.attendance_api.add_log_based_on_employee_field",
+      "employee": "QA-IOS-001",
+      "params": {
+        "device_id": "MobileAPP",
+        "employee_field_value": "QA-IOS-001",
+        "log_type": "IN",
+        "timestamp": "2026-10-30 10:18:45",
+        "auto": true,
+        "latitude": 25.2854,
+        "longitude": 51.531,
+        "location": "Disposable QA Doha Office"
+      },
+      "sequence": 37,
+      "receivedAt": "2026-10-30T10:18:46.866+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_notification",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee": "QA-IOS-001"
+      },
+      "sequence": 38,
+      "receivedAt": "2026-10-30T10:18:50.829+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee_id": "QA-IOS-001"
+      },
+      "sequence": 39,
+      "receivedAt": "2026-10-30T10:18:51.133+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_server_time",
+      "employee": "QA-IOS-001",
+      "params": {},
+      "sequence": 40,
+      "receivedAt": "2026-10-30T10:19:17.018+00:00"
+    },
+    {
+      "method": "POST",
+      "path": "/api/method/employee_app.attendance_api.add_log_based_on_employee_field",
+      "employee": "QA-IOS-001",
+      "params": {
+        "device_id": "MobileAPP",
+        "employee_field_value": "QA-IOS-001",
+        "log_type": "OUT",
+        "timestamp": "2026-10-30 10:19:16",
+        "auto": true,
+        "latitude": 25.2854,
+        "longitude": 51.531,
+        "location": "Disposable QA Doha Office"
+      },
+      "sequence": 41,
+      "receivedAt": "2026-10-30T10:19:17.029+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_server_time",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 42,
+      "receivedAt": "2026-10-30T10:23:08.630+00:00"
+    },
+    {
+      "method": "POST",
+      "path": "/api/method/employee_app.attendance_api.add_log_based_on_employee_field",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "device_id": "MobileAPP",
+        "employee_field_value": "QA-ANDROID-001",
+        "log_type": "IN",
+        "timestamp": "2026-10-30 10:23:07",
+        "auto": true,
+        "latitude": 25.2854,
+        "longitude": 51.531,
+        "location": "Disposable QA Doha Office"
+      },
+      "sequence": 43,
+      "receivedAt": "2026-10-30T10:23:08.672+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee_id": "QA-IOS-001"
+      },
+      "sequence": 44,
+      "receivedAt": "2026-10-30T15:39:28.729+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/whatsapp_saudi.whatsapp_saudi.doctype.whatsapp_saudi.whatsapp_saudi.get_or_update_employee_token",
+      "employee": "QA-IOS-001",
+      "params": {},
+      "sequence": 45,
+      "receivedAt": "2026-10-30T15:39:28.735+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.gauth.employee_checkin_setting",
+      "employee": "QA-IOS-001",
+      "params": {},
+      "sequence": 46,
+      "receivedAt": "2026-10-30T15:39:28.736+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee_id": "QA-IOS-001"
+      },
+      "sequence": 47,
+      "receivedAt": "2026-10-30T15:39:28.736+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_notification",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee": "QA-IOS-001"
+      },
+      "sequence": 48,
+      "receivedAt": "2026-10-30T15:39:28.958+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/whatsapp_saudi.whatsapp_saudi.doctype.whatsapp_saudi.whatsapp_saudi.get_or_update_employee_token",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 49,
+      "receivedAt": "2026-10-30T15:39:31.366+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 50,
+      "receivedAt": "2026-10-30T15:39:31.388+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.gauth.employee_checkin_setting",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 51,
+      "receivedAt": "2026-10-30T15:39:31.389+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_notification",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee": "QA-ANDROID-001"
+      },
+      "sequence": 52,
+      "receivedAt": "2026-10-30T15:39:31.416+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 53,
+      "receivedAt": "2026-10-30T15:39:31.467+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_server_time",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 54,
+      "receivedAt": "2026-10-30T15:40:14.281+00:00"
+    },
+    {
+      "method": "POST",
+      "path": "/api/method/employee_app.attendance_api.add_log_based_on_employee_field",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "device_id": "MobileAPP",
+        "employee_field_value": "QA-ANDROID-001",
+        "log_type": "OUT",
+        "timestamp": "2026-10-30 15:40:13",
+        "auto": true,
+        "latitude": 25.2854,
+        "longitude": 51.531,
+        "location": "Disposable QA Doha Office"
+      },
+      "sequence": 55,
+      "receivedAt": "2026-10-30T15:40:14.331+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_server_time",
+      "employee": "QA-IOS-001",
+      "params": {},
+      "sequence": 56,
+      "receivedAt": "2026-10-30T15:40:14.784+00:00"
+    },
+    {
+      "method": "POST",
+      "path": "/api/method/employee_app.attendance_api.add_log_based_on_employee_field",
+      "employee": "QA-IOS-001",
+      "params": {
+        "device_id": "MobileAPP",
+        "employee_field_value": "QA-IOS-001",
+        "log_type": "IN",
+        "timestamp": "2026-10-30 15:40:13",
+        "auto": true,
+        "latitude": 25.2854,
+        "longitude": 51.531,
+        "location": "Disposable QA Doha Office"
+      },
+      "sequence": 57,
+      "receivedAt": "2026-10-30T15:40:14.811+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_server_time",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 58,
+      "receivedAt": "2026-10-30T15:41:06.482+00:00"
+    },
+    {
+      "method": "POST",
+      "path": "/api/method/employee_app.attendance_api.add_log_based_on_employee_field",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "device_id": "MobileAPP",
+        "employee_field_value": "QA-ANDROID-001",
+        "log_type": "IN",
+        "timestamp": "2026-10-30 15:41:05",
+        "auto": true,
+        "latitude": 25.2854,
+        "longitude": 51.531,
+        "location": "Disposable QA Doha Office"
+      },
+      "sequence": 59,
+      "receivedAt": "2026-10-30T15:41:06.524+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_server_time",
+      "employee": "QA-IOS-001",
+      "params": {},
+      "sequence": 60,
+      "receivedAt": "2026-10-30T15:41:42.031+00:00"
+    },
+    {
+      "method": "POST",
+      "path": "/api/method/employee_app.attendance_api.add_log_based_on_employee_field",
+      "employee": "QA-IOS-001",
+      "params": {
+        "device_id": "MobileAPP",
+        "employee_field_value": "QA-IOS-001",
+        "log_type": "OUT",
+        "timestamp": "2026-10-30 15:41:41",
+        "auto": true,
+        "latitude": 25.2854,
+        "longitude": 51.531,
+        "location": "Disposable QA Doha Office"
+      },
+      "sequence": 61,
+      "receivedAt": "2026-10-30T15:41:42.046+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_server_time",
+      "employee": "QA-IOS-001",
+      "params": {},
+      "sequence": 62,
+      "receivedAt": "2026-10-30T15:42:04.345+00:00"
+    },
+    {
+      "method": "POST",
+      "path": "/api/method/employee_app.attendance_api.add_log_based_on_employee_field",
+      "employee": "QA-IOS-001",
+      "params": {
+        "device_id": "MobileAPP",
+        "employee_field_value": "QA-IOS-001",
+        "log_type": "IN",
+        "timestamp": "2026-10-30 15:42:03",
+        "auto": true,
+        "latitude": 25.2854,
+        "longitude": 51.531,
+        "location": "Disposable QA Doha Office"
+      },
+      "sequence": 63,
+      "receivedAt": "2026-10-30T15:42:04.356+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee_id": "QA-IOS-001"
+      },
+      "sequence": 64,
+      "receivedAt": "2026-10-30T15:42:13.005+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee_id": "QA-IOS-001"
+      },
+      "sequence": 65,
+      "receivedAt": "2026-10-30T15:42:13.014+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/whatsapp_saudi.whatsapp_saudi.doctype.whatsapp_saudi.whatsapp_saudi.get_or_update_employee_token",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 66,
+      "receivedAt": "2026-10-30T15:42:15.050+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 67,
+      "receivedAt": "2026-10-30T15:42:15.112+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.gauth.employee_checkin_setting",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 68,
+      "receivedAt": "2026-10-30T15:42:15.118+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_notification",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee": "QA-ANDROID-001"
+      },
+      "sequence": 69,
+      "receivedAt": "2026-10-30T15:42:15.164+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 70,
+      "receivedAt": "2026-10-30T15:42:15.245+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_server_time",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 71,
+      "receivedAt": "2026-10-30T15:42:37.014+00:00"
+    },
+    {
+      "method": "POST",
+      "path": "/api/method/employee_app.attendance_api.add_log_based_on_employee_field",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "device_id": "MobileAPP",
+        "employee_field_value": "QA-ANDROID-001",
+        "log_type": "OUT",
+        "timestamp": "2026-10-30 15:42:36",
+        "auto": true,
+        "latitude": 25.2854,
+        "longitude": 51.531,
+        "location": "Disposable QA Doha Office"
+      },
+      "sequence": 72,
+      "receivedAt": "2026-10-30T15:42:37.073+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_server_time",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 73,
+      "receivedAt": "2026-10-30T15:42:52.029+00:00"
+    },
+    {
+      "method": "POST",
+      "path": "/api/method/employee_app.attendance_api.add_log_based_on_employee_field",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "device_id": "MobileAPP",
+        "employee_field_value": "QA-ANDROID-001",
+        "log_type": "IN",
+        "timestamp": "2026-10-30 15:42:51",
+        "auto": true,
+        "latitude": 25.2854,
+        "longitude": 51.531,
+        "location": "Disposable QA Doha Office"
+      },
+      "sequence": 74,
+      "receivedAt": "2026-10-30T15:42:52.074+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_server_time",
+      "employee": "QA-IOS-001",
+      "params": {},
+      "sequence": 75,
+      "receivedAt": "2026-10-30T15:42:57.552+00:00"
+    },
+    {
+      "method": "POST",
+      "path": "/api/method/employee_app.attendance_api.add_log_based_on_employee_field",
+      "employee": "QA-IOS-001",
+      "params": {
+        "device_id": "MobileAPP",
+        "employee_field_value": "QA-IOS-001",
+        "log_type": "OUT",
+        "timestamp": "2026-10-30 15:42:56",
+        "auto": true,
+        "latitude": 25.2854,
+        "longitude": 51.531,
+        "location": "Disposable QA Doha Office"
+      },
+      "sequence": 76,
+      "receivedAt": "2026-10-30T15:42:57.562+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/whatsapp_saudi.whatsapp_saudi.doctype.whatsapp_saudi.whatsapp_saudi.get_or_update_employee_token",
+      "employee": "QA-IOS-001",
+      "params": {},
+      "sequence": 77,
+      "receivedAt": "2026-10-30T15:43:00.984+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee_id": "QA-IOS-001"
+      },
+      "sequence": 78,
+      "receivedAt": "2026-10-30T15:43:00.997+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.gauth.employee_checkin_setting",
+      "employee": "QA-IOS-001",
+      "params": {},
+      "sequence": 79,
+      "receivedAt": "2026-10-30T15:43:01.006+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee_id": "QA-IOS-001"
+      },
+      "sequence": 80,
+      "receivedAt": "2026-10-30T15:43:01.008+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_notification",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee": "QA-IOS-001"
+      },
+      "sequence": 81,
+      "receivedAt": "2026-10-30T15:43:01.119+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/whatsapp_saudi.whatsapp_saudi.doctype.whatsapp_saudi.whatsapp_saudi.get_or_update_employee_token",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 82,
+      "receivedAt": "2026-10-30T15:43:12.678+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.gauth.employee_checkin_setting",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 83,
+      "receivedAt": "2026-10-30T15:43:12.694+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 84,
+      "receivedAt": "2026-10-30T15:43:12.702+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_notification",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee": "QA-ANDROID-001"
+      },
+      "sequence": 85,
+      "receivedAt": "2026-10-30T15:43:12.743+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 86,
+      "receivedAt": "2026-10-30T15:43:12.802+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_server_time",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 87,
+      "receivedAt": "2026-10-30T15:43:12.898+00:00"
+    },
+    {
+      "method": "POST",
+      "path": "/api/method/employee_app.attendance_api.add_log_based_on_employee_field",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "device_id": "MobileAPP",
+        "employee_field_value": "QA-ANDROID-001",
+        "log_type": "OUT",
+        "timestamp": "2026-10-30 15:43:10",
+        "auto": true,
+        "latitude": 25.2854,
+        "longitude": 51.531,
+        "location": "Disposable QA Doha Office"
+      },
+      "sequence": 88,
+      "receivedAt": "2026-10-30T15:43:12.957+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_server_time",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 89,
+      "receivedAt": "2026-10-30T15:43:38.373+00:00"
+    },
+    {
+      "method": "POST",
+      "path": "/api/method/employee_app.attendance_api.add_log_based_on_employee_field",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "device_id": "MobileAPP",
+        "employee_field_value": "QA-ANDROID-001",
+        "log_type": "IN",
+        "timestamp": "2026-10-30 15:43:37",
+        "auto": true,
+        "latitude": 25.2854,
+        "longitude": 51.531,
+        "location": "Disposable QA Doha Office"
+      },
+      "sequence": 90,
+      "receivedAt": "2026-10-30T15:43:38.427+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee_id": "QA-IOS-001"
+      },
+      "sequence": 91,
+      "receivedAt": "2026-10-30T15:43:50.419+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee_id": "QA-IOS-001"
+      },
+      "sequence": 92,
+      "receivedAt": "2026-10-30T15:43:50.421+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_server_time",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 93,
+      "receivedAt": "2026-10-30T15:44:10.559+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_server_time",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 94,
+      "receivedAt": "2026-10-30T15:44:10.563+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_server_time",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 95,
+      "receivedAt": "2026-10-30T15:44:12.611+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/whatsapp_saudi.whatsapp_saudi.doctype.whatsapp_saudi.whatsapp_saudi.get_or_update_employee_token",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 96,
+      "receivedAt": "2026-10-30T15:44:30.093+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 97,
+      "receivedAt": "2026-10-30T15:44:30.117+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.gauth.employee_checkin_setting",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 98,
+      "receivedAt": "2026-10-30T15:44:30.119+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_notification",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee": "QA-ANDROID-001"
+      },
+      "sequence": 99,
+      "receivedAt": "2026-10-30T15:44:30.156+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 100,
+      "receivedAt": "2026-10-30T15:44:30.156+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_server_time",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 101,
+      "receivedAt": "2026-10-30T15:44:30.214+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 102,
+      "receivedAt": "2026-10-30T15:44:46.777+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_server_time",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 103,
+      "receivedAt": "2026-10-30T15:44:46.832+00:00"
+    },
+    {
+      "method": "POST",
+      "path": "/api/method/employee_app.attendance_api.add_offline_employee_checkins",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "logs": [
+          {
+            "employee": "QA-ANDROID-001",
+            "timestamp": "2026-10-30 15:44:10",
+            "device_id": "MobileAPP",
+            "log_type": "OUT",
+            "over_time": 0
+          }
+        ]
+      },
+      "sequence": 104,
+      "receivedAt": "2026-10-30T15:44:46.870+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_server_time",
+      "employee": "QA-IOS-001",
+      "params": {},
+      "sequence": 105,
+      "receivedAt": "2026-10-30T15:44:55.786+00:00"
+    },
+    {
+      "method": "POST",
+      "path": "/api/method/employee_app.attendance_api.add_log_based_on_employee_field",
+      "employee": "QA-IOS-001",
+      "params": {
+        "device_id": "MobileAPP",
+        "employee_field_value": "QA-IOS-001",
+        "log_type": "IN",
+        "timestamp": "2026-10-30 15:44:54",
+        "auto": true,
+        "latitude": 25.2854,
+        "longitude": 51.531,
+        "location": "Disposable QA Doha Office"
+      },
+      "sequence": 106,
+      "receivedAt": "2026-10-30T15:44:55.825+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_server_time",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 107,
+      "receivedAt": "2026-10-30T15:45:18.084+00:00"
+    },
+    {
+      "method": "POST",
+      "path": "/api/method/employee_app.attendance_api.add_log_based_on_employee_field",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "device_id": "MobileAPP",
+        "employee_field_value": "QA-ANDROID-001",
+        "log_type": "IN",
+        "timestamp": "2026-10-30 15:45:17",
+        "auto": true,
+        "latitude": 25.2854,
+        "longitude": 51.531,
+        "location": "Disposable QA Doha Office"
+      },
+      "sequence": 108,
+      "receivedAt": "2026-10-30T15:45:18.147+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/whatsapp_saudi.whatsapp_saudi.doctype.whatsapp_saudi.whatsapp_saudi.get_or_update_employee_token",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 109,
+      "receivedAt": "2026-10-30T15:45:49.247+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 110,
+      "receivedAt": "2026-10-30T15:45:49.266+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.gauth.employee_checkin_setting",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 111,
+      "receivedAt": "2026-10-30T15:45:49.268+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_notification",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee": "QA-ANDROID-001"
+      },
+      "sequence": 112,
+      "receivedAt": "2026-10-30T15:45:49.295+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 113,
+      "receivedAt": "2026-10-30T15:45:49.374+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_server_time",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 114,
+      "receivedAt": "2026-10-30T15:45:49.467+00:00"
+    },
+    {
+      "method": "POST",
+      "path": "/api/method/employee_app.attendance_api.add_log_based_on_employee_field",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "device_id": "MobileAPP",
+        "employee_field_value": "QA-ANDROID-001",
+        "log_type": "OUT",
+        "timestamp": "2026-10-30 15:45:45",
+        "auto": true,
+        "latitude": 25.2854,
+        "longitude": 51.531,
+        "location": "Disposable QA Doha Office"
+      },
+      "sequence": 115,
+      "receivedAt": "2026-10-30T15:45:49.533+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee_id": "QA-IOS-001"
+      },
+      "sequence": 116,
+      "receivedAt": "2026-10-30T15:48:08.139+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee_id": "QA-IOS-001"
+      },
+      "sequence": 117,
+      "receivedAt": "2026-10-30T15:48:08.144+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee_id": "QA-IOS-001"
+      },
+      "sequence": 118,
+      "receivedAt": "2026-10-30T15:48:08.147+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_server_time",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 119,
+      "receivedAt": "2026-10-30T15:48:24.421+00:00"
+    },
+    {
+      "method": "POST",
+      "path": "/api/method/employee_app.attendance_api.add_log_based_on_employee_field",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "device_id": "MobileAPP",
+        "employee_field_value": "QA-ANDROID-001",
+        "log_type": "IN",
+        "timestamp": "2026-10-30 15:48:23",
+        "auto": true,
+        "latitude": 25.2854,
+        "longitude": 51.531,
+        "location": "Disposable QA Doha Office"
+      },
+      "sequence": 120,
+      "receivedAt": "2026-10-30T15:48:24.476+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee_id": "QA-IOS-001"
+      },
+      "sequence": 121,
+      "receivedAt": "2026-10-30T15:48:34.551+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee_id": "QA-IOS-001"
+      },
+      "sequence": 122,
+      "receivedAt": "2026-10-30T15:48:34.556+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee_id": "QA-IOS-001"
+      },
+      "sequence": 123,
+      "receivedAt": "2026-10-30T15:48:34.562+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 124,
+      "receivedAt": "2026-10-30T15:48:59.936+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 125,
+      "receivedAt": "2026-10-30T15:48:59.937+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/whatsapp_saudi.whatsapp_saudi.doctype.whatsapp_saudi.whatsapp_saudi.get_or_update_employee_token",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 126,
+      "receivedAt": "2026-10-30T15:49:44.145+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.gauth.employee_checkin_setting",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 127,
+      "receivedAt": "2026-10-30T15:49:44.164+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 128,
+      "receivedAt": "2026-10-30T15:49:44.166+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_notification",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee": "QA-ANDROID-001"
+      },
+      "sequence": 129,
+      "receivedAt": "2026-10-30T15:49:44.192+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 130,
+      "receivedAt": "2026-10-30T15:49:44.235+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_server_time",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 131,
+      "receivedAt": "2026-10-30T15:49:44.302+00:00"
+    },
+    {
+      "method": "POST",
+      "path": "/api/method/employee_app.attendance_api.add_log_based_on_employee_field",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "device_id": "MobileAPP",
+        "employee_field_value": "QA-ANDROID-001",
+        "log_type": "OUT",
+        "timestamp": "2026-10-30 15:49:41",
+        "auto": true,
+        "latitude": 25.2854,
+        "longitude": 51.531,
+        "location": "Disposable QA Doha Office"
+      },
+      "sequence": 132,
+      "receivedAt": "2026-10-30T15:49:44.356+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_server_time",
+      "employee": "QA-IOS-001",
+      "params": {},
+      "sequence": 133,
+      "receivedAt": "2026-10-30T15:49:46.321+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_server_time",
+      "employee": "QA-IOS-001",
+      "params": {},
+      "sequence": 134,
+      "receivedAt": "2026-10-30T15:49:46.328+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_server_time",
+      "employee": "QA-IOS-001",
+      "params": {},
+      "sequence": 135,
+      "receivedAt": "2026-10-30T15:49:46.333+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee_id": "QA-IOS-001"
+      },
+      "sequence": 136,
+      "receivedAt": "2026-10-30T15:49:46.605+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee_id": "QA-IOS-001"
+      },
+      "sequence": 137,
+      "receivedAt": "2026-10-30T15:49:46.613+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee_id": "QA-IOS-001"
+      },
+      "sequence": 138,
+      "receivedAt": "2026-10-30T15:49:46.627+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 139,
+      "receivedAt": "2026-10-30T15:50:00.990+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 140,
+      "receivedAt": "2026-10-30T15:50:00.991+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/whatsapp_saudi.whatsapp_saudi.doctype.whatsapp_saudi.whatsapp_saudi.get_or_update_employee_token",
+      "employee": "QA-IOS-001",
+      "params": {},
+      "sequence": 141,
+      "receivedAt": "2026-10-30T15:50:28.153+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/whatsapp_saudi.whatsapp_saudi.doctype.whatsapp_saudi.whatsapp_saudi.get_or_update_employee_token",
+      "employee": "QA-IOS-001",
+      "params": {},
+      "sequence": 142,
+      "receivedAt": "2026-10-30T15:50:28.165+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee_id": "QA-IOS-001"
+      },
+      "sequence": 143,
+      "receivedAt": "2026-10-30T15:50:28.185+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.gauth.employee_checkin_setting",
+      "employee": "QA-IOS-001",
+      "params": {},
+      "sequence": 144,
+      "receivedAt": "2026-10-30T15:50:28.187+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee_id": "QA-IOS-001"
+      },
+      "sequence": 145,
+      "receivedAt": "2026-10-30T15:50:28.192+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/whatsapp_saudi.whatsapp_saudi.doctype.whatsapp_saudi.whatsapp_saudi.get_or_update_employee_token",
+      "employee": "QA-IOS-001",
+      "params": {},
+      "sequence": 146,
+      "receivedAt": "2026-10-30T15:50:28.200+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee_id": "QA-IOS-001"
+      },
+      "sequence": 147,
+      "receivedAt": "2026-10-30T15:50:28.208+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.gauth.employee_checkin_setting",
+      "employee": "QA-IOS-001",
+      "params": {},
+      "sequence": 148,
+      "receivedAt": "2026-10-30T15:50:28.209+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee_id": "QA-IOS-001"
+      },
+      "sequence": 149,
+      "receivedAt": "2026-10-30T15:50:28.213+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_server_time",
+      "employee": "QA-IOS-001",
+      "params": {},
+      "sequence": 150,
+      "receivedAt": "2026-10-30T15:50:28.215+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee_id": "QA-IOS-001"
+      },
+      "sequence": 151,
+      "receivedAt": "2026-10-30T15:50:28.224+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.gauth.employee_checkin_setting",
+      "employee": "QA-IOS-001",
+      "params": {},
+      "sequence": 152,
+      "receivedAt": "2026-10-30T15:50:28.228+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_server_time",
+      "employee": "QA-IOS-001",
+      "params": {},
+      "sequence": 153,
+      "receivedAt": "2026-10-30T15:50:28.230+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee_id": "QA-IOS-001"
+      },
+      "sequence": 154,
+      "receivedAt": "2026-10-30T15:50:28.231+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_server_time",
+      "employee": "QA-IOS-001",
+      "params": {},
+      "sequence": 155,
+      "receivedAt": "2026-10-30T15:50:28.239+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_notification",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee": "QA-IOS-001"
+      },
+      "sequence": 156,
+      "receivedAt": "2026-10-30T15:50:28.414+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_notification",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee": "QA-IOS-001"
+      },
+      "sequence": 157,
+      "receivedAt": "2026-10-30T15:50:28.418+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_notification",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee": "QA-IOS-001"
+      },
+      "sequence": 158,
+      "receivedAt": "2026-10-30T15:50:28.423+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee_id": "QA-IOS-001"
+      },
+      "sequence": 159,
+      "receivedAt": "2026-10-30T15:50:28.624+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee_id": "QA-IOS-001"
+      },
+      "sequence": 160,
+      "receivedAt": "2026-10-30T15:50:28.625+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee_id": "QA-IOS-001"
+      },
+      "sequence": 161,
+      "receivedAt": "2026-10-30T15:50:28.631+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee_id": "QA-IOS-001"
+      },
+      "sequence": 162,
+      "receivedAt": "2026-10-30T15:50:28.634+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee_id": "QA-IOS-001"
+      },
+      "sequence": 163,
+      "receivedAt": "2026-10-30T15:50:28.639+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee_id": "QA-IOS-001"
+      },
+      "sequence": 164,
+      "receivedAt": "2026-10-30T15:50:28.641+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_server_time",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 165,
+      "receivedAt": "2026-10-30T15:50:45.053+00:00"
+    },
+    {
+      "method": "POST",
+      "path": "/api/method/employee_app.attendance_api.add_log_based_on_employee_field",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "device_id": "MobileAPP",
+        "employee_field_value": "QA-ANDROID-001",
+        "log_type": "IN",
+        "timestamp": "2026-10-30 15:50:44",
+        "auto": true,
+        "latitude": 25.2854,
+        "longitude": 51.531,
+        "location": "Disposable QA Doha Office"
+      },
+      "sequence": 166,
+      "receivedAt": "2026-10-30T15:50:45.105+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/whatsapp_saudi.whatsapp_saudi.doctype.whatsapp_saudi.whatsapp_saudi.get_or_update_employee_token",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 167,
+      "receivedAt": "2026-10-30T15:50:54.739+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 168,
+      "receivedAt": "2026-10-30T15:50:54.769+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.gauth.employee_checkin_setting",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 169,
+      "receivedAt": "2026-10-30T15:50:54.771+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 170,
+      "receivedAt": "2026-10-30T15:50:54.778+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_notification",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee": "QA-ANDROID-001"
+      },
+      "sequence": 171,
+      "receivedAt": "2026-10-30T15:50:54.781+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/whatsapp_saudi.whatsapp_saudi.doctype.whatsapp_saudi.whatsapp_saudi.get_or_update_employee_token",
+      "employee": "QA-IOS-001",
+      "params": {},
+      "sequence": 172,
+      "receivedAt": "2026-10-30T15:51:05.752+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee_id": "QA-IOS-001"
+      },
+      "sequence": 173,
+      "receivedAt": "2026-10-30T15:51:05.761+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.gauth.employee_checkin_setting",
+      "employee": "QA-IOS-001",
+      "params": {},
+      "sequence": 174,
+      "receivedAt": "2026-10-30T15:51:05.765+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee_id": "QA-IOS-001"
+      },
+      "sequence": 175,
+      "receivedAt": "2026-10-30T15:51:05.801+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_notification",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee": "QA-IOS-001"
+      },
+      "sequence": 176,
+      "receivedAt": "2026-10-30T15:51:05.816+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_server_time",
+      "employee": "QA-IOS-001",
+      "params": {},
+      "sequence": 177,
+      "receivedAt": "2026-10-30T15:51:05.846+00:00"
+    },
+    {
+      "method": "POST",
+      "path": "/api/method/employee_app.attendance_api.add_offline_employee_checkins",
+      "employee": "QA-IOS-001",
+      "params": {
+        "logs": [
+          {
+            "employee": "QA-IOS-001",
+            "timestamp": "2026-10-30 15:49:45",
+            "device_id": "MobileAPP",
+            "log_type": "OUT",
+            "over_time": 0
+          }
+        ]
+      },
+      "sequence": 178,
+      "receivedAt": "2026-10-30T15:51:05.859+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/whatsapp_saudi.whatsapp_saudi.doctype.whatsapp_saudi.whatsapp_saudi.get_or_update_employee_token",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 179,
+      "receivedAt": "2026-10-30T15:51:43.641+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 180,
+      "receivedAt": "2026-10-30T15:51:43.689+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.gauth.employee_checkin_setting",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 181,
+      "receivedAt": "2026-10-30T15:51:43.694+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_notification",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee": "QA-ANDROID-001"
+      },
+      "sequence": 182,
+      "receivedAt": "2026-10-30T15:51:43.811+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 183,
+      "receivedAt": "2026-10-30T15:51:43.890+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_server_time",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 184,
+      "receivedAt": "2026-10-30T15:51:44.002+00:00"
+    },
+    {
+      "method": "POST",
+      "path": "/api/method/employee_app.attendance_api.add_log_based_on_employee_field",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "device_id": "MobileAPP",
+        "employee_field_value": "QA-ANDROID-001",
+        "log_type": "OUT",
+        "timestamp": "2026-10-30 15:51:41",
+        "auto": true,
+        "latitude": 25.2854,
+        "longitude": 51.531,
+        "location": "Disposable QA Doha Office"
+      },
+      "sequence": 185,
+      "receivedAt": "2026-10-30T15:51:44.092+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 186,
+      "receivedAt": "2026-10-30T15:52:08.529+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_server_time",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 187,
+      "receivedAt": "2026-10-30T15:52:10.554+00:00"
+    },
+    {
+      "method": "POST",
+      "path": "/api/method/employee_app.attendance_api.add_log_based_on_employee_field",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "device_id": "MobileAPP",
+        "employee_field_value": "QA-ANDROID-001",
+        "log_type": "IN",
+        "timestamp": "2026-10-30 15:52:08",
+        "auto": true,
+        "latitude": 25.2854,
+        "longitude": 51.531,
+        "location": "Disposable QA Doha Office"
+      },
+      "sequence": 188,
+      "receivedAt": "2026-10-30T15:52:10.996+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee_id": "QA-IOS-001"
+      },
+      "sequence": 189,
+      "receivedAt": "2026-10-30T15:52:22.528+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_server_time",
+      "employee": "QA-IOS-001",
+      "params": {},
+      "sequence": 190,
+      "receivedAt": "2026-10-30T15:52:23.985+00:00"
+    },
+    {
+      "method": "POST",
+      "path": "/api/method/employee_app.attendance_api.add_log_based_on_employee_field",
+      "employee": "QA-IOS-001",
+      "params": {
+        "device_id": "MobileAPP",
+        "employee_field_value": "QA-IOS-001",
+        "log_type": "IN",
+        "timestamp": "2026-10-30 15:52:22",
+        "auto": true,
+        "latitude": 25.2854,
+        "longitude": 51.531,
+        "location": "Disposable QA Doha Office"
+      },
+      "sequence": 191,
+      "receivedAt": "2026-10-30T15:52:24.044+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_server_time",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 192,
+      "receivedAt": "2026-10-30T15:52:48.339+00:00"
+    },
+    {
+      "method": "POST",
+      "path": "/api/method/employee_app.attendance_api.add_log_based_on_employee_field",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "device_id": "MobileAPP",
+        "employee_field_value": "QA-ANDROID-001",
+        "log_type": "OUT",
+        "timestamp": "2026-10-30 15:52:47",
+        "auto": true,
+        "latitude": 25.2854,
+        "longitude": 51.531,
+        "location": "Disposable QA Doha Office"
+      },
+      "sequence": 193,
+      "receivedAt": "2026-10-30T15:52:48.396+00:00"
+    },
+    {
+      "method": "POST",
+      "path": "/api/method/employee_app.attendance_api.add_log_based_on_employee_field",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "device_id": "MobileAPP",
+        "employee_field_value": "QA-ANDROID-001",
+        "log_type": "OUT",
+        "timestamp": "2026-10-30 15:52:47",
+        "auto": true,
+        "latitude": 25.2854,
+        "longitude": 51.531,
+        "location": "Disposable QA Doha Office"
+      },
+      "sequence": 194,
+      "receivedAt": "2026-10-30T15:52:48.402+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/whatsapp_saudi.whatsapp_saudi.doctype.whatsapp_saudi.whatsapp_saudi.get_or_update_employee_token",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 195,
+      "receivedAt": "2026-10-30T15:53:23.662+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 196,
+      "receivedAt": "2026-10-30T15:53:23.683+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.gauth.employee_checkin_setting",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 197,
+      "receivedAt": "2026-10-30T15:53:23.688+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 198,
+      "receivedAt": "2026-10-30T15:53:23.720+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_notification",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee": "QA-ANDROID-001"
+      },
+      "sequence": 199,
+      "receivedAt": "2026-10-30T15:53:23.731+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 200,
+      "receivedAt": "2026-10-30T15:53:23.813+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/whatsapp_saudi.whatsapp_saudi.doctype.whatsapp_saudi.whatsapp_saudi.get_or_update_employee_token",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 201,
+      "receivedAt": "2026-10-30T15:53:42.155+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 202,
+      "receivedAt": "2026-10-30T15:53:42.173+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.gauth.employee_checkin_setting",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 203,
+      "receivedAt": "2026-10-30T15:53:42.179+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 204,
+      "receivedAt": "2026-10-30T15:53:42.200+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_notification",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee": "QA-ANDROID-001"
+      },
+      "sequence": 205,
+      "receivedAt": "2026-10-30T15:53:42.201+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 206,
+      "receivedAt": "2026-10-30T15:53:42.267+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee_id": "QA-IOS-001"
+      },
+      "sequence": 207,
+      "receivedAt": "2026-10-30T15:53:59.058+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee_id": "QA-IOS-001"
+      },
+      "sequence": 208,
+      "receivedAt": "2026-10-30T15:53:59.061+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 209,
+      "receivedAt": "2026-10-30T15:54:13.151+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 210,
+      "receivedAt": "2026-10-30T15:54:13.157+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee_id": "QA-IOS-001"
+      },
+      "sequence": 211,
+      "receivedAt": "2026-10-30T15:54:36.369+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee_id": "QA-IOS-001"
+      },
+      "sequence": 212,
+      "receivedAt": "2026-10-30T15:54:38.077+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/whatsapp_saudi.whatsapp_saudi.doctype.whatsapp_saudi.whatsapp_saudi.get_or_update_employee_token",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 213,
+      "receivedAt": "2026-10-30T15:54:57.223+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 214,
+      "receivedAt": "2026-10-30T15:54:57.243+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.gauth.employee_checkin_setting",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 215,
+      "receivedAt": "2026-10-30T15:54:57.247+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 216,
+      "receivedAt": "2026-10-30T15:54:57.273+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_notification",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee": "QA-ANDROID-001"
+      },
+      "sequence": 217,
+      "receivedAt": "2026-10-30T15:54:57.281+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/whatsapp_saudi.whatsapp_saudi.doctype.whatsapp_saudi.whatsapp_saudi.get_or_update_employee_token",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 218,
+      "receivedAt": "2026-10-30T15:55:20.185+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 219,
+      "receivedAt": "2026-10-30T15:55:20.200+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.gauth.employee_checkin_setting",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 220,
+      "receivedAt": "2026-10-30T15:55:20.203+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_notification",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee": "QA-ANDROID-001"
+      },
+      "sequence": 221,
+      "receivedAt": "2026-10-30T15:55:20.261+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 222,
+      "receivedAt": "2026-10-30T15:55:20.280+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_server_time",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 223,
+      "receivedAt": "2026-10-30T15:55:35.247+00:00"
+    },
+    {
+      "method": "POST",
+      "path": "/api/method/employee_app.attendance_api.add_log_based_on_employee_field",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "device_id": "MobileAPP",
+        "employee_field_value": "QA-ANDROID-001",
+        "log_type": "IN",
+        "timestamp": "2026-10-30 15:55:34",
+        "auto": true,
+        "latitude": 25.2854,
+        "longitude": 51.531,
+        "location": "Disposable QA Doha Office"
+      },
+      "sequence": 224,
+      "receivedAt": "2026-10-30T15:55:35.305+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_server_time",
+      "employee": "QA-IOS-001",
+      "params": {},
+      "sequence": 225,
+      "receivedAt": "2026-10-30T15:55:35.740+00:00"
+    },
+    {
+      "method": "POST",
+      "path": "/api/method/employee_app.attendance_api.add_log_based_on_employee_field",
+      "employee": "QA-IOS-001",
+      "params": {
+        "device_id": "MobileAPP",
+        "employee_field_value": "QA-IOS-001",
+        "log_type": "OUT",
+        "timestamp": "2026-10-30 15:55:34",
+        "auto": true,
+        "latitude": 25.2854,
+        "longitude": 51.531,
+        "location": "Disposable QA Doha Office"
+      },
+      "sequence": 226,
+      "receivedAt": "2026-10-30T15:55:35.752+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 227,
+      "receivedAt": "2026-10-30T15:55:48.560+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-IOS-001",
+      "params": {
+        "employee_id": "QA-IOS-001"
+      },
+      "sequence": 228,
+      "receivedAt": "2026-10-30T15:55:58.292+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/whatsapp_saudi.whatsapp_saudi.doctype.whatsapp_saudi.whatsapp_saudi.get_or_update_employee_token",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 229,
+      "receivedAt": "2026-10-30T15:57:09.069+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 230,
+      "receivedAt": "2026-10-30T15:57:09.083+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.gauth.employee_checkin_setting",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 231,
+      "receivedAt": "2026-10-30T15:57:09.085+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_notification",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee": "QA-ANDROID-001"
+      },
+      "sequence": 232,
+      "receivedAt": "2026-10-30T15:57:09.093+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 233,
+      "receivedAt": "2026-10-30T15:57:09.155+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 234,
+      "receivedAt": "2026-10-30T15:57:23.259+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 235,
+      "receivedAt": "2026-10-30T15:57:23.489+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_server_time",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 236,
+      "receivedAt": "2026-10-30T15:57:26.223+00:00"
+    },
+    {
+      "method": "POST",
+      "path": "/api/method/employee_app.attendance_api.add_log_based_on_employee_field",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "device_id": "MobileAPP",
+        "employee_field_value": "QA-ANDROID-001",
+        "log_type": "OUT",
+        "timestamp": "2026-10-30 15:57:22",
+        "auto": false,
+        "location": "Disposable QA Doha Office",
+        "latitude": 25.2854,
+        "longitude": 51.531,
+        "distance": 0,
+        "radius": 100
+      },
+      "sequence": 237,
+      "receivedAt": "2026-10-30T15:57:26.248+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 238,
+      "receivedAt": "2026-10-30T15:57:42.723+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 239,
+      "receivedAt": "2026-10-30T15:57:42.886+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_server_time",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 240,
+      "receivedAt": "2026-10-30T15:57:46.323+00:00"
+    },
+    {
+      "method": "POST",
+      "path": "/api/method/employee_app.attendance_api.add_log_based_on_employee_field",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "device_id": "MobileAPP",
+        "employee_field_value": "QA-ANDROID-001",
+        "log_type": "IN",
+        "timestamp": "2026-10-30 15:57:42",
+        "auto": false,
+        "location": "Disposable QA Doha Office",
+        "latitude": 25.2854,
+        "longitude": 51.531,
+        "distance": 0,
+        "radius": 100
+      },
+      "sequence": 241,
+      "receivedAt": "2026-10-30T15:57:46.350+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 242,
+      "receivedAt": "2026-10-30T15:58:38.968+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 243,
+      "receivedAt": "2026-10-30T15:58:39.089+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_server_time",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 244,
+      "receivedAt": "2026-10-30T15:58:42.026+00:00"
+    },
+    {
+      "method": "POST",
+      "path": "/api/method/employee_app.attendance_api.add_log_based_on_employee_field",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "device_id": "MobileAPP",
+        "employee_field_value": "QA-ANDROID-001",
+        "log_type": "OUT",
+        "timestamp": "2026-10-30 15:58:38",
+        "auto": false,
+        "location": "Disposable QA Doha Office",
+        "latitude": 25.2854,
+        "longitude": 51.531,
+        "distance": 0,
+        "radius": 100
+      },
+      "sequence": 245,
+      "receivedAt": "2026-10-30T15:58:42.051+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_server_time",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 246,
+      "receivedAt": "2026-10-30T15:59:07.263+00:00"
+    },
+    {
+      "method": "POST",
+      "path": "/api/method/employee_app.attendance_api.add_log_based_on_employee_field",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "device_id": "MobileAPP",
+        "employee_field_value": "QA-ANDROID-001",
+        "log_type": "IN",
+        "timestamp": "2026-10-30 15:59:06",
+        "auto": true,
+        "latitude": 25.2854,
+        "longitude": 51.531,
+        "location": "Disposable QA Doha Office"
+      },
+      "sequence": 247,
+      "receivedAt": "2026-10-30T15:59:07.317+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_server_time",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 248,
+      "receivedAt": "2026-10-30T15:59:21.336+00:00"
+    },
+    {
+      "method": "POST",
+      "path": "/api/method/employee_app.attendance_api.add_log_based_on_employee_field",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "device_id": "MobileAPP",
+        "employee_field_value": "QA-ANDROID-001",
+        "log_type": "OUT",
+        "timestamp": "2026-10-30 15:59:20",
+        "auto": true,
+        "latitude": 25.2854,
+        "longitude": 51.531,
+        "location": "Disposable QA Doha Office"
+      },
+      "sequence": 249,
+      "receivedAt": "2026-10-30T15:59:21.378+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 250,
+      "receivedAt": "2026-10-30T15:59:45.300+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 251,
+      "receivedAt": "2026-10-30T15:59:45.445+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/whatsapp_saudi.whatsapp_saudi.doctype.whatsapp_saudi.whatsapp_saudi.get_or_update_employee_token",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 252,
+      "receivedAt": "2026-10-30T16:00:59.663+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 253,
+      "receivedAt": "2026-10-30T16:00:59.693+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.gauth.employee_checkin_setting",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 254,
+      "receivedAt": "2026-10-30T16:00:59.697+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 255,
+      "receivedAt": "2026-10-30T16:00:59.703+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_notification",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee": "QA-ANDROID-001"
+      },
+      "sequence": 256,
+      "receivedAt": "2026-10-30T16:00:59.709+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 257,
+      "receivedAt": "2026-10-30T16:01:11.166+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 258,
+      "receivedAt": "2026-10-30T16:01:11.286+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 259,
+      "receivedAt": "2026-10-30T16:01:59.457+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 260,
+      "receivedAt": "2026-10-30T16:01:59.575+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_server_time",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 261,
+      "receivedAt": "2026-10-30T16:02:02.760+00:00"
+    },
+    {
+      "method": "POST",
+      "path": "/api/method/employee_app.attendance_api.add_log_based_on_employee_field",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "device_id": "MobileAPP",
+        "employee_field_value": "QA-ANDROID-001",
+        "log_type": "IN",
+        "timestamp": "2026-10-30 16:01:58",
+        "auto": false,
+        "location": "Disposable QA Doha Office",
+        "latitude": 25.2854,
+        "longitude": 51.531,
+        "distance": 95,
+        "radius": 100
+      },
+      "sequence": 262,
+      "receivedAt": "2026-10-30T16:02:02.785+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 263,
+      "receivedAt": "2026-10-30T16:02:18.739+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_server_time",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 264,
+      "receivedAt": "2026-10-30T16:02:19.839+00:00"
+    },
+    {
+      "method": "POST",
+      "path": "/api/method/employee_app.attendance_api.add_log_based_on_employee_field",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "device_id": "MobileAPP",
+        "employee_field_value": "QA-ANDROID-001",
+        "log_type": "OUT",
+        "timestamp": "2026-10-30 16:02:17",
+        "auto": false,
+        "location": "Disposable QA Doha Office",
+        "latitude": 25.2854,
+        "longitude": 51.531,
+        "distance": 95,
+        "radius": 100
+      },
+      "sequence": 265,
+      "receivedAt": "2026-10-30T16:02:19.861+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 266,
+      "receivedAt": "2026-10-30T16:02:19.891+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/whatsapp_saudi.whatsapp_saudi.doctype.whatsapp_saudi.whatsapp_saudi.get_or_update_employee_token",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 267,
+      "receivedAt": "2026-10-30T16:02:59.158+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 268,
+      "receivedAt": "2026-10-30T16:02:59.177+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.gauth.employee_checkin_setting",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 269,
+      "receivedAt": "2026-10-30T16:02:59.178+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 270,
+      "receivedAt": "2026-10-30T16:02:59.187+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_notification",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee": "QA-ANDROID-001"
+      },
+      "sequence": 271,
+      "receivedAt": "2026-10-30T16:02:59.189+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_server_time",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 272,
+      "receivedAt": "2026-10-30T16:02:59.416+00:00"
+    },
+    {
+      "method": "POST",
+      "path": "/api/method/employee_app.attendance_api.add_log_based_on_employee_field",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "device_id": "MobileAPP",
+        "employee_field_value": "QA-ANDROID-001",
+        "log_type": "IN",
+        "timestamp": "2026-10-30 16:02:58",
+        "auto": true,
+        "latitude": 25.286,
+        "longitude": 51.532,
+        "location": "Disposable QA Doha Office"
+      },
+      "sequence": 273,
+      "receivedAt": "2026-10-30T16:02:59.467+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/whatsapp_saudi.whatsapp_saudi.doctype.whatsapp_saudi.whatsapp_saudi.get_or_update_employee_token",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 274,
+      "receivedAt": "2026-10-30T16:03:37.321+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 275,
+      "receivedAt": "2026-10-30T16:03:37.335+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.gauth.employee_checkin_setting",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 276,
+      "receivedAt": "2026-10-30T16:03:37.338+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_notification",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee": "QA-ANDROID-001"
+      },
+      "sequence": 277,
+      "receivedAt": "2026-10-30T16:03:37.366+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 278,
+      "receivedAt": "2026-10-30T16:03:37.407+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 279,
+      "receivedAt": "2026-10-30T16:04:05.571+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/whatsapp_saudi.whatsapp_saudi.doctype.whatsapp_saudi.whatsapp_saudi.get_or_update_employee_token",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 280,
+      "receivedAt": "2026-10-30T16:04:40.561+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 281,
+      "receivedAt": "2026-10-30T16:04:40.573+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.gauth.employee_checkin_setting",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 282,
+      "receivedAt": "2026-10-30T16:04:40.576+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_notification",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee": "QA-ANDROID-001"
+      },
+      "sequence": 283,
+      "receivedAt": "2026-10-30T16:04:40.594+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 284,
+      "receivedAt": "2026-10-30T16:04:40.641+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 285,
+      "receivedAt": "2026-10-30T16:04:56.165+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_employee_data",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "employee_id": "QA-ANDROID-001"
+      },
+      "sequence": 286,
+      "receivedAt": "2026-10-30T16:04:56.293+00:00"
+    },
+    {
+      "method": "GET",
+      "path": "/api/method/employee_app.attendance_api.get_server_time",
+      "employee": "QA-ANDROID-001",
+      "params": {},
+      "sequence": 287,
+      "receivedAt": "2026-10-30T16:05:01.988+00:00"
+    },
+    {
+      "method": "POST",
+      "path": "/api/method/employee_app.attendance_api.add_log_based_on_employee_field",
+      "employee": "QA-ANDROID-001",
+      "params": {
+        "device_id": "MobileAPP",
+        "employee_field_value": "QA-ANDROID-001",
+        "log_type": "OUT",
+        "timestamp": "2026-10-30 16:04:55",
+        "auto": false,
+        "location": "Disposable QA Doha Office",
+        "latitude": 25.2854,
+        "longitude": 51.531,
+        "distance": 0,
+        "radius": 100
+      },
+      "sequence": 288,
+      "receivedAt": "2026-10-30T16:05:02.021+00:00"
+    }
+  ],
+  "controls": [
+    {
+      "at": "2026-10-30T15:44:00.861+00:00",
+      "employees": [
+        "QA-ANDROID-001"
+      ],
+      "changes": {
+        "network": "drop"
+      }
+    },
+    {
+      "at": "2026-10-30T15:44:42.785+00:00",
+      "employees": [
+        "QA-ANDROID-001"
+      ],
+      "changes": {
+        "network": "online"
+      }
+    },
+    {
+      "at": "2026-10-30T15:47:10.660+00:00",
+      "employees": [
+        "QA-IOS-001"
+      ],
+      "changes": {
+        "network": "drop"
+      }
+    },
+    {
+      "at": "2026-10-30T15:51:03.803+00:00",
+      "employees": [
+        "QA-IOS-001"
+      ],
+      "changes": {
+        "network": "online"
+      }
+    },
+    {
+      "at": "2026-10-30T15:52:46.201+00:00",
+      "employees": [
+        "QA-ANDROID-001"
+      ],
+      "changes": {
+        "nextAttendance": {
+          "behavior": "accept_disconnect"
+        }
+      }
+    },
+    {
+      "at": "2026-10-30T15:53:13.486+00:00",
+      "employees": [
+        "QA-ANDROID-001"
+      ],
+      "changes": {
+        "geotagging": 0
+      }
+    },
+    {
+      "at": "2026-10-30T15:53:34.875+00:00",
+      "employees": [
+        "QA-ANDROID-001"
+      ],
+      "changes": {
+        "geotagging": 1
+      }
+    },
+    {
+      "at": "2026-10-30T15:54:49.972+00:00",
+      "employees": [
+        "QA-ANDROID-001"
+      ],
+      "changes": {
+        "geotagging": 2,
+        "geoTagging": false
+      }
+    },
+    {
+      "at": "2026-10-30T15:55:13.041+00:00",
+      "employees": [
+        "QA-ANDROID-001"
+      ],
+      "changes": {
+        "geoTagging": true,
+        "geotagging": 2
+      }
+    },
+    {
+      "at": "2026-10-30T16:00:52.179+00:00",
+      "employees": [
+        "QA-ANDROID-001"
+      ],
+      "changes": {
+        "restrictLocation": 0
+      }
+    },
+    {
+      "at": "2026-10-30T16:02:51.871+00:00",
+      "employees": [
+        "QA-ANDROID-001"
+      ],
+      "changes": {
+        "restrictLocation": 1,
+        "geometry": {
+          "latitude": 25.286,
+          "longitude": 51.532,
+          "radius": 150
+        }
+      }
+    },
+    {
+      "at": "2026-10-30T16:03:30.802+00:00",
+      "employees": [
+        "QA-ANDROID-001"
+      ],
+      "changes": {
+        "geometry": {
+          "latitude": 25.2854,
+          "longitude": 51.531,
+          "radius": 100
+        },
+        "geoTagging": true,
+        "geotagging": 2,
+        "restrictLocation": 1,
+        "network": "online",
+        "nextAttendance": null
+      }
+    }
+  ]
+}

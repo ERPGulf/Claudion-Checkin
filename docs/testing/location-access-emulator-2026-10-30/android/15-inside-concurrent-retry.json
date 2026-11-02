@@ -1,0 +1,54 @@
+{
+  "attempts": [
+    {
+      "elapsedMs": 4510,
+      "state": {
+        "lossEventId": null,
+        "reason": null,
+        "recoveryPending": false,
+        "registration": {
+          "employeeId": "QA-ANDROID-001",
+          "geotagging": 2,
+          "identifier": "office-main",
+          "latitude": 25.2854,
+          "longitude": 51.531,
+          "nativeIdentifier": "attendance:a4184d41-1755-478a-80c1-32f01285d904",
+          "radius": 100,
+          "registrationGeneration": "e859ea60-ad0a-4374-8466-819fe9397911",
+          "registrationId": "[\"http://10.0.2.2:8765\",\"QA-ANDROID-001\",\"office-main\",25.2854,51.531,100,2]",
+          "requestedRadius": 100,
+          "tenantKey": "http://10.0.2.2:8765"
+        },
+        "registrationGeneration": "e859ea60-ad0a-4374-8466-819fe9397911",
+        "state": "confirmed_available"
+      },
+      "which": "first"
+    },
+    {
+      "elapsedMs": 2,
+      "state": {
+        "lossEventId": "47ee9eb4-61ad-4cf0-a736-c58b05b8e1ca",
+        "reason": null,
+        "recoveryPending": true,
+        "registration": {
+          "employeeId": "QA-ANDROID-001",
+          "geotagging": 2,
+          "identifier": "office-main",
+          "latitude": 25.2854,
+          "longitude": 51.531,
+          "nativeIdentifier": "attendance:a4184d41-1755-478a-80c1-32f01285d904",
+          "radius": 100,
+          "registrationGeneration": "e859ea60-ad0a-4374-8466-819fe9397911",
+          "registrationId": "[\"http://10.0.2.2:8765\",\"QA-ANDROID-001\",\"office-main\",25.2854,51.531,100,2]",
+          "requestedRadius": 100,
+          "tenantKey": "http://10.0.2.2:8765"
+        },
+        "registrationGeneration": "e859ea60-ad0a-4374-8466-819fe9397911",
+        "state": "confirmed_available"
+      },
+      "which": "second"
+    }
+  ],
+  "endedAt": 1793375017767,
+  "startedAt": 1793375013257
+}

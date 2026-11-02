@@ -253,6 +253,194 @@ struct GeofenceStoreTests {
       invalidConfig?["employeeId"] as? String == "EMP-SYNTHETIC",
       "OS monitoring failure retains original scoped desired registration durably")
 
+    // OS-confirmed loss is a control receipt, never a manufactured EXIT. Its
+    // episode survives acknowledgement, repeated probes and process restart.
+    let accessURL = directory.appendingPathComponent("access.json")
+    let access = GeofenceStore(defaults: MemoryDefaults(), journalURL: accessURL)
+    try access.savePendingRegistration(configuration)
+    _ = try access.confirmRegistration("native-synthetic")
+    let accessConfiguration = try access.getRegistrationState()!["configuration"] as! [String: Any]
+    let accessGeneration = accessConfiguration["registrationGeneration"] as! String
+    let loss = try access.observeAccessLoss(reason: "services-disabled", at: 10_000)!
+    let lossId = loss["eventId"] as! String
+    let duplicateLoss = try access.observeAccessLoss(reason: "precise-permission-lost", at: 11_000)
+    try check(duplicateLoss == nil, "Repeated confirmed revocations reuse one episode")
+    try check(loss["kind"] as? String == "LOCATION_ACCESS_LOST" && loss["transition"] == nil,
+      "Access loss never manufactures a geofence EXIT")
+    try check(access.getLastEvent() == nil, "Control receipts never replace the compatibility transition slot")
+    _ = try access.acknowledgeEvent(lossId)
+    let accessRestart = GeofenceStore(defaults: MemoryDefaults(), journalURL: accessURL)
+    let restoredEpisode = try accessRestart.getAccessEpisode()
+    try check(restoredEpisode?["lossEventId"] as? String == lossId &&
+      (restoredEpisode?["firstObservedAt"] as? NSNumber)?.int64Value == 10_000,
+      "Restart and acknowledgement preserve the first observable loss time")
+    try accessRestart.savePendingRegistration(accessConfiguration)
+    let repairedConfiguration = try accessRestart.getRegistrationState()!["configuration"] as! [String: Any]
+    try check(repairedConfiguration["registrationGeneration"] as? String == accessGeneration,
+      "Repair preserves the durable logical registration generation")
+    var pendingEnter = accessConfiguration
+    pendingEnter["transition"] = "ENTER"
+    pendingEnter["timestamp"] = 11_500
+    let recoveryEnter = try accessRestart.appendEvent(pendingEnter)
+    try check(recoveryEnter["lossEventId"] as? String == lossId,
+      "An ENTER during recovery remains permanently tagged as non-authorizing evidence")
+    var position: [String: Any] = ["latitude": 1.0, "longitude": 2.0,
+      "horizontalAccuracy": 200.0, "timestamp": 12_001]
+    let uncertain = try accessRestart.completeAccessRecovery(lossEventId: lossId,
+      registrationGeneration: accessGeneration, requestedAt: 12_000, position: position, observedAt: 13_000)
+    let pendingUncertainEpisode = try accessRestart.getAccessEpisode()
+    try check(uncertain == nil && pendingUncertainEpisode != nil,
+      "Indoor imprecise GPS leaves recovery pending without another punch")
+    position["horizontalAccuracy"] = 5.0
+    position["timestamp"] = 11_999
+    let cachedRecovery = try accessRestart.completeAccessRecovery(lossEventId: lossId,
+      registrationGeneration: accessGeneration, requestedAt: 12_000, position: position, observedAt: 13_000)
+    try check(cachedRecovery == nil, "Cached fixes cannot establish recovery presence")
+    position["timestamp"] = 12_001
+    let wrongGeneration = try accessRestart.completeAccessRecovery(lossEventId: lossId,
+      registrationGeneration: "stale-generation", requestedAt: 12_000, position: position, observedAt: 13_000)
+    let wrongLoss = try accessRestart.completeAccessRecovery(lossEventId: "another-loss",
+      registrationGeneration: accessGeneration, requestedAt: 12_000, position: position, observedAt: 13_000)
+    try check(wrongGeneration == nil && wrongLoss == nil, "Stale generation/loss cannot settle the episode")
+    let recovered = try accessRestart.completeAccessRecovery(lossEventId: lossId,
+      registrationGeneration: accessGeneration, requestedAt: 12_000, position: position, observedAt: 13_000)!
+    try check(recovered["kind"] as? String == "LOCATION_ACCESS_RECOVERED" && recovered["presence"] as? String == "inside",
+      "Only fresh accuracy-verified presence completes recovery")
+    let repeatedRecovery = try accessRestart.completeAccessRecovery(lossEventId: lossId,
+      registrationGeneration: accessGeneration, requestedAt: 12_000, position: position, observedAt: 13_000)
+    try check(repeatedRecovery == nil, "A successful recovery cannot append twice")
+    pendingEnter["initialPresence"] = true
+    let lateInitial = try accessRestart.appendEvent(pendingEnter)
+    try check(lateInitial["lossEventId"] as? String == lossId,
+      "An initial ENTER after native recovery cannot bypass pending JS cutoff processing")
+    let retainedSlot = accessRestart.getLastEvent()
+    try check(retainedSlot?["transition"] as? String == "ENTER", "Control recovery never overwrites legacy display with a fake crossing")
+    let secondLoss = try accessRestart.observeAccessLoss(reason: "background-permission-lost", at: 14_000)!
+    try check(secondLoss["eventId"] as? String != lossId, "A later interruption receives a distinct episode")
+    try accessRestart.cancelRegistration()
+    let cancelledEpisode = try accessRestart.getAccessEpisode()
+    try check(cancelledEpisode == nil, "Intentional cancellation resolves recovery without deleting receipts")
+    let retainedAccessEvents = try accessRestart.getPendingEvents()
+    try check(retainedAccessEvents.contains { $0["eventId"] as? String == secondLoss["eventId"] as? String },
+      "Cancellation retains the original loss receipt for safe replay/review")
+    let repairStore = GeofenceStore(defaults: MemoryDefaults(), journalURL: directory.appendingPathComponent("repair-access.json"))
+    try repairStore.savePendingRegistration(configuration)
+    _ = try repairStore.confirmRegistration("native-synthetic")
+    _ = try repairStore.completeInitialPresence("native-synthetic")
+    let repairLoss = try repairStore.observeAccessLoss(reason: "services-disabled", at: 20_000)!
+    var repairedPhysical = try repairStore.getRegistrationState()!["configuration"] as! [String: Any]
+    let repairGeneration = repairedPhysical["registrationGeneration"] as! String
+    repairedPhysical["nativeIdentifier"] = "native-repaired-instance"
+    try repairStore.savePendingRegistration(repairedPhysical)
+    let repairedState = try repairStore.getRegistrationState()
+    let repairedEpisode = try repairStore.getAccessEpisode()
+    try check(repairedEpisode?["lossEventId"] as? String == repairLoss["eventId"] as? String &&
+      repairedState?["initialPresencePending"] as? Bool == false,
+      "Same-generation physical repair retains interruption and completed initial presence")
+    var newIntent = repairedPhysical
+    newIntent["nativeIdentifier"] = "native-new-intent"
+    newIntent.removeValue(forKey: "registrationGeneration")
+    try repairStore.savePendingRegistration(newIntent)
+    let replacedState = try repairStore.getRegistrationState()!["configuration"] as! [String: Any]
+    let replacedEpisode = try repairStore.getAccessEpisode()
+    try check(replacedState["registrationGeneration"] as? String != repairGeneration && replacedEpisode == nil,
+      "A genuine new generation cancels recovery without adopting its predecessor's episode")
+    let invalidReason = try repairStore.observeAccessLoss(reason: "weak-gps", at: 21_000)
+    try check(invalidReason == nil, "Signal-quality failures cannot create access-loss receipts")
+    let outsideLoss = try repairStore.observeAccessLoss(reason: "services-disabled", at: 22_000)!
+    let outsideGeneration = replacedState["registrationGeneration"] as! String
+    let outsidePosition: [String: Any] = ["latitude": 1.002, "longitude": 2.0,
+      "horizontalAccuracy": 5.0, "timestamp": 22_002]
+    let outsideRecovery = try repairStore.completeAccessRecovery(lossEventId: outsideLoss["eventId"] as! String,
+      registrationGeneration: outsideGeneration, requestedAt: 22_001,
+      position: outsidePosition, observedAt: 23_000)
+    try check(outsideRecovery?["presence"] as? String == "outside" && outsideRecovery?["transition"] == nil,
+      "Verified outside recovery remains a non-punch control receipt")
+    try check(repairStore.getLastEvent() == nil, "Neither access cutoff nor outside proof manufactures a displayed geofence crossing")
+    try check(LocationAccessGeometry.classify(distance: 90, accuracy: 10, radius: 100) == "inside",
+      "Inside threshold equality is inside")
+    try check(LocationAccessGeometry.classify(distance: 110, accuracy: 10, radius: 100) == nil,
+      "Outside threshold equality is uncertain")
+    try check(LocationAccessGeometry.classify(distance: 111, accuracy: 10, radius: 100) == "outside",
+      "Only accuracy-adjusted distance strictly beyond the fence is outside")
+    try check(LocationAccessGeometry.classify(distance: 0, accuracy: 200, radius: 100) == nil &&
+      LocationAccessGeometry.classify(distance: 0, accuracy: -1, radius: 100) == nil,
+      "Large and invalid accuracy never establish presence")
+    let gate = LocationAccessAttemptGate()
+    let firstAttempt = gate.begin(lossEventId: lossId, registrationGeneration: accessGeneration, requestedAt: 15_000, uptime: 100)!
+    try check(firstAttempt.isWithinDeadline(at: 114.999), "Fresh recovery may complete before its deadline")
+    try check(!firstAttempt.isWithinDeadline(at: 115) && !firstAttempt.isWithinDeadline(at: 1000),
+      "A suspended timeout cannot accept a callback at or after its monotonic deadline")
+    let concurrentAttempt = gate.begin(lossEventId: lossId, registrationGeneration: accessGeneration, requestedAt: 15_001)
+    try check(concurrentAttempt == nil, "Only one current-location request can own an episode")
+    _ = gate.finish(firstAttempt.id) // Timeout invalidates ownership before cancellation/retry.
+    let nextAttempt = gate.begin(lossEventId: lossId, registrationGeneration: accessGeneration, requestedAt: 30_000)!
+    try check(gate.finish(firstAttempt.id) == nil && gate.current?.id == nextAttempt.id,
+      "Timed-out callbacks cannot settle a newer recovery attempt")
+    _ = gate.finish(nextAttempt.id)
+    let restartedGate = LocationAccessAttemptGate()
+    try check(restartedGate.begin(lossEventId: lossId, registrationGeneration: accessGeneration, requestedAt: 31_000) != nil,
+      "Process restart has no everlasting in-flight request flag")
+
+    // Deterministic state-layer contract for a provider stream: rejected cached
+    // and uncertain observations leave one attempt available for a fresh fix.
+    // This does not execute CLLocationManagerDelegate delivery or its timer.
+    let streamingStore = GeofenceStore(defaults: MemoryDefaults(),
+      journalURL: directory.appendingPathComponent("streaming-recovery.json"))
+    try streamingStore.savePendingRegistration(configuration)
+    _ = try streamingStore.confirmRegistration("native-synthetic")
+    let streamingConfiguration = try streamingStore.getRegistrationState()!["configuration"] as! [String: Any]
+    let streamingGeneration = streamingConfiguration["registrationGeneration"] as! String
+    let streamingLoss = try streamingStore.observeAccessLoss(reason: "services-disabled", at: 49_000)!
+    let streamingLossId = streamingLoss["eventId"] as! String
+    let streamingGate = LocationAccessAttemptGate()
+    let streamingAttempt = streamingGate.begin(lossEventId: streamingLossId,
+      registrationGeneration: streamingGeneration, requestedAt: 50_000, uptime: 200)!
+    var streamingPosition: [String: Any] = ["latitude": 1.0, "longitude": 2.0,
+      "horizontalAccuracy": 5.0, "timestamp": 49_999]
+    let streamingCached = try streamingStore.completeAccessRecovery(lossEventId: streamingAttempt.lossEventId,
+      registrationGeneration: streamingAttempt.registrationGeneration, requestedAt: streamingAttempt.requestedAt,
+      position: streamingPosition, observedAt: 51_000)
+    try check(streamingCached == nil && streamingGate.current?.id == streamingAttempt.id,
+      "A cached observation cannot settle or replace the pending recovery attempt")
+    streamingPosition["horizontalAccuracy"] = 200.0
+    streamingPosition["timestamp"] = 50_001
+    let streamingUncertain = try streamingStore.completeAccessRecovery(lossEventId: streamingAttempt.lossEventId,
+      registrationGeneration: streamingAttempt.registrationGeneration, requestedAt: streamingAttempt.requestedAt,
+      position: streamingPosition, observedAt: 51_000)
+    try check(streamingUncertain == nil && streamingGate.current?.id == streamingAttempt.id,
+      "An uncertain observation leaves the same attempt pending for a better fix")
+    try check(streamingGate.begin(lossEventId: streamingLossId, registrationGeneration: streamingGeneration,
+      requestedAt: 51_001, uptime: 201) == nil,
+      "Rejected observations cannot admit a concurrent second recovery request")
+    let streamingPendingEvents = try streamingStore.getPendingEvents()
+    try check(streamingPendingEvents.count == 1 && streamingPendingEvents[0]["eventId"] as? String == streamingLossId,
+      "Cached and uncertain observations append no recovery receipts or attendance transitions")
+    let streamingEpisode = try streamingStore.getAccessEpisode()
+    try check(streamingEpisode?["lossEventId"] as? String == streamingLossId &&
+      (streamingEpisode?["firstObservedAt"] as? NSNumber)?.int64Value == 49_000,
+      "Rejected observations preserve the original durable loss provenance and timestamp")
+    streamingPosition["horizontalAccuracy"] = 5.0
+    streamingPosition["timestamp"] = 52_000
+    let streamingRecovered = try streamingStore.completeAccessRecovery(lossEventId: streamingAttempt.lossEventId,
+      registrationGeneration: streamingAttempt.registrationGeneration, requestedAt: streamingAttempt.requestedAt,
+      position: streamingPosition, observedAt: 53_000)
+    try check(streamingAttempt.isWithinDeadline(at: 203) && streamingRecovered?["presence"] as? String == "inside" &&
+      (streamingRecovered?["fixRequestedAt"] as? NSNumber)?.int64Value == 50_000,
+      "A later fresh fix completes recovery using the original attempt's request time")
+    try check(streamingGate.finish(streamingAttempt.id)?.id == streamingAttempt.id && streamingGate.current == nil,
+      "Fresh accepted recovery can release its exact request ownership once")
+    let streamingCompletedEvents = try streamingStore.getPendingEvents()
+    try check(streamingCompletedEvents.count == 2 && streamingCompletedEvents[1]["kind"] as? String == "LOCATION_ACCESS_RECOVERED" &&
+      streamingCompletedEvents[1]["transition"] == nil,
+      "One provider stream creates only loss then recovery control receipts in journal order")
+    let streamingRepeated = try streamingStore.completeAccessRecovery(lossEventId: streamingAttempt.lossEventId,
+      registrationGeneration: streamingAttempt.registrationGeneration, requestedAt: streamingAttempt.requestedAt,
+      position: streamingPosition, observedAt: 53_000)
+    let streamingAfterRepeated = try streamingStore.getPendingEvents()
+    try check(streamingRepeated == nil && streamingAfterRepeated.count == 2,
+      "Repeated delivery of the accepted fix cannot create a duplicate recovery receipt")
+
     // IO/corruption cannot be reported as capture/ack success or reset history.
     let blockedParent = directory.appendingPathComponent("file-instead-of-directory")
     try Data("block".utf8).write(to: blockedParent)
@@ -269,6 +457,11 @@ struct GeofenceStoreTests {
     } catch is TestFailure { throw TestFailure.assertion("Pending ownership storage failure must propagate before OS registration") }
     catch { checks += 1 }
     try Data("corrupt journal".utf8).write(to: url)
+    do {
+      _ = try restarted.observeAccessLoss(reason: "services-disabled", at: 40_000)
+      throw TestFailure.assertion("Corruption must not create an access-loss episode")
+    } catch is TestFailure { throw TestFailure.assertion("Corruption must not create an access-loss episode") }
+    catch { checks += 1 }
     do {
       _ = try restarted.acknowledgeEvent(secondId)
       throw TestFailure.assertion("Corruption must not acknowledge an event")

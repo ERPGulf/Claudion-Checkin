@@ -1,0 +1,9 @@
+Timestamp               Ty Process[PID:TID]
+2026-10-30 15:35:39.919 Df ClaudionCheckin[25346:3ef04] (Foundation) [ExpoAutoAttendance] Location manager primed (monitoring=0)
+2026-10-30 15:35:39.929 Df ClaudionCheckin[25346:3ef04] (Foundation) [ExpoAutoAttendance] Authorization changed: 3
+2026-10-30 15:36:55.812 E  ClaudionCheckin[25346:3efeb] [com.facebook.react.log:javascript] '[expo-notifications] Error reading persisted server registration info: ', { [Error: FunctionCallException: Calling the 'getRegistrationInfoAsync' function has failed (at ExpoModulesCore/AsyncFunctionDefinition.swift:123)
+→ Caused by: ERR_NOTIFICATIONS_KEYCHAIN_ACCESS: Keychain access failed: A required entitlement is not present. (at ExpoNotifications/ServerRegistrationModule.swift:161)] code: '-34018' }
+2026-10-30 15:36:56.221 Df ClaudionCheckin[25346:3ef04] (Foundation) [ExpoAutoAttendance] Geofence removed
+2026-10-30 15:36:56.222 Df ClaudionCheckin[25346:3ef04] (Foundation) [ExpoAutoAttendance] Monitoring stopped
+2026-10-30 15:36:56.242 Df ClaudionCheckin[25346:3ef04] (Foundation) [ExpoAutoAttendance] Geofence removed
+2026-10-30 15:36:56.242 Df ClaudionCheckin[25346:3ef04] (Foundation) [ExpoAutoAttendance] Monitoring stopped

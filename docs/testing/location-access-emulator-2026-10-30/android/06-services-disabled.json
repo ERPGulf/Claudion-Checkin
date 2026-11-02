@@ -1,0 +1,137 @@
+{
+  "appState": "background",
+  "employee": "QA-ANDROID-001",
+  "employeePolicy": {
+    "accountId": "QA-ANDROID-001",
+    "explicit": true,
+    "generation": 1,
+    "mode": 2,
+    "receivedAt": 1793355395711,
+    "revision": 6,
+    "scope": "http://10.0.2.2:8765::QA-ANDROID-001",
+    "source": "response"
+  },
+  "events": [
+    {
+      "event": {
+        "employeeId": "QA-ANDROID-001",
+        "eventId": "81781699-a2cc-4ded-8809-d49e2094bc4b",
+        "geotagging": 2,
+        "identifier": "office-main",
+        "latitude": 25.2854,
+        "longitude": 51.531,
+        "nativeIdentifier": "attendance:2b4b81ff-67cd-4acc-9d65-e4ec86209c95",
+        "radius": 100,
+        "registrationGeneration": "e859ea60-ad0a-4374-8466-819fe9397911",
+        "registrationId": "[\"http://10.0.2.2:8765\",\"QA-ANDROID-001\",\"office-main\",25.2854,51.531,100,2]",
+        "requestedRadius": 100,
+        "sequence": 1,
+        "tenantKey": "http://10.0.2.2:8765",
+        "timestamp": 1793355392005,
+        "transition": "ENTER"
+      },
+      "eventId": "81781699-a2cc-4ded-8809-d49e2094bc4b",
+      "occurredAt": 1793355392005,
+      "outcome": {
+        "name": "QA-CHECKIN-00001",
+        "queued": false,
+        "serverConfirmed": true,
+        "status": "completed"
+      },
+      "punchTimestamp": "2026-10-30 10:16:30",
+      "queueRowId": null,
+      "reason": null,
+      "receivedAt": 1793355395794,
+      "sequence": 1,
+      "status": "handled",
+      "transition": "ENTER"
+    },
+    {
+      "event": {
+        "employeeId": "QA-ANDROID-001",
+        "eventId": "31c57905-774f-4dfc-9c85-3e5ff79b1c47",
+        "geotagging": 2,
+        "identifier": "office-main",
+        "kind": "LOCATION_ACCESS_LOST",
+        "latitude": 25.2854,
+        "longitude": 51.531,
+        "nativeIdentifier": "attendance:2b4b81ff-67cd-4acc-9d65-e4ec86209c95",
+        "radius": 100,
+        "reason": "services-disabled",
+        "registrationGeneration": "e859ea60-ad0a-4374-8466-819fe9397911",
+        "registrationId": "[\"http://10.0.2.2:8765\",\"QA-ANDROID-001\",\"office-main\",25.2854,51.531,100,2]",
+        "requestedRadius": 100,
+        "sequence": 2,
+        "tenantKey": "http://10.0.2.2:8765",
+        "timestamp": 1793355474151
+      },
+      "eventId": "31c57905-774f-4dfc-9c85-3e5ff79b1c47",
+      "occurredAt": 1793355474151,
+      "outcome": {
+        "targetSession": {
+          "registrationGeneration": "e859ea60-ad0a-4374-8466-819fe9397911",
+          "sourceEventId": "81781699-a2cc-4ded-8809-d49e2094bc4b",
+          "startedAt": 1793355392005
+        }
+      },
+      "punchTimestamp": "2026-10-30 10:17:53",
+      "queueRowId": null,
+      "reason": null,
+      "receivedAt": 1793355474962,
+      "sequence": 2,
+      "status": "processing",
+      "transition": null
+    }
+  ],
+  "featureSettings": {
+    "error": null,
+    "lastFetchedAt": 1793355166985,
+    "pendingRequestId": null,
+    "pendingScope": null,
+    "scope": "http://10.0.2.2:8765::QA-ANDROID-001",
+    "settings": {
+      "attendance_action": {
+        "attendance_history": true,
+        "attendance_request": false,
+        "employee_checkin_break": false,
+        "employee_shift": false,
+        "geo_tagging": true,
+        "offline_attendance": true,
+        "offline_attendance_version": "1",
+        "photo_upload": false,
+        "restrict_location": true,
+        "unrestricted_checkout_location": false
+      },
+      "complaints": false,
+      "employee_records": false,
+      "employee_resignation": false,
+      "expense_claim": false,
+      "leave_request": false,
+      "loan_application": false
+    },
+    "status": "success"
+  },
+  "loggedIn": true,
+  "monitoring": {
+    "scope": "http://10.0.2.2:8765::QA-ANDROID-001",
+    "state": "active"
+  },
+  "nativePending": [],
+  "observedAt": "2026-10-30T10:18:07.033Z",
+  "platform": "android",
+  "queue": [],
+  "registered": [],
+  "session": {
+    "closedBy": "AUTO",
+    "closedByEventId": "31c57905-774f-4dfc-9c85-3e5ff79b1c47",
+    "committedAt": 1793355486547,
+    "endedAt": 1793355474151,
+    "origin": "AUTO",
+    "registrationGeneration": "e859ea60-ad0a-4374-8466-819fe9397911",
+    "sourceEventId": "81781699-a2cc-4ded-8809-d49e2094bc4b",
+    "sourceTimestamp": "2026-10-30 10:16:30",
+    "startedAt": 1793355392005,
+    "status": "CHECKED_OUT"
+  },
+  "tenant": "http://10.0.2.2:8765"
+}

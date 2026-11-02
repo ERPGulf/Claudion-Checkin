@@ -1,0 +1,1116 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.3.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :gradle-plugin:settings-plugin:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :gradle-plugin:shared:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :expo-gradle-plugin:expo-autolinking-settings-plugin:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :expo-gradle-plugin:expo-autolinking-plugin-shared:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :expo-gradle-plugin:expo-autolinking-settings-plugin:pluginDescriptors UP-TO-DATE
+> Task :gradle-plugin:settings-plugin:pluginDescriptors UP-TO-DATE
+> Task :expo-gradle-plugin:expo-autolinking-settings-plugin:processResources UP-TO-DATE
+> Task :gradle-plugin:settings-plugin:processResources UP-TO-DATE
+> Task :gradle-plugin:shared:compileKotlin UP-TO-DATE
+> Task :expo-gradle-plugin:expo-autolinking-plugin-shared:compileKotlin UP-TO-DATE
+> Task :gradle-plugin:shared:compileJava NO-SOURCE
+> Task :expo-gradle-plugin:expo-autolinking-plugin-shared:compileJava NO-SOURCE
+> Task :gradle-plugin:shared:processResources NO-SOURCE
+> Task :expo-gradle-plugin:expo-autolinking-plugin-shared:processResources NO-SOURCE
+> Task :expo-gradle-plugin:expo-autolinking-plugin-shared:classes UP-TO-DATE
+> Task :gradle-plugin:shared:classes UP-TO-DATE
+> Task :gradle-plugin:shared:jar UP-TO-DATE
+> Task :expo-gradle-plugin:expo-autolinking-plugin-shared:jar UP-TO-DATE
+> Task :gradle-plugin:settings-plugin:compileKotlin UP-TO-DATE
+> Task :gradle-plugin:settings-plugin:compileJava NO-SOURCE
+> Task :gradle-plugin:settings-plugin:classes UP-TO-DATE
+> Task :gradle-plugin:settings-plugin:jar UP-TO-DATE
+> Task :expo-gradle-plugin:expo-autolinking-settings-plugin:compileKotlin UP-TO-DATE
+> Task :expo-gradle-plugin:expo-autolinking-settings-plugin:compileJava NO-SOURCE
+> Task :expo-gradle-plugin:expo-autolinking-settings-plugin:classes UP-TO-DATE
+> Task :expo-gradle-plugin:expo-autolinking-settings-plugin:jar UP-TO-DATE
+> Task :expo-gradle-plugin:expo-autolinking-plugin:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :expo-gradle-plugin:expo-max-sdk-override-plugin:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :expo-module-gradle-plugin:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :expo-updates-gradle-plugin:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :expo-updates-gradle-plugin:pluginDescriptors UP-TO-DATE
+> Task :expo-module-gradle-plugin:pluginDescriptors UP-TO-DATE
+> Task :expo-updates-gradle-plugin:processResources UP-TO-DATE
+> Task :expo-module-gradle-plugin:processResources UP-TO-DATE
+> Task :gradle-plugin:react-native-gradle-plugin:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :expo-gradle-plugin:expo-max-sdk-override-plugin:compileKotlin UP-TO-DATE
+> Task :expo-gradle-plugin:expo-autolinking-plugin:compileKotlin UP-TO-DATE
+> Task :expo-gradle-plugin:expo-max-sdk-override-plugin:compileJava NO-SOURCE
+> Task :expo-gradle-plugin:expo-autolinking-plugin:compileJava NO-SOURCE
+> Task :expo-gradle-plugin:expo-max-sdk-override-plugin:pluginDescriptors UP-TO-DATE
+> Task :expo-gradle-plugin:expo-autolinking-plugin:pluginDescriptors UP-TO-DATE
+> Task :expo-gradle-plugin:expo-max-sdk-override-plugin:processResources UP-TO-DATE
+> Task :expo-gradle-plugin:expo-autolinking-plugin:processResources UP-TO-DATE
+> Task :expo-gradle-plugin:expo-max-sdk-override-plugin:classes UP-TO-DATE
+> Task :expo-gradle-plugin:expo-autolinking-plugin:classes UP-TO-DATE
+> Task :expo-gradle-plugin:expo-autolinking-plugin:jar UP-TO-DATE
+> Task :expo-gradle-plugin:expo-max-sdk-override-plugin:jar UP-TO-DATE
+> Task :gradle-plugin:react-native-gradle-plugin:compileKotlin UP-TO-DATE
+> Task :gradle-plugin:react-native-gradle-plugin:compileJava NO-SOURCE
+> Task :gradle-plugin:react-native-gradle-plugin:pluginDescriptors UP-TO-DATE
+> Task :gradle-plugin:react-native-gradle-plugin:processResources UP-TO-DATE
+> Task :gradle-plugin:react-native-gradle-plugin:classes UP-TO-DATE
+> Task :gradle-plugin:react-native-gradle-plugin:jar UP-TO-DATE
+> Task :expo-module-gradle-plugin:compileKotlin UP-TO-DATE
+> Task :expo-module-gradle-plugin:compileJava NO-SOURCE
+> Task :expo-module-gradle-plugin:classes UP-TO-DATE
+> Task :expo-module-gradle-plugin:jar UP-TO-DATE
+> Task :expo-updates-gradle-plugin:compileKotlin UP-TO-DATE
+> Task :expo-updates-gradle-plugin:compileJava NO-SOURCE
+> Task :expo-updates-gradle-plugin:classes UP-TO-DATE
+> Task :expo-updates-gradle-plugin:jar UP-TO-DATE
+
+> Configure project :app
+ ℹ️  [33mApplying gradle plugin[0m '[32mexpo-max-sdk-override-plugin[0m'
+  [expo-max-sdk-override-plugin] This plugin will find all permissions declared with `android:maxSdkVersion`. If there exists a declaration with the `android:maxSdkVersion` annotation and another one without, the plugin will remove the annotation from the final merged manifest. In order to see a log with the changes run a clean build of the app.
+ ℹ️  [33mApplying gradle plugin[0m '[32mexpo-updates-gradle-plugin[0m'
+
+> Configure project :
+[32m[ExpoRootProject][0m Using the following versions:
+  - buildTools:  [32m36.0.0[0m
+  - minSdk:      [32m24[0m
+  - compileSdk:  [32m36[0m
+  - targetSdk:   [32m36[0m
+  - ndk:         [32m27.1.12297006[0m
+  - kotlin:      [32m2.1.20[0m
+  - ksp:         [32m2.1.20-2.0.1[0m
+
+> Configure project :expo-modules-core
+Linking react-native-worklets native libs into expo-modules-core build tasks
+task ':react-native-worklets:mergeDebugNativeLibs'
+task ':react-native-worklets:mergeReleaseNativeLibs'
+
+> Configure project :expo
+
+Using expo modules
+  - [32mexpo-log-box[0m (57.0.4)
+  - [32mexpo-auto-attendance[0m (0.1.0)
+  - [32mexpo-constants[0m (57.0.21)
+  - [32mexpo-eas-client[0m (57.0.5)
+  - [32mexpo-json-utils[0m (57.0.2)
+  - [32mexpo-manifests[0m (57.0.2)
+  - [32mexpo-modules-core[0m (57.0.21)
+  - [32mexpo-structured-headers[0m (57.0.1)
+  - [32mexpo-updates[0m (57.0.25)
+  - [32mexpo-updates-interface[0m (57.0.2)
+  - [33m[📦][0m [32mexpo-dom-webview[0m (57.0.1)
+  - [33m[📦][0m [32mexpo-application[0m (57.0.3)
+  - [33m[📦][0m [32mexpo-asset[0m (57.0.19)
+  - [33m[📦][0m [32mexpo-blur[0m (57.0.3)
+  - [33m[📦][0m [32mexpo-camera[0m (57.0.6)
+  - [33m[📦][0m [32mexpo-crypto[0m (57.0.3)
+  - [33m[📦][0m [32mexpo-device[0m (57.0.2)
+  - [33m[📦][0m [32mexpo-document-picker[0m (57.0.3)
+  - [33m[📦][0m [32mexpo-file-system[0m (57.0.7)
+  - [33m[📦][0m [32mexpo-font[0m (57.0.4)
+  - [33m[📦][0m [32mexpo-haptics[0m (57.0.3)
+  - [33m[📦][0m [32mexpo-image[0m (57.0.5)
+  - [33m[📦][0m [32mexpo-image-loader[0m (57.0.1)
+  - [33m[📦][0m [32mexpo-image-picker[0m (57.0.20)
+  - [33m[📦][0m [32mexpo-keep-awake[0m (57.0.2)
+  - [33m[📦][0m [32mexpo-localization[0m (57.0.2)
+  - [33m[📦][0m [32mexpo-location[0m (57.0.20)
+  - [33m[📦][0m [32mexpo-notifications[0m (57.0.22)
+  - [33m[📦][0m [32mexpo-splash-screen[0m (57.0.9)
+  - [33m[📦][0m [32mexpo-sqlite[0m (57.0.4)
+  - [33m[📦][0m [32mexpo-status-bar[0m (57.0.1)
+
+
+> Configure project :react-native-firebase_app
+:react-native-firebase_app package.json found at /Volumes/DevSSD/Projects/claudion-checkin/node_modules/@react-native-firebase/app/package.json
+:react-native-firebase_app:firebase.bom using default value: 34.10.0
+:react-native-firebase_app:play.play-services-auth using default value: 21.5.0
+:react-native-firebase_app package.json found at /Volumes/DevSSD/Projects/claudion-checkin/node_modules/@react-native-firebase/app/package.json
+:react-native-firebase_app:version set from package.json: 24.0.0 (24,0,0 - 24000000)
+:react-native-firebase_app:android.compileSdk using custom value: 36
+:react-native-firebase_app:android.targetSdk using custom value: 36
+:react-native-firebase_app:android.minSdk using custom value: 24
+:react-native-firebase_app:reactNativeAndroidDir /Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native
+
+> Configure project :react-native-firebase_crashlytics
+:react-native-firebase_crashlytics package.json found at /Volumes/DevSSD/Projects/claudion-checkin/node_modules/@react-native-firebase/crashlytics/package.json
+:react-native-firebase_app package.json found at /Volumes/DevSSD/Projects/claudion-checkin/node_modules/@react-native-firebase/app/package.json
+:react-native-firebase_crashlytics:firebase.bom using default value: 34.10.0
+:react-native-firebase_crashlytics package.json found at /Volumes/DevSSD/Projects/claudion-checkin/node_modules/@react-native-firebase/crashlytics/package.json
+:react-native-firebase_crashlytics:version set from package.json: 24.0.0 (24,0,0 - 24000000)
+:react-native-firebase_crashlytics:android.compileSdk using custom value: 36
+:react-native-firebase_crashlytics:android.targetSdk using custom value: 36
+:react-native-firebase_crashlytics:android.minSdk using custom value: 24
+:react-native-firebase_crashlytics:reactNativeAndroidDir /Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native
+
+> Configure project :react-native-firebase_messaging
+:react-native-firebase_messaging package.json found at /Volumes/DevSSD/Projects/claudion-checkin/node_modules/@react-native-firebase/messaging/package.json
+:react-native-firebase_app package.json found at /Volumes/DevSSD/Projects/claudion-checkin/node_modules/@react-native-firebase/app/package.json
+:react-native-firebase_messaging:firebase.bom using default value: 34.10.0
+:react-native-firebase_messaging package.json found at /Volumes/DevSSD/Projects/claudion-checkin/node_modules/@react-native-firebase/messaging/package.json
+:react-native-firebase_messaging:version set from package.json: 24.0.0 (24,0,0 - 24000000)
+:react-native-firebase_messaging:android.compileSdk using custom value: 36
+:react-native-firebase_messaging:android.targetSdk using custom value: 36
+:react-native-firebase_messaging:android.minSdk using custom value: 24
+:react-native-firebase_messaging:reactNativeAndroidDir /Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native
+
+> Task :expo-auto-attendance:preBuild UP-TO-DATE
+> Task :expo-eas-client:preBuild UP-TO-DATE
+> Task :expo-json-utils:preBuild UP-TO-DATE
+> Task :expo-log-box:preBuild UP-TO-DATE
+> Task :expo-manifests:preBuild UP-TO-DATE
+> Task :expo-modules-core:preBuild UP-TO-DATE
+> Task :expo-structured-headers:preBuild UP-TO-DATE
+> Task :expo-updates:preBuild UP-TO-DATE
+> Task :expo:generatePackagesList UP-TO-DATE
+> Task :expo:preBuild UP-TO-DATE
+> Task :expo-updates-interface:preBuild UP-TO-DATE
+> Task :react-native-community_datetimepicker:generateCodegenSchemaFromJavaScript UP-TO-DATE
+> Task :app:generateAutolinkingNewArchitectureFiles UP-TO-DATE
+> Task :react-native-async-storage_async-storage:generateCodegenSchemaFromJavaScript UP-TO-DATE
+> Task :react-native-community_datetimepicker:generateCodegenArtifactsFromSchema UP-TO-DATE
+> Task :react-native-community_datetimepicker:preBuild UP-TO-DATE
+> Task :react-native-async-storage_async-storage:generateCodegenArtifactsFromSchema UP-TO-DATE
+> Task :react-native-async-storage_async-storage:preBuild UP-TO-DATE
+> Task :react-native-firebase_app:preBuild UP-TO-DATE
+> Task :react-native-firebase_crashlytics:preBuild UP-TO-DATE
+> Task :react-native-firebase_messaging:preBuild UP-TO-DATE
+> Task :app:generateAutolinkingPackageList UP-TO-DATE
+> Task :app:generateCodegenSchemaFromJavaScript SKIPPED
+> Task :app:generateCodegenArtifactsFromSchema SKIPPED
+> Task :app:generateReactNativeEntryPoint UP-TO-DATE
+> Task :react-native-gesture-handler:generateCodegenSchemaFromJavaScript UP-TO-DATE
+> Task :react-native-community_netinfo:generateCodegenSchemaFromJavaScript UP-TO-DATE
+> Task :react-native-picker_picker:generateCodegenSchemaFromJavaScript UP-TO-DATE
+> Task :react-native-community_netinfo:generateCodegenArtifactsFromSchema UP-TO-DATE
+> Task :react-native-community_netinfo:preBuild UP-TO-DATE
+> Task :react-native-gesture-handler:generateCodegenArtifactsFromSchema UP-TO-DATE
+> Task :react-native-gesture-handler:preBuild UP-TO-DATE
+> Task :react-native-picker_picker:generateCodegenArtifactsFromSchema UP-TO-DATE
+> Task :react-native-picker_picker:preBuild UP-TO-DATE
+> Task :react-native-safe-area-context:generateCodegenSchemaFromJavaScript UP-TO-DATE
+> Task :react-native-safe-area-context:generateCodegenArtifactsFromSchema UP-TO-DATE
+> Task :react-native-safe-area-context:preBuild UP-TO-DATE
+> Task :react-native-screens:generateCodegenSchemaFromJavaScript UP-TO-DATE
+> Task :react-native-screens:generateCodegenArtifactsFromSchema UP-TO-DATE
+> Task :react-native-screens:preBuild UP-TO-DATE
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :expo:preDebugBuild UP-TO-DATE
+> Task :expo:writeDebugAarMetadata
+> Task :expo-auto-attendance:preDebugBuild UP-TO-DATE
+> Task :react-native-reanimated:assertMinimalReactNativeVersionTask
+> Task :expo-auto-attendance:writeDebugAarMetadata
+> Task :expo-eas-client:preDebugBuild UP-TO-DATE
+> Task :expo-eas-client:writeDebugAarMetadata
+> Task :expo-json-utils:preDebugBuild UP-TO-DATE
+> Task :expo-json-utils:writeDebugAarMetadata
+> Task :expo-log-box:preDebugBuild UP-TO-DATE
+> Task :expo-log-box:writeDebugAarMetadata
+> Task :expo-manifests:preDebugBuild UP-TO-DATE
+> Task :expo-manifests:writeDebugAarMetadata
+> Task :expo-modules-core:preDebugBuild UP-TO-DATE
+> Task :expo-modules-core:writeDebugAarMetadata
+> Task :expo-structured-headers:preDebugBuild UP-TO-DATE
+> Task :react-native-worklets:assertMinimalReactNativeVersionTask
+> Task :expo-structured-headers:writeDebugAarMetadata
+> Task :expo-updates:preDebugBuild UP-TO-DATE
+> Task :react-native-worklets:generateCodegenSchemaFromJavaScript UP-TO-DATE
+> Task :expo-updates:writeDebugAarMetadata
+> Task :expo-updates-interface:preDebugBuild UP-TO-DATE
+> Task :react-native-worklets:generateCodegenArtifactsFromSchema UP-TO-DATE
+> Task :expo-updates-interface:writeDebugAarMetadata
+> Task :react-native-async-storage_async-storage:preDebugBuild UP-TO-DATE
+> Task :react-native-async-storage_async-storage:writeDebugAarMetadata
+> Task :react-native-community_datetimepicker:preDebugBuild UP-TO-DATE
+> Task :react-native-community_datetimepicker:writeDebugAarMetadata
+> Task :react-native-community_netinfo:preDebugBuild UP-TO-DATE
+> Task :react-native-community_netinfo:writeDebugAarMetadata
+> Task :react-native-firebase_app:preDebugBuild UP-TO-DATE
+> Task :react-native-firebase_app:writeDebugAarMetadata
+> Task :react-native-firebase_crashlytics:preDebugBuild UP-TO-DATE
+> Task :react-native-worklets:prepareWorkletsHeadersForPrefabs UP-TO-DATE
+> Task :react-native-worklets:preBuild
+> Task :react-native-firebase_messaging:preDebugBuild UP-TO-DATE
+> Task :react-native-firebase_crashlytics:writeDebugAarMetadata
+> Task :react-native-gesture-handler:preDebugBuild UP-TO-DATE
+> Task :react-native-firebase_messaging:writeDebugAarMetadata
+> Task :react-native-picker_picker:preDebugBuild UP-TO-DATE
+> Task :react-native-reanimated:assertWorkletsVersionTask
+> Task :react-native-gesture-handler:writeDebugAarMetadata
+> Task :react-native-safe-area-context:preDebugBuild UP-TO-DATE
+> Task :react-native-picker_picker:writeDebugAarMetadata
+> Task :react-native-screens:preDebugBuild UP-TO-DATE
+> Task :react-native-reanimated:generateCodegenSchemaFromJavaScript UP-TO-DATE
+> Task :react-native-safe-area-context:writeDebugAarMetadata
+> Task :react-native-worklets:preDebugBuild
+> Task :react-native-screens:writeDebugAarMetadata
+> Task :react-native-reanimated:generateCodegenArtifactsFromSchema UP-TO-DATE
+> Task :react-native-worklets:writeDebugAarMetadata
+> Task :expo:generateDebugResValues
+> Task :expo:generateDebugResources
+> Task :app:injectCrashlyticsMappingFileIdDebug
+> Task :app:injectCrashlyticsVersionControlInfoDebug
+> Task :app:processDebugGoogleServices
+> Task :react-native-reanimated:prepareReanimatedHeadersForPrefabs UP-TO-DATE
+> Task :react-native-reanimated:preBuild
+> Task :react-native-reanimated:preDebugBuild
+> Task :expo-auto-attendance:generateDebugResValues
+> Task :expo-auto-attendance:generateDebugResources
+> Task :react-native-reanimated:writeDebugAarMetadata
+> Task :expo-eas-client:generateDebugResValues
+> Task :expo-eas-client:generateDebugResources
+> Task :expo:packageDebugResources
+> Task :expo-auto-attendance:packageDebugResources
+> Task :expo-json-utils:generateDebugResValues
+> Task :expo-log-box:generateDebugResValues
+> Task :expo-json-utils:generateDebugResources
+> Task :expo-log-box:generateDebugResources
+> Task :expo-eas-client:packageDebugResources
+> Task :expo-manifests:generateDebugResValues
+> Task :expo-json-utils:packageDebugResources
+> Task :expo-manifests:generateDebugResources
+> Task :expo-log-box:packageDebugResources
+> Task :expo-modules-core:generateDebugResValues
+> Task :expo-structured-headers:generateDebugResValues
+> Task :expo-modules-core:generateDebugResources
+> Task :expo-structured-headers:generateDebugResources
+> Task :expo-manifests:packageDebugResources
+> Task :expo-updates:generateDebugResValues
+> Task :expo-updates:generateDebugResources
+> Task :expo-modules-core:packageDebugResources
+> Task :expo-structured-headers:packageDebugResources
+> Task :expo-updates-interface:generateDebugResValues
+> Task :react-native-async-storage_async-storage:generateDebugResValues
+> Task :expo-updates-interface:generateDebugResources
+> Task :react-native-async-storage_async-storage:generateDebugResources
+> Task :expo-updates:packageDebugResources
+> Task :react-native-community_datetimepicker:generateDebugResValues
+> Task :react-native-community_datetimepicker:generateDebugResources
+> Task :expo-updates-interface:packageDebugResources
+> Task :react-native-async-storage_async-storage:packageDebugResources
+> Task :react-native-community_netinfo:generateDebugResValues
+> Task :react-native-firebase_app:generateDebugResValues
+> Task :react-native-firebase_app:generateDebugResources
+> Task :react-native-community_netinfo:generateDebugResources
+> Task :react-native-community_netinfo:packageDebugResources
+> Task :react-native-firebase_app:packageDebugResources
+> Task :react-native-firebase_crashlytics:generateDebugResValues
+> Task :react-native-firebase_messaging:generateDebugResValues
+> Task :react-native-firebase_crashlytics:generateDebugResources
+> Task :react-native-firebase_messaging:generateDebugResources
+> Task :react-native-firebase_crashlytics:packageDebugResources
+> Task :react-native-gesture-handler:generateDebugResValues
+> Task :react-native-gesture-handler:generateDebugResources
+> Task :react-native-gesture-handler:packageDebugResources
+> Task :react-native-picker_picker:generateDebugResValues
+> Task :react-native-picker_picker:generateDebugResources
+> Task :react-native-firebase_messaging:packageDebugResources
+> Task :react-native-community_datetimepicker:packageDebugResources
+
+> Task :expo-constants:createExpoConfig
+env: load .env
+env: export EXPO_PUBLIC_SERVER_LOOKUP_ALPHABET EXPO_PUBLIC_SERVER_LOOKUP_SECRET EXPO_PUBLIC_SERVER_LOOKUP_URL
+
+> Task :expo-constants:preBuild
+> Task :app:preBuild
+> Task :app:preDebugBuild
+> Task :react-native-safe-area-context:generateDebugResValues
+> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+> Task :react-native-reanimated:generateDebugResValues
+> Task :expo-constants:preDebugBuild
+> Task :expo-constants:writeDebugAarMetadata
+> Task :react-native-reanimated:generateDebugResources
+> Task :expo-constants:generateDebugResValues
+> Task :expo-constants:generateDebugResources
+> Task :react-native-reanimated:packageDebugResources
+> Task :app:generateDebugBuildConfig
+> Task :react-native-safe-area-context:generateDebugResources
+> Task :react-native-picker_picker:packageDebugResources
+> Task :expo-constants:packageDebugResources
+> Task :react-native-screens:generateDebugResValues
+> Task :react-native-worklets:generateDebugResValues
+> Task :react-native-worklets:generateDebugResources
+> Task :react-native-safe-area-context:packageDebugResources
+> Task :expo:extractDeepLinksDebug
+> Task :react-native-worklets:packageDebugResources
+> Task :expo-auto-attendance:extractDeepLinksDebug
+> Task :react-native-screens:generateDebugResources
+> Task :react-native-screens:packageDebugResources
+> Task :expo-constants:extractDeepLinksDebug
+> Task :expo:processDebugManifest
+> Task :expo-constants:processDebugManifest
+> Task :expo-json-utils:extractDeepLinksDebug
+> Task :expo-auto-attendance:processDebugManifest
+> Task :expo-log-box:extractDeepLinksDebug
+> Task :expo-json-utils:processDebugManifest
+> Task :expo-manifests:extractDeepLinksDebug
+> Task :expo-eas-client:extractDeepLinksDebug
+> Task :expo-manifests:processDebugManifest
+> Task :expo-modules-core:extractDeepLinksDebug
+> Task :expo-eas-client:processDebugManifest
+> Task :expo-structured-headers:extractDeepLinksDebug
+
+> Task :expo-modules-core:processDebugManifest
+/Volumes/DevSSD/Projects/claudion-checkin/node_modules/expo-modules-core/android/src/main/AndroidManifest.xml:8:9-11:45 Warning:
+	meta-data#com.facebook.soloader.enabled@android:value was tagged at AndroidManifest.xml:8 to replace other declarations but no other declaration present
+
+> Task :expo-structured-headers:processDebugManifest
+> Task :expo-updates:extractDeepLinksDebug
+> Task :expo-updates-interface:extractDeepLinksDebug
+> Task :expo-updates-interface:processDebugManifest
+> Task :react-native-async-storage_async-storage:extractDeepLinksDebug
+
+> Task :react-native-async-storage_async-storage:processDebugManifest
+package="com.reactnativecommunity.asyncstorage" found in source AndroidManifest.xml: /Volumes/DevSSD/Projects/claudion-checkin/node_modules/@react-native-async-storage/async-storage/android/src/main/AndroidManifest.xml.
+Setting the namespace via the package attribute in the source AndroidManifest.xml is no longer supported, and the value is ignored.
+Recommendation: remove package="com.reactnativecommunity.asyncstorage" from the source AndroidManifest.xml: /Volumes/DevSSD/Projects/claudion-checkin/node_modules/@react-native-async-storage/async-storage/android/src/main/AndroidManifest.xml.
+
+> Task :react-native-community_datetimepicker:extractDeepLinksDebug
+> Task :react-native-community_datetimepicker:processDebugManifest
+> Task :react-native-community_netinfo:extractDeepLinksDebug
+
+> Task :react-native-community_netinfo:processDebugManifest
+package="com.reactnativecommunity.netinfo" found in source AndroidManifest.xml: /Volumes/DevSSD/Projects/claudion-checkin/node_modules/@react-native-community/netinfo/android/src/main/AndroidManifest.xml.
+Setting the namespace via the package attribute in the source AndroidManifest.xml is no longer supported, and the value is ignored.
+Recommendation: remove package="com.reactnativecommunity.netinfo" from the source AndroidManifest.xml: /Volumes/DevSSD/Projects/claudion-checkin/node_modules/@react-native-community/netinfo/android/src/main/AndroidManifest.xml.
+
+> Task :expo-log-box:processDebugManifest
+> Task :react-native-firebase_crashlytics:extractDeepLinksDebug
+> Task :react-native-firebase_app:extractDeepLinksDebug
+
+> Task :react-native-firebase_app:processDebugManifest
+package="io.invertase.firebase" found in source AndroidManifest.xml: /Volumes/DevSSD/Projects/claudion-checkin/node_modules/@react-native-firebase/app/android/src/main/AndroidManifest.xml.
+Setting the namespace via the package attribute in the source AndroidManifest.xml is no longer supported, and the value is ignored.
+Recommendation: remove package="io.invertase.firebase" from the source AndroidManifest.xml: /Volumes/DevSSD/Projects/claudion-checkin/node_modules/@react-native-firebase/app/android/src/main/AndroidManifest.xml.
+
+> Task :react-native-firebase_messaging:extractDeepLinksDebug
+
+> Task :react-native-firebase_crashlytics:processDebugManifest
+package="io.invertase.firebase.crashlytics" found in source AndroidManifest.xml: /Volumes/DevSSD/Projects/claudion-checkin/node_modules/@react-native-firebase/crashlytics/android/src/main/AndroidManifest.xml.
+Setting the namespace via the package attribute in the source AndroidManifest.xml is no longer supported, and the value is ignored.
+Recommendation: remove package="io.invertase.firebase.crashlytics" from the source AndroidManifest.xml: /Volumes/DevSSD/Projects/claudion-checkin/node_modules/@react-native-firebase/crashlytics/android/src/main/AndroidManifest.xml.
+
+> Task :react-native-gesture-handler:extractDeepLinksDebug
+> Task :react-native-gesture-handler:processDebugManifest
+> Task :expo-updates:processDebugManifest
+> Task :react-native-picker_picker:extractDeepLinksDebug
+> Task :react-native-reanimated:extractDeepLinksDebug
+
+> Task :react-native-picker_picker:processDebugManifest
+package="com.reactnativecommunity.picker" found in source AndroidManifest.xml: /Volumes/DevSSD/Projects/claudion-checkin/node_modules/@react-native-picker/picker/android/src/main/AndroidManifest.xml.
+Setting the namespace via the package attribute in the source AndroidManifest.xml is no longer supported, and the value is ignored.
+Recommendation: remove package="com.reactnativecommunity.picker" from the source AndroidManifest.xml: /Volumes/DevSSD/Projects/claudion-checkin/node_modules/@react-native-picker/picker/android/src/main/AndroidManifest.xml.
+
+> Task :react-native-safe-area-context:extractDeepLinksDebug
+
+> Task :react-native-firebase_messaging:processDebugManifest
+package="io.invertase.firebase.messaging" found in source AndroidManifest.xml: /Volumes/DevSSD/Projects/claudion-checkin/node_modules/@react-native-firebase/messaging/android/src/main/AndroidManifest.xml.
+Setting the namespace via the package attribute in the source AndroidManifest.xml is no longer supported, and the value is ignored.
+Recommendation: remove package="io.invertase.firebase.messaging" from the source AndroidManifest.xml: /Volumes/DevSSD/Projects/claudion-checkin/node_modules/@react-native-firebase/messaging/android/src/main/AndroidManifest.xml.
+
+> Task :react-native-screens:extractDeepLinksDebug
+
+> Task :react-native-safe-area-context:processDebugManifest
+package="com.th3rdwave.safeareacontext" found in source AndroidManifest.xml: /Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-safe-area-context/android/src/main/AndroidManifest.xml.
+Setting the namespace via the package attribute in the source AndroidManifest.xml is no longer supported, and the value is ignored.
+Recommendation: remove package="com.th3rdwave.safeareacontext" from the source AndroidManifest.xml: /Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-safe-area-context/android/src/main/AndroidManifest.xml.
+
+> Task :react-native-worklets:extractDeepLinksDebug
+> Task :react-native-screens:processDebugManifest
+> Task :react-native-reanimated:processDebugManifest
+> Task :react-native-worklets:processDebugManifest
+> Task :expo-auto-attendance:compileDebugLibraryResources
+> Task :expo:compileDebugLibraryResources
+> Task :expo-constants:compileDebugLibraryResources
+> Task :app:checkDebugAarMetadata
+> Task :expo-auto-attendance:parseDebugLocalResources
+> Task :expo-constants:parseDebugLocalResources
+> Task :expo:parseDebugLocalResources
+> Task :app:generateDebugResValues
+> Task :expo:generateDebugRFile
+> Task :expo-constants:generateDebugRFile
+> Task :expo-auto-attendance:generateDebugRFile
+> Task :expo-eas-client:parseDebugLocalResources
+> Task :expo-json-utils:compileDebugLibraryResources
+> Task :expo-json-utils:parseDebugLocalResources
+> Task :expo-eas-client:compileDebugLibraryResources
+> Task :expo-eas-client:generateDebugRFile
+> Task :expo-log-box:compileDebugLibraryResources
+> Task :expo-json-utils:generateDebugRFile
+> Task :expo-manifests:compileDebugLibraryResources
+> Task :expo-modules-core:compileDebugLibraryResources
+> Task :expo-manifests:parseDebugLocalResources
+> Task :expo-log-box:parseDebugLocalResources
+> Task :app:mapDebugSourceSetPaths
+> Task :expo-modules-core:parseDebugLocalResources
+> Task :app:generateDebugResources
+> Task :expo-manifests:generateDebugRFile
+> Task :expo-log-box:generateDebugRFile
+> Task :expo-structured-headers:compileDebugLibraryResources
+> Task :expo-modules-core:generateDebugRFile
+> Task :expo-updates:compileDebugLibraryResources
+> Task :expo-updates-interface:compileDebugLibraryResources
+> Task :expo-structured-headers:parseDebugLocalResources
+> Task :expo-updates-interface:parseDebugLocalResources
+> Task :expo-updates:parseDebugLocalResources
+> Task :expo-structured-headers:generateDebugRFile
+> Task :react-native-async-storage_async-storage:compileDebugLibraryResources
+> Task :expo-updates:generateDebugRFile
+> Task :expo-updates-interface:generateDebugRFile
+> Task :react-native-community_datetimepicker:compileDebugLibraryResources
+> Task :react-native-async-storage_async-storage:parseDebugLocalResources
+> Task :react-native-community_netinfo:compileDebugLibraryResources
+> Task :react-native-community_netinfo:parseDebugLocalResources
+> Task :react-native-async-storage_async-storage:generateDebugRFile
+> Task :react-native-community_datetimepicker:parseDebugLocalResources
+> Task :react-native-firebase_app:compileDebugLibraryResources
+> Task :react-native-community_netinfo:generateDebugRFile
+> Task :react-native-firebase_app:parseDebugLocalResources
+> Task :react-native-firebase_crashlytics:compileDebugLibraryResources
+> Task :react-native-community_datetimepicker:generateDebugRFile
+> Task :react-native-firebase_messaging:compileDebugLibraryResources
+> Task :react-native-firebase_app:generateDebugRFile
+> Task :react-native-firebase_crashlytics:parseDebugLocalResources
+> Task :react-native-gesture-handler:compileDebugLibraryResources
+> Task :react-native-firebase_messaging:parseDebugLocalResources
+> Task :react-native-gesture-handler:parseDebugLocalResources
+> Task :react-native-firebase_crashlytics:generateDebugRFile
+> Task :react-native-firebase_messaging:generateDebugRFile
+> Task :react-native-reanimated:compileDebugLibraryResources
+> Task :react-native-gesture-handler:generateDebugRFile
+> Task :react-native-reanimated:parseDebugLocalResources
+> Task :react-native-picker_picker:parseDebugLocalResources
+> Task :react-native-reanimated:generateDebugRFile
+> Task :react-native-picker_picker:generateDebugRFile
+> Task :react-native-picker_picker:compileDebugLibraryResources
+> Task :react-native-worklets:compileDebugLibraryResources
+> Task :react-native-safe-area-context:compileDebugLibraryResources
+> Task :react-native-safe-area-context:parseDebugLocalResources
+> Task :react-native-worklets:parseDebugLocalResources
+> Task :react-native-screens:compileDebugLibraryResources
+> Task :react-native-screens:parseDebugLocalResources
+> Task :react-native-safe-area-context:generateDebugRFile
+> Task :expo:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :expo:generateDebugBuildConfig
+> Task :expo-auto-attendance:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :react-native-worklets:generateDebugRFile
+> Task :expo-modules-core:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :expo-auto-attendance:generateDebugBuildConfig
+> Task :react-native-worklets:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :react-native-screens:generateDebugRFile
+> Task :expo-modules-core:generateDebugBuildConfig
+> Task :react-native-worklets:generateDebugBuildConfig
+> Task :expo-modules-core:javaPreCompileDebug
+> Task :expo-auto-attendance:javaPreCompileDebug
+> Task :expo-constants:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :expo-eas-client:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :expo-eas-client:generateDebugBuildConfig
+> Task :expo-constants:generateDebugBuildConfig
+> Task :expo-constants:javaPreCompileDebug
+> Task :expo-eas-client:javaPreCompileDebug
+> Task :expo-json-utils:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :expo-log-box:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :expo-json-utils:generateDebugBuildConfig
+> Task :expo-log-box:generateDebugBuildConfig
+> Task :expo-json-utils:javaPreCompileDebug
+> Task :expo-log-box:javaPreCompileDebug
+> Task :expo-manifests:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :expo-structured-headers:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :expo-manifests:generateDebugBuildConfig
+> Task :expo-structured-headers:generateDebugBuildConfig
+> Task :expo-manifests:javaPreCompileDebug
+> Task :expo-updates:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :expo-structured-headers:javaPreCompileDebug
+> Task :expo-updates-interface:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :expo-updates:generateDebugBuildConfig
+> Task :expo-updates-interface:generateDebugBuildConfig
+> Task :expo-updates-interface:javaPreCompileDebug
+> Task :expo:javaPreCompileDebug
+> Task :react-native-async-storage_async-storage:generateDebugBuildConfig
+> Task :react-native-async-storage_async-storage:javaPreCompileDebug
+> Task :expo-updates:javaPreCompileDebug
+> Task :react-native-community_datetimepicker:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :react-native-community_datetimepicker:generateDebugBuildConfig
+
+> Task :react-native-async-storage_async-storage:compileDebugJavaWithJavac
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+Note: /Volumes/DevSSD/Projects/claudion-checkin/node_modules/@react-native-async-storage/async-storage/android/src/javaPackage/java/com/reactnativecommunity/asyncstorage/AsyncStoragePackage.java uses unchecked or unsafe operations.
+Note: Recompile with -Xlint:unchecked for details.
+
+> Task :app:packageDebugResources
+> Task :app:parseDebugLocalResources
+> Task :app:createDebugCompatibleScreenManifests
+> Task :app:extractDeepLinksDebug
+> Task :app:mergeDebugResources
+> Task :react-native-worklets:javaPreCompileDebug
+> Task :react-native-async-storage_async-storage:bundleLibCompileToJarDebug
+> Task :react-native-community_datetimepicker:javaPreCompileDebug
+> Task :react-native-community_netinfo:generateDebugBuildConfig
+> Task :react-native-community_netinfo:javaPreCompileDebug
+
+> Task :app:processDebugMainManifest
+/Volumes/DevSSD/Projects/claudion-checkin/android/app/src/debug/AndroidManifest.xml:6:5-162 Warning:
+	application@android:usesCleartextTraffic was tagged at AndroidManifest.xml:6 to replace other declarations but no other declaration present
+/Volumes/DevSSD/Projects/claudion-checkin/android/app/src/debug/AndroidManifest.xml Warning:
+	provider#expo.modules.filesystem.FileSystemFileProvider@android:authorities was tagged at AndroidManifest.xml:0 to replace other declarations but no other declaration present
+/Volumes/DevSSD/Projects/claudion-checkin/android/app/src/debug/AndroidManifest.xml Warning:
+	activity#expo.modules.imagepicker.ExpoCropImageActivity@android:exported was tagged at AndroidManifest.xml:0 to replace other declarations but no other declaration present
+
+> Task :app:expoDebugOverrideMaxSdkConflicts
+[33m---------- Expo Max Sdk Override Plugin ----------[0m
+[32m>>> No 'android:maxSdkVersion' conflicts found[0m
+[33m--------------------------------------------------[0m
+
+> Task :app:processDebugManifest
+> Task :app:processDebugManifestForPackage
+
+> Task :react-native-community_netinfo:compileDebugJavaWithJavac
+/Volumes/DevSSD/Projects/claudion-checkin/node_modules/@react-native-community/netinfo/android/src/newarch/com/reactnativecommunity/netinfo/NetInfoModule.java:43: warning: [removal] onCatalystInstanceDestroy() in NativeModule has been deprecated and marked for removal
+    public void onCatalystInstanceDestroy() {
+                ^
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+1 warning
+
+> Task :react-native-community_netinfo:bundleLibCompileToJarDebug
+> Task :react-native-firebase_app:generateDebugBuildConfig
+> Task :react-native-firebase_app:javaPreCompileDebug
+
+> Task :react-native-firebase_app:compileDebugJavaWithJavac
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+
+> Task :react-native-firebase_app:bundleLibCompileToJarDebug
+> Task :react-native-firebase_crashlytics:generateDebugBuildConfig
+> Task :react-native-firebase_crashlytics:javaPreCompileDebug
+
+> Task :react-native-firebase_crashlytics:compileDebugJavaWithJavac
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+
+> Task :react-native-firebase_crashlytics:bundleLibCompileToJarDebug
+> Task :react-native-firebase_messaging:generateDebugBuildConfig
+> Task :react-native-firebase_messaging:javaPreCompileDebug
+
+> Task :react-native-firebase_messaging:compileDebugJavaWithJavac
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+
+> Task :react-native-firebase_messaging:bundleLibCompileToJarDebug
+> Task :app:processDebugResources
+> Task :react-native-gesture-handler:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :react-native-reanimated:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :react-native-reanimated:generateDebugBuildConfig
+> Task :react-native-gesture-handler:generateDebugBuildConfig
+> Task :react-native-reanimated:javaPreCompileDebug
+> Task :react-native-gesture-handler:javaPreCompileDebug
+> Task :react-native-safe-area-context:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :react-native-safe-area-context:generateDebugBuildConfig
+> Task :react-native-picker_picker:generateDebugBuildConfig
+> Task :react-native-picker_picker:javaPreCompileDebug
+
+> Task :react-native-picker_picker:compileDebugJavaWithJavac
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+
+> Task :react-native-picker_picker:bundleLibCompileToJarDebug
+> Task :react-native-safe-area-context:javaPreCompileDebug
+> Task :react-native-screens:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :react-native-screens:generateDebugBuildConfig
+> Task :react-native-community_datetimepicker:compileDebugKotlin
+> Task :react-native-worklets:compileDebugKotlin
+> Task :react-native-worklets:compileDebugJavaWithJavac
+> Task :react-native-worklets:bundleLibCompileToJarDebug
+
+> Task :react-native-community_datetimepicker:compileDebugJavaWithJavac
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+
+> Task :react-native-community_datetimepicker:bundleLibCompileToJarDebug
+
+> Task :react-native-safe-area-context:compileDebugKotlin
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-safe-area-context/android/src/main/java/com/th3rdwave/safeareacontext/SafeAreaProviderManager.kt:39:19 'fun getEventDispatcherForReactTag(context: ReactContext, reactTag: Int): EventDispatcher?' is deprecated. reactTag is no longer needed.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-safe-area-context/android/src/main/java/com/th3rdwave/safeareacontext/SafeAreaView.kt:9:8 'class UIManagerModule : ReactContextBaseJavaModule, LifecycleEventListener, UIManager' is deprecated. Deprecated in Java.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-safe-area-context/android/src/main/java/com/th3rdwave/safeareacontext/SafeAreaView.kt:50:54 'class UIManagerModule : ReactContextBaseJavaModule, LifecycleEventListener, UIManager' is deprecated. Deprecated in Java.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-safe-area-context/android/src/main/java/com/th3rdwave/safeareacontext/SafeAreaView.kt:59:23 'val uiImplementation: UIImplementation!' is deprecated. Deprecated in Java.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-safe-area-context/android/src/main/java/com/th3rdwave/safeareacontext/SafeAreaViewShadowNode.kt:9:32 'class LayoutShadowNode : ReactShadowNodeImpl' is deprecated. This class is part of Legacy Architecture and will be removed in a future release.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-safe-area-context/android/src/main/java/com/th3rdwave/safeareacontext/SafeAreaViewShadowNode.kt:110:61 'class NativeViewHierarchyOptimizer : Any' is deprecated. This class is part of Legacy Architecture and will be removed in a future release.
+
+> Task :react-native-safe-area-context:compileDebugJavaWithJavac
+> Task :react-native-safe-area-context:bundleLibCompileToJarDebug
+> Task :react-native-screens:javaPreCompileDebug
+> Task :app:javaPreCompileDebug
+> Task :app:mergeDebugShaders
+> Task :app:compileDebugShaders NO-SOURCE
+> Task :app:createDebugUpdatesResources
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :expo:mergeDebugShaders
+> Task :expo:compileDebugShaders NO-SOURCE
+> Task :expo:generateDebugAssets UP-TO-DATE
+> Task :expo:mergeDebugAssets
+> Task :expo-auto-attendance:mergeDebugShaders
+> Task :expo-auto-attendance:compileDebugShaders NO-SOURCE
+> Task :expo-auto-attendance:generateDebugAssets UP-TO-DATE
+> Task :expo-auto-attendance:mergeDebugAssets
+> Task :expo-constants:mergeDebugShaders
+> Task :expo-constants:compileDebugShaders NO-SOURCE
+> Task :expo-constants:generateDebugAssets UP-TO-DATE
+> Task :expo-constants:mergeDebugAssets
+> Task :expo-eas-client:mergeDebugShaders
+> Task :expo-eas-client:compileDebugShaders NO-SOURCE
+> Task :expo-eas-client:generateDebugAssets UP-TO-DATE
+> Task :expo-eas-client:mergeDebugAssets
+> Task :expo-json-utils:mergeDebugShaders
+> Task :expo-json-utils:compileDebugShaders NO-SOURCE
+> Task :expo-json-utils:generateDebugAssets UP-TO-DATE
+> Task :expo-json-utils:mergeDebugAssets
+> Task :expo-log-box:mergeDebugShaders
+> Task :expo-log-box:compileDebugShaders NO-SOURCE
+> Task :expo-log-box:generateDebugAssets UP-TO-DATE
+> Task :expo-log-box:mergeDebugAssets
+> Task :expo-manifests:mergeDebugShaders
+> Task :expo-manifests:compileDebugShaders NO-SOURCE
+> Task :expo-manifests:generateDebugAssets UP-TO-DATE
+> Task :expo-manifests:mergeDebugAssets
+> Task :expo-modules-core:mergeDebugShaders
+> Task :expo-modules-core:compileDebugShaders NO-SOURCE
+> Task :expo-modules-core:generateDebugAssets UP-TO-DATE
+> Task :expo-modules-core:mergeDebugAssets
+> Task :expo-structured-headers:mergeDebugShaders
+> Task :expo-structured-headers:compileDebugShaders NO-SOURCE
+> Task :expo-structured-headers:generateDebugAssets UP-TO-DATE
+> Task :expo-structured-headers:mergeDebugAssets
+> Task :expo-updates:mergeDebugShaders
+> Task :expo-updates:compileDebugShaders NO-SOURCE
+> Task :expo-updates:generateDebugAssets UP-TO-DATE
+> Task :expo-updates:mergeDebugAssets
+> Task :expo-updates-interface:mergeDebugShaders
+> Task :expo-updates-interface:compileDebugShaders NO-SOURCE
+> Task :expo-updates-interface:generateDebugAssets UP-TO-DATE
+> Task :expo-updates-interface:mergeDebugAssets
+> Task :react-native-async-storage_async-storage:mergeDebugShaders
+> Task :react-native-async-storage_async-storage:compileDebugShaders NO-SOURCE
+> Task :react-native-async-storage_async-storage:generateDebugAssets UP-TO-DATE
+> Task :react-native-async-storage_async-storage:mergeDebugAssets
+> Task :react-native-community_datetimepicker:mergeDebugShaders
+> Task :react-native-community_datetimepicker:compileDebugShaders NO-SOURCE
+> Task :react-native-community_datetimepicker:generateDebugAssets UP-TO-DATE
+> Task :react-native-community_datetimepicker:mergeDebugAssets
+> Task :react-native-community_netinfo:mergeDebugShaders
+> Task :react-native-community_netinfo:compileDebugShaders NO-SOURCE
+> Task :react-native-community_netinfo:generateDebugAssets UP-TO-DATE
+> Task :react-native-community_netinfo:mergeDebugAssets
+> Task :react-native-firebase_app:mergeDebugShaders
+> Task :react-native-firebase_app:compileDebugShaders NO-SOURCE
+> Task :react-native-firebase_app:generateDebugAssets UP-TO-DATE
+> Task :react-native-firebase_app:mergeDebugAssets
+> Task :react-native-firebase_crashlytics:mergeDebugShaders
+> Task :react-native-firebase_crashlytics:compileDebugShaders NO-SOURCE
+> Task :react-native-firebase_crashlytics:generateDebugAssets UP-TO-DATE
+> Task :react-native-firebase_crashlytics:mergeDebugAssets
+> Task :react-native-firebase_messaging:mergeDebugShaders
+> Task :react-native-firebase_messaging:compileDebugShaders NO-SOURCE
+> Task :react-native-firebase_messaging:generateDebugAssets UP-TO-DATE
+> Task :react-native-firebase_messaging:mergeDebugAssets
+> Task :react-native-gesture-handler:mergeDebugShaders
+> Task :react-native-gesture-handler:compileDebugShaders NO-SOURCE
+> Task :react-native-gesture-handler:generateDebugAssets UP-TO-DATE
+> Task :react-native-gesture-handler:mergeDebugAssets
+> Task :react-native-picker_picker:mergeDebugShaders
+> Task :react-native-picker_picker:compileDebugShaders NO-SOURCE
+> Task :react-native-picker_picker:generateDebugAssets UP-TO-DATE
+> Task :react-native-picker_picker:mergeDebugAssets
+> Task :react-native-reanimated:mergeDebugShaders
+> Task :react-native-reanimated:compileDebugShaders NO-SOURCE
+> Task :react-native-reanimated:generateDebugAssets UP-TO-DATE
+> Task :react-native-reanimated:mergeDebugAssets
+> Task :react-native-safe-area-context:mergeDebugShaders
+> Task :react-native-safe-area-context:compileDebugShaders NO-SOURCE
+> Task :react-native-safe-area-context:generateDebugAssets UP-TO-DATE
+> Task :react-native-safe-area-context:mergeDebugAssets
+> Task :react-native-screens:mergeDebugShaders
+> Task :react-native-screens:compileDebugShaders NO-SOURCE
+> Task :react-native-screens:generateDebugAssets UP-TO-DATE
+> Task :react-native-screens:mergeDebugAssets
+> Task :react-native-worklets:mergeDebugShaders
+> Task :react-native-worklets:compileDebugShaders NO-SOURCE
+> Task :react-native-worklets:generateDebugAssets UP-TO-DATE
+> Task :react-native-worklets:mergeDebugAssets
+> Task :app:mergeDebugAssets
+> Task :app:compressDebugAssets
+> Task :react-native-community_datetimepicker:bundleLibRuntimeToJarDebug
+
+> Task :react-native-reanimated:compileDebugKotlin
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-reanimated/android/src/main/java/com/swmansion/reanimated/NodesManager.kt:13:8 'class UIManagerModule : ReactContextBaseJavaModule, LifecycleEventListener, UIManager' is deprecated. Deprecated in Java.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-reanimated/android/src/main/java/com/swmansion/reanimated/NodesManager.kt:58:95 'fun resolveCustomDirectEventName(eventName: String): String?' is deprecated.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-reanimated/android/src/main/java/com/swmansion/reanimated/NodesManager.kt:234:29 'fun receiveEvent(surfaceId: Int, targetTag: Int, eventName: String, canCoalesceEvent: Boolean, customCoalesceKey: Int, params: WritableMap?, category: Int): Unit' is deprecated. Use the overload with eventTimestamp parameter instead.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-reanimated/android/src/main/java/com/swmansion/reanimated/ReanimatedPackage.kt:5:8 'class ReactInstanceManager : Any' is deprecated. Deprecated in Java.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-reanimated/android/src/main/java/com/swmansion/reanimated/ReanimatedPackage.kt:60:73 'class ReactInstanceManager : Any' is deprecated. Deprecated in Java.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-reanimated/android/src/main/java/com/swmansion/reanimated/ReanimatedPackage.kt:61:63 'val reactNativeHost: ReactNativeHost' is deprecated. You should not use ReactNativeHost directly in the New Architecture. Use ReactHost instead.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-reanimated/android/src/main/java/com/swmansion/reanimated/nativeProxy/EventHandler.kt:7:8 'class UIManagerModule : ReactContextBaseJavaModule, LifecycleEventListener, UIManager' is deprecated. Deprecated in Java.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-reanimated/android/src/main/java/com/swmansion/reanimated/nativeProxy/EventHandler.kt:25:18 This declaration overrides a deprecated member but is not marked as deprecated itself. Add the '@Deprecated' annotation or suppress the diagnostic.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-reanimated/android/src/main/java/com/swmansion/reanimated/nativeProxy/EventHandler.kt:38:18 This declaration overrides a deprecated member but is not marked as deprecated itself. Add the '@Deprecated' annotation or suppress the diagnostic.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-reanimated/android/src/main/java/com/swmansion/reanimated/nativeProxy/EventHandler.kt:48:18 This declaration overrides a deprecated member but is not marked as deprecated itself. Add the '@Deprecated' annotation or suppress the diagnostic.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-reanimated/android/src/main/java/com/swmansion/reanimated/nativeProxy/EventHandler.kt:57:18 This declaration overrides a deprecated member but is not marked as deprecated itself. Add the '@Deprecated' annotation or suppress the diagnostic.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-reanimated/android/src/main/java/com/swmansion/reanimated/nativeProxy/NoopEventHandler.kt:8:18 This declaration overrides a deprecated member but is not marked as deprecated itself. Add the '@Deprecated' annotation or suppress the diagnostic.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-reanimated/android/src/main/java/com/swmansion/reanimated/nativeProxy/NoopEventHandler.kt:20:18 This declaration overrides a deprecated member but is not marked as deprecated itself. Add the '@Deprecated' annotation or suppress the diagnostic.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-reanimated/android/src/main/java/com/swmansion/reanimated/nativeProxy/NoopEventHandler.kt:29:18 This declaration overrides a deprecated member but is not marked as deprecated itself. Add the '@Deprecated' annotation or suppress the diagnostic.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-reanimated/android/src/main/java/com/swmansion/reanimated/nativeProxy/NoopEventHandler.kt:37:18 This declaration overrides a deprecated member but is not marked as deprecated itself. Add the '@Deprecated' annotation or suppress the diagnostic.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-reanimated/android/src/main/java/com/swmansion/reanimated/sensor/ReanimatedSensor.kt:28:26 'val defaultDisplay: Display!' is deprecated. Deprecated in Java.
+
+> Task :react-native-reanimated:compileDebugJavaWithJavac
+> Task :react-native-reanimated:bundleLibCompileToJarDebug
+> Task :react-native-reanimated:bundleLibRuntimeToJarDebug
+> Task :react-native-safe-area-context:bundleLibRuntimeToJarDebug
+> Task :react-native-worklets:bundleLibRuntimeToJarDebug
+> Task :react-native-async-storage_async-storage:bundleLibRuntimeToJarDebug
+> Task :react-native-community_netinfo:bundleLibRuntimeToJarDebug
+> Task :react-native-firebase_crashlytics:bundleLibRuntimeToJarDebug
+> Task :react-native-firebase_messaging:bundleLibRuntimeToJarDebug
+> Task :react-native-firebase_app:bundleLibRuntimeToJarDebug
+> Task :react-native-picker_picker:bundleLibRuntimeToJarDebug
+> Task :app:desugarDebugFileDependencies
+> Task :react-native-async-storage_async-storage:processDebugJavaRes NO-SOURCE
+> Task :react-native-community_datetimepicker:processDebugJavaRes
+> Task :react-native-community_netinfo:processDebugJavaRes NO-SOURCE
+> Task :react-native-firebase_app:processDebugJavaRes NO-SOURCE
+> Task :react-native-firebase_crashlytics:processDebugJavaRes NO-SOURCE
+> Task :react-native-firebase_messaging:processDebugJavaRes NO-SOURCE
+> Task :react-native-picker_picker:processDebugJavaRes NO-SOURCE
+> Task :react-native-reanimated:processDebugJavaRes
+> Task :react-native-safe-area-context:processDebugJavaRes
+> Task :react-native-worklets:processDebugJavaRes
+> Task :react-native-screens:compileDebugKotlin
+> Task :app:checkDebugDuplicateClasses
+> Task :expo-modules-core:compileDebugKotlin
+> Task :react-native-gesture-handler:compileDebugKotlin
+> Task :app:mergeExtDexDebug
+
+> Task :react-native-gesture-handler:compileDebugKotlin
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-gesture-handler/android/src/main/java/com/swmansion/gesturehandler/react/Extensions.kt:8:8 'class UIManagerModule : ReactContextBaseJavaModule, LifecycleEventListener, UIManager' is deprecated. Deprecated in Java.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-gesture-handler/android/src/main/java/com/swmansion/gesturehandler/react/Extensions.kt:13:29 'class UIManagerModule : ReactContextBaseJavaModule, LifecycleEventListener, UIManager' is deprecated. Deprecated in Java.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-gesture-handler/android/src/main/java/com/swmansion/gesturehandler/react/Extensions.kt:14:32 'class UIManagerModule : ReactContextBaseJavaModule, LifecycleEventListener, UIManager' is deprecated. Deprecated in Java.
+
+> Task :react-native-gesture-handler:compileDebugJavaWithJavac
+> Task :react-native-gesture-handler:bundleLibCompileToJarDebug
+> Task :react-native-gesture-handler:bundleLibRuntimeToJarDebug
+> Task :react-native-gesture-handler:processDebugJavaRes
+> Task :react-native-community_datetimepicker:bundleLibRuntimeToDirDebug
+> Task :react-native-gesture-handler:bundleLibRuntimeToDirDebug
+> Task :react-native-reanimated:bundleLibRuntimeToDirDebug
+> Task :react-native-safe-area-context:bundleLibRuntimeToDirDebug
+> Task :react-native-worklets:bundleLibRuntimeToDirDebug
+> Task :react-native-async-storage_async-storage:bundleLibRuntimeToDirDebug
+> Task :react-native-community_netinfo:bundleLibRuntimeToDirDebug
+> Task :react-native-firebase_crashlytics:bundleLibRuntimeToDirDebug
+> Task :react-native-firebase_messaging:bundleLibRuntimeToDirDebug
+> Task :react-native-firebase_app:bundleLibRuntimeToDirDebug
+> Task :react-native-picker_picker:bundleLibRuntimeToDirDebug
+> Task :app:mergeDebugJniLibFolders
+> Task :expo:mergeDebugJniLibFolders
+> Task :expo:mergeDebugNativeLibs NO-SOURCE
+> Task :expo:copyDebugJniLibsProjectOnly
+> Task :expo-auto-attendance:mergeDebugJniLibFolders
+> Task :expo-auto-attendance:mergeDebugNativeLibs NO-SOURCE
+> Task :expo-auto-attendance:copyDebugJniLibsProjectOnly
+> Task :expo-constants:mergeDebugJniLibFolders
+> Task :expo-constants:mergeDebugNativeLibs NO-SOURCE
+> Task :expo-constants:copyDebugJniLibsProjectOnly
+> Task :expo-eas-client:mergeDebugJniLibFolders
+> Task :expo-eas-client:mergeDebugNativeLibs NO-SOURCE
+> Task :expo-eas-client:copyDebugJniLibsProjectOnly
+> Task :expo-json-utils:mergeDebugJniLibFolders
+> Task :expo-json-utils:mergeDebugNativeLibs NO-SOURCE
+> Task :expo-json-utils:copyDebugJniLibsProjectOnly
+> Task :expo-log-box:mergeDebugJniLibFolders
+> Task :expo-log-box:mergeDebugNativeLibs NO-SOURCE
+> Task :expo-log-box:copyDebugJniLibsProjectOnly
+> Task :expo-manifests:mergeDebugJniLibFolders
+> Task :expo-manifests:mergeDebugNativeLibs NO-SOURCE
+> Task :expo-manifests:copyDebugJniLibsProjectOnly
+> Task :expo-modules-core:mergeDebugJniLibFolders
+> Task :expo-structured-headers:mergeDebugJniLibFolders
+> Task :expo-structured-headers:mergeDebugNativeLibs NO-SOURCE
+> Task :expo-structured-headers:copyDebugJniLibsProjectOnly
+> Task :expo-updates:configureCMakeDebug[arm64-v8a]
+
+> Task :react-native-worklets:configureCMakeDebug[arm64-v8a]
+[CXX5304] This version only understands SDK XML versions up to 3 but an SDK XML file of version 4 was encountered. This can happen if you use versions of Android Studio and the command-line tools that were released at different times.
+[CXX5304] This version only understands SDK XML versions up to 3 but an SDK XML file of version 4 was encountered. This can happen if you use versions of Android Studio and the command-line tools that were released at different times.
+
+> Task :expo-updates:buildCMakeDebug[arm64-v8a]
+> Task :expo-updates:mergeDebugJniLibFolders
+> Task :expo-updates:mergeDebugNativeLibs
+> Task :expo-updates:copyDebugJniLibsProjectOnly
+> Task :expo-updates-interface:mergeDebugJniLibFolders
+> Task :expo-updates-interface:mergeDebugNativeLibs NO-SOURCE
+> Task :expo-updates-interface:copyDebugJniLibsProjectOnly
+> Task :react-native-async-storage_async-storage:mergeDebugJniLibFolders
+> Task :react-native-async-storage_async-storage:mergeDebugNativeLibs NO-SOURCE
+> Task :react-native-async-storage_async-storage:copyDebugJniLibsProjectOnly
+> Task :react-native-community_datetimepicker:mergeDebugJniLibFolders
+> Task :react-native-community_datetimepicker:mergeDebugNativeLibs NO-SOURCE
+> Task :react-native-community_datetimepicker:copyDebugJniLibsProjectOnly
+> Task :react-native-community_netinfo:mergeDebugJniLibFolders
+> Task :react-native-community_netinfo:mergeDebugNativeLibs NO-SOURCE
+> Task :react-native-community_netinfo:copyDebugJniLibsProjectOnly
+> Task :react-native-firebase_app:mergeDebugJniLibFolders
+> Task :react-native-firebase_app:mergeDebugNativeLibs NO-SOURCE
+> Task :react-native-firebase_app:copyDebugJniLibsProjectOnly
+> Task :react-native-firebase_crashlytics:mergeDebugJniLibFolders
+> Task :react-native-firebase_crashlytics:mergeDebugNativeLibs NO-SOURCE
+> Task :react-native-firebase_crashlytics:copyDebugJniLibsProjectOnly
+> Task :react-native-firebase_messaging:mergeDebugJniLibFolders
+> Task :react-native-firebase_messaging:mergeDebugNativeLibs NO-SOURCE
+> Task :react-native-firebase_messaging:copyDebugJniLibsProjectOnly
+> Task :react-native-gesture-handler:mergeDebugJniLibFolders
+> Task :react-native-picker_picker:mergeDebugJniLibFolders
+> Task :react-native-picker_picker:mergeDebugNativeLibs NO-SOURCE
+> Task :react-native-picker_picker:copyDebugJniLibsProjectOnly
+> Task :react-native-reanimated:mergeDebugJniLibFolders
+> Task :react-native-safe-area-context:mergeDebugJniLibFolders
+> Task :react-native-safe-area-context:mergeDebugNativeLibs NO-SOURCE
+> Task :react-native-safe-area-context:copyDebugJniLibsProjectOnly
+> Task :react-native-screens:configureCMakeDebug[arm64-v8a]
+> Task :react-native-screens:buildCMakeDebug[arm64-v8a]
+> Task :react-native-worklets:buildCMakeDebug[arm64-v8a][worklets]
+> Task :react-native-screens:mergeDebugJniLibFolders
+> Task :react-native-screens:mergeDebugNativeLibs
+> Task :react-native-screens:copyDebugJniLibsProjectOnly
+> Task :app:validateSigningDebug
+> Task :app:writeDebugAppMetadata
+> Task :app:writeDebugSigningConfigVersions
+> Task :react-native-worklets:externalNativeBuildDebug
+> Task :react-native-worklets:generateJsonModelDebug
+> Task :react-native-worklets:prefabDebugConfigurePackage
+> Task :react-native-worklets:prefabDebugPackage
+> Task :react-native-reanimated:configureCMakeDebug[arm64-v8a]
+> Task :react-native-reanimated:generateJsonModelDebug
+> Task :react-native-reanimated:prefabDebugConfigurePackage
+> Task :react-native-worklets:mergeDebugJniLibFolders
+> Task :app:configureCMakeDebug[arm64-v8a]
+> Task :react-native-worklets:mergeDebugNativeLibs
+> Task :react-native-worklets:copyDebugJniLibsProjectOnly
+> Task :expo-modules-core:configureCMakeDebug[arm64-v8a]
+> Task :expo-modules-core:buildCMakeDebug[arm64-v8a]
+> Task :expo-modules-core:mergeDebugNativeLibs
+> Task :expo-modules-core:copyDebugJniLibsProjectOnly
+> Task :react-native-gesture-handler:configureCMakeDebug[arm64-v8a]
+
+> Task :react-native-screens:compileDebugKotlin
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/RNScreensPackage.kt:70:9 The corresponding parameter in the supertype 'BaseReactPackage' is named 'name'. This may cause problems when calling this function with named arguments.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/RNScreensPackage.kt:71:9 The corresponding parameter in the supertype 'BaseReactPackage' is named 'reactContext'. This may cause problems when calling this function with named arguments.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/RNScreensPackage.kt:83:17 'constructor(name: String, className: String, canOverrideExistingModule: Boolean, needsEagerInit: Boolean, hasConstants: Boolean, isCxxModule: Boolean, isTurboModule: Boolean): ReactModuleInfo' is deprecated. This constructor is deprecated and will be removed in the future. Use ReactModuleInfo(String, String, boolean, boolean, boolean, boolean)].
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/Screen.kt:54:77 Unchecked cast of '(CoordinatorLayout.Behavior<View!>?..CoordinatorLayout.Behavior<*>?)' to 'BottomSheetBehavior<Screen>'.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/Screen.kt:59:33 'fun getEventDispatcherForReactTag(context: ReactContext, reactTag: Int): EventDispatcher?' is deprecated. reactTag is no longer needed.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/Screen.kt:516:14 'fun getEventDispatcherForReactTag(context: ReactContext, reactTag: Int): EventDispatcher?' is deprecated. reactTag is no longer needed.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/ScreenContainer.kt:250:18 'fun getEventDispatcherForReactTag(context: ReactContext, reactTag: Int): EventDispatcher?' is deprecated. reactTag is no longer needed.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/ScreenContainer.kt:260:18 'fun getEventDispatcherForReactTag(context: ReactContext, reactTag: Int): EventDispatcher?' is deprecated. reactTag is no longer needed.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/ScreenFragment.kt:225:37 'fun getEventDispatcherForReactTag(context: ReactContext, reactTag: Int): EventDispatcher?' is deprecated. reactTag is no longer needed.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/ScreenFragment.kt:242:14 'fun getEventDispatcherForReactTag(context: ReactContext, reactTag: Int): EventDispatcher?' is deprecated. reactTag is no longer needed.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/ScreenFragment.kt:258:22 'fun getEventDispatcherForReactTag(context: ReactContext, reactTag: Int): EventDispatcher?' is deprecated. reactTag is no longer needed.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/ScreenFragment.kt:327:22 'fun getEventDispatcherForReactTag(context: ReactContext, reactTag: Int): EventDispatcher?' is deprecated. reactTag is no longer needed.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/ScreenModalFragment.kt:180:22 'fun getEventDispatcherForReactTag(context: ReactContext, reactTag: Int): EventDispatcher?' is deprecated. reactTag is no longer needed.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/ScreenStack.kt:120:14 'fun getEventDispatcherForReactTag(context: ReactContext, reactTag: Int): EventDispatcher?' is deprecated. reactTag is no longer needed.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/ScreenStackFragment.kt:173:18 'fun getEventDispatcherForReactTag(context: ReactContext, reactTag: Int): EventDispatcher?' is deprecated. reactTag is no longer needed.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/ScreenStackFragment.kt:230:31 'var targetElevation: Float' is deprecated. Deprecated in Java.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/ScreenStackFragment.kt:233:13 'fun setHasOptionsMenu(p0: Boolean): Unit' is deprecated. Deprecated in Java.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/ScreenStackFragment.kt:443:18 This declaration overrides a deprecated member but is not marked as deprecated itself. Add the '@Deprecated' annotation or suppress the diagnostic.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/ScreenStackFragment.kt:450:22 'fun onPrepareOptionsMenu(p0: Menu): Unit' is deprecated. Deprecated in Java.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/ScreenStackFragment.kt:453:18 This declaration overrides a deprecated member but is not marked as deprecated itself. Add the '@Deprecated' annotation or suppress the diagnostic.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/ScreenStackFragment.kt:458:22 'fun onCreateOptionsMenu(p0: Menu, p1: MenuInflater): Unit' is deprecated. Deprecated in Java.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/ScreenStackHeaderConfig.kt:199:14 'fun getEventDispatcherForReactTag(context: ReactContext, reactTag: Int): EventDispatcher?' is deprecated. reactTag is no longer needed.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/ScreenStackHeaderConfig.kt:209:14 'fun getEventDispatcherForReactTag(context: ReactContext, reactTag: Int): EventDispatcher?' is deprecated. reactTag is no longer needed.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/ScreenWindowTraits.kt:48:42 'fun replaceSystemWindowInsets(p0: Int, p1: Int, p2: Int, p3: Int): @NonNull() WindowInsetsCompat' is deprecated. Deprecated in Java.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/ScreenWindowTraits.kt:49:39 'val systemWindowInsetLeft: Int' is deprecated. Deprecated in Java.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/ScreenWindowTraits.kt:51:39 'val systemWindowInsetRight: Int' is deprecated. Deprecated in Java.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/ScreenWindowTraits.kt:52:39 'val systemWindowInsetBottom: Int' is deprecated. Deprecated in Java.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/ScreensModule.kt:100:14 'fun getEventDispatcherForReactTag(context: ReactContext, reactTag: Int): EventDispatcher?' is deprecated. reactTag is no longer needed.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/SearchBarView.kt:137:29 'fun getEventDispatcherForReactTag(context: ReactContext, reactTag: Int): EventDispatcher?' is deprecated. reactTag is no longer needed.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/bottomsheet/BottomSheetDialogRootView.kt:7:8 'object ReactFeatureFlags : Any' is deprecated. Use com.facebook.react.internal.featureflags.ReactNativeFeatureFlags instead.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/bottomsheet/BottomSheetDialogRootView.kt:25:13 'object ReactFeatureFlags : Any' is deprecated. Use com.facebook.react.internal.featureflags.ReactNativeFeatureFlags instead.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/bottomsheet/BottomSheetDialogRootView.kt:32:9 The corresponding parameter in the supertype 'ReactViewGroup' is named 'left'. This may cause problems when calling this function with named arguments.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/bottomsheet/BottomSheetDialogRootView.kt:33:9 The corresponding parameter in the supertype 'ReactViewGroup' is named 'top'. This may cause problems when calling this function with named arguments.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/bottomsheet/BottomSheetDialogRootView.kt:34:9 The corresponding parameter in the supertype 'ReactViewGroup' is named 'right'. This may cause problems when calling this function with named arguments.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/bottomsheet/BottomSheetDialogRootView.kt:35:9 The corresponding parameter in the supertype 'ReactViewGroup' is named 'bottom'. This may cause problems when calling this function with named arguments.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/bottomsheet/BottomSheetDialogRootView.kt:71:9 The corresponding parameter in the supertype 'RootView' is named 'childView'. This may cause problems when calling this function with named arguments.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/bottomsheet/BottomSheetDialogRootView.kt:72:9 The corresponding parameter in the supertype 'RootView' is named 'ev'. This may cause problems when calling this function with named arguments.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/bottomsheet/BottomSheetDialogRootView.kt:79:46 The corresponding parameter in the supertype 'RootView' is named 'ev'. This may cause problems when calling this function with named arguments.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/bottomsheet/BottomSheetDialogRootView.kt:83:9 The corresponding parameter in the supertype 'RootView' is named 'childView'. This may cause problems when calling this function with named arguments.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/bottomsheet/BottomSheetDialogRootView.kt:84:9 The corresponding parameter in the supertype 'RootView' is named 'ev'. This may cause problems when calling this function with named arguments.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/bottomsheet/BottomSheetDialogRootView.kt:95:34 The corresponding parameter in the supertype 'RootView' is named 't'. This may cause problems when calling this function with named arguments.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/bottomsheet/DimmingView.kt:64:9 The corresponding parameter in the supertype 'ReactCompoundView' is named 'touchX'. This may cause problems when calling this function with named arguments.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/bottomsheet/DimmingView.kt:65:9 The corresponding parameter in the supertype 'ReactCompoundView' is named 'touchY'. This may cause problems when calling this function with named arguments.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/bottomsheet/DimmingView.kt:69:9 The corresponding parameter in the supertype 'ReactCompoundViewGroup' is named 'touchX'. This may cause problems when calling this function with named arguments.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/bottomsheet/DimmingView.kt:70:9 The corresponding parameter in the supertype 'ReactCompoundViewGroup' is named 'touchY'. This may cause problems when calling this function with named arguments.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/gamma/common/event/BaseEventEmitter.kt:12:38 'fun getEventDispatcherForReactTag(context: ReactContext, reactTag: Int): EventDispatcher?' is deprecated. reactTag is no longer needed.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/gamma/modals/dimmingview/DimmingView.kt:64:9 The corresponding parameter in the supertype 'ReactCompoundView' is named 'touchX'. This may cause problems when calling this function with named arguments.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/gamma/modals/dimmingview/DimmingView.kt:65:9 The corresponding parameter in the supertype 'ReactCompoundView' is named 'touchY'. This may cause problems when calling this function with named arguments.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/gamma/modals/dimmingview/DimmingView.kt:69:9 The corresponding parameter in the supertype 'ReactCompoundViewGroup' is named 'touchX'. This may cause problems when calling this function with named arguments.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/gamma/modals/dimmingview/DimmingView.kt:70:9 The corresponding parameter in the supertype 'ReactCompoundViewGroup' is named 'touchY'. This may cause problems when calling this function with named arguments.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/gamma/modals/formsheet/FormSheetContentView.kt:11:8 'object ReactFeatureFlags : Any' is deprecated. Use com.facebook.react.internal.featureflags.ReactNativeFeatureFlags instead.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/gamma/modals/formsheet/FormSheetContentView.kt:39:33 'fun getEventDispatcher(context: ReactContext, uiManagerType: Int): EventDispatcher?' is deprecated. UIManagerType is no longer needed.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/gamma/modals/formsheet/FormSheetContentView.kt:44:13 'object ReactFeatureFlags : Any' is deprecated. Use com.facebook.react.internal.featureflags.ReactNativeFeatureFlags instead.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/gamma/modals/formsheet/FormSheetHostViewManager.kt:38:9 The corresponding parameter in the supertype 'FormSheetHostViewManager' is named 'view'. This may cause problems when calling this function with named arguments.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/gamma/tabs/host/TabsHostViewManager.kt:44:9 The corresponding parameter in the supertype 'TabsHostViewManager' is named 'view'. This may cause problems when calling this function with named arguments.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/safearea/SafeAreaView.kt:143:45 'fun consumeDisplayCutout(): @NonNull() WindowInsetsCompat' is deprecated. Deprecated in Java.
+
+> Task :react-native-screens:compileDebugJavaWithJavac
+> Task :react-native-screens:bundleLibRuntimeToJarDebug
+> Task :react-native-screens:bundleLibCompileToJarDebug
+> Task :react-native-screens:processDebugJavaRes
+> Task :react-native-reanimated:buildCMakeDebug[arm64-v8a][reanimated]
+> Task :react-native-screens:bundleLibRuntimeToDirDebug
+
+> Task :expo-modules-core:compileDebugKotlin
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/expo-modules-core/android/src/main/java/expo/modules/apploader/AppLoaderProvider.kt:34:52 Unchecked cast of 'Class<*>!' to 'Class<out HeadlessAppLoader>'.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/expo-modules-core/android/src/main/java/expo/modules/kotlin/AppContext.kt:14:8 'class UIManagerModule : ReactContextBaseJavaModule, LifecycleEventListener, UIManager' is deprecated. Deprecated in Java.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/expo-modules-core/android/src/main/java/expo/modules/kotlin/AppContext.kt:22:8 'typealias ErrorManagerModule = JSLoggerModule' is deprecated. Use JSLoggerModule instead.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/expo-modules-core/android/src/main/java/expo/modules/kotlin/AppContext.kt:61:13 'val hostingRuntimeContext: MainRuntime' is deprecated. Use AppContext.runtimeContext instead.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/expo-modules-core/android/src/main/java/expo/modules/kotlin/AppContext.kt:271:21 'typealias ErrorManagerModule = JSLoggerModule' is deprecated. Use JSLoggerModule instead.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/expo-modules-core/android/src/main/java/expo/modules/kotlin/AppContext.kt:380:21 'val DEFAULT: Int' is deprecated. UIManagerType.DEFAULT will be deleted in the next release of React Native. Use [LEGACY] instead.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/expo-modules-core/android/src/main/java/expo/modules/kotlin/AppContext.kt:381:10 'class UIManagerModule : ReactContextBaseJavaModule, LifecycleEventListener, UIManager' is deprecated. Deprecated in Java.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/expo-modules-core/android/src/main/java/expo/modules/kotlin/defaultmodules/NativeModulesProxyModule.kt:16:5 'fun Constants(legacyConstantsProvider: () -> Map<String, Any?>): Unit' is deprecated. Use `Constant` or `Property` instead.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/expo-modules-core/android/src/main/java/expo/modules/kotlin/events/KModuleEventEmitterWrapper.kt:99:21 'fun getEventDispatcherForReactTag(context: ReactContext, reactTag: Int): EventDispatcher?' is deprecated. reactTag is no longer needed.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/expo-modules-core/android/src/main/java/expo/modules/kotlin/events/KModuleEventEmitterWrapper.kt:108:21 'fun getEventDispatcherForReactTag(context: ReactContext, reactTag: Int): EventDispatcher?' is deprecated. reactTag is no longer needed.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/expo-modules-core/android/src/main/java/expo/modules/kotlin/views/ViewDefinitionBuilder.kt:470:16 'val errorManager: JSLoggerModule?' is deprecated. Use AppContext.jsLogger instead.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/expo-modules-core/android/src/main/java/expo/modules/kotlin/views/ViewDefinitionBuilder.kt:470:30 'fun reportExceptionToLogBox(codedException: CodedException): Unit' is deprecated. Use appContext.jsLogger.error(...) instead.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/expo-modules-core/android/src/main/java/expo/modules/kotlin/views/ViewManagerDefinition.kt:41:16 'val errorManager: JSLoggerModule?' is deprecated. Use AppContext.jsLogger instead.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/expo-modules-core/android/src/main/java/expo/modules/kotlin/views/ViewManagerDefinition.kt:41:30 'fun reportExceptionToLogBox(codedException: CodedException): Unit' is deprecated. Use appContext.jsLogger.error(...) instead.
+
+> Task :expo-modules-core:compileDebugJavaWithJavac
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+
+> Task :expo-modules-core:processDebugJavaRes
+> Task :expo-modules-core:bundleLibCompileToJarDebug
+> Task :expo-modules-core:bundleLibRuntimeToJarDebug
+> Task :expo-modules-core:bundleLibRuntimeToDirDebug
+
+> Task :expo-constants:compileDebugKotlin
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/expo-constants/android/src/main/java/expo/modules/constants/ConstantsModule.kt:13:5 'fun Constants(legacyConstantsProvider: () -> Map<String, Any?>): Unit' is deprecated. Use `Constant` or `Property` instead.
+
+> Task :expo-constants:compileDebugJavaWithJavac
+> Task :expo-constants:bundleLibCompileToJarDebug
+> Task :expo-eas-client:compileDebugKotlin
+> Task :expo-json-utils:compileDebugKotlin
+> Task :expo-eas-client:compileDebugJavaWithJavac
+> Task :expo-eas-client:bundleLibCompileToJarDebug
+> Task :expo-json-utils:compileDebugJavaWithJavac
+> Task :expo-json-utils:bundleLibCompileToJarDebug
+
+> Task :expo-manifests:compileDebugKotlin
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/expo-manifests/android/src/main/java/expo/modules/manifests/core/EmbeddedManifest.kt:19:16 This declaration overrides a deprecated member but is not marked as deprecated itself. Add the '@Deprecated' annotation or suppress the diagnostic.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/expo-manifests/android/src/main/java/expo/modules/manifests/core/EmbeddedManifest.kt:19:86 'fun getLegacyID(): String' is deprecated. Prefer scopeKey or projectId depending on use case.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/expo-manifests/android/src/main/java/expo/modules/manifests/core/ExpoUpdatesManifest.kt:16:16 This declaration overrides a deprecated member but is not marked as deprecated itself. Add the '@Deprecated' annotation or suppress the diagnostic.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/expo-manifests/android/src/main/java/expo/modules/manifests/core/Manifest.kt:13:3 Deprecations and opt-ins on a method overridden from 'Any' may not be reported.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/expo-manifests/android/src/main/java/expo/modules/manifests/core/Manifest.kt:15:12 'fun getRawJson(): JSONObject' is deprecated. Prefer to use specific field getters.
+
+> Task :expo-log-box:compileDebugKotlin
+> Task :expo-manifests:compileDebugJavaWithJavac
+> Task :expo-manifests:bundleLibCompileToJarDebug
+> Task :expo-structured-headers:compileDebugKotlin NO-SOURCE
+> Task :expo-log-box:compileDebugJavaWithJavac
+> Task :expo-log-box:bundleLibCompileToJarDebug
+> Task :expo-structured-headers:compileDebugJavaWithJavac
+> Task :expo-structured-headers:bundleLibCompileToJarDebug
+> Task :expo-updates-interface:compileDebugKotlin
+> Task :expo-updates-interface:compileDebugJavaWithJavac
+> Task :expo-updates-interface:bundleLibCompileToJarDebug
+> Task :expo-auto-attendance:compileDebugKotlin
+> Task :expo-auto-attendance:compileDebugJavaWithJavac
+> Task :expo-auto-attendance:bundleLibCompileToJarDebug
+> Task :expo-log-box:bundleLibRuntimeToJarDebug
+> Task :expo-auto-attendance:bundleLibRuntimeToJarDebug
+> Task :expo-constants:bundleLibRuntimeToJarDebug
+> Task :expo-eas-client:bundleLibRuntimeToJarDebug
+> Task :expo-manifests:bundleLibRuntimeToJarDebug
+> Task :expo-json-utils:bundleLibRuntimeToJarDebug
+> Task :expo-structured-headers:bundleLibRuntimeToJarDebug
+> Task :expo-updates-interface:bundleLibRuntimeToJarDebug
+> Task :expo-auto-attendance:processDebugJavaRes
+> Task :expo-constants:processDebugJavaRes
+> Task :expo-eas-client:processDebugJavaRes
+> Task :expo-json-utils:processDebugJavaRes
+> Task :expo-log-box:processDebugJavaRes
+> Task :expo-manifests:processDebugJavaRes
+> Task :expo-structured-headers:processDebugJavaRes NO-SOURCE
+> Task :expo-updates-interface:processDebugJavaRes
+> Task :expo-log-box:bundleLibRuntimeToDirDebug
+> Task :expo-auto-attendance:bundleLibRuntimeToDirDebug
+> Task :expo-constants:bundleLibRuntimeToDirDebug
+> Task :expo-eas-client:bundleLibRuntimeToDirDebug
+> Task :expo-manifests:bundleLibRuntimeToDirDebug
+> Task :expo-json-utils:bundleLibRuntimeToDirDebug
+> Task :expo-structured-headers:bundleLibRuntimeToDirDebug
+> Task :expo-updates-interface:bundleLibRuntimeToDirDebug
+> Task :react-native-reanimated:externalNativeBuildDebug
+> Task :react-native-reanimated:prefabDebugPackage
+> Task :react-native-gesture-handler:buildCMakeDebug[arm64-v8a]
+> Task :react-native-gesture-handler:mergeDebugNativeLibs
+> Task :react-native-gesture-handler:copyDebugJniLibsProjectOnly
+> Task :react-native-reanimated:mergeDebugNativeLibs
+> Task :react-native-reanimated:copyDebugJniLibsProjectOnly
+> Task :expo-updates:kspDebugKotlin
+> Task :app:buildCMakeDebug[arm64-v8a]
+> Task :expo-updates:compileDebugKotlin
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/expo-updates/android/src/main/java/expo/modules/updates/UpdatesConfiguration.kt:322:13 'fun get(p0: String!): Any?' is deprecated. Deprecated in Java.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/expo-updates/android/src/main/java/expo/modules/updates/UpdatesDevLauncherController.kt:215:133 'fun getRawJson(): JSONObject' is deprecated. Prefer to use specific field getters.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/expo-updates/android/src/main/java/expo/modules/updates/UpdatesModule.kt:47:5 'fun Constants(legacyConstantsProvider: () -> Map<String, Any?>): Unit' is deprecated. Use `Constant` or `Property` instead.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/expo-updates/android/src/main/java/expo/modules/updates/UpdatesModule.kt:96:38 'fun toString(): String' is deprecated. Prefer to use specific field getters.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/expo-updates/android/src/main/java/expo/modules/updates/db/Converters.kt:56:30 Java type mismatch: inferred type is 'ByteArray?', but 'ByteArray' was expected.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/expo-updates/android/src/main/java/expo/modules/updates/db/DatabaseIntegrityCheck.kt:38:39 Java type mismatch: inferred type is 'String?', but 'String' was expected.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/expo-updates/android/src/main/java/expo/modules/updates/db/Reaper.kt:83:41 Java type mismatch: inferred type is 'String?', but 'String' was expected.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/expo-updates/android/src/main/java/expo/modules/updates/loader/Loader.kt:265:65 Java type mismatch: inferred type is 'String?', but 'String' was expected.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/expo-updates/android/src/main/java/expo/modules/updates/loader/LoaderTask.kt:372:101 'fun getRawJson(): JSONObject' is deprecated. Prefer to use specific field getters.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/expo-updates/android/src/main/java/expo/modules/updates/manifest/EmbeddedUpdate.kt:33:89 'fun getRawJson(): JSONObject' is deprecated. Prefer to use specific field getters.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/expo-updates/android/src/main/java/expo/modules/updates/manifest/ExpoUpdatesUpdate.kt:38:92 'fun getRawJson(): JSONObject' is deprecated. Prefer to use specific field getters.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/expo-updates/android/src/main/java/expo/modules/updates/procedures/CheckForUpdateProcedure.kt:143:100 'fun getRawJson(): JSONObject' is deprecated. Prefer to use specific field getters.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/expo-updates/android/src/main/java/expo/modules/updates/procedures/CheckForUpdateProcedure.kt:176:100 'fun getRawJson(): JSONObject' is deprecated. Prefer to use specific field getters.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/expo-updates/android/src/main/java/expo/modules/updates/procedures/StartupProcedure.kt:162:36 'fun getCurrentState(): UpdatesStateValue' is deprecated. Avoid needing to access current state to know how to transition to next state.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/expo-updates/android/src/main/java/expo/modules/updates/procedures/StartupProcedure.kt:196:34 'fun getCurrentState(): UpdatesStateValue' is deprecated. Avoid needing to access current state to know how to transition to next state.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/expo-updates/android/src/main/java/expo/modules/updates/procedures/StateMachineSerialExecutorQueue.kt:64:45 'fun getCurrentState(): UpdatesStateValue' is deprecated. Avoid needing to access current state to know how to transition to next state.
+
+> Task :expo-updates:compileDebugJavaWithJavac
+> Task :expo-updates:bundleLibCompileToJarDebug
+> Task :expo-updates:bundleLibRuntimeToJarDebug
+> Task :expo-updates:processDebugJavaRes
+> Task :expo-updates:bundleLibRuntimeToDirDebug
+
+> Task :expo:compileDebugKotlin
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/expo/android/src/main/java/expo/modules/ExpoModulesPackage.kt:34:16 This declaration overrides a deprecated member but is not marked as deprecated itself. Add the '@Deprecated' annotation or suppress the diagnostic.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/expo/android/src/main/java/expo/modules/ReactActivityDelegateWrapper.kt:22:8 'class ReactInstanceManager : Any' is deprecated. Deprecated in Java.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/expo/android/src/main/java/expo/modules/ReactActivityDelegateWrapper.kt:102:16 This declaration overrides a deprecated member but is not marked as deprecated itself. Add the '@Deprecated' annotation or suppress the diagnostic.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/expo/android/src/main/java/expo/modules/ReactActivityDelegateWrapper.kt:102:43 'class ReactInstanceManager : Any' is deprecated. Deprecated in Java.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/expo/android/src/main/java/expo/modules/ReactActivityDelegateWrapper.kt:103:21 'val reactInstanceManager: ReactInstanceManager' is deprecated. Deprecated in Java.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/expo/android/src/main/java/expo/modules/fetch/ExpoFetchModule.kt:33:39 'constructor(reactContext: ReactContext): ForwardingCookieHandler' is deprecated. Use the default constructor.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/expo/android/src/main/java/expo/modules/fetch/NativeResponse.kt:44:16 This declaration overrides a deprecated member but is not marked as deprecated itself. Add the '@Deprecated' annotation or suppress the diagnostic.
+w: file:///Volumes/DevSSD/Projects/claudion-checkin/node_modules/expo/android/src/main/java/expo/modules/fetch/NativeResponse.kt:46:11 'fun deallocate(): Unit' is deprecated. Use sharedObjectDidRelease() instead.
+
+> Task :expo:compileDebugJavaWithJavac
+> Task :expo:bundleLibCompileToJarDebug
+> Task :expo:bundleLibRuntimeToJarDebug
+> Task :expo:processDebugJavaRes
+> Task :expo:bundleLibRuntimeToDirDebug
+> Task :app:mergeLibDexDebug
+> Task :app:compileDebugKotlin
+> Task :app:compileDebugJavaWithJavac
+> Task :app:dexBuilderDebug
+> Task :app:mergeDebugNativeLibs
+> Task :app:processDebugJavaRes
+> Task :app:mergeDebugGlobalSynthetics
+> Task :app:mergeProjectDexDebug
+> Task :app:stripDebugDebugSymbols
+> Task :app:mergeDebugJavaResource
+> Task :app:packageDebug
+> Task :app:createDebugApkListingFileRedirect
+> Task :app:assembleDebug
+
+[Incubating] Problems report is available at: file:///Volumes/DevSSD/Projects/claudion-checkin/android/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 10.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/9.3.1/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 5m 12s
+598 actionable tasks: 542 executed, 56 up-to-date

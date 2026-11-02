@@ -1,0 +1,64 @@
+--------- beginning of main
+10-30 21:12:10.839  1651  1651 I ExpoAutoAttendance: Geofence registered
+10-30 21:12:10.839  1651  1651 I ExpoAutoAttendance: Geofence restored after reboot/update
+10-30 21:12:11.762  1651  1651 I ExpoAutoAttendance: Geofence registered
+10-30 21:12:11.762  1651  1651 I ExpoAutoAttendance: Geofence restored after reboot/update
+10-30 21:13:37.992  3649  3731 I ExpoAutoAttendance: Permission granted, registering geofence
+10-30 21:13:38.003  3649  3649 I ExpoAutoAttendance: Geofence registered
+10-30 21:14:04.103  3649  3649 I ExpoAutoAttendance: Battery Saver changed: true
+10-30 21:15:17.719  3962  4021 I ExpoAutoAttendance: Permission granted, registering geofence
+10-30 21:15:17.728  3962  3962 I ExpoAutoAttendance: Geofence registered
+10-30 21:18:24.056  4176  4227 I ExpoAutoAttendance: Permission granted, registering geofence
+10-30 21:18:24.077  4176  4176 I ExpoAutoAttendance: Geofence registered
+10-30 21:20:44.714  4599  4652 I ExpoAutoAttendance: Permission granted, registering geofence
+10-30 21:20:44.742  4599  4599 I ExpoAutoAttendance: Geofence registered
+10-30 21:20:53.021  4810  4810 I ExpoAutoAttendance: Geofence registered
+10-30 21:20:53.021  4810  4810 I ExpoAutoAttendance: Geofence restored after reboot/update
+10-30 21:22:10.906  4944  4997 I ExpoAutoAttendance: Permission granted, registering geofence
+10-30 21:22:10.954  4944  4944 I ExpoAutoAttendance: Geofence registered
+10-30 21:23:23.217  5240  5240 I ExpoAutoAttendance: Monitoring stopped
+10-30 21:23:23.280  5240  5240 I ExpoAutoAttendance: Monitoring stopped
+10-30 21:23:39.380  5342  5342 I ExpoAutoAttendance: No persisted geofence to restore
+10-30 21:23:40.489  5342  5391 I ExpoAutoAttendance: No persisted geofence to restore
+10-30 21:23:41.468  5342  5342 I ExpoAutoAttendance: Monitoring stopped
+10-30 21:23:41.677  5342  5342 I ExpoAutoAttendance: Monitoring stopped
+10-30 21:23:41.731  5342  5342 I ExpoAutoAttendance: Monitoring stopped
+10-30 21:24:41.702  5342  5342 I ExpoAutoAttendance: Monitoring stopped
+10-30 21:24:54.406  5536  5536 I ExpoAutoAttendance: No persisted geofence to restore
+10-30 21:24:55.511  5536  5584 I ExpoAutoAttendance: No persisted geofence to restore
+10-30 21:24:56.638  5536  5536 I ExpoAutoAttendance: Monitoring stopped
+10-30 21:24:56.739  5536  5536 I ExpoAutoAttendance: Monitoring stopped
+10-30 21:24:56.747  5536  5536 I ExpoAutoAttendance: Monitoring stopped
+10-30 21:24:56.776  5536  5536 I ExpoAutoAttendance: Monitoring stopped
+10-30 21:25:17.452  5635  5635 I ExpoAutoAttendance: No persisted geofence to restore
+10-30 21:25:18.567  5635  5683 I ExpoAutoAttendance: No persisted geofence to restore
+10-30 21:25:19.576  5635  5635 I ExpoAutoAttendance: Monitoring stopped
+10-30 21:25:19.623  5635  5635 I ExpoAutoAttendance: Monitoring stopped
+10-30 21:25:19.926  5635  5687 I ExpoAutoAttendance: Permission granted, registering geofence
+10-30 21:25:19.948  5635  5635 I ExpoAutoAttendance: Geofence registered
+10-30 21:27:06.428  5909  5909 I ExpoAutoAttendance: Geofence registered
+10-30 21:27:06.428  5909  5909 I ExpoAutoAttendance: Geofence restored after reboot/update
+10-30 21:27:07.388  5909  5909 I ExpoAutoAttendance: Geofence registered
+10-30 21:27:07.388  5909  5909 I ExpoAutoAttendance: Geofence restored after reboot/update
+10-30 21:28:14.775  5909  5964 I ExpoAutoAttendance: Permission granted, registering geofence
+10-30 21:28:14.781  5909  5909 I ExpoAutoAttendance: Geofence registered
+10-30 21:32:39.067  6320  6373 I ExpoAutoAttendance: Permission granted, registering geofence
+10-30 21:32:39.080  6320  6320 I ExpoAutoAttendance: Geofence registered
+10-30 21:32:56.756  6503  6503 I ExpoAutoAttendance: Geofence registered
+10-30 21:32:56.756  6503  6503 I ExpoAutoAttendance: Geofence restored after reboot/update
+10-30 21:32:57.654  6503  6503 I ExpoAutoAttendance: Geofence registered
+10-30 21:32:57.654  6503  6503 I ExpoAutoAttendance: Geofence restored after reboot/update
+10-30 21:32:58.693  6503  6503 I ExpoAutoAttendance: Monitoring stopped
+10-30 21:32:58.792  6503  6557 I ExpoAutoAttendance: Permission granted, registering geofence
+10-30 21:32:58.799  6503  6503 I ExpoAutoAttendance: Geofence registered
+10-30 21:33:33.256  6606  6606 I ExpoAutoAttendance: Geofence registered
+10-30 21:33:33.256  6606  6606 I ExpoAutoAttendance: Geofence restored after reboot/update
+10-30 21:33:35.804  6606  6606 I ExpoAutoAttendance: Geofence registered
+10-30 21:33:35.804  6606  6606 I ExpoAutoAttendance: Geofence restored after reboot/update
+10-30 21:33:36.888  6606  6606 I ExpoAutoAttendance: Monitoring stopped
+10-30 21:33:37.026  6606  6670 I ExpoAutoAttendance: Permission granted, registering geofence
+10-30 21:33:37.033  6606  6606 I ExpoAutoAttendance: Geofence registered
+10-30 21:34:38.073  6834  6834 I ExpoAutoAttendance: Geofence registered
+10-30 21:34:38.074  6834  6834 I ExpoAutoAttendance: Geofence restored after reboot/update
+10-30 21:34:38.988  6834  6834 I ExpoAutoAttendance: Geofence registered
+10-30 21:34:38.988  6834  6834 I ExpoAutoAttendance: Geofence restored after reboot/update

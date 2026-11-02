@@ -37,7 +37,7 @@ import {
 import { fetchShouldAttemptRequest } from "./NetworkListener";
 import { ATTENDANCE_SCOPE_CHANGED, assertAttendanceQueueScope, captureAttendanceQueueScope } from "./attendanceQueueProvenance";
 import { verifyQueuedAttendance } from "./AttendanceVerification";
-import { isoTime, logAttendanceDiagnostic } from "./attendanceDiagnostics";
+import { isoTime, logAttendanceDiagnostic, recordAttendanceLifecycle } from "./attendanceDiagnostics";
 import { checkInstanceAvailability, invalidateInstanceAvailability } from "./InstanceAvailabilityService";
 
 /**
@@ -661,6 +661,10 @@ export const syncPendingAttendance = async ({
         const report = { id: row.id, action: row.action, timestamp: row.timestamp };
         const outcome = await syncRow(row, syncScope, report);
         const saved = await findById(row.id);
+        recordAttendanceLifecycle("queue.settled", {
+          eventId: row.sourceEventId, queueRowId: row.id, status: saved?.status,
+          nextAttemptAt: saved?.nextAttemptAt, retry: ["pending", "blocked"].includes(saved?.status),
+        });
         logAttendanceDiagnostic(QUEUE_LOG, `#${row.id} syncing → ${saved?.status}`, {
           action: row.action, timestamp: row.timestamp, outcome, reason: saved?.error ?? outcome,
           attemptCount: saved?.attemptCount, retryCount: saved?.retryCount, failureClass: saved?.failureClass ?? null,

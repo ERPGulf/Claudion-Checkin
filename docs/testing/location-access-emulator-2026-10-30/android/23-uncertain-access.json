@@ -1,0 +1,20 @@
+{
+  "lossEventId": "fda49e86-ce94-457b-bb7e-af50f0764837",
+  "reason": null,
+  "recoveryPending": true,
+  "registration": {
+    "employeeId": "QA-ANDROID-001",
+    "geotagging": 2,
+    "identifier": "office-main",
+    "latitude": 25.2854,
+    "longitude": 51.531,
+    "nativeIdentifier": "attendance:1d231728-febf-4ece-a315-f0146e487225",
+    "radius": 100,
+    "registrationGeneration": "e859ea60-ad0a-4374-8466-819fe9397911",
+    "registrationId": "[\"http://10.0.2.2:8765\",\"QA-ANDROID-001\",\"office-main\",25.2854,51.531,100,2]",
+    "requestedRadius": 100,
+    "tenantKey": "http://10.0.2.2:8765"
+  },
+  "registrationGeneration": "e859ea60-ad0a-4374-8466-819fe9397911",
+  "state": "confirmed_available"
+}

@@ -1,0 +1,27 @@
+{
+  "backendType": "isolated local mock, not staging",
+  "originalQueueId": 1,
+  "lossEventId": "3F2F89EE-C6AE-4953-B279-B108F86DFC6C",
+  "originalQueuedTimestamp": "2026-10-30 15:49:45",
+  "matchingStoredOutCount": 1,
+  "storedRecords": [
+    {
+      "name": "QA-CHECKIN-00023",
+      "employee": "QA-IOS-001",
+      "employee_name": "Disposable QA-IOS-001",
+      "time": "2026-10-30 15:49:45",
+      "timestamp": "2026-10-30 15:49:45",
+      "log_type": "OUT",
+      "custom_in": 0,
+      "device_id": "MobileAPP",
+      "auto": null,
+      "location": null,
+      "latitude": null,
+      "longitude": null,
+      "receivedAt": "2026-10-30T15:51:05.859+00:00",
+      "storedAt": "2026-10-30T15:51:05.863+00:00",
+      "endpoint": "offline"
+    }
+  ],
+  "timestampPreserved": true
+}

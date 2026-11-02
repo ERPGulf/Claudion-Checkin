@@ -39,7 +39,7 @@ public class ExpoAutoAttendanceModule: Module {
   public func definition() -> ModuleDefinition {
     Name("ExpoAutoAttendance")
 
-    Events(GeofenceEvents.enter, GeofenceEvents.exit, GeofenceEvents.error)
+    Events(GeofenceEvents.enter, GeofenceEvents.exit, GeofenceEvents.error, GeofenceEvents.accessChanged)
 
     OnCreate {
       GeofenceEventBus.shared.listener = { [weak self] eventName, payload in
@@ -120,8 +120,23 @@ public class ExpoAutoAttendanceModule: Module {
       }
     }.runOnQueue(.main)
 
+    Function("refreshLocationAccess") {
+      return GeofenceManager.shared.refreshLocationAccess()
+    }
+
+    Function("getLocationAccessState") {
+      return GeofenceManager.shared.getLocationAccessState()
+    }
+
+    AsyncFunction("retryLocationAccessRecovery") { (promise: Promise) in
+      GeofenceManager.shared.retryLocationAccessRecovery { state in promise.resolve(state) }
+    }.runOnQueue(.main)
+
     Function("isMonitoring") { () throws -> Bool in
-      return try GeofenceStore.shared.getRegistrationState()?["status"] as? String == "monitoring"
+      let access = GeofenceManager.shared.getLocationAccessState()
+      let registration = try GeofenceStore.shared.getRegistrationState()
+      return access["state"] as? String == "confirmed_available" && access["recoveryPending"] as? Bool == false &&
+        registration?["status"] as? String == "monitoring"
     }
 
     // Status queries the JS screen can poll (e.g. on focus, before Start) to

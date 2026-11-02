@@ -1,5 +1,6 @@
 // src/services/offline/BackgroundSyncManager.js
 import { AppState } from "react-native";
+import { recordAttendanceLifecycle } from "./attendanceDiagnostics";
 import { addTokenChangeListener } from "../api/apiClient";
 import { FAILURE_CLASS } from "./AttendanceDatabase";
 import { cancelActiveSync, syncPendingAttendance } from "./AttendanceSyncService";
@@ -34,9 +35,9 @@ import {
  *    thing that retires a row whose retry backoff expires while the user sits
  *    on one screen doing nothing
  *
- * There is no OS-level background task here. `expo-background-task` would be a
- * further native dependency, and the geofence relaunch already wakes JS at the
- * moments that matter for attendance.
+ * These triggers require a live JS runtime. Android's native attendance
+ * WorkManager worker separately starts the registered headless task and uses
+ * the same processors; a geofence broadcast alone does not wake JavaScript.
  */
 
 const LOG_PREFIX = "[BackgroundSyncManager]";
@@ -141,6 +142,7 @@ const runConfigRefresh = async (trigger, { force = false } = {}) => {
 };
 
 const handleAppStateChange = (nextState) => {
+  recordAttendanceLifecycle("app.state", { appState: nextState });
   if (nextState !== "active") return;
 
   const now = Date.now();

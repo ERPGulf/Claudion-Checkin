@@ -114,6 +114,7 @@ function AutoAttendance() {
     eventLog,
     permissionError,
     reliabilityWarning,
+    verificationNotice,
     busy,
     presence,
     presenceLoading,
@@ -162,8 +163,9 @@ function AutoAttendance() {
 
   const headline = (() => {
     if (presenceLoading && !known) return t("Checking your location…");
+    if (presence?.verification === 'uncertain') return t("Waiting for accurate location");
     if (!known) {
-      return permissionGranted ? t("Location unavailable") : t("Location access needed");
+      return permissionGranted === false ? t("Location access needed") : t("Location unavailable");
     }
     return presence.withinRadius
       ? t("You're at the office")
@@ -172,10 +174,11 @@ function AutoAttendance() {
 
   const supporting = (() => {
     if (presenceLoading && !known) return t("Reading your current position.");
+    if (presence?.verification === 'uncertain') return t("Your location is not accurate enough to verify office presence yet.");
     if (!known) {
-      return permissionGranted
-        ? t("No location fix or office boundary yet.")
-        : t("Grant location access to see whether you're at the office.");
+      return permissionGranted === false
+        ? t("Grant location access to see whether you're at the office.")
+        : t("No location fix or office boundary yet.");
     }
     return presence.withinRadius
       ? t("Inside the {{radius}} boundary.", { radius: formatDistance(presence.radius) })
@@ -321,6 +324,24 @@ function AutoAttendance() {
             <StatusBadge tone={status.tone} label={status.label} />
           </SettingsRow>
         </Card>
+
+        {verificationNotice ? (
+          <StatusBanner
+            tone={verificationNotice.tone}
+            title={verificationNotice.title}
+            message={verificationNotice.message}
+            style={{ marginTop: SPACING.md }}
+          />
+        ) : null}
+
+        {status.key === "location_services_disabled" ? (
+          <StatusBanner
+            tone="warning"
+            title={t("Location services are off")}
+            message={t("Turn on location services in your device settings to resume automatic attendance.")}
+            style={{ marginTop: SPACING.md }}
+          />
+        ) : null}
 
         {status.key === "permission" ? (
           <>

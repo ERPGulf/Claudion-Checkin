@@ -1,0 +1,75 @@
+{
+  "appState": "active",
+  "employee": "QA-ANDROID-001",
+  "employeePolicy": {
+    "accountId": "QA-ANDROID-001",
+    "explicit": true,
+    "generation": 1,
+    "mode": 2,
+    "receivedAt": 1793355197901,
+    "revision": 3,
+    "scope": "http://10.0.2.2:8765::QA-ANDROID-001",
+    "source": "response"
+  },
+  "events": [],
+  "featureSettings": {
+    "error": null,
+    "lastFetchedAt": 1793355166985,
+    "pendingRequestId": null,
+    "pendingScope": null,
+    "scope": "http://10.0.2.2:8765::QA-ANDROID-001",
+    "settings": {
+      "attendance_action": {
+        "attendance_history": true,
+        "attendance_request": false,
+        "employee_checkin_break": false,
+        "employee_shift": false,
+        "geo_tagging": true,
+        "offline_attendance": true,
+        "offline_attendance_version": "1",
+        "photo_upload": false,
+        "restrict_location": true,
+        "unrestricted_checkout_location": false
+      },
+      "complaints": false,
+      "employee_records": false,
+      "employee_resignation": false,
+      "expense_claim": false,
+      "leave_request": false,
+      "loan_application": false
+    },
+    "status": "success"
+  },
+  "loggedIn": true,
+  "monitoring": {
+    "scope": "http://10.0.2.2:8765::QA-ANDROID-001",
+    "state": "active"
+  },
+  "nativePending": [],
+  "observedAt": "2026-10-30T10:13:23.698Z",
+  "platform": "android",
+  "queue": [],
+  "registered": [
+    {
+      "employeeId": "QA-ANDROID-001",
+      "geotagging": 2,
+      "identifier": "office-main",
+      "latitude": 25.2854,
+      "longitude": 51.531,
+      "nativeIdentifier": "attendance:2b4b81ff-67cd-4acc-9d65-e4ec86209c95",
+      "radius": 100,
+      "registrationGeneration": "e859ea60-ad0a-4374-8466-819fe9397911",
+      "registrationId": "[\"http://10.0.2.2:8765\",\"QA-ANDROID-001\",\"office-main\",25.2854,51.531,100,2]",
+      "requestedRadius": 100,
+      "tenantKey": "http://10.0.2.2:8765"
+    }
+  ],
+  "session": {
+    "closedBy": null,
+    "endedAt": null,
+    "origin": null,
+    "startedAt": null,
+    "status": "CHECKED_OUT"
+  },
+  "tenant": "http://10.0.2.2:8765"
+}

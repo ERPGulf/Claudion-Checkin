@@ -57,6 +57,20 @@ describe("localNotifications", () => {
     expect(Notifications.scheduleNotificationAsync).toHaveBeenCalledTimes(1);
   });
 
+  it("never requests permission from a headless attendance notification", async () => {
+    Notifications.getPermissionsAsync.mockResolvedValue({ granted: false, canAskAgain: true });
+    await presentLocalNotification({ title: "Checked out", body: "Saved", requestPermission: false });
+    expect(Notifications.requestPermissionsAsync).not.toHaveBeenCalled();
+    expect(Notifications.scheduleNotificationAsync).not.toHaveBeenCalled();
+  });
+
+  it("delivers a headless notification with existing permission", async () => {
+    Notifications.getPermissionsAsync.mockResolvedValue({ granted: true });
+    await presentLocalNotification({ title: "Checked out", body: "Saved", requestPermission: false });
+    expect(Notifications.requestPermissionsAsync).not.toHaveBeenCalled();
+    expect(Notifications.scheduleNotificationAsync).toHaveBeenCalledTimes(1);
+  });
+
   it("does not present (and never throws) when permission is permanently denied", async () => {
     Notifications.getPermissionsAsync.mockResolvedValue({
       granted: false,

@@ -1,0 +1,10 @@
+appId: com.bazim.claudioncheckin
+---
+- tapOn: "Enter password"
+- inputText: "${QA_PASSWORD}"
+- hideKeyboard
+- tapOn:
+    text: "Login"
+    index: 0
+- waitForAnimationToEnd
+- takeScreenshot: ios-after-login

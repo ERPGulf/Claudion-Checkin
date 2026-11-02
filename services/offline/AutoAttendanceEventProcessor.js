@@ -9,6 +9,7 @@ import { captureAttendanceQueueScope } from "./attendanceQueueProvenance";
 import { readAttendanceConfig } from "./attendanceConfigCache";
 import { fetchShouldAttemptRequest, isOnline } from "./NetworkListener";
 import { checkInstanceAvailability } from "./InstanceAvailabilityService";
+import { recordAttendanceLifecycle } from "./attendanceDiagnostics";
 import { autoCheckInOut, getAttendanceStatus, resolveServerTimestampAt } from "../api/attendance.service";
 import { formatOfflineTimestamp, normalizeAttendanceStatusClock } from "../../utils/serverClock";
 import { normalizeCustomIn, toTimestampMs } from "../../utils/attendanceSession";
@@ -18,6 +19,10 @@ import { assertCapability, assertCapabilityCurrent } from "../capabilityPolicy";
 import { assertEmployeeAutoAttendancePolicy } from "../employeeAutoAttendancePolicy";
 import { ATTENDANCE_FEATURES } from "../../utils/featureSettings";
 import {
+  LOCATION_ACCESS_KIND, LOCATION_ACCESS_LOSS_REASONS, classifyOfficePresence,
+  autoEventAttendanceType, autoEventAttendanceAction,
+} from "../../utils/locationAccessState";
+import {
   applySessionOwner, clearUnverifiedSessionOwner, performSessionTransition,
   readUnverifiedSessionOwner, reconcileSessionFromServer, SESSION_ORIGIN, TRANSITION_RESULT,
 } from "../../utils/attendanceSessionState";
@@ -26,6 +31,12 @@ const { PENDING, PROCESSING, HANDLED, NEEDS_REVIEW } = Events.AUTO_EVENT_STATUS;
 let processor = Promise.resolve();
 const claimOwner = `auto-attendance:${Date.now()}:${Math.random()}`;
 const TRANSIENT_AVAILABILITY = new Set(["device_offline", "instance_unreachable", "server_unavailable"]);
+const NON_AUTHORIZING = new Set([
+  "initial-presence-after-manual-checkout", "access-loss-non-auto-session",
+  "access-loss-session-mismatch", "access-recovery-session-mismatch",
+  "access-recovery-registration-changed", "access-recovery-loss-mismatch",
+  "access-recovery-superseded",
+]);
 
 const availabilityRefusal = availability => ({
   allowed: false,
@@ -62,7 +73,7 @@ export const verifyAutoAttendanceEvent = async ({ eventId, employeeId }) => {
   if (config?.tenantKey !== scope.tenantKey || config?.employeeId !== scope.employeeId) return { verified: false };
   const result = await verifyQueuedAttendance({ tenantKey: row.tenantKey, employeeId: row.employeeId,
     employeeDocname: config.employeeDocname, timestamp: row.punchTimestamp,
-    action: row.transition === "ENTER" ? "checkin" : "checkout" }, { syncScope: scope });
+    action: autoEventAttendanceAction(row.event) }, { syncScope: scope });
   await assertAttendanceQueueScope(scope);
   if (result.verified) {
     await Events.updateEvent(eventId, { status: PENDING, reason: "server-record-verified" });
@@ -72,12 +83,19 @@ export const verifyAutoAttendanceEvent = async ({ eventId, employeeId }) => {
 };
 
 const updateOwned = async (eventId, changes = {}) => {
+  if (changes.outcome) {
+    const previous = await Events.findEvent(eventId);
+    changes = { ...changes, outcome: { ...previous?.outcome, ...changes.outcome } };
+  }
   const row = await Events.updateClaimedEvent(eventId, claimOwner, changes);
   if (!row) {
     const error = new Error("Automatic attendance event claim changed.");
     error.code = "AUTO_ATTENDANCE_CLAIM_CHANGED";
     throw error;
   }
+  if (changes.status) recordAttendanceLifecycle("event.status", {
+    eventId, status: row.status, queueRowId: row.queueRowId, reason: row.reason,
+  });
   return row;
 };
 
@@ -87,7 +105,16 @@ export const ingestPendingNativeEvents = async () => {
   const pending = Native.getPendingEvents();
   if (!Array.isArray(pending)) return 0;
   for (const event of pending) {
-    await Events.ingestNativeEvent(event);
+    let row;
+    try {
+      row = await Events.ingestNativeEvent(event);
+    } catch (error) {
+      recordAttendanceLifecycle("sqlite.ingress_failed", { eventId: event.eventId, timestamp: event.timestamp });
+      throw error;
+    }
+    recordAttendanceLifecycle("sqlite.ingress_committed", {
+      eventId: row.eventId, timestamp: event.timestamp, status: row.status,
+    });
     if (event.eventId) {
       try {
         Native.acknowledgeEvent(event.eventId);
@@ -104,9 +131,25 @@ export const ingestPendingNativeEvents = async () => {
 const validateEvent = (event, scope) => {
   if (event?.tenantKey !== scope.tenantKey || event?.employeeId !== scope.employeeId) return "native-provenance-mismatch";
   if (event.captureIssue || event.identifier !== Native.OFFICE_GEOFENCE_IDENTIFIER ||
-    !["ENTER", "EXIT"].includes(event.transition) || !validOffice(event) ||
+    !validOffice(event) ||
     !Number.isFinite(event.timestamp) || event.timestamp <= 0 ||
     event.timestamp > Date.now() + 60000 || typeof event.registrationId !== "string" || !event.registrationId) return "invalid-native-event";
+  if (event.kind == null) {
+    if (!["ENTER", "EXIT"].includes(event.transition)) return "invalid-native-event";
+  } else {
+    if (event.transition != null || typeof event.registrationGeneration !== "string" ||
+      !event.registrationGeneration) return "invalid-native-event";
+    if (event.kind === LOCATION_ACCESS_KIND.LOST) {
+      if (!LOCATION_ACCESS_LOSS_REASONS.has(event.reason)) return "invalid-native-event";
+    } else if (event.kind === LOCATION_ACCESS_KIND.RECOVERED) {
+      if (typeof event.lossEventId !== "string" || !event.lossEventId ||
+        !Number.isFinite(event.fixRequestedAt) || event.fixRequestedAt <= 0 ||
+        event.position?.timestamp !== event.timestamp || !["inside", "outside"].includes(event.presence) ||
+        classifyOfficePresence(event, event.position, { requestedAt: event.fixRequestedAt }) !== event.presence) {
+        return "invalid-native-event";
+      }
+    } else return "invalid-native-event";
+  }
   if ((event.initialPresence !== undefined && typeof event.initialPresence !== "boolean") ||
     (event.initialPresence === true && (!Number.isFinite(event.registrationStartedAt) ||
       event.registrationStartedAt <= 0 || event.registrationStartedAt > event.timestamp))) return "invalid-native-event";
@@ -143,12 +186,19 @@ const restoreVerifiedOwner = async (scope) => {
 };
 
 const saveOutcome = async (row, result) => {
+  const previous = await Events.findEvent(row.eventId);
+  const target = previous?.outcome?.targetSession;
+  const cutoffAccepted = row.event.kind === LOCATION_ACCESS_KIND.LOST && !!target &&
+    result.session?.origin === SESSION_ORIGIN.AUTO && result.session?.closedByEventId === row.eventId &&
+    result.session?.sourceEventId === target.sourceEventId && result.session?.startedAt === target.startedAt &&
+    result.session?.registrationGeneration === target.registrationGeneration && result.session?.endedAt === row.occurredAt;
   const queueRowId = result.response?.queueRowId ?? result.response?.row?.id ?? null;
   await updateOwned(row.eventId, {
     status: HANDLED, reason: result.reason ?? null,
     sessionAt: result.session?.startedAt ?? result.session?.endedAt ?? null,
     queueRowId,
     outcome: { status: result.status, queued: result.queued, serverConfirmed: result.serverConfirmed,
+      ...(row.event.kind === LOCATION_ACCESS_KIND.LOST ? { cutoffAccepted: !!previous?.outcome?.cutoffAccepted || cutoffAccepted } : {}),
       name: result.response?.name ?? null },
   });
   // Development only: one line per processed crossing, for device testing.
@@ -164,14 +214,67 @@ const saveOutcome = async (row, result) => {
   notifyQueueChanged();
 };
 
+const recoveryRegistrationRefusal = (event, fresh = false) => {
+  if (event.kind !== LOCATION_ACCESS_KIND.RECOVERED) return null;
+  const current = Native.getLocationAccessState?.();
+  if (current?.registrationGeneration !== event.registrationGeneration) {
+    return { allowed: false, reason: "access-recovery-registration-changed" };
+  }
+  if (fresh && current.lossEventId && current.lossEventId !== event.lossEventId) {
+    return { allowed: false, reason: "access-recovery-superseded" };
+  }
+  if (fresh && current.state !== "confirmed_available") {
+    return { allowed: false, reason: "access-recovery-access-unverified" };
+  }
+  return null;
+};
+
+/** Called inside the session lock; never readSession() here. */
+const controlSessionRefusal = async (row, session) => {
+  const event = row.event;
+  if (event.kind === LOCATION_ACCESS_KIND.LOST) {
+    if (session.origin !== SESSION_ORIGIN.AUTO) return { allowed: false, reason: "access-loss-non-auto-session" };
+    if (!session.sourceEventId || session.registrationGeneration !== event.registrationGeneration) {
+      return { allowed: false, reason: "access-loss-session-mismatch" };
+    }
+    const target = { sourceEventId: session.sourceEventId, startedAt: session.startedAt,
+      registrationGeneration: session.registrationGeneration };
+    const previous = (await Events.findEvent(row.eventId))?.outcome?.targetSession;
+    if (previous && (previous.sourceEventId !== target.sourceEventId || previous.startedAt !== target.startedAt ||
+      previous.registrationGeneration !== target.registrationGeneration)) {
+      return { allowed: false, reason: "access-loss-session-mismatch" };
+    }
+    await updateOwned(row.eventId, { outcome: { targetSession: target } });
+  } else if (event.kind === LOCATION_ACCESS_KIND.RECOVERED) {
+    const loss = await Events.findEvent(event.lossEventId);
+    const target = loss?.outcome?.targetSession;
+    if (loss?.event?.kind !== LOCATION_ACCESS_KIND.LOST || loss.status !== HANDLED ||
+      !loss.outcome?.cutoffAccepted || loss.tenantKey !== row.tenantKey || loss.employeeId !== row.employeeId ||
+      loss.event.registrationGeneration !== event.registrationGeneration || loss.event.registrationId !== event.registrationId ||
+      loss.occurredAt > event.fixRequestedAt || !target) {
+      return { allowed: false, reason: "access-recovery-loss-mismatch" };
+    }
+    const changed = recoveryRegistrationRefusal(event);
+    if (changed) return changed;
+    if (session.status !== "CHECKED_OUT" || session.origin !== SESSION_ORIGIN.AUTO ||
+      session.closedBy !== SESSION_ORIGIN.AUTO || session.closedByEventId !== loss.eventId ||
+      session.sourceEventId !== target.sourceEventId || session.startedAt !== target.startedAt ||
+      session.endedAt !== loss.occurredAt || session.registrationGeneration !== target.registrationGeneration) {
+      return { allowed: false, reason: "access-recovery-session-mismatch" };
+    }
+  }
+  return null;
+};
+
 const runTransition = (row, scope, execute) => performSessionTransition({
-  type: row.transition === "ENTER" ? "IN" : "OUT", origin: SESSION_ORIGIN.AUTO,
+  type: autoEventAttendanceType(row.event), origin: SESSION_ORIGIN.AUTO,
   at: row.occurredAt, rejectStale: true, strictRead: true,
-  sourceEventId: row.eventId, withSessionContext: true,
+  sourceEventId: row.eventId, registrationGeneration: row.event.registrationGeneration, withSessionContext: true,
+  resolveSourceTimestamp: async () => (await Events.findEvent(row.eventId))?.punchTimestamp,
   assertCurrent: async () => {
     await assertAttendanceQueueScope(scope);
     await updateOwned(row.eventId);
-  }, execute,
+  }, execute: async session => await controlSessionRefusal(row, session) ?? execute(session),
 });
 
 const processRow = async (input, scope, config, verifiedDispatch = null) => {
@@ -181,6 +284,15 @@ const processRow = async (input, scope, config, verifiedDispatch = null) => {
   if (invalid) {
     await updateOwned(row.eventId, { status: NEEDS_REVIEW, reason: invalid });
     notifyQueueChanged();
+    return {};
+  }
+  // A recovery-era callback is evidence only, even after the episode resolves.
+  if (row.event.kind == null && row.event.transition === "ENTER" && row.event.lossEventId) {
+    await updateOwned(row.eventId, { status: HANDLED, reason: "access-recovery-enter-evidence" });
+    return {};
+  }
+  if (row.event.kind === LOCATION_ACCESS_KIND.RECOVERED && row.event.presence === "outside") {
+    await updateOwned(row.eventId, { status: HANDLED, reason: "access-recovery-outside" });
     return {};
   }
   const requestedRadius = JSON.parse(row.event.registrationId)[5];
@@ -224,7 +336,7 @@ const processRow = async (input, scope, config, verifiedDispatch = null) => {
       verifiedDispatch?.punchTimestamp === row.punchTimestamp ? verifiedDispatch.verification
       : await verifyQueuedAttendance({ tenantKey: row.tenantKey, employeeId: row.employeeId,
       employeeDocname: config.employeeDocname, timestamp: row.punchTimestamp,
-      action: row.transition === "ENTER" ? "checkin" : "checkout" }, { syncScope: scope });
+      action: autoEventAttendanceAction(row.event) }, { syncScope: scope });
     await assertAttendanceQueueScope(scope);
     if (!verification.verified) {
       await updateOwned(row.eventId, { status: verification.reason === "server-unavailable" ? PROCESSING : NEEDS_REVIEW,
@@ -243,7 +355,7 @@ const processRow = async (input, scope, config, verifiedDispatch = null) => {
     await updateOwned(row.eventId, { status: PENDING, reason: refusal.reason });
     return { stop: true };
   }
-  const type = row.transition === "ENTER" ? "IN" : "OUT";
+  const type = autoEventAttendanceType(row.event);
   const result = await runTransition(row, scope, async (session) => {
     const refusal = await automaticCapabilityRefusal(scope);
     if (refusal) return refusal;
@@ -272,6 +384,10 @@ const processRow = async (input, scope, config, verifiedDispatch = null) => {
     let availability = null;
     if (!forceQueue) {
       availability = await checkInstanceAvailability({ syncScope: scope });
+      recordAttendanceLifecycle("server.reachability", {
+        eventId: row.eventId, status: availability.status,
+        serverReachable: availability.status === "available", httpStatus: availability.httpStatus,
+      });
       await assertAttendanceQueueScope(scope);
       if (availability.status !== "available") {
         if (TRANSIENT_AVAILABILITY.has(availability.status)) forceQueue = true;
@@ -301,8 +417,13 @@ const processRow = async (input, scope, config, verifiedDispatch = null) => {
     }
     const currentRefusal = await automaticCapabilityRefusal(scope);
     if (currentRefusal) return currentRefusal;
+    const changed = recoveryRegistrationRefusal(row.event, true);
+    if (changed) return changed;
+    const submissionScope = row.event.kind === LOCATION_ACCESS_KIND.RECOVERED ? {
+      ...scope, isCancelled: () => scope.isCancelled?.() || !!recoveryRegistrationRefusal(row.event, true),
+    } : scope;
     return submitAutoAttendance({ type, employeeCode: scope.employeeId, occurredAt: row.occurredAt,
-      sourceScope: scope, sourceEventId: row.eventId, timestamp, forceQueue, strictOrdering: true, skipPosition: true,
+      sourceScope: submissionScope, sourceEventId: row.eventId, timestamp, forceQueue, strictOrdering: true, skipPosition: true,
       sourceParentEventId,
       onKnownNoInsert: async ({ httpStatus, failureClass }) => {
         row = await updateOwned(row.eventId, { onlineAttemptAt: null,
@@ -319,6 +440,11 @@ const processRow = async (input, scope, config, verifiedDispatch = null) => {
           row = await updateOwned(row.eventId, { onlineAttemptAt: null });
           return currentRefusal;
         }
+        const changed = recoveryRegistrationRefusal(row.event, true);
+        if (changed) {
+          row = await updateOwned(row.eventId, { onlineAttemptAt: null });
+          return changed;
+        }
         const reportingLocation = config.locations.find(location => {
           const coordinates = resolveLocationCoordinates(location);
           return coordinates?.latitude === row.event.latitude && coordinates?.longitude === row.event.longitude;
@@ -334,7 +460,7 @@ const processRow = async (input, scope, config, verifiedDispatch = null) => {
     return { result };
   }
   // If a POST may have reached the server, the durable attempt must be verified.
-  if (result.response?.reason === "initial-presence-after-manual-checkout") {
+  if (NON_AUTHORIZING.has(result.response?.reason)) {
     await updateOwned(row.eventId, { status: HANDLED, reason: result.response.reason,
       outcome: { status: TRANSITION_RESULT.SKIPPED, queued: false, serverConfirmed: false } });
     notifyQueueChanged();
@@ -358,7 +484,7 @@ const recheckReviewEvents = async (scope, config) => {
     if (!row) continue;
     const verification = await verifyQueuedAttendance({ tenantKey: row.tenantKey, employeeId: row.employeeId,
       employeeDocname: config.employeeDocname, timestamp: row.punchTimestamp,
-      action: row.transition === "ENTER" ? "checkin" : "checkout" }, { syncScope: scope });
+      action: autoEventAttendanceAction(row.event) }, { syncScope: scope });
     await assertAttendanceQueueScope(scope);
     await updateOwned(row.eventId, { status: verification.verified ? PENDING : NEEDS_REVIEW,
       reason: verification.verified ? "server-record-verified" : verification.reason,
@@ -400,7 +526,7 @@ export const reconcileUncertainAutoAttendance = ({ scope }) => {
       const verification = existing ? { verified: true, evidence: { name: existing.serverCheckinId } }
         : await verifyQueuedAttendance({ tenantKey: row.tenantKey, employeeId: row.employeeId,
           employeeDocname: config.employeeDocname, timestamp: row.punchTimestamp,
-          action: row.transition === "ENTER" ? "checkin" : "checkout" }, { syncScope: scope });
+          action: autoEventAttendanceAction(row.event) }, { syncScope: scope });
       await assertAttendanceQueueScope(scope);
       if (!verification.verified) {
         await updateOwned(row.eventId, { status: NEEDS_REVIEW, reason: verification.reason });

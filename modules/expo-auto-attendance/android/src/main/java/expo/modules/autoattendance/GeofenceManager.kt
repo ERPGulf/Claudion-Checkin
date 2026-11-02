@@ -165,6 +165,15 @@ object GeofenceManager {
     val nativeIdentifier = "attendance:${UUID.randomUUID()}"
     knownIdentifiers[nativeIdentifier] = generation
     val actualRadius = radius.toFloat()
+    val previous = GeofenceStore.getPendingGeofence(context) ?: GeofenceStore.getGeofence(context)
+    val sameIntent = previous != null && GeofenceStore.shouldRestoreGeofence(context) &&
+      previous.optString("registrationId") == registrationId && previous.optString("tenantKey") == tenantKey &&
+      previous.optString("employeeId") == employeeId && previous.optDouble("latitude") == latitude &&
+      previous.optDouble("longitude") == longitude &&
+      previous.optDouble("requestedRadius", previous.optDouble("radius")) == radius &&
+      previous.optInt("geotagging") == geotagging
+    val registrationGeneration = if (sameIntent) previous!!.getString("registrationGeneration") else UUID.randomUUID().toString()
+    if (!sameIntent) LocationAccessMonitor.cancel(context)
     val registration = mapOf(
       "identifier" to identifier,
       "nativeIdentifier" to nativeIdentifier,
@@ -176,6 +185,7 @@ object GeofenceManager {
       "employeeId" to employeeId,
       "registrationId" to registrationId,
       "geotagging" to geotagging,
+      "registrationGeneration" to registrationGeneration,
     )
     enqueueOperation { finish ->
       if (generation != operationGeneration.get()) {
@@ -207,7 +217,10 @@ object GeofenceManager {
           .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER or Geofence.GEOFENCE_TRANSITION_EXIT)
           .build()
         val request = GeofencingRequest.Builder()
-          .setInitialTrigger(GeofencingRequest.INITIAL_TRIGGER_ENTER)
+          // Fresh outside recovery ends the ENTER barrier, so a subsequent
+          // genuine crossing may check in. Repair itself must not manufacture
+          // an initial ENTER from a cached pre-loss presence estimate.
+          .setInitialTrigger(if (GeofenceStore.suppressInitialEnter(context)) 0 else GeofencingRequest.INITIAL_TRIGGER_ENTER)
           .addGeofence(geofence)
           .build()
         val locationClient = client(context)
@@ -273,6 +286,7 @@ object GeofenceManager {
     val generation = operationGeneration.incrementAndGet()
     val identifiers: List<String>
     try {
+      LocationAccessMonitor.cancel(context)
       identifiers = identifiersToRemove(context, generation)
       GeofenceStore.clearGeofence(context)
     } catch (error: Exception) {
@@ -314,6 +328,13 @@ object GeofenceManager {
    */
   @Synchronized
   fun restoreFromStore(context: Context, onComplete: () -> Unit = {}) {
+    // Permission/precision changes can kill the process. Capture only what the
+    // OS confirms NOW, before restoration can replace original registration.
+    val access = LocationAccessMonitor.refresh(context)
+    if (access["state"] != "confirmed_available" || access["recoveryPending"] == true) {
+      onComplete()
+      return
+    }
     if (!GeofenceStore.shouldRestoreGeofence(context)) {
       Log.i(TAG, "No persisted geofence to restore")
       onComplete()

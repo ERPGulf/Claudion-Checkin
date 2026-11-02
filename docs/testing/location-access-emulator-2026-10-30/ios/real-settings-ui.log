@@ -1,0 +1,17 @@
+Running on Claudion Location Access QA iOS26 2026-10-30 - iOS 26.5 - FC19E559-3811-4ACF-B5E9-0933E113C411
+ > Flow claudion-ios-settings-privacy
+Scrolling DOWN until "Privacy & Security" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Tap on "Privacy & Security"... COMPLETED
+Tap on "Location Services"... COMPLETED
+Tap on "Claudion Checkin"... COMPLETED
+Take screenshot precise-location-before... COMPLETED
+
+Running on Claudion Location Access QA iOS26 2026-10-30 - iOS 26.5 - FC19E559-3811-4ACF-B5E9-0933E113C411
+ > Flow claudion-ios-precision-switch
+Tap on point (84%,58%)... COMPLETED
+Take screenshot precise-location-switch-off... COMPLETED
+
+Running on Claudion Location Access QA iOS26 2026-10-30 - iOS 26.5 - FC19E559-3811-4ACF-B5E9-0933E113C411
+ > Flow claudion-ios-precision-switch
+Tap on point (84%,58%)... COMPLETED
+Take screenshot precise-location-switch-off... COMPLETED

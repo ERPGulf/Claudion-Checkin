@@ -6,6 +6,10 @@ The QR/password and company-code/mobile sign-in methods are described in [Mobile
 
 English/Arabic architecture, native build requirements, validation results and remaining review work are documented in [Localization](docs/localization.md). Run `npm run validate:localization` when changing UI copy.
 
+Location-access loss checkout rules, employee GPS safeguards, and required staging/device checks are documented in [Location-access checkout](docs/location-access-checkout.md).
+
+Automatic attendance uploads without opening the app on Android: a WorkManager pass runs the existing processors in a headless JS task once a network is available. On iOS a crossing wakes the app for about 25 seconds, so an online crossing uploads then, but a punch queued offline waits for the next crossing, push notification, or app launch. Neither platform guarantees timing: Doze, standby buckets, OEM battery managers such as Samsung's Sleeping apps, and force-stop can delay or suppress delivery. The design, its limits, and the device checks still required are in [Android background attendance](docs/android-background-attendance.md); emulator evidence is in [docs/testing/android-background-2026-11-02](docs/testing/android-background-2026-11-02/README.md).
+
 ## Firebase Cloud Messaging (FCM)
 
 This app now includes production-ready FCM client wiring for Android and iOS:

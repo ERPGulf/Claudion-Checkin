@@ -1,0 +1,16 @@
+{
+  "kind": "LOCAL_MOCK_BACKEND_ONLY",
+  "observedAt": "2026-10-30T16:09:34.304968+00:00",
+  "storedAttendanceRecords": 38,
+  "employeeCounts": {
+    "QA-ANDROID-001": 28,
+    "QA-IOS-001": 10
+  },
+  "duplicateStoredEmployeeTimestampAction": false,
+  "allEndpoints": [
+    "offline",
+    "online"
+  ],
+  "faultsCleared": true,
+  "scope": "Only disposable employees; no records were inserted through QA controls"
+}

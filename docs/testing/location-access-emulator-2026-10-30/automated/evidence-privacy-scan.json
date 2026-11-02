@@ -1,0 +1,7 @@
+{
+  "textFilesScanned": 274,
+  "credentialPatternFindings": [],
+  "brokenLocalLinks": [],
+  "scope": "Generated QA evidence only; no AsyncStorage/token database exported",
+  "limitations": "Pattern scan supplements scoped collectors and sanitized backend auditing"
+}

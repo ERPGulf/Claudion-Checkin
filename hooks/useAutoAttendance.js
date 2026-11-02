@@ -32,6 +32,7 @@ import {
   clearLastEvent,
   getLastEvent,
   getRegisteredGeofences,
+  getLocationAccessState,
   hasFullAccuracy,
   isAvailable,
   isIgnoringBatteryOptimizations,
@@ -40,13 +41,17 @@ import {
   OFFICE_GEOFENCE_IDENTIFIER,
   startGeofence,
   stopGeofence,
+  supportsLocationAccessEvents,
+  addLocationAccessChangedListener,
 } from '../modules/expo-auto-attendance';
+import { classifyOfficePresence } from '../utils/locationAccessState';
 import {
   DEFAULT_GEOFENCE,
   MAX_LOG_ENTRIES,
   WARNING_CODES,
   askForLocationAccess,
   describeAutoAttendanceStatus,
+  describeLocationVerification,
   parseGeofenceInput,
   readDevicePosition,
   readLocationAccess,
@@ -88,6 +93,8 @@ export default function useAutoAttendance() {
   );
   const baseUrl = useSelector((state) => state.user?.baseUrl);
   const settingsScope = useSelector(selectAutoAttendanceScope);
+  const autoSessionActive = useSelector((state) =>
+    state.attendance?.checkin === true && state.attendance?.sessionOrigin === 'AUTO');
 
   const policySource =
     GEOTAGGING_LABELS[geotagging] || GEOTAGGING_LABELS[GEOTAGGING.DISABLED];
@@ -96,6 +103,7 @@ export default function useAutoAttendance() {
   const [monitoring, setMonitoring] = useState(false);
   // Everything automatic attendance needs (see readLocationAccess); null until read.
   const [permissionGranted, setPermissionGranted] = useState(null);
+  const [locationAccess, setLocationAccess] = useState(null);
   const [lastEvent, setLastEvent] = useState(null);
   const [eventLog, setEventLog] = useState([]);
   const [permissionError, setPermissionError] = useState(null);
@@ -103,6 +111,7 @@ export default function useAutoAttendance() {
   const [busy, setBusy] = useState(false);
   const [presence, setPresence] = useState(null);
   const [presenceLoading, setPresenceLoading] = useState(false);
+  const [presenceObserved, setPresenceObserved] = useState(false);
   const [latitudeText, setLatitudeText] = useState(
     String(DEFAULT_GEOFENCE.latitude),
   );
@@ -117,9 +126,12 @@ export default function useAutoAttendance() {
   const devPolicyOverrideRef = useRef(false);
 
   const status = describeAutoAttendanceStatus({
-    configured, permitted: permissionGranted, monitoring: registration,
+    configured, permitted: permissionGranted, monitoring: registration, locationAccess,
   });
   const active = status.key === 'active';
+  const verificationNotice = configured ? describeLocationVerification({
+    locationAccess, autoSessionActive, presence, presenceObserved,
+  }) : null;
 
   const assertMonitoringAllowed = async (scope) => {
     await assertCapability(ATTENDANCE_FEATURES.AUTO_ATTENDANCE, scope);
@@ -158,7 +170,17 @@ export default function useAutoAttendance() {
     }
   }, [employeeCode, baseUrl]);
 
+  const refreshNativeAccess = useCallback(() => {
+    if (typeof supportsLocationAccessEvents !== 'function' || !supportsLocationAccessEvents()) return;
+    try {
+      setLocationAccess(getLocationAccessState());
+    } catch {
+      setLocationAccess({ state: 'unknown', recoveryPending: false });
+    }
+  }, []);
+
   const refreshPermissionStatus = useCallback(async () => {
+    refreshNativeAccess();
     try {
       setPermissionGranted((await readLocationAccess()).granted);
     } catch (error) {
@@ -166,9 +188,10 @@ export default function useAutoAttendance() {
         '[AutoAttendance] Failed to read permission status:',
         error?.message,
       );
-      setPermissionGranted(false);
+      // An unsuccessful read is not evidence that the employee revoked access.
+      setPermissionGranted(null);
     }
-  }, []);
+  }, [refreshNativeAccess]);
 
   // Reliability signals JS can poll (hasFullAccuracy/isLowPowerModeEnabled are
   // iOS-only in practice — they resolve to true/false on Android via the
@@ -220,6 +243,7 @@ export default function useAutoAttendance() {
     }
 
     setPresenceLoading(true);
+    const requestedAt = Date.now();
     try {
       const position = await readDevicePosition();
       if (!position) {
@@ -237,18 +261,24 @@ export default function useAutoAttendance() {
         registered.latitude,
         registered.longitude,
       );
+      const verification = classifyOfficePresence(registered, {
+        ...position.coords, horizontalAccuracy: position.coords.accuracy, timestamp: position.timestamp,
+      }, { requestedAt });
       setPresence({
         locationName,
         latitude: registered.latitude,
         longitude: registered.longitude,
         radius: registered.radius,
         distance,
-        withinRadius: registered.radius > 0 ? distance <= registered.radius : false,
+        accuracy: position.coords.accuracy,
+        verification,
+        withinRadius: verification === 'inside',
       });
     } catch (error) {
       console.log('[AutoAttendance] Failed to compute presence:', error?.message);
       setPresence(null);
     } finally {
+      setPresenceObserved(true);
       setPresenceLoading(false);
     }
   }, [available]);
@@ -302,6 +332,13 @@ export default function useAutoAttendance() {
         }
       }),
     ];
+    if (typeof supportsLocationAccessEvents === 'function' && supportsLocationAccessEvents() &&
+        typeof addLocationAccessChangedListener === 'function') {
+      subscriptions.push(addLocationAccessChangedListener(() => {
+        refreshPermissionStatus();
+        setMonitoring(isMonitoring());
+      }));
+    }
 
     return () => subscriptions.forEach((subscription) => subscription.remove());
   }, [
@@ -578,6 +615,8 @@ export default function useAutoAttendance() {
     // Live state
     monitoring,
     permissionGranted,
+    locationAccess,
+    verificationNotice,
     lastEvent,
     eventLog,
     permissionError: translateMessage(permissionError),

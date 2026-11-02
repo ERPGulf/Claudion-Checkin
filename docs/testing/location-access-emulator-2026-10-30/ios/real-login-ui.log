@@ -1,0 +1,8 @@
+Running on Claudion Location Access QA iOS26 2026-10-30 - iOS 26.5 - FC19E559-3811-4ACF-B5E9-0933E113C411
+ > Flow ios-login
+Tap on "Enter password"... COMPLETED
+Input text ${QA_PASSWORD}... COMPLETED
+Hide Keyboard... COMPLETED
+Tap on "Login", Index: 0... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot ios-after-login... COMPLETED

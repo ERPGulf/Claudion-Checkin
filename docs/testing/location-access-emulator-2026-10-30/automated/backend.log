@@ -1,0 +1,12 @@
+test_ambiguous_accept_is_persisted_once_and_fault_is_consumed (test_mock_backend.MockBackendTests.test_ambiguous_accept_is_persisted_once_and_fault_is_consumed) ... ok
+test_employee_scope_rejects_cross_employee_punch_and_history (test_mock_backend.MockBackendTests.test_employee_scope_rejects_cross_employee_punch_and_history) ... ok
+test_fixture_real_login_envelope_and_sanitized_evidence (test_mock_backend.MockBackendTests.test_fixture_real_login_envelope_and_sanitized_evidence) ... ok
+test_one_record_offline_contract_and_invalid_timestamps_do_not_insert (test_mock_backend.MockBackendTests.test_one_record_offline_contract_and_invalid_timestamps_do_not_insert) ... ok
+test_online_and_offline_preserve_original_time_and_deduplicate (test_mock_backend.MockBackendTests.test_online_and_offline_preserve_original_time_and_deduplicate) ... ok
+test_policy_controls_never_insert_records_and_provenance_survives_restart (test_mock_backend.MockBackendTests.test_policy_controls_never_insert_records_and_provenance_survives_restart) ... ok
+test_rejection_and_network_failure_store_no_record (test_mock_backend.MockBackendTests.test_rejection_and_network_failure_store_no_record) ... ok
+
+----------------------------------------------------------------------
+Ran 7 tests in 3.588s
+
+OK

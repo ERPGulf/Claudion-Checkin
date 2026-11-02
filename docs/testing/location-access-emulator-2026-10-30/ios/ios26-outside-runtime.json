@@ -1,0 +1,76 @@
+{
+  "appState": "inactive",
+  "employee": "QA-IOS-001",
+  "employeePolicy": {
+    "accountId": "QA-IOS-001",
+    "explicit": true,
+    "generation": 1,
+    "mode": 2,
+    "receivedAt": 1793355494992,
+    "revision": 2,
+    "scope": "http://localhost:8765::QA-IOS-001",
+    "source": "response"
+  },
+  "events": [],
+  "featureSettings": {
+    "error": null,
+    "lastFetchedAt": 1793355494808,
+    "pendingRequestId": null,
+    "pendingScope": null,
+    "scope": "http://localhost:8765::QA-IOS-001",
+    "settings": {
+      "attendance_action": {
+        "attendance_history": true,
+        "attendance_request": false,
+        "employee_checkin_break": false,
+        "employee_shift": false,
+        "geo_tagging": true,
+        "offline_attendance": true,
+        "offline_attendance_version": "1",
+        "photo_upload": false,
+        "restrict_location": true,
+        "unrestricted_checkout_location": false
+      },
+      "complaints": false,
+      "employee_records": false,
+      "employee_resignation": false,
+      "expense_claim": false,
+      "leave_request": false,
+      "loan_application": false
+    },
+    "status": "success"
+  },
+  "loggedIn": true,
+  "monitoring": {
+    "scope": "http://localhost:8765::QA-IOS-001",
+    "state": "active"
+  },
+  "nativePending": [],
+  "observedAt": "2026-10-30T10:18:23.822Z",
+  "platform": "ios",
+  "queue": [],
+  "registered": [
+    {
+      "employeeId": "QA-IOS-001",
+      "geotagging": 2,
+      "identifier": "office-main",
+      "latitude": 25.2854,
+      "longitude": 51.531,
+      "nativeIdentifier": "claudion-auto-attendance:office-main:07075577-5213-4109-AD8F-4420323154A7",
+      "radius": 100,
+      "registrationGeneration": "053914FD-EF47-4261-85D9-366045512DD5",
+      "registrationId": "[\"http://localhost:8765\",\"QA-IOS-001\",\"office-main\",25.2854,51.531,100,2]",
+      "registrationStartedAt": 1793355495029,
+      "requestedRadius": 100,
+      "tenantKey": "http://localhost:8765"
+    }
+  ],
+  "session": {
+    "closedBy": null,
+    "endedAt": null,
+    "origin": null,
+    "startedAt": null,
+    "status": "CHECKED_OUT"
+  },
+  "tenant": "http://localhost:8765"
+}

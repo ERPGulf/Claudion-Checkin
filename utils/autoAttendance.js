@@ -332,14 +332,41 @@ export const describeMonitoring = (monitoring) =>
  * OS permission (`permitted`: null until read) and the bootstrap's report.
  * Configured alone is never "Active".
  */
-export const describeAutoAttendanceStatus = ({ configured, permitted, monitoring }) => {
+export const describeAutoAttendanceStatus = ({ configured, permitted, monitoring, locationAccess }) => {
   if (!configured) return { key: 'disabled', tone: 'neutral', label: t("Disabled by administrator"), icon: 'lock-closed-outline' };
+  if (locationAccess?.state === 'confirmed_disabled' && locationAccess.reason === 'services-disabled') {
+    return { key: 'location_services_disabled', tone: 'warning', label: t("Location services are off"), icon: 'location-outline' };
+  }
+  if (locationAccess?.state === 'confirmed_disabled') {
+    return { key: 'permission', tone: 'warning', label: t("Location permission required"), icon: 'location-outline' };
+  }
+  if (locationAccess?.state === 'confirmed_available' && locationAccess.recoveryPending) {
+    return { key: 'waiting_for_accurate_location', tone: 'info', label: t("Waiting for accurate location"), icon: 'locate-outline' };
+  }
+  if (locationAccess?.state === 'unknown') {
+    return { key: 'access_unknown', tone: 'neutral', label: t("Checking location access"), icon: 'sync-outline' };
+  }
   if (permitted === false || (permitted == null && monitoring === 'permission')) {
     return { key: 'permission', tone: 'warning', label: t("Location permission required"), icon: 'location-outline' };
   }
   if (monitoring === 'active') return { key: 'active', tone: 'success', label: t("Active"), icon: 'radio-outline' };
   if (monitoring === 'unavailable') return { key: 'unavailable', tone: 'error', label: t("Monitoring unavailable"), icon: 'warning-outline' };
   return { key: 'starting', tone: 'info', label: t("Initializing monitoring"), icon: 'sync-outline' };
+};
+
+/** Location quality is presentation only; these notices never authorize a punch. */
+export const describeLocationVerification = ({ locationAccess, autoSessionActive, presence, presenceObserved }) => {
+  if (locationAccess?.state === 'confirmed_disabled') return null;
+  if (locationAccess?.state === 'confirmed_available' && locationAccess.recoveryPending) {
+    return { tone: 'info', title: t("Waiting for accurate location"),
+      message: t("Waiting for an accurate location. We’ll retry automatically.") };
+  }
+  if (autoSessionActive && presenceObserved && !locationAccess?.recoveryPending &&
+      (!presence || presence.verification === 'uncertain')) {
+    return { tone: 'info', title: t("Location signal is weak"),
+      message: t("Location signal is weak. Your check-in remains active.") };
+  }
+  return null;
 };
 
 /** A geofence transition → badge tone + label. */
@@ -376,6 +403,9 @@ export const describePolicy = (geotagging) => {
 
 /** Presence → badge tone + label, for the overview card. */
 export const describePresence = (presence, loading) => {
+  if (presence?.verification === 'uncertain') {
+    return { tone: 'neutral', label: t("Waiting for accurate location"), icon: 'locate-outline' };
+  }
   if (presence == null) {
     return loading
       ? { tone: 'neutral', label: t("Locating…"), icon: 'locate-outline' }

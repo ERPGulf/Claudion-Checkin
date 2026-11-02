@@ -6,7 +6,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import Entypo from "@expo/vector-icons/Entypo";
 import { Ionicons } from "@expo/vector-icons";
-import { COLORS, SIZES } from "../constants";
+import { COLORS, SIZES, SPACING } from "../constants";
+import StatusBanner from "../components/common/StatusBanner";
 import {
   GEOTAGGING,
   GEOTAGGING_LABELS,
@@ -74,11 +75,12 @@ function PresenceCard({
 }) {
   const { language, direction, isRTL } = useTranslation();
   const known = presence != null;
+  const uncertain = presence?.verification === 'uncertain';
   const inside = presence?.withinRadius === true;
 
-  const accent = !known ? COLORS.gray : inside ? "#16A34A" : "#B45309";
-  const background = !known ? "#F3F4F6" : inside ? "#ECFDF5" : "#FFFBEB";
-  const icon = !known
+  const accent = !known || uncertain ? COLORS.gray : inside ? "#16A34A" : "#B45309";
+  const background = !known || uncertain ? "#F3F4F6" : inside ? "#ECFDF5" : "#FFFBEB";
+  const icon = !known || uncertain
     ? "help-circle-outline"
     : inside
       ? "business"
@@ -89,11 +91,14 @@ function PresenceCard({
   if (loading && !known) {
     title = t("Checking your location…");
     subtitle = t("Reading your current position");
+  } else if (uncertain) {
+    title = t("Waiting for accurate location");
+    subtitle = t("Your location is not accurate enough to verify office presence yet.");
   } else if (!known) {
     title = t("Location unavailable");
-    subtitle = permissionGranted
-      ? t("No location fix or office boundary yet — tap refresh to retry.")
-      : t("Grant location access to see whether you're at the office.");
+    subtitle = permissionGranted === false
+      ? t("Grant location access to see whether you're at the office.")
+      : t("No location fix or office boundary yet — tap refresh to retry.");
   } else if (inside) {
     title = t("You're at the office");
     subtitle = t("Inside the {{radius}} boundary", { radius: formatDistance(presence.radius) });
@@ -207,6 +212,7 @@ export default function AutoAttendanceScreen() {
     eventLog,
     permissionError,
     reliabilityWarning,
+    verificationNotice,
     busy,
     presence,
     presenceLoading,
@@ -326,6 +332,24 @@ export default function AutoAttendanceScreen() {
               {status.label}
             </Text>
           </View>
+
+          {verificationNotice ? (
+            <StatusBanner
+              tone={verificationNotice.tone}
+              title={verificationNotice.title}
+              message={verificationNotice.message}
+              style={{ marginTop: SPACING.md }}
+            />
+          ) : null}
+
+          {status.key === "location_services_disabled" ? (
+            <StatusBanner
+              tone="warning"
+              title={t("Location services are off")}
+              message={t("Turn on location services in your device settings to resume automatic attendance.")}
+              style={{ marginTop: SPACING.md }}
+            />
+          ) : null}
 
           {status.key === "permission" ? (
             <>

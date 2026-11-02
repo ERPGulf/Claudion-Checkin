@@ -1,0 +1,18 @@
+{
+  "allowed": true,
+  "queued": false,
+  "serverConfirmed": true,
+  "serverRecord": "QA-CHECKIN-00030",
+  "session": {
+    "closedBy": "MANUAL",
+    "committedAt": 1793375845703,
+    "endedAt": 1793375842670,
+    "origin": "AUTO",
+    "registrationGeneration": "aa34d832-3767-4d4e-b3dd-42bbc97cc165",
+    "sourceEventId": "8c23c74c-7766-4046-90b8-cf9777b6bbc3",
+    "sourceTimestamp": "2026-10-30 15:55:34",
+    "startedAt": 1793375734630,
+    "status": "CHECKED_OUT"
+  },
+  "status": "completed"
+}

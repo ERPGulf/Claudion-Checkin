@@ -23,6 +23,40 @@ const ExpoAutoAttendance = requireOptionalNativeModule("ExpoAutoAttendance");
 export const EVENT_ENTER = "onGeofenceEnter";
 export const EVENT_EXIT = "onGeofenceExit";
 export const EVENT_ERROR = "onError";
+export const EVENT_LOCATION_ACCESS = "onLocationAccessChanged";
+
+export const supportsLocationAccessEvents = () =>
+  typeof ExpoAutoAttendance?.refreshLocationAccess === "function" &&
+  typeof ExpoAutoAttendance?.getLocationAccessState === "function" &&
+  typeof ExpoAutoAttendance?.retryLocationAccessRecovery === "function";
+
+const unknownLocationAccess = () => ({ state: "unknown", recoveryPending: false });
+
+/** Missing/failed OS reads are unknown, never a fabricated revocation. */
+export function getLocationAccessState() {
+  if (!supportsLocationAccessEvents()) return unknownLocationAccess();
+  try {
+    return nativeModule().getLocationAccessState() ?? unknownLocationAccess();
+  } catch {
+    return unknownLocationAccess();
+  }
+}
+
+export function refreshLocationAccess() {
+  if (!supportsLocationAccessEvents()) return unknownLocationAccess();
+  // Storage failures must propagate: a loss must be journaled before processing.
+  return nativeModule().refreshLocationAccess();
+}
+
+export async function retryLocationAccessRecovery() {
+  if (!supportsLocationAccessEvents()) return unknownLocationAccess();
+  return nativeModule().retryLocationAccessRecovery();
+}
+
+export function addLocationAccessChangedListener(listener) {
+  return supportsLocationAccessEvents()
+    ? nativeModule().addListener(EVENT_LOCATION_ACCESS, listener) : { remove() {} };
+}
 
 /** Shared identifier for the single production geofence, used by both the
  * AutoAttendance screen (dev tools) and AutoAttendanceBootstrap (real
@@ -55,6 +89,23 @@ function nativeModule() {
 export function supportsDurableEvents() {
   return typeof ExpoAutoAttendance?.getPendingEvents === "function" &&
     typeof ExpoAutoAttendance?.acknowledgeEvent === "function";
+}
+
+/** Android scheduling is additive; older binaries and iOS keep their existing path. */
+export function scheduleBackgroundSync() {
+  return ExpoAutoAttendance?.scheduleBackgroundSync?.();
+}
+
+export function completeBackgroundSync(runId, retry) {
+  return ExpoAutoAttendance?.completeBackgroundSync?.(runId, retry) ?? false;
+}
+
+export function recordBackgroundSyncDiagnostic(stage, eventId = null, details = {}) {
+  return ExpoAutoAttendance?.recordBackgroundSyncDiagnostic?.(stage, eventId, details);
+}
+
+export function getBackgroundSyncDiagnostics() {
+  return ExpoAutoAttendance?.getBackgroundSyncDiagnostics?.() ?? [];
 }
 
 const captureMonitoringScope = async expectedScope => {

@@ -1,0 +1,42 @@
+10-30 21:22:47.789  4944  4993 I ReactNativeJS: [InstanceHealth] available
+10-30 21:22:47.789  4944  4993 I ReactNativeJS: {
+10-30 21:22:47.789  4944  4993 I ReactNativeJS:   "status": "available",
+10-30 21:22:47.789  4944  4993 I ReactNativeJS:   "instanceId": "http://10.0.2.2:8765",
+10-30 21:22:47.789  4944  4993 I ReactNativeJS:   "checkedAt": 1793375567787,
+10-30 21:22:47.789  4944  4993 I ReactNativeJS:   "durationMs": 12,
+10-30 21:22:47.789  4944  4993 I ReactNativeJS:   "httpStatus": 200,
+10-30 21:22:47.789  4944  4993 I ReactNativeJS:   "failureCategory": null,
+10-30 21:22:47.789  4944  4993 I ReactNativeJS:   "cached": false,
+10-30 21:22:47.789  4944  4993 I ReactNativeJS:   "serverTime": "2026-10-30 15:52:48",
+10-30 21:22:47.789  4944  4993 I ReactNativeJS:   "observedAt": 1793375567787,
+10-30 21:22:47.789  4944  4993 I ReactNativeJS:   "endpoint": "employee_app.attendance_api.get_server_time",
+10-30 21:22:47.789  4944  4993 I ReactNativeJS:   "timeoutMs": 4000
+10-30 21:22:47.789  4944  4993 I ReactNativeJS: }
+10-30 21:22:47.827  4944  4993 I ReactNativeJS: [InstanceHealth] cached
+10-30 21:22:47.827  4944  4993 I ReactNativeJS: {
+10-30 21:22:47.827  4944  4993 I ReactNativeJS:   "status": "available",
+10-30 21:22:47.827  4944  4993 I ReactNativeJS:   "instanceId": "http://10.0.2.2:8765",
+10-30 21:22:47.827  4944  4993 I ReactNativeJS:   "checkedAt": 1793375567787,
+10-30 21:22:47.827  4944  4993 I ReactNativeJS:   "durationMs": 12,
+10-30 21:22:47.827  4944  4993 I ReactNativeJS:   "httpStatus": 200,
+10-30 21:22:47.827  4944  4993 I ReactNativeJS:   "failureCategory": null,
+10-30 21:22:47.827  4944  4993 I ReactNativeJS:   "cached": true,
+10-30 21:22:47.827  4944  4993 I ReactNativeJS:   "serverTime": "2026-10-30 15:52:48",
+10-30 21:22:47.827  4944  4993 I ReactNativeJS:   "observedAt": 1793375567787,
+10-30 21:22:47.827  4944  4993 I ReactNativeJS:   "endpoint": "employee_app.attendance_api.get_server_time"
+10-30 21:22:47.827  4944  4993 I ReactNativeJS: }
+10-30 21:22:47.834  4944  4993 I ReactNativeJS: [attendance.service/autoCheckInOut] Auto OUT
+10-30 21:22:47.872  4944  4993 I ReactNativeJS: '[AutoAttendance] Event processed', { eventId: '47bc6178-bc09-49fb-acf2-575cef9bdc00',
+10-30 21:22:47.872  4944  4993 I ReactNativeJS:   transition: null,
+10-30 21:22:47.872  4944  4993 I ReactNativeJS:   geofence: 'office-main',
+10-30 21:22:47.872  4944  4993 I ReactNativeJS:   detectedAt: '2026-10-30T15:52:47.650Z',
+10-30 21:22:47.872  4944  4993 I ReactNativeJS:   receivedAt: '2026-10-30T15:52:47.665Z',
+10-30 21:22:47.872  4944  4993 I ReactNativeJS:   appState: 'active',
+10-30 21:22:47.872  4944  4993 I ReactNativeJS:   transport: true,
+10-30 21:22:47.872  4944  4993 I ReactNativeJS:   status: 'completed',
+10-30 21:22:47.872  4944  4993 I ReactNativeJS:   reason: null,
+10-30 21:22:47.872  4944  4993 I ReactNativeJS:   queued: false,
+10-30 21:22:47.872  4944  4993 I ReactNativeJS:   serverConfirmed: true,
+10-30 21:22:47.872  4944  4993 I ReactNativeJS:   queueRowId: null,
+10-30 21:22:47.872  4944  4993 I ReactNativeJS:   serverRecord: 'QA-CHECKIN-00027',
+10-30 21:22:47.872  4944  4993 I ReactNativeJS:   session: 'CHECKED_OUT' }
