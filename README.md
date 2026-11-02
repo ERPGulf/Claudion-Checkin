@@ -1,6 +1,6 @@
 # Claudion-Checkin
 
-Contributor setup, architecture, validation commands, and compatibility constraints are in [AGENTS.md](AGENTS.md). [CLAUDE.md](CLAUDE.md) provides deeper domain rationale for both coding agents.
+Contributor setup, architecture, validation commands, and compatibility constraints are in [AGENTS.md](AGENTS.md). [CLAUDE.md](CLAUDE.md) holds the rules most tasks need; domain rationale for both coding agents is in [docs/architecture/](docs/architecture/).
 
 The QR/password and company-code/mobile sign-in methods are described in [Mobile sign-in](docs/mobile-sign-in.md), including lookup configuration and the staging checks required before rollout.
 
@@ -100,7 +100,7 @@ requires an explicit EAS environment when publishing; the update scripts select
 `preview` or `production`. Ensure that environment contains the intended public
 lookup configuration before publishing. No update is published by local tests.
 
-When you bump the app version, keep the runtime version in `app.json` and the native Expo update config aligned. Review the [versioning guide](CLAUDE.md#versioning-gotcha): the committed iOS project does not automatically receive `app.json` changes. Changes to native modules or native configuration require a new binary.
+When you bump the app version, keep the runtime version in `app.json` and the native Expo update config aligned. Review the [versioning guide](docs/architecture/releases-and-versioning.md): the committed iOS project does not automatically receive `app.json` changes. Changes to native modules or native configuration require a new binary.
 
 Use a real EAS build to test OTA updates. Expo Go will not receive updates from your project channel.
 
