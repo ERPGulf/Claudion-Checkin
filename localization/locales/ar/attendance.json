@@ -528,6 +528,7 @@
   "Offline attendance isn't enabled on your organization's server yet. Please check in while you have a connection.": "الحضور دون اتصال غير مفعّل بعد على خادم مؤسستك. يُرجى تسجيل الحضور عند توفر الاتصال.",
   "Offline attendance is switched off for your organization. Please check in while you have a connection.": "الحضور دون اتصال غير مفعّل لمؤسستك. يُرجى تسجيل الحضور عند توفر الاتصال.",
   "No connection — your attendance was not marked. Please try again once you're online.": "لا يوجد اتصال؛ لم يُسجّل حضورك. حاول مجددًا عند عودة الاتصال.",
+  "We couldn't confirm whether your attendance was recorded. Check Attendance history or contact your administrator before trying again.": "تعذّر التأكد مما إذا كان حضورك قد سُجّل. راجع سجل الحضور أو تواصل مع مسؤولك قبل المحاولة مجددًا.",
   "Attendance configuration is unavailable. Please sign in again or contact your administrator.": "إعدادات الحضور غير متاحة. يُرجى تسجيل الدخول مجددًا أو التواصل مع المسؤول.",
   "Your location policy changed or assigned location could not be verified. Please try again.": "تغيّرت سياسة موقعك أو تعذّر التحقق من الموقع المحدّد لك. يُرجى المحاولة مجددًا.",
   "An earlier automatic attendance request needs server verification. Check the saved record in Attendance recovery before trying again.": "يحتاج طلب حضور تلقائي سابق إلى التحقق من الخادم. راجع السجل المحفوظ في استعادة الحضور قبل المحاولة مجددًا.",

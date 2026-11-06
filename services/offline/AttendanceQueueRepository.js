@@ -128,6 +128,22 @@ const hydrateAll = (rows) => (Array.isArray(rows) ? rows.map(hydrate) : []);
 
 const placeholdersFor = (values) => values.map(() => "?").join(", ");
 
+// UI reads may include unattributed legacy evidence without adopting it. A
+// known foreign tenant is always excluded when a tenant scope is supplied.
+const readScope = (employeeId, tenantKey, includeUnknownTenant) => {
+  const conditions = [];
+  const params = [];
+  if (employeeId) {
+    conditions.push("employeeId = ?");
+    params.push(employeeId);
+  }
+  if (tenantKey) {
+    conditions.push(includeUnknownTenant ? "(tenantKey = ? OR tenantKey IS NULL)" : "tenantKey = ?");
+    params.push(tenantKey);
+  }
+  return { sql: conditions.length ? ` AND ${conditions.join(" AND ")}` : "", params };
+};
+
 const retryAfterDelay = (value) => Number.isFinite(value) && value > 0 ? value : 0;
 
 // Preflight Retry-After is app-owned metadata on a never-dispatched row. It
@@ -163,6 +179,13 @@ const CLAIM_DEPENDENCIES_SQL = `
      WHERE paired.id = candidate.pairedAttendanceId
        AND (paired.tenantKey IS NOT candidate.tenantKey OR paired.employeeId <> candidate.employeeId)
        AND paired.status IN ('pending', 'syncing', 'blocked', 'needs_review')
+  ) AND (
+    candidate.action <> 'checkout' OR candidate.pairedAttendanceId IS NULL OR EXISTS (
+      SELECT 1 FROM ${QUEUE_TABLE} AS checkin
+       WHERE checkin.id = candidate.pairedAttendanceId AND checkin.action = 'checkin'
+         AND checkin.tenantKey IS candidate.tenantKey AND checkin.employeeId = candidate.employeeId
+         AND checkin.status = 'synced' AND checkin.acceptanceConfirmed = 1
+    )
   ) AND (
     (CASE WHEN json_valid(candidate.payload) THEN json_extract(candidate.payload, '$.sourceParentEventId') END) IS NULL OR EXISTS (
       SELECT 1 FROM ${QUEUE_TABLE} AS parent
@@ -232,12 +255,91 @@ export const enqueue = async ({
     assertCurrent();
   }
 
+  // A checkout of a checkin stranded on `endpoint-missing` is admitted blocked
+  // with it, for the reason given on markBlocked.
   const result = await database.runAsync(
-    `INSERT INTO ${QUEUE_TABLE}
-       (employeeId, employeeDocname, tenantKey, attendanceType, action, timestamp,
+    `WITH input(employeeId, employeeDocname, tenantKey, attendanceType, action, timestamp,
+       latitude, longitude, accuracy, address, deviceId, payload, sessionId, sourceEventId, now)
+       AS (VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)),
+     admission AS MATERIALIZED (
+       SELECT input.* FROM input WHERE NOT EXISTS (
+         SELECT 1 FROM ${QUEUE_TABLE} AS existing WHERE existing.tenantKey IS input.tenantKey
+           AND existing.employeeId = input.employeeId AND (
+             (existing.timestamp = input.timestamp AND existing.action = input.action)
+             OR (input.sourceEventId IS NOT NULL AND existing.sourceEventId = input.sourceEventId))
+       )
+     ), parent AS MATERIALIZED (
+       SELECT checkin.* FROM ${QUEUE_TABLE} AS checkin JOIN admission AS input
+        WHERE input.action = 'checkout' AND checkin.action = 'checkin'
+          AND checkin.employeeId = input.employeeId AND checkin.tenantKey IS input.tenantKey
+          AND IFNULL(json_extract(input.payload, '$.parentServerConfirmed'), 0) <> 1
+          AND checkin.pairedAttendanceId IS NULL
+          AND CASE
+            WHEN json_extract(input.payload, '$.parentQueueRowId') IS NOT NULL
+              THEN checkin.id = json_extract(input.payload, '$.parentQueueRowId')
+            WHEN json_extract(input.payload, '$.sourceParentEventId') IS NOT NULL
+              THEN checkin.sourceEventId = json_extract(input.payload, '$.sourceParentEventId')
+            ELSE checkin.timestamp <= input.timestamp END
+          AND (checkin.status IN ('pending', 'syncing', 'blocked', 'rejected', 'needs_review')
+            OR (checkin.status = 'synced' AND (json_extract(input.payload, '$.parentQueueRowId') IS NOT NULL
+              OR json_extract(input.payload, '$.sourceParentEventId') IS NOT NULL)))
+        ORDER BY checkin.timestamp DESC, checkin.id DESC LIMIT 1
+     ), next_id AS MATERIALIZED (
+       SELECT MAX(COALESCE((SELECT MAX(id) FROM ${QUEUE_TABLE}), 0),
+         COALESCE((SELECT seq FROM sqlite_sequence WHERE name = '${QUEUE_TABLE}'), 0)) + 1 AS value
+     )
+     INSERT INTO ${QUEUE_TABLE}
+       (id, employeeId, employeeDocname, tenantKey, attendanceType, action, timestamp,
         latitude, longitude, accuracy, address, deviceId, payload,
-        status, retryCount, nextAttemptAt, sessionId, sourceEventId, createdAt, updatedAt)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?)
+        status, retryCount, nextAttemptAt, sessionId, sourceEventId, createdAt, updatedAt,
+        pairedAttendanceId, failureClass, error, blockedSince)
+     SELECT next_id.value, input.employeeId, input.employeeDocname, input.tenantKey,
+       input.attendanceType, input.action, input.timestamp, input.latitude, input.longitude,
+       input.accuracy, input.address, input.deviceId, input.payload,
+       CASE WHEN parent.status = 'rejected' THEN
+         CASE WHEN json_extract(input.payload, '$.parentQueueRowId') IS NOT NULL
+           OR json_extract(input.payload, '$.sourceParentEventId') IS NOT NULL THEN 'rejected' ELSE 'needs_review' END
+         WHEN parent.id IS NULL AND (json_extract(input.payload, '$.parentQueueRowId') IS NOT NULL
+           OR json_extract(input.payload, '$.sourceParentEventId') IS NOT NULL) THEN 'needs_review'
+         WHEN parent.status = 'blocked' AND parent.failureClass = 'endpoint-missing' THEN 'blocked'
+         ELSE 'pending' END, 0,
+       CASE WHEN parent.status = 'blocked' AND parent.failureClass = 'endpoint-missing'
+         THEN parent.nextAttemptAt ELSE 0 END,
+       CASE WHEN parent.id IS NULL OR (parent.status = 'rejected'
+         AND json_extract(input.payload, '$.parentQueueRowId') IS NULL
+         AND json_extract(input.payload, '$.sourceParentEventId') IS NULL) THEN input.sessionId
+         ELSE COALESCE(parent.sessionId, 's-' || input.employeeId || '-' || parent.id) END,
+       input.sourceEventId, input.now, input.now,
+       CASE WHEN parent.status = 'rejected' AND json_extract(input.payload, '$.parentQueueRowId') IS NULL
+         AND json_extract(input.payload, '$.sourceParentEventId') IS NULL THEN NULL ELSE parent.id END,
+       CASE WHEN parent.status = 'rejected' THEN
+         CASE WHEN json_extract(input.payload, '$.parentQueueRowId') IS NOT NULL
+           OR json_extract(input.payload, '$.sourceParentEventId') IS NOT NULL THEN 'dependent' ELSE 'verification-required' END
+         WHEN parent.id IS NULL AND (json_extract(input.payload, '$.parentQueueRowId') IS NOT NULL
+           OR json_extract(input.payload, '$.sourceParentEventId') IS NOT NULL) THEN 'verification-required'
+         WHEN parent.status = 'blocked' AND parent.failureClass = 'endpoint-missing' THEN 'endpoint-missing' END,
+       CASE WHEN parent.status = 'rejected' THEN
+         CASE WHEN json_extract(input.payload, '$.parentQueueRowId') IS NOT NULL
+           OR json_extract(input.payload, '$.sourceParentEventId') IS NOT NULL
+           THEN 'Dependent on rejected check-in.' ELSE 'The current attendance parent could not be proven.' END
+         WHEN parent.id IS NULL AND (json_extract(input.payload, '$.parentQueueRowId') IS NOT NULL
+           OR json_extract(input.payload, '$.sourceParentEventId') IS NOT NULL) THEN 'The current attendance parent could not be proven.'
+         WHEN parent.status = 'blocked' AND parent.failureClass = 'endpoint-missing' THEN 'Dependent on blocked check-in.' END,
+       CASE WHEN parent.status = 'blocked' AND parent.failureClass = 'endpoint-missing' THEN parent.blockedSince END
+       FROM admission AS input CROSS JOIN next_id LEFT JOIN parent ON 1 = 1
+     UNION ALL
+     SELECT parent.id, parent.employeeId, parent.employeeDocname, parent.tenantKey,
+       parent.attendanceType, parent.action, parent.timestamp, parent.latitude, parent.longitude,
+       parent.accuracy, parent.address, parent.deviceId, parent.payload, parent.status,
+       parent.retryCount, parent.nextAttemptAt,
+       COALESCE(parent.sessionId, 's-' || parent.employeeId || '-' || parent.id),
+       parent.sourceEventId, parent.createdAt, input.now, next_id.value, parent.failureClass, parent.error,
+       parent.blockedSince
+       FROM parent CROSS JOIN admission AS input CROSS JOIN next_id
+        WHERE parent.status <> 'rejected' OR json_extract(input.payload, '$.parentQueueRowId') IS NOT NULL
+          OR json_extract(input.payload, '$.sourceParentEventId') IS NOT NULL
+     ON CONFLICT(id) DO UPDATE SET pairedAttendanceId = excluded.pairedAttendanceId,
+       sessionId = excluded.sessionId, updatedAt = excluded.updatedAt
      ON CONFLICT DO NOTHING;`,
     [
       employeeId,
@@ -252,10 +354,8 @@ export const enqueue = async ({
       address,
       deviceId,
       JSON.stringify(payload ?? {}),
-      QUEUE_STATUS.PENDING,
       sessionId,
       sourceEventId,
-      now,
       now,
     ],
   );
@@ -306,6 +406,7 @@ export const beginDirectAttendanceReceipt = async ({
   if (typeof timestamp !== "string" || !timestamp.trim()) throw new Error("Direct attendance receipt requires its exact POST timestamp.");
   if (![QUEUE_ACTION.CHECKIN, QUEUE_ACTION.CHECKOUT].includes(action)) throw new Error("Direct attendance receipt requires a valid action.");
   if (!ownerId) throw new Error("Direct attendance receipt requires a claim owner.");
+  validateClaim(ownerId, now, leaseMs);
   if (typeof assertCurrent !== "function") throw new Error("Direct attendance receipt requires a current authorization check.");
   const database = await getDatabase();
   assertCurrent();
@@ -433,9 +534,16 @@ export const countUnconfirmedAttendanceDependencies = async ({ tenantKey, employ
 export const QUEUE_CLAIM_CHANGED = "ATTENDANCE_QUEUE_CLAIM_CHANGED";
 export const QUEUE_CLAIM_LEASE_MS = 120000;
 const claimChanged = () => Object.assign(new Error("Attendance upload claim changed."), { code: QUEUE_CLAIM_CHANGED });
+const validateClaim = (ownerId, now, leaseMs) => {
+  if (typeof ownerId !== "string" || !ownerId.trim() || !Number.isFinite(now) || now < 0 ||
+    !Number.isFinite(leaseMs) || leaseMs <= 0 || leaseMs > QUEUE_CLAIM_LEASE_MS) {
+    throw new Error("Invalid attendance upload claim.");
+  }
+};
 const claimPredicate = (claimOwner, now) => claimOwner == null
   ? { sql: "", params: [] }
-  : { sql: " AND status = 'syncing' AND claimOwner = ? AND claimExpiresAt > ?", params: [claimOwner, now] };
+  : { sql: " AND status = 'syncing' AND claimOwner = ? AND claimExpiresAt > ? AND claimExpiresAt <= ?",
+    params: [claimOwner, now, now + QUEUE_CLAIM_LEASE_MS] };
 const requireClaimWrite = (result, claimOwner) => {
   if (claimOwner != null && !result?.changes) throw claimChanged();
   return result;
@@ -473,12 +581,14 @@ export const settleDirectAttendanceNoInsert = async ({
 
 export const renewAttendanceClaim = async ({ id, claimOwner, now = Date.now(), leaseMs = QUEUE_CLAIM_LEASE_MS, beginUpload = false }) => {
   if (!claimOwner) throw claimChanged();
+  validateClaim(claimOwner, now, leaseMs);
   const database = await getDatabase();
   const row = await database.getFirstAsync(
     `UPDATE ${QUEUE_TABLE} SET claimExpiresAt = ?,
        uploadAttemptAt = CASE WHEN ? THEN COALESCE(uploadAttemptAt, ?) ELSE uploadAttemptAt END
-      WHERE id = ? AND status = 'syncing' AND claimOwner = ? AND claimExpiresAt > ? RETURNING *;`,
-    [now + leaseMs, beginUpload ? 1 : 0, now, id, claimOwner, now],
+      WHERE id = ? AND status = 'syncing' AND claimOwner = ? AND claimExpiresAt > ?
+        AND claimExpiresAt <= ? RETURNING *;`,
+    [now + leaseMs, beginUpload ? 1 : 0, now, id, claimOwner, now, now + QUEUE_CLAIM_LEASE_MS],
   );
   if (!row) throw claimChanged();
   return hydrate(row);
@@ -525,41 +635,52 @@ export const pairWithOpenCheckin = async ({
   now = Date.now(),
 }) => {
   const database = await getDatabase();
-
-  const checkin = await database.getFirstAsync(
-    `SELECT * FROM ${QUEUE_TABLE}
-      WHERE employeeId = ?
-        AND tenantKey IS ?
-        AND action = ?
-        AND pairedAttendanceId IS NULL
-        AND ((? IS NULL AND timestamp <= ?) OR sourceEventId = ?)
-        AND status IN (${placeholdersFor(UNRESOLVED_STATUSES)})
-      ORDER BY timestamp DESC, id DESC
-      LIMIT 1;`,
-    [employeeId, tenantKey, QUEUE_ACTION.CHECKIN, sourceParentEventId, timestamp, sourceParentEventId, ...UNRESOLVED_STATUSES],
+  // Compatibility repair for an existing unpaired row. New admission already
+  // commits both links in enqueue's single INSERT/UPSERT statement.
+  const rows = await database.getAllAsync(
+    `WITH checkout AS MATERIALIZED (
+       SELECT * FROM ${QUEUE_TABLE} WHERE id = ? AND employeeId = ? AND tenantKey IS ?
+         AND action = 'checkout' AND timestamp = ?
+     ), parent AS MATERIALIZED (
+       SELECT checkin.* FROM ${QUEUE_TABLE} AS checkin JOIN checkout
+        WHERE checkin.employeeId = checkout.employeeId AND checkin.tenantKey IS checkout.tenantKey
+          AND checkin.action = 'checkin'
+          AND (checkin.pairedAttendanceId IS NULL OR checkin.pairedAttendanceId = checkout.id)
+          AND (checkout.pairedAttendanceId IS NULL OR checkout.pairedAttendanceId = checkin.id)
+          AND ((? IS NULL AND checkin.timestamp <= checkout.timestamp) OR checkin.sourceEventId = ?)
+          AND checkin.status IN (${placeholdersFor(UNRESOLVED_STATUSES)})
+        ORDER BY checkin.timestamp DESC, checkin.id DESC LIMIT 1
+     )
+     UPDATE ${QUEUE_TABLE} SET pairedAttendanceId = CASE WHEN action = 'checkout'
+         THEN (SELECT id FROM parent) ELSE (SELECT id FROM checkout) END,
+       sessionId = (SELECT COALESCE(sessionId, 's-' || employeeId || '-' || id) FROM parent),
+       status = CASE WHEN action = 'checkout' AND (SELECT status FROM parent) = 'rejected'
+           AND status IN ('pending', 'syncing', 'blocked')
+         THEN CASE WHEN uploadAttemptAt IS NULL THEN 'rejected' ELSE 'needs_review' END ELSE status END,
+       failureClass = CASE WHEN action = 'checkout' AND (SELECT status FROM parent) = 'rejected'
+           AND status IN ('pending', 'syncing', 'blocked')
+         THEN CASE WHEN uploadAttemptAt IS NULL THEN 'dependent' ELSE 'verification-required' END ELSE failureClass END,
+       error = CASE WHEN action = 'checkout' AND (SELECT status FROM parent) = 'rejected'
+           AND status IN ('pending', 'syncing', 'blocked')
+         THEN 'Dependent on rejected check-in.' ELSE error END,
+       verificationIssue = CASE WHEN action = 'checkout' AND (SELECT status FROM parent) = 'rejected'
+           AND status IN ('pending', 'syncing', 'blocked') AND uploadAttemptAt IS NOT NULL
+         THEN 'upload-outcome-unverified' ELSE verificationIssue END,
+       verificationCheckedAt = CASE WHEN action = 'checkout' AND (SELECT status FROM parent) = 'rejected'
+           AND status IN ('pending', 'syncing', 'blocked') AND uploadAttemptAt IS NOT NULL
+         THEN NULL ELSE verificationCheckedAt END,
+       claimOwner = CASE WHEN action = 'checkout' AND (SELECT status FROM parent) = 'rejected'
+         THEN NULL ELSE claimOwner END,
+       claimExpiresAt = CASE WHEN action = 'checkout' AND (SELECT status FROM parent) = 'rejected'
+         THEN NULL ELSE claimExpiresAt END,
+       updatedAt = ?
+      WHERE EXISTS (SELECT 1 FROM parent) AND id IN (
+        SELECT id FROM parent UNION ALL SELECT id FROM checkout
+      ) RETURNING *;`,
+    [checkoutId, employeeId, tenantKey, timestamp, sourceParentEventId, sourceParentEventId,
+      ...UNRESOLVED_STATUSES, now],
   );
-
-  if (!checkin) return null;
-
-  // One id for the pair, so the cascade and the correction flow can both address
-  // "this attendance session" rather than two unrelated rows.
-  const sessionId = checkin.sessionId || `s-${employeeId}-${checkin.id}`;
-
-  await database.runAsync(
-    `UPDATE ${QUEUE_TABLE}
-        SET pairedAttendanceId = ?, sessionId = ?, updatedAt = ?
-      WHERE id = ?;`,
-    [checkoutId, sessionId, now, checkin.id],
-  );
-
-  await database.runAsync(
-    `UPDATE ${QUEUE_TABLE}
-        SET pairedAttendanceId = ?, sessionId = ?, updatedAt = ?
-      WHERE id = ?;`,
-    [checkin.id, sessionId, now, checkoutId],
-  );
-
-  return hydrate({ ...checkin, sessionId });
+  return hydrate(rows.find(row => row.action === QUEUE_ACTION.CHECKIN) ?? null);
 };
 
 /**
@@ -618,6 +739,7 @@ export const claimNextPending = async (
   now = Date.now(),
   { employeeId = null, tenantKey = null, ownerId = `upload:${Date.now()}:${Math.random()}`, leaseMs = QUEUE_CLAIM_LEASE_MS } = {},
 ) => {
+  validateClaim(ownerId, now, leaseMs);
   const database = await getDatabase();
 
   const scope = [];
@@ -845,14 +967,31 @@ export const markBlocked = async ({
   const nextAttemptAt =
     now + Math.max(blockedDelayFor(step === -1 ? BLOCKED_DELAYS_MS.length - 1 : step), retryAfterDelay(retryAfterMs));
 
+  // `endpoint-missing` does not hold newer rows back (OLDER_DEPENDENCY_SQL), but
+  // a paired checkout cannot be claimed before its checkin is confirmed. Left
+  // pending, that checkout would hold every later punch back until a backend
+  // deployment, so it waits in the same state, in the same statement. A
+  // dispatched checkout keeps its own state as evidence.
   const result = await database.runAsync(
-    `UPDATE ${QUEUE_TABLE}
+    `WITH target AS MATERIALIZED (
+       SELECT id, pairedAttendanceId, employeeId, tenantKey FROM ${QUEUE_TABLE}
+        WHERE id = ?${claim.sql}
+     )
+     UPDATE ${QUEUE_TABLE}
         SET status = ?, failureClass = ?, blockedSince = ?, nextAttemptAt = ?,
-            error = ?, serverResponse = ?, updatedAt = ?, claimOwner = NULL, claimExpiresAt = NULL,
-            uploadAttemptAt = CASE WHEN ? IN ('auth', 'configuration', 'endpoint-missing')
-              THEN NULL ELSE uploadAttemptAt END
-      WHERE id = ?${claim.sql};`,
+            error = CASE WHEN id IN (SELECT id FROM target) THEN ? ELSE 'Dependent on blocked check-in.' END,
+            serverResponse = CASE WHEN id IN (SELECT id FROM target) THEN ? ELSE serverResponse END,
+            updatedAt = ?, claimOwner = NULL, claimExpiresAt = NULL,
+            uploadAttemptAt = CASE WHEN id IN (SELECT id FROM target)
+              AND ? IN ('auth', 'configuration', 'endpoint-missing') THEN NULL ELSE uploadAttemptAt END
+      WHERE id IN (SELECT id FROM target) OR (? = 'endpoint-missing' AND action = 'checkout'
+        AND status IN ('pending', 'blocked') AND uploadAttemptAt IS NULL
+        AND EXISTS (SELECT 1 FROM target WHERE employeeId = ${QUEUE_TABLE}.employeeId
+          AND tenantKey IS ${QUEUE_TABLE}.tenantKey
+          AND (pairedAttendanceId = ${QUEUE_TABLE}.id OR id = ${QUEUE_TABLE}.pairedAttendanceId)));`,
     [
+      id,
+      ...claim.params,
       QUEUE_STATUS.BLOCKED,
       failureClass,
       blockedSince,
@@ -861,8 +1000,7 @@ export const markBlocked = async ({
       serverResponse ? JSON.stringify(serverResponse) : null,
       now,
       failureClass,
-      id,
-      ...claim.params,
+      failureClass,
     ],
   );
   requireClaimWrite(result, claimOwner);
@@ -893,53 +1031,37 @@ export const markRejected = async ({
   const database = await getDatabase();
   const claim = claimPredicate(claimOwner, now);
 
-  const result = await database.runAsync(
-    `UPDATE ${QUEUE_TABLE}
-        SET status = ?, failureClass = ?, error = ?, serverResponse = ?,
+  // Root refusal and dependent outcomes commit together. A killed process must
+  // never expose a rejected IN while its paired OUT is still claimable. The
+  // materialized owner check also prevents a stale claimant touching the pair.
+  const changed = await database.getAllAsync(
+    `WITH target AS MATERIALIZED (
+       SELECT id, pairedAttendanceId, employeeId, tenantKey FROM ${QUEUE_TABLE}
+        WHERE id = ?${claim.sql}
+     )
+     UPDATE ${QUEUE_TABLE}
+        SET status = CASE WHEN id = ? OR uploadAttemptAt IS NULL THEN 'rejected' ELSE 'needs_review' END,
+            failureClass = CASE WHEN id = ? THEN ? WHEN uploadAttemptAt IS NULL
+              THEN 'dependent' ELSE 'verification-required' END,
+            error = CASE WHEN id = ? THEN ? ELSE 'Dependent on rejected check-in.' END,
+            serverResponse = CASE WHEN id = ? THEN ? ELSE serverResponse END,
+            verificationIssue = CASE WHEN id <> ? AND uploadAttemptAt IS NOT NULL
+              THEN 'upload-outcome-unverified' ELSE verificationIssue END,
+            verificationCheckedAt = CASE WHEN id <> ? AND uploadAttemptAt IS NOT NULL
+              THEN NULL ELSE verificationCheckedAt END,
             nextAttemptAt = 0, updatedAt = ?, claimOwner = NULL, claimExpiresAt = NULL
-      WHERE id = ?${claim.sql};`,
-    [
-      QUEUE_STATUS.REJECTED,
-      failureClass,
-      error,
-      serverResponse ? JSON.stringify(serverResponse) : null,
-      now,
-      id,
-      ...claim.params,
-    ],
+      WHERE id IN (SELECT id FROM target) OR (
+        EXISTS (SELECT 1 FROM target WHERE employeeId = ${QUEUE_TABLE}.employeeId
+          AND tenantKey IS ${QUEUE_TABLE}.tenantKey
+          AND (pairedAttendanceId = ${QUEUE_TABLE}.id OR id = ${QUEUE_TABLE}.pairedAttendanceId))
+        AND status IN (${placeholdersFor(AWAITING_SERVER_STATUSES)})
+      ) RETURNING id;`,
+    [id, ...claim.params, id, id, failureClass, id, error,
+      id, serverResponse ? JSON.stringify(serverResponse) : null, id, id, now, ...AWAITING_SERVER_STATUSES],
   );
-  requireClaimWrite(result, claimOwner);
-
-  const row = await database.getFirstAsync(
-    `SELECT pairedAttendanceId, employeeId, tenantKey FROM ${QUEUE_TABLE} WHERE id = ?;`,
-    [id],
-  );
-
-  const pairedId = row?.pairedAttendanceId;
-  if (!pairedId) return { cascaded: 0 };
-
-  // Only rows still awaiting an outcome. A pair already synced is a fact on the
-  // server and cannot be un-sent; a pair already rejected needs no second
-  // rejection.
-  const cascade = await database.runAsync(
-    `UPDATE ${QUEUE_TABLE}
-        SET status = ?, failureClass = ?, error = ?, nextAttemptAt = 0,
-            updatedAt = ?
-      WHERE id = ? AND employeeId = ? AND tenantKey IS ?
-        AND status IN (${placeholdersFor(AWAITING_SERVER_STATUSES)});`,
-    [
-      QUEUE_STATUS.REJECTED,
-      FAILURE_CLASS.DEPENDENT,
-      "Dependent on rejected check-in.",
-      now,
-      pairedId,
-      row.employeeId,
-      row.tenantKey,
-      ...AWAITING_SERVER_STATUSES,
-    ],
-  );
-
-  return { cascaded: cascade?.changes ?? 0 };
+  const targetId = Number(id);
+  requireClaimWrite({ changes: changed.some(row => row.id === targetId) ? 1 : 0 }, claimOwner);
+  return { cascaded: changed.filter(row => row.id !== targetId).length };
 };
 
 /**
@@ -1119,11 +1241,14 @@ export const releaseStuckSyncing = async (
   now = Date.now(),
   { employeeId = null, tenantKey = null } = {},
 ) => {
+  if (!Number.isFinite(now) || now < 0) throw new Error("Invalid attendance claim recovery time.");
   const database = await getDatabase();
   const conditions = ["status = ?"];
   const params = [QUEUE_STATUS.SYNCING];
-  conditions.push("(claimOwner IS NULL OR claimExpiresAt IS NULL OR claimExpiresAt <= ?)");
-  params.push(now);
+  // A legitimate lease never extends beyond this maximum. A future lease
+  // outside that bound proves wall-clock discontinuity, not a live owner.
+  conditions.push("(claimOwner IS NULL OR claimExpiresAt IS NULL OR claimExpiresAt <= ? OR claimExpiresAt > ?)");
+  params.push(now, now + QUEUE_CLAIM_LEASE_MS);
   if (employeeId) {
     conditions.push("employeeId = ?");
     params.push(employeeId);
@@ -1141,6 +1266,8 @@ export const releaseStuckSyncing = async (
               THEN failureClass ELSE 'verification-required' END,
             verificationIssue = CASE WHEN claimOwner IS NOT NULL AND uploadAttemptAt IS NULL
               THEN verificationIssue ELSE 'upload-outcome-unverified' END,
+            verificationCheckedAt = CASE WHEN claimOwner IS NOT NULL AND uploadAttemptAt IS NULL
+              THEN verificationCheckedAt ELSE NULL END,
             nextAttemptAt = 0, updatedAt = ?, claimOwner = NULL, claimExpiresAt = NULL
       WHERE ${conditions.join(" AND ")};`,
     [now, ...params],
@@ -1212,15 +1339,14 @@ export const findSessionRows = async (sessionId) => {
  * Rows the employee still needs an outcome on, newest first — what the banner
  * and the sync sheet describe.
  */
-export const listUnresolved = async ({ employeeId = null, limit = 100 } = {}) => {
+export const listUnresolved = async ({ employeeId = null, tenantKey = null, includeUnknownTenant = false, limit = 100 } = {}) => {
   const database = await getDatabase();
 
   const params = [...UNRESOLVED_STATUSES];
   let where = `status IN (${placeholdersFor(UNRESOLVED_STATUSES)})`;
-  if (employeeId) {
-    where += " AND employeeId = ?";
-    params.push(employeeId);
-  }
+  const scope = readScope(employeeId, tenantKey, includeUnknownTenant);
+  where += scope.sql;
+  params.push(...scope.params);
   params.push(limit);
 
   const rows = await database.getAllAsync(
@@ -1243,6 +1369,8 @@ export const listUnresolved = async ({ employeeId = null, limit = 100 } = {}) =>
  */
 export const listForHistory = async ({
   employeeId = null,
+  tenantKey = null,
+  includeUnknownTenant = false,
   statuses = [
     QUEUE_STATUS.PENDING,
     QUEUE_STATUS.SYNCING,
@@ -1259,10 +1387,9 @@ export const listForHistory = async ({
 
   const params = [...statuses];
   let where = `status IN (${placeholdersFor(statuses)})`;
-  if (employeeId) {
-    where += " AND employeeId = ?";
-    params.push(employeeId);
-  }
+  const scope = readScope(employeeId, tenantKey, includeUnknownTenant);
+  where += scope.sql;
+  params.push(...scope.params);
   params.push(limit);
 
   const rows = await database.getAllAsync(
@@ -1403,18 +1530,14 @@ export const explainUnclaimable = async ({ employeeId, tenantKey, now = Date.now
  * kept, still retried, and still counted everywhere else. If the endpoint is
  * later deployed, one success flips it back and it is counted again.
  */
-export const countByStatus = async (employeeId = null) => {
+export const countByStatus = async (employeeId = null, { tenantKey = null, includeUnknownTenant = false } = {}) => {
   const database = await getDatabase();
+  const scope = readScope(employeeId, tenantKey, includeUnknownTenant);
 
-  const rows = employeeId
-    ? await database.getAllAsync(
-        `SELECT status, COUNT(*) AS total FROM ${QUEUE_TABLE}
-          WHERE employeeId = ? GROUP BY status;`,
-        [employeeId],
-      )
-    : await database.getAllAsync(
-        `SELECT status, COUNT(*) AS total FROM ${QUEUE_TABLE} GROUP BY status;`,
-      );
+  const rows = await database.getAllAsync(
+    `SELECT status, COUNT(*) AS total FROM ${QUEUE_TABLE}
+      WHERE 1 = 1${scope.sql} GROUP BY status;`, scope.params,
+  );
 
   const counts = {
     [QUEUE_STATUS.PENDING]: 0,
@@ -1454,17 +1577,11 @@ export const countByStatus = async (employeeId = null) => {
 
   // Blocked rows split by *why*. Only the undeliverable class is separated out;
   // auth, configuration and unknown all remain things that can still land.
-  const blockedRows = employeeId
-    ? await database.getAllAsync(
-        `SELECT failureClass, COUNT(*) AS total FROM ${QUEUE_TABLE}
-          WHERE status = ? AND employeeId = ? GROUP BY failureClass;`,
-        [QUEUE_STATUS.BLOCKED, employeeId],
-      )
-    : await database.getAllAsync(
-        `SELECT failureClass, COUNT(*) AS total FROM ${QUEUE_TABLE}
-          WHERE status = ? GROUP BY failureClass;`,
-        [QUEUE_STATUS.BLOCKED],
-      );
+  const blockedRows = await database.getAllAsync(
+    `SELECT failureClass, COUNT(*) AS total FROM ${QUEUE_TABLE}
+      WHERE status = ?${scope.sql} GROUP BY failureClass;`,
+    [QUEUE_STATUS.BLOCKED, ...scope.params],
+  );
 
   counts.blockedUndeliverableCount = (blockedRows ?? []).reduce(
     (total, { failureClass, total: rowTotal }) =>
@@ -1485,17 +1602,11 @@ export const countByStatus = async (employeeId = null) => {
   //
   // `createdAt`, not `timestamp` — how long the app has been holding the record,
   // not when the employee punched. A backdated geofence replay is not stale.
-  const oldest = employeeId
-    ? await database.getFirstAsync(
-        `SELECT MIN(createdAt) AS oldest FROM ${QUEUE_TABLE}
-          WHERE status IN (?, ?) AND employeeId = ?;`,
-        [QUEUE_STATUS.PENDING, QUEUE_STATUS.SYNCING, employeeId],
-      )
-    : await database.getFirstAsync(
-        `SELECT MIN(createdAt) AS oldest FROM ${QUEUE_TABLE}
-          WHERE status IN (?, ?);`,
-        [QUEUE_STATUS.PENDING, QUEUE_STATUS.SYNCING],
-      );
+  const oldest = await database.getFirstAsync(
+    `SELECT MIN(createdAt) AS oldest FROM ${QUEUE_TABLE}
+      WHERE status IN (?, ?)${scope.sql};`,
+    [QUEUE_STATUS.PENDING, QUEUE_STATUS.SYNCING, ...scope.params],
+  );
 
   counts.oldestPendingAt = Number(oldest?.oldest) || null;
 

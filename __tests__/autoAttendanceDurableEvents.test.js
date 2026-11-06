@@ -104,6 +104,48 @@ it("prevents an expired or replaced owner from recording another POST or changin
   expect(await claimEvent("enter", { ownerId: "runtime-c", now: 999999 })).toBeNull();
 });
 
+it.each([false, true])("recovers a receipt lease after clock rewind/reopen without erasing dispatch evidence (%s)", async dispatched => {
+  const correctedNow = 10000000;
+  const wrongNow = correctedNow + 6 * 60 * 60 * 1000;
+  await ingestNativeEvent(event("rewound"));
+  await claimEvent("rewound", { ownerId: "before-reboot", now: wrongNow });
+  if (dispatched) await updateClaimedEvent("rewound", "before-reboot", {
+    onlineAttemptAt: wrongNow + 1, punchTimestamp: "2026-10-12 09:00:00",
+  }, { now: wrongNow + 1 });
+  const before = await findEvent("rewound");
+  resetDatabaseHandle();
+
+  // A live old process cannot erase its dispatch marker or renew the
+  // implausible lease while a replacement worker has not reclaimed it yet.
+  expect(await updateClaimedEvent("rewound", "before-reboot", { onlineAttemptAt: null },
+    { now: correctedNow })).toBeNull();
+
+  const reclaimed = await claimEvent("rewound", { ownerId: "after-reboot", now: correctedNow });
+  expect(reclaimed).toMatchObject({ status: "processing", claimOwner: "after-reboot",
+    claimExpiresAt: correctedNow + 120000, onlineAttemptAt: before.onlineAttemptAt,
+    punchTimestamp: before.punchTimestamp, event: before.event });
+  expect(await updateClaimedEvent("rewound", "before-reboot", { onlineAttemptAt: null },
+    { now: correctedNow + 1 })).toBeNull();
+});
+
+it("expires an input lease after a forward clock jump without granting two claimants ownership", async () => {
+  await ingestNativeEvent(event("forward"));
+  await claimEvent("forward", { ownerId: "old-worker", now: 1000 });
+  const claims = await Promise.all([
+    claimEvent("forward", { ownerId: "worker-a", now: 3601000 }),
+    claimEvent("forward", { ownerId: "worker-b", now: 3601000 }),
+  ]);
+  expect(claims.filter(Boolean)).toHaveLength(1);
+  expect(await updateClaimedEvent("forward", "old-worker", { onlineAttemptAt: 3601001 },
+    { now: 3601001 })).toBeNull();
+});
+
+it.each([0, -1, 120001, Infinity, NaN])("refuses an invalid or unbounded receipt claim lease %s", async leaseMs => {
+  await ingestNativeEvent(event("invalid-lease"));
+  await expect(claimEvent("invalid-lease", { ownerId: "worker", leaseMs })).rejects.toThrow("Invalid automatic event claim");
+  expect((await findEvent("invalid-lease")).status).toBe("pending");
+});
+
 it("restores an interrupted online attempt as processing with durable dispatch evidence", async () => {
   await ingestNativeEvent(event("enter"));
   await claimEvent("enter");

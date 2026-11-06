@@ -24,6 +24,7 @@
 import React from 'react';
 import { Text } from 'react-native';
 import { render, fireEvent, act } from '@testing-library/react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const mockQueryState = {
   data: { pages: [[]] },
@@ -48,7 +49,7 @@ jest.mock('@tanstack/react-query', () => ({
 
 jest.mock('react-redux', () => ({
   useSelector: (selector) =>
-    selector({ user: { userDetails: { employeeCode: 'TDI0167' } } }),
+    selector({ user: { baseUrl: 'https://history.example', userDetails: { employeeCode: 'TDI0167' } } }),
 }));
 
 jest.mock('../services/api', () => ({
@@ -84,11 +85,13 @@ function Probe() {
   );
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   jest.clearAllMocks();
   mockSyncNow.mockResolvedValue({ ran: true });
   mockGetHistoryRows.mockResolvedValue([]);
   mockRefetch.mockResolvedValue();
+  await AsyncStorage.multiSet([['baseUrl', 'https://history.example'], ['employee_code', 'TDI0167'],
+    ['access_token', 'synthetic-access'], ['api_key', 'synthetic-account']]);
 });
 
 describe('pull-to-refresh', () => {
@@ -130,7 +133,9 @@ describe('pull-to-refresh', () => {
       fireEvent.press(getByText('idle'));
     });
 
-    expect(mockGetHistoryRows).toHaveBeenCalledWith('TDI0167');
+    expect(mockGetHistoryRows).toHaveBeenCalledWith('TDI0167', expect.objectContaining({
+      tenantKey: 'https://history.example', employeeId: 'TDI0167',
+    }));
   });
 
   // The drain is the slow half and the half the employee is waiting on, so the

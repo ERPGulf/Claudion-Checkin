@@ -145,6 +145,12 @@ will no longer ask (`blocked`), onboarding shows nothing. The screen's button
 then offers Settings, and only from a tap. A granted result dispatches
 `requestAutoAttendanceSync()`. Any answer records the account as answered.
 
+The explanation also owns the lifetime of the permission sequence. If sign-out,
+an account change, a tenant disable, an employee policy change to mode 0/1, or
+unmount makes it obsolete, it stays cancelled even if eligibility later returns.
+The current system dialog can finish, but the flow checks its owner after OS
+reads and starts no further prompt. A cancelled flow is left unanswered.
+
 Notifications are not part of this flow. FCM already asks at every sign-in for
 push, and the automatic check-out alert reuses that permission. Without it the
 alert is skipped and attendance is unaffected. No battery-optimisation

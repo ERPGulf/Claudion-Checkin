@@ -2,10 +2,12 @@ package expo.modules.autoattendance
 
 import android.content.Context
 import java.nio.file.Files
+import java.io.File
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import org.json.JSONObject
 import org.json.JSONArray
+import kotlin.system.exitProcess
 
 private fun context(): Context = Context(Files.createTempDirectory("attendance-journal-").toFile())
 
@@ -24,12 +26,56 @@ private fun registration(nativeIdentifier: String = "physical-one", employeeId: 
 private fun capture(context: Context, transition: String, nativeIdentifier: String = "physical-one", at: Long = 1000) =
   GeofenceStore.appendEvent(context, transition, at, GeofenceStore.captureMetadata(context, nativeIdentifier))
 
-fun main() {
+fun main(args: Array<String>) {
+  // Mutate only the parent's disposable fixture, then terminate before any
+  // emitter/JS work. The adapter tests process-boundary persistence, not Android
+  // receiver scheduling or the real SharedPreferences implementation.
+  if (args.size >= 2) {
+    val childContext = Context(File(args[1]))
+    if (args[0] == "--exit-after-capture") {
+      capture(childContext, "ENTER")
+      exitProcess(71)
+    }
+    if (args[0] == "--exit-after-ack" && args.size == 3) {
+      GeofenceStore.acknowledgeEvent(childContext, args[2])
+      exitProcess(72)
+    }
+  }
   var passed = 0
   fun checkCase(name: String, test: () -> Unit) {
     test()
     passed += 1
     println("PASS $name")
+  }
+
+  fun terminateAfterMutation(context: Context, mode: String, eventId: String? = null): Int {
+    val command = mutableListOf(File(System.getProperty("java.home"), "bin/java").path,
+      "-cp", System.getProperty("java.class.path"), "expo.modules.autoattendance.GeofenceJournalHarnessKt",
+      mode, context.directory.path)
+    if (eventId != null) command.add(eventId)
+    val child = ProcessBuilder(command).start()
+    if (!child.waitFor(30, TimeUnit.SECONDS)) {
+      child.destroyForcibly()
+      error("Synthetic journal child process did not finish")
+    }
+    return child.exitValue()
+  }
+
+  checkCase("capture survives process termination after commit and before emission") {
+    val context = context()
+    GeofenceStore.saveGeofence(context, registration())
+    check(terminateAfterMutation(context, "--exit-after-capture") == 71)
+    val recovered = GeofenceStore.getPendingEvents(Context(context.directory))
+    check(recovered.size == 1 && recovered[0]["transition"] == "ENTER")
+    check(recovered[0]["employeeId"] == "employee-a")
+  }
+
+  checkCase("acknowledgment survives process termination without resurrecting transferred capture") {
+    val context = context()
+    GeofenceStore.saveGeofence(context, registration())
+    val original = capture(context, "ENTER")
+    check(terminateAfterMutation(context, "--exit-after-ack", original["eventId"] as String) == 72)
+    check(GeofenceStore.getPendingEvents(Context(context.directory)).isEmpty())
   }
 
   checkCase("ENTER and EXIT survive restart without a JavaScript listener") {

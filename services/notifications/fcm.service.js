@@ -26,6 +26,7 @@ import { setUnreadCount } from "../../redux/Slices/notificationSlice";
 import { navigateSafely } from "../../navigation/rootNavigation";
 import { getSanitizedTopics, getTopicSyncPlan } from "../../utils/fcmTopics";
 import { describeHttpFailure } from "../../utils/httpDiagnostics";
+import { getAuthSessionGeneration } from "../../utils/authSessionGuard";
 
 const FCM_TOKEN_KEY = "fcm_token";
 const FCM_LAST_MESSAGE_AT_KEY = "fcm_last_message_at";
@@ -406,15 +407,19 @@ const getStoredTopics = async () => {
   }
 };
 
-const syncTopicsFromBackend = async (messagingInstance, topics) => {
-  if (!messagingInstance) {
+const syncTopicsFromBackend = async (messagingInstance, topics, isCurrent = captureFcmSession()) => {
+  if (!messagingInstance || !isCurrent()) {
     return;
   }
 
   const nextTopics = getSanitizedTopics(topics);
   const currentTopics = await getStoredTopics();
-  const { topicsToSubscribe, topicsToUnsubscribe, syncedTopics } =
+  if (!isCurrent()) return;
+  const { topicsToSubscribe, topicsToUnsubscribe } =
     getTopicSyncPlan(currentTopics, nextTopics);
+  // Cache successful native operations, so a transient Firebase failure is
+  // eligible for the next ordinary sync instead of becoming a permanent miss.
+  const subscribedTopics = new Set(currentTopics);
 
   console.log("[FCM] syncTopicsFromBackend: topic counts", {
     next: nextTopics.length, current: currentTopics.length,
@@ -426,8 +431,10 @@ const syncTopicsFromBackend = async (messagingInstance, topics) => {
 
   await Promise.all(
     topicsToUnsubscribe.map(async (topic) => {
+      if (!isCurrent()) return;
       try {
         await unsubscribeFromTopic(messagingInstance, topic);
+        subscribedTopics.delete(topic);
         console.log("[FCM] unsubscribed from topic");
       } catch (err) {
         // Ignore per-topic unsubscription failures to keep bootstrap resilient.
@@ -441,8 +448,10 @@ const syncTopicsFromBackend = async (messagingInstance, topics) => {
 
   await Promise.all(
     topicsToSubscribe.map(async (topic) => {
+      if (!isCurrent()) return;
       try {
         await subscribeToTopic(messagingInstance, topic);
+        subscribedTopics.add(topic);
         console.log("[FCM] subscribed to topic");
       } catch (err) {
         // Ignore per-topic subscription failures to keep bootstrap resilient.
@@ -452,16 +461,17 @@ const syncTopicsFromBackend = async (messagingInstance, topics) => {
   );
 
   try {
-    await AsyncStorage.setItem(FCM_TOPICS_KEY, JSON.stringify(syncedTopics));
+    if (!isCurrent()) return;
+    await AsyncStorage.setItem(FCM_TOPICS_KEY, JSON.stringify([...subscribedTopics]));
   } catch {
     // Ignore storage issues and continue app startup.
   }
 };
 
-const syncTokenToBackend = async (token) => {
+const syncTokenToBackend = async (token, isCurrent = captureFcmSession()) => {
   const registrationMethod = getRegistrationMethod();
 
-  if (!registrationMethod || !token) {
+  if (!registrationMethod || !token || !isCurrent()) {
     return null;
   }
 
@@ -470,6 +480,7 @@ const syncTokenToBackend = async (token) => {
     AsyncStorage.getItem("access_token"),
     AsyncStorage.getItem("employee_id"),
   ]);
+  if (!isCurrent()) return null;
 
   console.log("[FCM] baseUrl for token sync:", baseUrl);
 
@@ -509,6 +520,7 @@ const syncTokenToBackend = async (token) => {
       },
       timeout: 10000,
     });
+    if (!isCurrent()) return null;
 
     console.log("[FCM] token sync status:", response?.status);
 
@@ -523,6 +535,7 @@ const syncTokenToBackend = async (token) => {
         },
         timeout: 10000,
       });
+      if (!isCurrent()) return null;
 
       console.log("[FCM] GET topics status:", topicsResponse?.status);
       topicData = extractTopicSyncData(topicsResponse?.data);
@@ -533,6 +546,7 @@ const syncTokenToBackend = async (token) => {
     console.log("[FCM] topics from server:", { count: topicData?.topics?.length || 0 });
 
     const messagingInstance = await getMessagingInstanceWithRetry();
+    if (!isCurrent()) return null;
 
     if (!messagingInstance) {
       console.log(
@@ -543,7 +557,7 @@ const syncTokenToBackend = async (token) => {
 
     if (Array.isArray(topicData?.topics)) {
       console.log("[FCM] starting topic sync after login");
-      await syncTopicsFromBackend(messagingInstance, topicData.topics);
+      await syncTopicsFromBackend(messagingInstance, topicData.topics, isCurrent);
       console.log("[FCM] topic sync complete");
     }
 
@@ -555,8 +569,8 @@ const syncTokenToBackend = async (token) => {
   }
 };
 
-const persistFcmToken = async (token) => {
-  if (!token) {
+const persistFcmToken = async (token, isCurrent = captureFcmSession()) => {
+  if (!token || !isCurrent()) {
     console.log("[FCM] persistFcmToken: token is empty");
     return;
   }
@@ -567,6 +581,7 @@ const persistFcmToken = async (token) => {
   );
 
   const previousToken = await AsyncStorage.getItem(FCM_TOKEN_KEY);
+  if (!isCurrent()) return;
 
   if (previousToken === token) {
     console.log("[FCM] persistFcmToken: token unchanged");
@@ -657,19 +672,20 @@ export const requestFcmPermission = async () => {
   }
 };
 
-export const syncUnreadCountFromServer = async (dispatch) => {
-  if (typeof dispatch !== "function") {
+export const syncUnreadCountFromServer = async (dispatch, isCurrent = captureFcmSession()) => {
+  if (typeof dispatch !== "function" || !isCurrent()) {
     return;
   }
 
   try {
     const employeeId = await AsyncStorage.getItem("employee_id");
 
-    if (!employeeId) {
+    if (!employeeId || !isCurrent()) {
       return;
     }
 
     const notifications = await getNotifications(employeeId);
+    if (!isCurrent()) return;
     const unreadCount = notifications.filter(
       (item) => Number(item.read) === 0,
     ).length;
@@ -680,14 +696,15 @@ export const syncUnreadCountFromServer = async (dispatch) => {
   }
 };
 
-export const handleNotificationOpen = async (remoteMessage, dispatch) => {
-  if (!remoteMessage) {
+export const handleNotificationOpen = async (remoteMessage, dispatch, isCurrent = captureFcmSession()) => {
+  if (!remoteMessage || !isCurrent()) {
     return;
   }
 
   logNotificationPayload("handleNotificationOpen", remoteMessage);
 
-  await syncUnreadCountFromServer(dispatch);
+  await syncUnreadCountFromServer(dispatch, isCurrent);
+  if (!isCurrent()) return;
 
   const routeName = getTargetRoute(remoteMessage);
   const params = parseRouteParams(getMessageData(remoteMessage));
@@ -727,17 +744,20 @@ export const initializeFcm = async ({
   // Firebase deregistration in flight, and this is what tells it to leave this
   // session's token and topics alone. See `revokeFcmRegistration`.
   beginFcmSession();
+  const sessionIsCurrent = captureFcmSession();
+  let active = true;
+  const isCurrent = () => active && sessionIsCurrent();
 
   const messagingInstance = await getMessagingInstanceWithRetry();
 
-  if (!messagingInstance) {
+  if (!messagingInstance || !isCurrent()) {
     console.log("[FCM] initializeFcm: messaging instance unavailable");
     return () => {};
   }
 
   const hasPermission = await requestFcmPermission();
 
-  if (!hasPermission) {
+  if (!hasPermission || !isCurrent()) {
     console.log("[FCM] initializeFcm: notification permission not granted");
     return () => {};
   }
@@ -745,42 +765,51 @@ export const initializeFcm = async ({
   try {
     console.log("[FCM] initializeFcm: requesting token");
     const token = await getToken(messagingInstance);
+    if (!isCurrent()) return () => {};
     console.log(
       "[FCM] initializeFcm: token received",
       formatTokenForLogs(token),
     );
-    await persistFcmToken(token);
+    await persistFcmToken(token, isCurrent);
   } catch (error) {
     console.log("[FCM] initializeFcm: token fetch failed", describeHttpFailure(error));
     // Do not block app startup if token retrieval fails.
   }
 
-  await syncUnreadCountFromServer(dispatch);
+  if (!isCurrent()) return () => {};
+  await syncUnreadCountFromServer(dispatch, isCurrent);
+  if (!isCurrent()) return () => {};
 
   const unsubscribeTokenRefresh = onTokenRefresh(
     messagingInstance,
     async (token) => {
-      await persistFcmToken(token);
+      if (!isCurrent()) return;
+      await persistFcmToken(token, isCurrent);
+      if (!isCurrent()) return;
       // A rotated token is NOT subscribed to the previous token's topics. Reset
       // the local topic baseline so the sync below re-subscribes the new token
       // to every backend topic (Firebase recommends resubscribing on token
       // change; our diff-based sync would otherwise see no change and skip it).
       await AsyncStorage.removeItem(FCM_TOPICS_KEY);
+      if (!isCurrent()) return;
       // Push the rotated token to the backend immediately so it never serves a
       // stale token between the refresh and the next Home-focus sync.
-      await syncTokenToBackend(token);
+      await syncTokenToBackend(token, isCurrent);
     },
   );
 
   const unsubscribeForeground = onMessage(
     messagingInstance,
     async (remoteMessage) => {
+      if (!isCurrent()) return;
       const messageData = getMessageData(remoteMessage);
 
       logNotificationReceived("foregroundMessage", remoteMessage);
       logNotificationPayload("foregroundMessage", remoteMessage);
       await AsyncStorage.setItem(FCM_LAST_MESSAGE_AT_KEY, String(Date.now()));
-      await syncUnreadCountFromServer(dispatch);
+      if (!isCurrent()) return;
+      await syncUnreadCountFromServer(dispatch, isCurrent);
+      if (!isCurrent()) return;
 
       if (typeof onForegroundNotification === "function") {
         onForegroundNotification({
@@ -799,31 +828,34 @@ export const initializeFcm = async ({
   const unsubscribeNotificationOpen = onNotificationOpenedApp(
     messagingInstance,
     async (remoteMessage) => {
+      if (!isCurrent()) return;
       logNotificationPayload("notificationOpenedApp", remoteMessage);
-      await handleNotificationOpen(remoteMessage, dispatch);
+      await handleNotificationOpen(remoteMessage, dispatch, isCurrent);
     },
   );
 
   try {
     const initialMessage = await getInitialNotification(messagingInstance);
 
-    if (initialMessage) {
+    if (initialMessage && isCurrent()) {
       logNotificationPayload("initialNotification", initialMessage);
-      await handleNotificationOpen(initialMessage, dispatch);
+      await handleNotificationOpen(initialMessage, dispatch, isCurrent);
     }
   } catch {
     // Ignore initial notification parsing errors.
   }
 
   return () => {
+    active = false;
     unsubscribeTokenRefresh();
     unsubscribeForeground();
     unsubscribeNotificationOpen();
   };
 };
 
-export const getClientFcmToken = async () => {
+export const getClientFcmToken = async (isCurrent = captureFcmSession()) => {
   const cachedToken = await AsyncStorage.getItem(FCM_TOKEN_KEY);
+  if (!isCurrent()) return null;
 
   if (cachedToken) {
     console.log(
@@ -835,7 +867,7 @@ export const getClientFcmToken = async () => {
 
   const messagingInstance = await getMessagingInstanceWithRetry();
 
-  if (!messagingInstance) {
+  if (!messagingInstance || !isCurrent()) {
     console.log("[FCM] getClientFcmToken: messaging instance unavailable");
     return null;
   }
@@ -845,7 +877,7 @@ export const getClientFcmToken = async () => {
     "getClientFcmToken",
   );
 
-  if (!isRegistered) {
+  if (!isRegistered || !isCurrent()) {
     console.log(
       "[FCM] getClientFcmToken: device is not registered for remote messages",
     );
@@ -854,7 +886,7 @@ export const getClientFcmToken = async () => {
 
   const hasPermission = await requestFcmPermission();
 
-  if (!hasPermission) {
+  if (!hasPermission || !isCurrent()) {
     console.log("[FCM] getClientFcmToken: notification permission not granted");
     return null;
   }
@@ -862,18 +894,19 @@ export const getClientFcmToken = async () => {
   try {
     const token = await getToken(messagingInstance);
 
-    if (!token) {
+    if (!token || !isCurrent()) {
       return null;
     }
 
-    await persistFcmToken(token);
-    return token;
+    await persistFcmToken(token, isCurrent);
+    return isCurrent() ? token : null;
   } catch {
     return null;
   }
 };
 
 export const syncFcmTokenAfterLogin = async () => {
+  const isCurrent = captureFcmSession();
   console.log("[FCM] syncFcmTokenAfterLogin called");
 
   const token = await AsyncStorage.getItem(FCM_TOKEN_KEY);
@@ -882,7 +915,7 @@ export const syncFcmTokenAfterLogin = async () => {
     formatTokenForLogs(token),
   );
 
-  if (!token) {
+  if (!token || !isCurrent()) {
     console.log("[FCM] No token stored, skipping sync");
     return;
   }
@@ -890,11 +923,12 @@ export const syncFcmTokenAfterLogin = async () => {
   console.log(
     "[FCM] syncFcmTokenAfterLogin: sending token and subscribing to topics",
   );
-  await syncTokenToBackend(token);
+  await syncTokenToBackend(token, isCurrent);
   console.log("[FCM] syncFcmTokenAfterLogin: complete");
 };
 
 export const fetchTopicsFromServer = async () => {
+  const isCurrent = captureFcmSession();
   console.log("[FCM] fetchTopicsFromServer called");
   const startTime = Date.now();
 
@@ -909,6 +943,7 @@ export const fetchTopicsFromServer = async () => {
     console.log("[FCM] fetchTopicsFromServer: baseUrl =", baseUrl);
 
     const authToken = await AsyncStorage.getItem("access_token");
+    if (!isCurrent()) return null;
     console.log("[FCM] fetchTopicsFromServer: authToken exists =", !!authToken);
 
     if (!registrationMethod || !baseUrl || !authToken) {
@@ -946,6 +981,7 @@ export const fetchTopicsFromServer = async () => {
       },
       timeout: 10000,
     });
+    if (!isCurrent()) return null;
 
     const requestDuration = Date.now() - requestStartTime;
     console.log(
@@ -969,10 +1005,10 @@ export const fetchTopicsFromServer = async () => {
         "[FCM] fetchTopicsFromServer: server token not updated, syncing current FCM token",
       );
 
-      const currentToken = await getClientFcmToken();
+      const currentToken = await getClientFcmToken(isCurrent);
 
-      if (currentToken) {
-        const refreshedTopics = await syncTokenToBackend(currentToken);
+      if (currentToken && isCurrent()) {
+        const refreshedTopics = await syncTokenToBackend(currentToken, isCurrent);
 
         if (Array.isArray(refreshedTopics)) {
           console.log(
@@ -988,6 +1024,7 @@ export const fetchTopicsFromServer = async () => {
     }
 
     const messagingInstance = await getMessagingInstanceWithRetry();
+    if (!isCurrent()) return null;
     console.log(
       "[FCM] fetchTopicsFromServer: messagingInstance available =",
       !!messagingInstance,
@@ -1008,7 +1045,7 @@ export const fetchTopicsFromServer = async () => {
       );
       const syncStartTime = Date.now();
 
-      await syncTopicsFromBackend(messagingInstance, topicData.topics);
+      await syncTopicsFromBackend(messagingInstance, topicData.topics, isCurrent);
 
       const syncDuration = Date.now() - syncStartTime;
       console.log(
@@ -1051,6 +1088,15 @@ export const fetchTopicsFromServer = async () => {
  * stale teardown notice that the device has moved on and stop.
  */
 let fcmSessionEpoch = 0;
+
+// Firebase callbacks can already be awaiting storage/network when their
+// listener is removed. Keep their effects tied to the account and FCM setup
+// that started them, including logout followed by the same account signing in.
+const captureFcmSession = () => {
+  const epoch = fcmSessionEpoch;
+  const generation = getAuthSessionGeneration();
+  return () => epoch === fcmSessionEpoch && generation === getAuthSessionGeneration();
+};
 
 /** Called when a session starts, so any pending teardown becomes stale. */
 export const beginFcmSession = () => {
@@ -1118,10 +1164,11 @@ export const revokeFcmRegistration = async (
  */
 export const clearFcmRegistration = async () => {
   const messagingInstance = getMessagingInstance();
-  const epoch = fcmSessionEpoch;
+  const epoch = beginFcmSession();
 
   // Read before the removal below wipes it.
   const storedTopics = messagingInstance ? await getStoredTopics() : [];
+  if (epoch !== fcmSessionEpoch) return;
 
   await AsyncStorage.multiRemove([
     FCM_TOKEN_KEY,

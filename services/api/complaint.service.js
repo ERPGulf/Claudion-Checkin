@@ -7,6 +7,7 @@ import {
 import { getServerTime } from "./attendance.service";
 import { assertCapability } from "../capabilityPolicy";
 import { describeHttpFailure } from "../../utils/httpDiagnostics";
+import { fetchUploadJson } from "./uploadTransport";
 
 /**
  * CREATE COMPLAINT
@@ -95,7 +96,7 @@ export const uploadComplaintAttachment = async (file, docname, { capabilityScope
     formData.append("docname", String(docname));
 
     await assertCapability("complaints", capabilityScope);
-    const response = await fetch(
+    const { response, result } = await fetchUploadJson(
       `${baseUrl}/api/method/employee_app.attendance_api.upload_file`,
       {
         method: "POST",
@@ -104,15 +105,8 @@ export const uploadComplaintAttachment = async (file, docname, { capabilityScope
         },
         body: formData,
       },
+      { invalidJsonMessage: "Invalid server response" },
     );
-
-    let result;
-
-    try {
-      result = await response.json();
-    } catch {
-      throw new Error("Invalid server response");
-    }
 
     if (!response.ok) {
       console.log("Complaint upload failed:", { httpStatus: response.status });

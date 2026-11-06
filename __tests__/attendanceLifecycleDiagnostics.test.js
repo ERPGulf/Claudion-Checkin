@@ -4,8 +4,8 @@ jest.mock("../modules/expo-auto-attendance", () => ({
 }));
 
 import * as Native from "../modules/expo-auto-attendance";
-import { recordAttendanceLifecycle } from "../services/offline/attendanceDiagnostics";
-import { requestQueueDrain, registerQueueDrainHandler } from "../services/offline/AttendanceQueueService";
+import { logAttendanceDiagnostic, recordAttendanceLifecycle } from "../services/offline/attendanceDiagnostics";
+import { requestQueueDrain, registerQueueDrainHandler, submitManualAttendance } from "../services/offline/AttendanceQueueService";
 
 const eventId = "12345678-1234-1234-1234-123456789abc";
 
@@ -60,4 +60,44 @@ it("retains foreground recovery when durable native enqueue rejects asynchronous
   requestQueueDrain({ reason: "queued-punch" });
   await Promise.resolve();
   expect(foreground).toHaveBeenCalledWith({ reason: "queued-punch" });
+});
+
+it("keeps private request, response, employee and location details out of development logs", () => {
+  const log = jest.spyOn(console, "log").mockImplementation(() => {});
+  try {
+    logAttendanceDiagnostic("[AttendanceUpload]", "HTTP response", {
+      httpStatus: 503, queueRowId: 4, attemptCount: 2,
+      payload: { logs: [{ employee: "synthetic-private-employee", location: "25.2, 51.3" }] },
+      body: { error: "Bearer synthetic-private-token" },
+      responseData: { employee_name: "synthetic-private-name" },
+      employeeId: "synthetic-private-employee", tenantKey: "https://private-company.example",
+      latitude: 25.2, longitude: 51.3, message: "synthetic-private-message",
+      reason: "synthetic-private-message", serverCheckinId: "synthetic-private-reference",
+      nested: { access_token: "synthetic-private-token", locationName: "synthetic-private-office" },
+      summary: { reason: "offline" },
+    });
+    const output = log.mock.calls.flat().join(" ");
+    expect(output).not.toMatch(/synthetic-private|25\.2|51\.3|private-company/);
+    expect(output).toContain('"httpStatus": 503');
+    expect(output).toContain('"queueRowId": 4');
+    expect(output).toContain('"attemptCount": 2');
+    expect(output).toContain('"reason": "offline"');
+  } finally {
+    log.mockRestore();
+  }
+});
+
+it("does not log raw manual attendance errors in release builds", async () => {
+  const log = jest.spyOn(console, "log").mockImplementation(() => {});
+  const development = global.__DEV__;
+  try {
+    global.__DEV__ = false;
+    const result = await submitManualAttendance({ type: "IN", employeeCode: "synthetic-employee",
+      online: async () => { throw new Error("synthetic-private-server-error"); } });
+    expect(result.allowed).toBe(false);
+    expect(log.mock.calls.flat().join(" ")).not.toContain("synthetic-private-server-error");
+  } finally {
+    global.__DEV__ = development;
+    log.mockRestore();
+  }
 });

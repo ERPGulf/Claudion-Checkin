@@ -59,6 +59,7 @@ import { useFeatureEnabled } from "../hooks/useFeatureSettings";
 import { ATTENDANCE_FEATURES } from "../utils/featureSettings";
 import { assertCapability, assertCapabilityCurrent } from "../services/capabilityPolicy";
 import { readLocationAccess } from "../utils/autoAttendance";
+import { describeHttpFailure } from "../utils/httpDiagnostics";
 import {
   assertEmployeeAutoAttendancePolicy,
   getEmployeeAutoAttendancePolicy,
@@ -158,14 +159,14 @@ function LegacyAutoAttendanceBootstrap() {
       } catch (error) {
         console.log(
           `${LOG_PREFIX} Failed to fetch geotagging policy:`,
-          error?.message,
+          describeHttpFailure(error),
         );
         try {
           if (scope && !cancelled) await getEmployeeAutoAttendancePolicy(scope);
         } catch (cacheError) {
           console.log(
             `${LOG_PREFIX} Failed to read cached geotagging:`,
-            cacheError?.message,
+            describeHttpFailure(cacheError),
           );
         }
       }
@@ -231,13 +232,16 @@ function LegacyAutoAttendanceBootstrap() {
      * Fails open at 0. A queue read that throws must not be able to disable
      * automatic attendance.
      */
-    const countAwaitingServer = async (code) =>
-      getQueueCounts(code)
+    const countAwaitingServer = async (code) => {
+      const scope = await queueScope;
+      if (!scope) return 0;
+      return getQueueCounts(code, scope)
         .then((counts) => counts?.mayAffectServerCount ?? 0)
         .catch((error) => {
-          console.log(`${LOG_PREFIX} Queue count failed:`, error?.message);
+          console.log(`${LOG_PREFIX} Queue count failed:`, describeHttpFailure(error));
           return 0;
         });
+    };
 
     const performAttendanceAction = async (
       type,
@@ -286,7 +290,8 @@ function LegacyAutoAttendanceBootstrap() {
           origin: SESSION_ORIGIN.AUTO,
           at: occurredAt,
           assertCurrent: () => assertAttendanceQueueScope(sourceScope),
-          execute: async () => {
+          withSessionContext: true,
+          execute: async (session) => {
             await assertPunchAllowed();
             // A check-in must never overtake a punch the server has not seen.
             // The OS can deliver an ENTER the instant the fence is registered at
@@ -323,6 +328,7 @@ function LegacyAutoAttendanceBootstrap() {
               forceQueue,
               sourceScope,
               sourceEventId,
+              parentSession: session,
               online: async ({ serverClock, timestamp } = {}) => {
                 await assertPunchAllowed();
                 return autoCheckInOut({
@@ -358,7 +364,7 @@ function LegacyAutoAttendanceBootstrap() {
         if (outcome.status === TRANSITION_RESULT.FAILED) {
           console.log(
             `${LOG_PREFIX} Auto ${type} blocked:`,
-            outcome.response?.message,
+            describeHttpFailure(outcome.response?.error),
           );
           return;
         }
@@ -408,7 +414,7 @@ function LegacyAutoAttendanceBootstrap() {
         }
         console.log(`${LOG_PREFIX} Auto ${type} succeeded`);
       } catch (error) {
-        console.log(`${LOG_PREFIX} Auto ${type} failed:`, error?.message);
+        console.log(`${LOG_PREFIX} Auto ${type} failed:`, describeHttpFailure(error));
       }
     };
 
@@ -449,8 +455,7 @@ function LegacyAutoAttendanceBootstrap() {
 
         if (pending.status === PENDING_EVENT.EXPIRED) {
           console.log(
-            `${LOG_PREFIX} Discarding stale ${lastEvent?.transition} from`,
-            new Date(pending.occurredAt).toISOString(),
+            `${LOG_PREFIX} Discarding stale native transition`,
           );
           await markEventProcessed(pending.occurredAt);
           return;
@@ -460,7 +465,7 @@ function LegacyAutoAttendanceBootstrap() {
         // record. Retain it; only a fresh observed event may create attendance.
         console.log(`${LOG_PREFIX} Retaining native event without capture-time ownership`);
       } catch (error) {
-        console.log(`${LOG_PREFIX} Replay failed:`, error?.message);
+        console.log(`${LOG_PREFIX} Replay failed:`, describeHttpFailure(error));
       }
     };
 
@@ -531,14 +536,14 @@ function LegacyAutoAttendanceBootstrap() {
             throw error;
           }
           if (cancelled) return null;
-          console.log(`${LOG_PREFIX} Monitoring (re)established`, nearest);
+          console.log(`${LOG_PREFIX} Monitoring (re)established`);
         }
 
         return nearest;
       } catch (error) {
         console.log(
           `${LOG_PREFIX} Failed to (re)start monitoring:`,
-          error?.message,
+          describeHttpFailure(error),
         );
         return null;
       }
@@ -602,7 +607,7 @@ function LegacyAutoAttendanceBootstrap() {
           // has been told who is logged in, and an unscoped drain would refuse.
           await syncNow({ trigger: "auto-attendance-presence", employeeId: code });
         } catch (error) {
-          console.log(`${LOG_PREFIX} Presence sync failed:`, error?.message);
+          console.log(`${LOG_PREFIX} Presence sync failed:`, describeHttpFailure(error));
         }
 
         if (cancelled) return;
@@ -621,7 +626,7 @@ function LegacyAutoAttendanceBootstrap() {
       //    on.
       const fetchedAt = Date.now();
       const status = await getAttendanceStatus().catch((error) => {
-        console.log(`${LOG_PREFIX} Status check failed:`, error?.message);
+        console.log(`${LOG_PREFIX} Status check failed:`, describeHttpFailure(error));
         return { unavailable: true };
       });
 
@@ -691,7 +696,7 @@ function LegacyAutoAttendanceBootstrap() {
       .catch((error) => {
         console.log(
           `${LOG_PREFIX} Startup reconciliation failed:`,
-          error?.message,
+          describeHttpFailure(error),
         );
       });
 

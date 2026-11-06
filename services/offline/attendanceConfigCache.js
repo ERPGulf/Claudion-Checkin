@@ -7,6 +7,7 @@ import {
   createAttendanceScopeChangedError,
 } from "./attendanceQueueProvenance";
 import { resolveLocationCoordinates } from "../../utils/attendanceLocations";
+import { logAttendanceDiagnostic } from "./attendanceDiagnostics";
 import {
   beginEmployeeAutoAttendancePolicyReception,
   receiveEmployeeAutoAttendancePolicy,
@@ -278,15 +279,14 @@ export const refreshAttendanceConfig = async (
     await assertAttendanceQueueScope(scope);
     await mirrorLegacyKeys(config);
 
-    console.log(`${logPrefix} Cached`, {
-      employeeId,
-      locations: config.locations.length,
+    logAttendanceDiagnostic(logPrefix, "Cached", {
+      locationCount: config.locations.length,
       restrictLocation: config.rules.restrictLocation,
     });
 
     return { refreshed: true, config };
   } catch (error) {
-    console.log(`${logPrefix} Failed, keeping previous cache:`, error?.message);
+    logAttendanceDiagnostic(logPrefix, "Failed, keeping previous cache", { code: error?.code });
     return {
       refreshed: false,
       config: await readAttendanceConfig(),

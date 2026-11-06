@@ -60,6 +60,7 @@ import { checkInstanceAvailability } from "../services/offline/InstanceAvailabil
 import { NO_CONFIG_MESSAGE } from "../services/offline/attendanceConfigCache";
 import {
   MANUAL_OFFLINE_MESSAGE,
+  MANUAL_UNCONFIRMED_MESSAGE,
   OFFLINE_DISABLED_MESSAGE,
   OFFLINE_UNSUPPORTED_MESSAGE,
 } from "../services/offline/AttendanceQueueService";
@@ -76,6 +77,9 @@ import { loginQueueEmployee, TEST_TENANT } from "../test-utils/attendanceScope";
 import { captureAttendanceQueueScope } from "../services/offline/attendanceQueueProvenance";
 import { assertEmployeeAutoAttendancePolicy, assertEmployeeAutoAttendancePolicyCurrent, beginEmployeeAutoAttendancePolicyReception,
   receiveEmployeeAutoAttendancePolicy } from "../services/employeeAutoAttendancePolicy";
+import { performManualAttendanceTransition } from "../services/offline/ManualAttendanceService";
+import { performSessionTransition, readSession, reconcileSessionFromServer, SESSION_ORIGIN } from "../utils/attendanceSessionState";
+import { resolveActiveSessionStart } from "../utils/attendanceSession";
 
 const { __resetAll } = require("../test-utils/expoSqliteMock");
 
@@ -109,6 +113,57 @@ const networkFailure = () => ({
  */
 const submitQueueable = (options) =>
   submitAttendance({ attendanceType: "auto", ...options });
+
+it("retains but never accepts a queued checkout whose checkin was already rejected", async () => {
+  fetchIsOnline.mockResolvedValue(false);
+  evaluateOfflineAttendance.mockResolvedValue(acceptedGate);
+  const parent = await submitQueueable({ type: "IN", employeeCode: "TDI0167" });
+  expect(parent.allowed).toBe(true);
+  await QueueRepository.markRejected({ id: parent.row.id, error: "synthetic refusal" });
+  const result = await submitQueueable({ type: "OUT", employeeCode: "TDI0167",
+    parentSession: { queueRowId: parent.row.id, serverConfirmed: false } });
+  expect(result).toMatchObject({ allowed: false, queued: false, reason: "source-parent-rejected",
+    row: { status: "rejected", failureClass: "dependent", pairedAttendanceId: parent.row.id } });
+  expect(await listAll()).toHaveLength(2);
+});
+
+it("queues a valid automatic OUT of a later confirmed manual IN without adopting old rejected history", async () => {
+  const old = await QueueRepository.enqueue({ employeeId: "TDI0167", tenantKey: TEST_TENANT,
+    attendanceType: "auto", action: "checkin", timestamp: "2026-11-04 09:00:00" });
+  await QueueRepository.markRejected({ id: old.row.id, error: "synthetic historical refusal" });
+  const manual = await performManualAttendanceTransition({ type: "IN", employeeCode: "TDI0167",
+    online: async () => ({ allowed: true, name: "SYNTHETIC-MANUAL-IN" }) });
+  expect(manual.status).toBe("completed");
+  expect(await readSession()).toMatchObject({ origin: SESSION_ORIGIN.MANUAL, serverConfirmed: true });
+  fetchIsOnline.mockResolvedValue(false);
+  evaluateOfflineAttendance.mockResolvedValue(acceptedGate);
+  const out = await performSessionTransition({ type: "OUT", origin: SESSION_ORIGIN.AUTO,
+    withSessionContext: true, execute: parentSession => submitQueueable({ type: "OUT", employeeCode: "TDI0167",
+      parentSession, timestamp: "2026-11-05 17:00:00" }) });
+  expect(out).toMatchObject({ status: "completed", queued: true, response: { allowed: true,
+    row: { action: "checkout", status: "pending", pairedAttendanceId: null, payload: { parentServerConfirmed: true } } } });
+  expect(await QueueRepository.findById(old.row.id)).toMatchObject({ status: "rejected", pairedAttendanceId: null });
+});
+
+it("keeps a queued parent unconfirmed through a generic active status before rejection and automatic OUT", async () => {
+  fetchIsOnline.mockResolvedValue(false);
+  evaluateOfflineAttendance.mockResolvedValue(acceptedGate);
+  const first = await performSessionTransition({ type: "IN", origin: SESSION_ORIGIN.AUTO,
+    execute: () => submitQueueable({ type: "IN", employeeCode: "TDI0167", timestamp: "2026-11-05 09:00:00" }) });
+  expect(await readSession()).toMatchObject({ serverConfirmed: false, queueRowId: first.response.row.id });
+  // This mirrors the hook's binary status + persisted-time resolution. It is
+  // evidence of an active session, not an exact receipt for the queued IN.
+  const activeStartedAt = resolveActiveSessionStart({ status: { custom_in: 1 },
+    storedCheckinStartTime: first.session.startedAt, reduxCheckinTime: first.session.startedAt });
+  await reconcileSessionFromServer({ activeStartedAt, fetchedAt: Date.now() + 1000 });
+  expect(await readSession()).toMatchObject({ serverConfirmed: false, queueRowId: first.response.row.id });
+  await QueueRepository.markRejected({ id: first.response.row.id, error: "synthetic current refusal" });
+  const out = await performSessionTransition({ type: "OUT", origin: SESSION_ORIGIN.AUTO,
+    withSessionContext: true, execute: parentSession => submitQueueable({ type: "OUT", employeeCode: "TDI0167",
+      parentSession, timestamp: "2026-11-05 17:00:00" }) });
+  expect(out).toMatchObject({ status: "failed", response: { allowed: false,
+    row: { status: "rejected", failureClass: "dependent", pairedAttendanceId: first.response.row.id } } });
+});
 
 // The employer has enabled automatic attendance; tests that disable it say so.
 const enableAutomaticTenant = (employeeId = "TDI0167") => store.dispatch(settingsReceived({
@@ -1196,7 +1251,7 @@ describe("manual attendance never touches the queue", () => {
     expect(online).toHaveBeenCalledTimes(1);
   });
 
-  it("says the attendance was not marked rather than 'Network Error'", async () => {
+  it("does not claim a transport failure proves that an attempted manual write was absent", async () => {
     const online = jest.fn(() => Promise.resolve(networkFailure()));
 
     const result = await submitManualAttendance({
@@ -1208,8 +1263,28 @@ describe("manual attendance never touches the queue", () => {
     expect(result).toMatchObject({
       allowed: false,
       offline: true,
-      message: MANUAL_OFFLINE_MESSAGE,
+      message: MANUAL_UNCONFIRMED_MESSAGE,
+      outcomeUnconfirmed: true,
     });
+  });
+
+  it("keeps the not-submitted message when failure happened before any write attempt", async () => {
+    const online = jest.fn(async () => ({ ...networkFailure(), submissionAttempted: false }));
+    const result = await submitManualAttendance({ type: "IN", employeeCode: "TDI0167", online });
+    expect(result).toMatchObject({ allowed: false, offline: true, message: MANUAL_OFFLINE_MESSAGE });
+    expect(result.outcomeUnconfirmed).not.toBe(true);
+    expect(online).toHaveBeenCalledTimes(1);
+    expect(await listAll()).toEqual([]);
+  });
+
+  it("retains an ambiguous success without retrying or creating a manual queue row", async () => {
+    const online = jest.fn(async () => ({ allowed: false, submissionAttempted: true,
+      message: "Failed to register attendance", location: null }));
+    const result = await submitManualAttendance({ type: "IN", employeeCode: "TDI0167", online });
+    expect(result).toMatchObject({ allowed: false, outcomeUnconfirmed: true,
+      reason: "manual-outcome-unconfirmed", message: MANUAL_UNCONFIRMED_MESSAGE });
+    expect(online).toHaveBeenCalledTimes(1);
+    expect(await listAll()).toEqual([]);
   });
 
   // A refusal the app or the server made on purpose already explains itself.
@@ -1297,7 +1372,7 @@ describe("manual attendance never touches the queue", () => {
       online,
     });
 
-    expect(result.message).toBe(MANUAL_OFFLINE_MESSAGE);
+    expect(result.message).toBe(MANUAL_UNCONFIRMED_MESSAGE);
     expect(result.message).not.toBe(OFFLINE_DISABLED_MESSAGE);
     expect(await listAll()).toHaveLength(0);
   });

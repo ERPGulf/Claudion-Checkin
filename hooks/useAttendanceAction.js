@@ -49,6 +49,7 @@ import { createManualAttendanceContext, performManualAttendanceTransition, asser
 import { resolveNearestOffice } from "../services/offline/offlineAttendanceGate";
 import { formatOfflineTimestamp, normalizeAttendanceStatusClock } from "../utils/serverClock";
 import { captureAttendanceQueueScope, assertAttendanceQueueScope } from "../services/offline/attendanceQueueProvenance";
+import { describeHttpFailure } from "../utils/httpDiagnostics";
 import { selectFeatureSettings } from "../redux/Slices/FeatureSettingsSlice";
 import { resolveManualAttendanceLocationPolicy } from "../services/manualAttendanceLocationPolicy";
 import {
@@ -241,10 +242,10 @@ export default function useAttendanceAction() {
         // session" is correct about them and must be allowed to close the
         // session — counting them would hold a session open forever on the
         // strength of a punch that will never land.
-        const awaitingServer = await getQueueCounts(employeeCode)
+        const awaitingServer = await getQueueCounts(employeeCode, scope)
           .then((counts) => counts?.awaitingServerCount ?? 0)
           .catch((error) => {
-            console.log("Queue count failed, reconciling anyway:", error?.message);
+            console.log("Queue count failed, reconciling anyway:", describeHttpFailure(error));
             return 0;
           });
 
@@ -290,7 +291,7 @@ export default function useAttendanceAction() {
 
         await syncCheckinFromStatus(res, fetchedAt, scope);
       } catch (e) {
-        console.log("Status sync error:", e);
+        console.log("Status sync error:", describeHttpFailure(e));
       }
     };
 
@@ -449,7 +450,6 @@ export default function useAttendanceAction() {
         const scope = await captureAttendanceQueueScope(employeeCode);
         const res = await getAttendanceStatus({ syncScope: scope });
 
-        console.log("FOCUS STATUS:", res.custom_in);
 
         if (!isMountedRef.current) return;
 
@@ -463,7 +463,7 @@ export default function useAttendanceAction() {
 
         syncBreakState(breakData);
       } catch (e) {
-        console.log("Focus sync error:", e);
+        console.log("Focus sync error:", describeHttpFailure(e));
       }
     });
 
@@ -535,9 +535,6 @@ export default function useAttendanceAction() {
         }
       }
     }, 1000);
-    console.log("BREAK START TIME:", breakStartTime);
-    console.log("NOW:", Date.now());
-    console.log("DIFF MIN:", (Date.now() - breakStartTime) / 60000);
 
     return () => clearInterval(interval);
   }, [onBreak, breakStartTime, dispatch, employeeCode, breakFeatureEnabled, isBreakEnabled]);
@@ -630,11 +627,7 @@ export default function useAttendanceAction() {
           text1: type === "IN" ? t("Checked in!") : t("Checked out!"),
         });
       } catch (error) {
-        console.log("AttendanceAction.handleDirectCheckInOut error:", {
-          errorMessage: error?.message,
-          status: error?.response?.status,
-          responseData: error?.response?.data,
-        });
+        console.log("AttendanceAction.handleDirectCheckInOut error:", describeHttpFailure(error));
 
         hapticsMessage("error");
         Toast.show({

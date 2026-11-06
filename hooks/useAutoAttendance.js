@@ -45,6 +45,7 @@ import {
   addLocationAccessChangedListener,
 } from '../modules/expo-auto-attendance';
 import { classifyOfficePresence } from '../utils/locationAccessState';
+import { describeHttpFailure } from '../utils/httpDiagnostics';
 import {
   DEFAULT_GEOFENCE,
   MAX_LOG_ENTRIES,
@@ -165,7 +166,7 @@ export default function useAutoAttendance() {
     } catch (error) {
       console.log(
         '[AutoAttendance] Failed to refresh geotagging policy:',
-        error?.message,
+        describeHttpFailure(error),
       );
     }
   }, [employeeCode, baseUrl]);
@@ -186,7 +187,7 @@ export default function useAutoAttendance() {
     } catch (error) {
       console.log(
         '[AutoAttendance] Failed to read permission status:',
-        error?.message,
+        describeHttpFailure(error),
       );
       // An unsuccessful read is not evidence that the employee revoked access.
       setPermissionGranted(null);
@@ -219,7 +220,7 @@ export default function useAutoAttendance() {
         setReliabilityWarning(null);
       }
     } catch (error) {
-      console.log('[AutoAttendance] Failed to read reliability status:', error);
+      console.log('[AutoAttendance] Failed to read reliability status:', describeHttpFailure(error));
     }
   }, [available]);
 
@@ -235,7 +236,7 @@ export default function useAutoAttendance() {
     try {
       [registered] = getRegisteredGeofences();
     } catch (error) {
-      console.log('[AutoAttendance] Failed to read registered fence:', error?.message);
+      console.log('[AutoAttendance] Failed to read registered fence:', describeHttpFailure(error));
     }
     if (!registered) {
       setPresence(null);
@@ -275,7 +276,7 @@ export default function useAutoAttendance() {
         withinRadius: verification === 'inside',
       });
     } catch (error) {
-      console.log('[AutoAttendance] Failed to compute presence:', error?.message);
+      console.log('[AutoAttendance] Failed to compute presence:', describeHttpFailure(error));
       setPresence(null);
     } finally {
       setPresenceObserved(true);
@@ -299,7 +300,7 @@ export default function useAutoAttendance() {
         setRadiusText(String(registered.radius));
       }
     } catch (error) {
-      console.log('[AutoAttendance] Failed to read native state:', error);
+      console.log('[AutoAttendance] Failed to read native state:', describeHttpFailure(error));
     }
     refreshReliabilityStatus();
     refreshPermissionStatus();
@@ -308,21 +309,21 @@ export default function useAutoAttendance() {
 
     const subscriptions = [
       addGeofenceEnterListener((event) => {
-        console.log('[AutoAttendance] ENTER detected', event);
+        console.log('[AutoAttendance] ENTER detected');
         setMonitoring(isMonitoring());
         setLastEvent(event);
         appendLog(event);
         refreshPresence();
       }),
       addGeofenceExitListener((event) => {
-        console.log('[AutoAttendance] EXIT detected', event);
+        console.log('[AutoAttendance] EXIT detected');
         setMonitoring(isMonitoring());
         setLastEvent(event);
         appendLog(event);
         refreshPresence();
       }),
       addErrorListener((event) => {
-        console.log('[AutoAttendance] Geofence error', event);
+        console.log('[AutoAttendance] Geofence error', { code: Number.isInteger(event?.code) ? event.code : null });
         appendLog({ transition: 'ERROR', ...event });
         if (
           event.code === WARNING_CODES.LOW_POWER_MODE ||
@@ -436,7 +437,7 @@ export default function useAutoAttendance() {
       // shows the real outcome rather than a stale "Not Monitoring".
       setMonitoring(await waitForMonitoring());
     } catch (error) {
-      console.log('[AutoAttendance] Failed to obtain location access:', error);
+      console.log('[AutoAttendance] Failed to obtain location access:', describeHttpFailure(error));
       // Fixed copy: the error is native/network text, not something to show.
       Alert.alert(
         t("Could not turn on monitoring"),
@@ -471,9 +472,9 @@ export default function useAutoAttendance() {
         throw error;
       }
       setMonitoring(true);
-      console.log('[AutoAttendance] Monitoring started', geofence);
+      console.log('[AutoAttendance] Monitoring started');
     } catch (error) {
-      console.log('[AutoAttendance] Failed to start monitoring:', error);
+      console.log('[AutoAttendance] Failed to start monitoring:', describeHttpFailure(error));
       Alert.alert(
         t("Could not start monitoring"),
         translateMessage(error?.message) || t("Failed to register the geofence."),
@@ -490,7 +491,7 @@ export default function useAutoAttendance() {
       setMonitoring(false);
       console.log('[AutoAttendance] Monitoring stopped');
     } catch (error) {
-      console.log('[AutoAttendance] Failed to stop monitoring:', error);
+      console.log('[AutoAttendance] Failed to stop monitoring:', describeHttpFailure(error));
       Alert.alert(
         t("Could not stop monitoring"),
         translateMessage(error?.message) || t("Failed to remove the geofence."),
@@ -538,7 +539,7 @@ export default function useAutoAttendance() {
       } catch (positionError) {
         console.log(
           '[AutoAttendance] getCurrentPosition failed, trying last known:',
-          positionError?.message,
+          describeHttpFailure(positionError),
         );
         position = await Location.getLastKnownPositionAsync({
           maxAge: 600000,
@@ -555,12 +556,9 @@ export default function useAutoAttendance() {
 
       setLatitudeText(position.coords.latitude.toFixed(6));
       setLongitudeText(position.coords.longitude.toFixed(6));
-      console.log(
-        '[AutoAttendance] Filled inputs from current location',
-        position.coords,
-      );
+      console.log('[AutoAttendance] Filled inputs from current location');
     } catch (error) {
-      console.log('[AutoAttendance] Failed to get current location:', error);
+      console.log('[AutoAttendance] Failed to get current location:', describeHttpFailure(error));
       Alert.alert(
         t("Location error"),
         translateMessage(error?.message) || t("Could not get the current location."),
@@ -574,7 +572,7 @@ export default function useAutoAttendance() {
     try {
       clearLastEvent();
     } catch (error) {
-      console.log('[AutoAttendance] Failed to clear native status:', error);
+      console.log('[AutoAttendance] Failed to clear native status:', describeHttpFailure(error));
     }
     setLastEvent(null);
     setEventLog([]);

@@ -241,6 +241,9 @@ it("retains an OUT after its parent is rejected even if a crash prevented pair l
   await enqueue({ employeeId, tenantKey: TEST_TENANT, attendanceType: "auto", action: "checkout",
     timestamp: "2026-10-12 18:00:00", sourceEventId: "exit-1", payload: { sourceParentEventId: "enter-1" } });
   const db = await getDatabase();
+  // Model retained rows from the pre-atomic admission path. Current enqueue
+  // commits both links, so merely inserting through it cannot simulate a crash.
+  await db.runAsync("UPDATE attendance_queue SET pairedAttendanceId = NULL, sessionId = NULL;");
   await db.runAsync("UPDATE attendance_queue SET status = ? WHERE id = ?;", ["rejected", first.row.id]);
   expect(await claimNextPending(Date.now(), sourceScope)).toBeNull();
   await syncPendingAttendance({ employeeId });

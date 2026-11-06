@@ -18,7 +18,6 @@ import { useDispatch, useSelector } from "react-redux";
 import AppToast from "./Toast/AppToast";
 import Navigator from "./navigation/navigator";
 import { navigateSafely } from "./navigation/rootNavigation";
-import * as Updates from "expo-updates";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import UpdateBanner from "./components/UpdateBanner";
 import ThemedStatusBar from "./components/common/ThemedStatusBar";
@@ -137,7 +136,7 @@ export default function App() {
   useEffect(() => {
     const loadResourcesAndDataAsync = async () => {
       try {
-        SplashScreen.preventAutoHideAsync();
+        SplashScreen.preventAutoHideAsync().catch(() => {});
 
         // Load fonts
         const IconAssets = cacheFonts([Ionicons.font]);
@@ -154,25 +153,16 @@ export default function App() {
         // it would be the worse trade.
         hydrateOfflineSyncAlerts().catch(() => {});
 
-        if (!__DEV__ && Updates.isEnabled) {
-          try {
-            const update = await Updates.checkForUpdateAsync();
-
-            if (update.isAvailable) {
-              await Updates.fetchUpdateAsync();
-              await Updates.reloadAsync();
-            }
-          } catch (error) {
-            // Ignore OTA check failures during startup and continue booting.
-          }
-        }
+        // UpdateBanner checks and downloads while the foreground app is usable.
+        // Startup (including a background attendance wake) must not wait for
+        // the update server or force a reload before attendance can bootstrap.
       } catch (error) {
         // Fonts or stored preferences failed to load. The app still boots, so
         // nothing else would ever say so.
         recordNonFatalError(error, { feature: "app", action: "startup" });
       } finally {
         setAppReady(true);
-        SplashScreen.hideAsync();
+        SplashScreen.hideAsync().catch(() => {});
       }
     };
 

@@ -218,6 +218,48 @@ describe('who is offered the explanation', () => {
 });
 
 describe('the permission flow', () => {
+  it.each([
+    ['the tenant disables geotagging', { attendance: { geo_tagging: false } }],
+    ['the employee becomes warnings-only', { geotagging: 1 }],
+    ['the employee becomes ineligible', { geotagging: 0 }],
+    ['the employee signs out', null],
+  ])('does not request background permission after %s during the foreground prompt', async (_, server) => {
+    let grantForeground;
+    Location.requestForegroundPermissionsAsync.mockImplementation(() => new Promise(resolve => {
+      grantForeground = () => { os.foreground = GRANTED; resolve(GRANTED); };
+    }));
+    const screen = mount();
+    await receive();
+    await press(screen, 'Continue');
+    await waitFor(() => expect(grantForeground).toBeDefined());
+
+    if (server) await receive(server);
+    else await act(async () => { mockStore.dispatch(setSignIn({ isLoggedIn: false })); });
+    await act(async () => { grantForeground(); });
+
+    await waitFor(() => expect(screen.queryByText(TITLE)).toBeNull());
+    expect(Location.requestBackgroundPermissionsAsync).not.toHaveBeenCalled();
+    expect(mockStore.getState().autoAttendance.syncRequestId).toBe(0);
+  });
+
+  it('cancels further system prompts when the explainer unmounts with a foreground prompt open', async () => {
+    let grantForeground;
+    Location.requestForegroundPermissionsAsync.mockImplementation(() => new Promise(resolve => {
+      grantForeground = () => { os.foreground = GRANTED; resolve(GRANTED); };
+    }));
+    const screen = mount();
+    await receive();
+    await press(screen, 'Continue');
+    await waitFor(() => expect(grantForeground).toBeDefined());
+
+    screen.unmount();
+    await act(async () => { grantForeground(); });
+
+    expect(Location.requestBackgroundPermissionsAsync).not.toHaveBeenCalled();
+    expect(mockStore.getState().autoAttendance.syncRequestId).toBe(0);
+    expect(answered()).toBe(false);
+  });
+
   it('starts the existing sequence once on Continue, foreground before background, behind the explanation', async () => {
     let grantForeground;
     Location.requestForegroundPermissionsAsync.mockImplementation(() => new Promise((resolve) => {

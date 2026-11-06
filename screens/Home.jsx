@@ -6,6 +6,7 @@ import { LavaMenu, QuickAccess, WelcomeCard } from "../components/Home";
 import { LAYOUT, SPACING } from "../constants";
 import useAppTheme from "../hooks/useAppTheme";
 import { fetchTopicsFromServer } from "../services/notifications/fcm.service";
+import { describeHttpFailure } from "../utils/httpDiagnostics";
 
 /** Docked tab bar + breathing room, on top of the bottom safe-area inset. */
 const TAB_BAR_CLEARANCE = LAYOUT.tabBarContentHeight + SPACING.xxl;
@@ -22,14 +23,13 @@ function Home() {
 
       fetchTopicsFromServer()
         .then((topics) => {
-          console.log("[Home] fetchTopicsFromServer returned:", topics);
           console.log(
             "[Home] Topics count:",
             Array.isArray(topics) ? topics.length : 0,
           );
         })
         .catch((error) => {
-          console.log("[Home] fetchTopicsFromServer error:", error?.message);
+          console.log("[Home] fetchTopicsFromServer error:", describeHttpFailure(error));
         });
     }, []),
   );

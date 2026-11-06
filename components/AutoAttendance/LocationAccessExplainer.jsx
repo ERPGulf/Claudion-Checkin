@@ -192,7 +192,9 @@ export default function LocationAccessExplainer() {
     const unregister = setLocationAccessExplainer(explain);
     return () => {
       unregister();
-      latest.current.request?.resolve(null);
+      const pending = latest.current.request;
+      if (pending) pending.cancelled = true;
+      pending?.resolve(null);
     };
   }, []);
 
@@ -205,11 +207,16 @@ export default function LocationAccessExplainer() {
   // under it (a preview has neither), or when it could not be shown. Not while
   // the system prompts it started are up: the flow ends when they do.
   useEffect(() => {
-    if (!request || busy) return undefined;
+    if (!request) return undefined;
     if (!request.preview && (!scope || request.scope !== scope)) {
+      // Remember cancellation even if the same account becomes eligible again
+      // before its existing foreground permission dialog returns.
+      request.cancelled = true;
+      if (busy) return undefined;
       settle(null);
       return undefined;
     }
+    if (busy) return undefined;
     if (shown) return undefined;
     const timer = setTimeout(() => settle(null), SHOW_TIMEOUT_MS);
     return () => clearTimeout(timer);
@@ -218,7 +225,8 @@ export default function LocationAccessExplainer() {
   const onContinue = () => {
     const current = request;
     setBusy(true);
-    current.proceed()
+    current.proceed({ isCurrent: () => current.preview ||
+      (!current.cancelled && !!current.scope && latest.current.scope === current.scope) })
       .then(current.resolve, current.reject)
       .finally(() => {
         setBusy(false);

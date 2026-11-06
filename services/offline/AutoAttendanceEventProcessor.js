@@ -366,7 +366,7 @@ const processRow = async (input, scope, config, verifiedDispatch = null) => {
     }
     let forceQueue = false;
     let sourceParentEventId = null;
-    if (type === "OUT" && session.sourceEventId) {
+    if (type === "OUT" && session.sourceEventId && session.serverConfirmed !== true) {
       const parent = await findBySourceEventId({ sourceEventId: session.sourceEventId,
         tenantKey: scope.tenantKey, employeeId: scope.employeeId });
       await assertAttendanceQueueScope(scope);
@@ -424,7 +424,7 @@ const processRow = async (input, scope, config, verifiedDispatch = null) => {
     } : scope;
     return submitAutoAttendance({ type, employeeCode: scope.employeeId, occurredAt: row.occurredAt,
       sourceScope: submissionScope, sourceEventId: row.eventId, timestamp, forceQueue, strictOrdering: true, skipPosition: true,
-      sourceParentEventId,
+      sourceParentEventId, parentSession: session,
       onKnownNoInsert: async ({ httpStatus, failureClass }) => {
         row = await updateOwned(row.eventId, { onlineAttemptAt: null,
           outcome: { requestOutcome: "not-inserted", attemptedAt: row.onlineAttemptAt, httpStatus, failureClass } });
@@ -512,7 +512,9 @@ export const reconcileUncertainAutoAttendance = ({ scope }) => {
     }
     for (const input of inputs) {
       if (validateEvent(input.event, scope)) return { ready: false, reason: "original-data-needs-review" };
-      const row = input.status === PROCESSING && input.claimOwner === claimOwner && input.claimExpiresAt > Date.now()
+      const now = Date.now();
+      const row = input.status === PROCESSING && input.claimOwner === claimOwner &&
+        input.claimExpiresAt > now && input.claimExpiresAt <= now + Events.MAX_CLAIM_LEASE_MS
         ? await updateOwned(input.eventId)
         : await Events.claimEvent(input.eventId, { ownerId: claimOwner, allowReview: true });
       if (!row) return { ready: false, reason: "automatic-request-in-progress" };

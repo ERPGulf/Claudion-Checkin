@@ -375,6 +375,26 @@ describe('isRouteEnabled', () => {
  * ================================================================== */
 
 describe('getFeatureSettings', () => {
+  it.each(['response', 'error'])('keeps private %s fields out of development diagnostics', async kind => {
+    const secret = 'SYNTHETIC-PRIVATE-FEATURE-RESPONSE';
+    const output = jest.spyOn(console, 'log').mockImplementation(() => {});
+    const originalDev = global.__DEV__;
+    global.__DEV__ = true;
+    try {
+      if (kind === 'response') mockGet.mockResolvedValue({ data: { ...FULL_RESPONSE, private: secret } });
+      else mockGet.mockRejectedValue(Object.assign(new Error(secret), {
+        code: 'ERR_BAD_RESPONSE', response: { status: 503, data: { private: secret } },
+      }));
+      const result = await getFeatureSettings();
+      expect(kind === 'response' ? result.message : result.error).toBeTruthy();
+      expect(output).toHaveBeenCalled();
+      expect(JSON.stringify(output.mock.calls)).not.toContain(secret);
+    } finally {
+      output.mockRestore();
+      global.__DEV__ = originalDev;
+    }
+  });
+
   it('calls the tenant it was provisioned with, using the session token', async () => {
     mockGet.mockResolvedValue({ data: FULL_RESPONSE });
 

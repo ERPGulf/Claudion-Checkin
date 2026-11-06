@@ -18,6 +18,7 @@ import {
 import { isAvailable } from "../modules/expo-auto-attendance";
 import { askForLocationAccess } from "../utils/autoAttendance";
 import LocationAccessExplainer from "./AutoAttendance/LocationAccessExplainer";
+import { describeHttpFailure } from "../utils/httpDiagnostics";
 
 /**
  * Explains, once per account, the location access automatic attendance needs,
@@ -68,7 +69,7 @@ export default function AutoAttendanceOnboarding() {
         // The bootstraps checked before permission existed; have them register now.
         if (access.granted) dispatch(requestAutoAttendanceSync());
       })
-      .catch((error) => console.log("[AutoAttendance] Onboarding failed:", error?.message));
+      .catch((error) => console.log("[AutoAttendance] Onboarding failed:", describeHttpFailure(error)));
   }, [verified, configured, answered, scope, appState, dispatch]);
 
   return <LocationAccessExplainer />;

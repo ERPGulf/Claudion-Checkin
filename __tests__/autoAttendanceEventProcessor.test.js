@@ -394,6 +394,61 @@ it("does not acknowledge native events when durable SQLite insertion fails", asy
   expect(autoCheckInOut).toHaveBeenCalledTimes(1);
 });
 
+it("survives interruption after SQLite insert but before the native acknowledgment", async () => {
+  const source = event("crash-after-insert", 1);
+  journal = [source];
+  const db = await getDatabase();
+  const read = jest.spyOn(db, "getFirstAsync").mockRejectedValueOnce(new Error("Interrupted after committed insert"));
+  await expect(ingestPendingNativeEvents()).rejects.toThrow("Interrupted after committed insert");
+  expect(Native.acknowledgeEvent).not.toHaveBeenCalled();
+  expect(journal).toEqual([source]);
+  read.mockRestore();
+  resetDatabaseHandle();
+
+  const preserved = await Events.findEvent(source.eventId);
+  expect(preserved).toMatchObject({ status: "pending", event: source });
+  await drain();
+  await drain();
+  expect(journal).toEqual([]);
+  expect(autoCheckInOut).toHaveBeenCalledTimes(1);
+  expect(await Events.findEvent(source.eventId)).toMatchObject({ status: "handled", event: source });
+});
+
+it("survives interruption after native acknowledgment with only SQLite holding the receipt", async () => {
+  const source = event("crash-after-ack", 1);
+  journal = [source];
+  Native.acknowledgeEvent.mockImplementationOnce(id => {
+    journal = journal.filter(item => item.eventId !== id);
+    throw new Error("Interrupted after durable native acknowledgment");
+  });
+  await ingestPendingNativeEvents();
+  expect(journal).toEqual([]);
+  expect(autoCheckInOut).not.toHaveBeenCalled();
+  resetDatabaseHandle();
+
+  expect(await Events.findEvent(source.eventId)).toMatchObject({ status: "pending", event: source });
+  await drain();
+  await drain();
+  expect(autoCheckInOut).toHaveBeenCalledTimes(1);
+  expect(await Events.findEvent(source.eventId)).toMatchObject({ status: "handled", event: source });
+});
+
+it("concurrent native ingress cannot admit multiple receipts or reset a settled outcome", async () => {
+  const source = event("concurrent-ingress", 1);
+  journal = [source];
+  await Promise.all([ingestPendingNativeEvents(), ingestPendingNativeEvents(), ingestPendingNativeEvents()]);
+  const db = await getDatabase();
+  expect(await db.getAllAsync("SELECT eventId FROM auto_attendance_events WHERE eventId = ?;", [source.eventId]))
+    .toEqual([{ eventId: source.eventId }]);
+  await drain();
+  const settled = await Events.findEvent(source.eventId);
+  journal = [source];
+  await Promise.all([ingestPendingNativeEvents(), ingestPendingNativeEvents()]);
+  expect(await Events.findEvent(source.eventId)).toEqual(settled);
+  await drain();
+  expect(autoCheckInOut).toHaveBeenCalledTimes(1);
+});
+
 it("native ack failure and repeated delivery cannot reset an earlier outcome", async () => {
   Native.acknowledgeEvent.mockReturnValue(false);
   journal = [event("enter", 1)];
@@ -497,6 +552,39 @@ it("expired claim without a POST can safely resume once after restart", async ()
   await Events.claimEvent("enter", { ownerId: "crashed", now: Date.now() - 200000 });
   resetDatabaseHandle(); await drain(); await drain();
   expect(autoCheckInOut).toHaveBeenCalledTimes(1);
+});
+
+it.each([false, true])("reconciles a dispatched receipt after clock correction/reopen without another POST (verified %s)", async verified => {
+  const source = event("rewound-dispatch", 1);
+  const wrongNow = Date.now() + 6 * 60 * 60 * 1000;
+  await Events.ingestNativeEvent(source);
+  await Events.claimEvent(source.eventId, { ownerId: "before-clock-correction", now: wrongNow });
+  await Events.updateClaimedEvent(source.eventId, "before-clock-correction", {
+    onlineAttemptAt: wrongNow + 1, punchTimestamp: wallClock(source.timestamp),
+  }, { now: wrongNow + 1 });
+  verifyQueuedAttendance.mockResolvedValue(verified
+    ? { verified: true, evidence: { name: "SYNTHETIC-PREVIOUSLY-ACCEPTED" } }
+    : { verified: false, reason: "no-exact-match-in-visible-history" });
+  resetDatabaseHandle();
+
+  await drain();
+  expect(autoCheckInOut).not.toHaveBeenCalled();
+  expect(verifyQueuedAttendance).toHaveBeenCalledTimes(1);
+  expect(await Events.findEvent(source.eventId)).toMatchObject({
+    status: verified ? "handled" : "needs_review", onlineAttemptAt: wrongNow + 1,
+    punchTimestamp: wallClock(source.timestamp), event: source,
+  });
+  expect((await readSession()).status).toBe(verified ? "CHECKED_IN" : "CHECKED_OUT");
+});
+
+it("resumes a never-dispatched receipt after clock correction/reopen at most once", async () => {
+  const source = event("rewound-before-dispatch", 1);
+  await Events.ingestNativeEvent(source);
+  await Events.claimEvent(source.eventId, { ownerId: "before-clock-correction", now: Date.now() + 21600000 });
+  resetDatabaseHandle();
+  await Promise.all([drain(), drain(), drain()]);
+  expect(autoCheckInOut).toHaveBeenCalledTimes(1);
+  expect(await Events.findEvent(source.eventId)).toMatchObject({ status: "handled", event: source });
 });
 
 it("a rejected source queue row is never treated as an accepted IN", async () => {

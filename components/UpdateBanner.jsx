@@ -7,7 +7,7 @@ import { t, useTranslation } from '../localization';
 // banner so the user can apply it from ANY screen without waiting for a cold
 // relaunch. Mounted once at the app root (App.js), above the navigator.
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { View, TouchableOpacity, ActivityIndicator, AppState } from 'react-native';
 import Text from '../localization/LocalizedText';
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -17,9 +17,11 @@ import { COLORS } from "../constants";
 export default function UpdateBanner() {
   const { language, direction, isRTL } = useTranslation();
   const insets = useSafeAreaInsets();
-  const { isUpdateAvailable, isUpdatePending, isDownloading } =
+  const { isUpdatePending, isDownloading } =
     Updates.useUpdates();
   const [applying, setApplying] = useState(false);
+  const updateState = useRef({ isUpdatePending, isDownloading });
+  updateState.current = { isUpdatePending, isDownloading };
 
   // OTA is disabled in Expo Go / dev builds — never check or fetch there.
   const canUpdate = !__DEV__ && Updates.isEnabled;
@@ -28,24 +30,36 @@ export default function UpdateBanner() {
   // update published while the app is open is picked up without a relaunch.
   useEffect(() => {
     if (!canUpdate) return undefined;
+    let cancelled = false;
+    let checking = false;
 
-    const check = () => {
-      Updates.checkForUpdateAsync().catch(() => {});
+    const check = async () => {
+      if (cancelled || checking || AppState.currentState !== 'active' ||
+          updateState.current.isUpdatePending || updateState.current.isDownloading) return;
+      checking = true;
+      try {
+        const update = await Updates.checkForUpdateAsync();
+        if (!cancelled && AppState.currentState === 'active' && update.isAvailable &&
+            !updateState.current.isUpdatePending && !updateState.current.isDownloading) {
+          await Updates.fetchUpdateAsync();
+        }
+      } catch {
+        // A failed check/download waits for a later foreground event. Retrying
+        // from isDownloading changes would loop during an update-server outage.
+      } finally {
+        checking = false;
+      }
     };
 
     check();
     const sub = AppState.addEventListener("change", (state) => {
       if (state === "active") check();
     });
-    return () => sub.remove();
+    return () => {
+      cancelled = true;
+      sub.remove();
+    };
   }, [canUpdate]);
-
-  // When the server has a newer update, download it quietly in the background.
-  useEffect(() => {
-    if (canUpdate && isUpdateAvailable && !isUpdatePending && !isDownloading) {
-      Updates.fetchUpdateAsync().catch(() => {});
-    }
-  }, [canUpdate, isUpdateAvailable, isUpdatePending, isDownloading]);
 
   const onApply = useCallback(async () => {
     setApplying(true);
@@ -86,13 +100,18 @@ export default function UpdateBanner() {
       <TouchableOpacity
         onPress={onApply}
         disabled={applying}
+        accessibilityRole="button"
+        accessibilityState={{ disabled: applying, busy: applying }}
+        accessibilityLabel={t("Update now")}
         style={{
           backgroundColor: COLORS.white,
           paddingVertical: 8,
           paddingHorizontal: 16,
           borderRadius: 8,
           minWidth: 96,
+          minHeight: 44,
           alignItems: "center",
+          justifyContent: "center",
         }}
       >
         {applying ? (

@@ -6,6 +6,7 @@ import { getPreciseDistance } from 'geolib';
 import { format } from 'date-fns';
 import { GEOTAGGING } from '../redux/Slices/AutoAttendanceSlice';
 import { hasFullAccuracy, isMonitoring } from '../modules/expo-auto-attendance';
+import { describeHttpFailure } from './httpDiagnostics';
 
 /**
  * Pure/IO helpers for the automatic-attendance screen, lifted verbatim out of
@@ -112,7 +113,7 @@ export const readDevicePosition = async () => {
   } catch (error) {
     console.log(
       '[AutoAttendance] Presence GPS failed, trying last known:',
-      error?.message,
+      describeHttpFailure(error),
     );
     return Location.getLastKnownPositionAsync({ maxAge: 600000 });
   } finally {
@@ -170,19 +171,24 @@ export const readLocationAccess = async () => {
 /**
  * Foreground first, then background — the order both platforms require — and
  * only the steps still missing. Returns the state read back from the OS:
- * asking for "Always" does not mean it was given.
+ * asking for "Always" does not mean it was given. An obsolete disclosure flow
+ * returns null and cannot start another prompt after an awaited OS step.
  */
-export const requestLocationAccess = async () => {
+export const requestLocationAccess = async ({ isCurrent = () => true } = {}) => {
   let access = await readLocationAccess();
+  if (!isCurrent()) return null;
   if (access.foreground !== 'granted' || (!access.precise && Platform.OS === 'android')) {
     await Location.requestForegroundPermissionsAsync();
     access = await readLocationAccess();
+    // The account or employer policy can change while the OS dialog is open.
+    // Permission already requested cannot be recalled; do not begin another.
+    if (!isCurrent()) return null;
   }
   if (access.foreground === 'granted' && access.background !== 'granted') {
     await Location.requestBackgroundPermissionsAsync();
     access = await readLocationAccess();
   }
-  return access;
+  return isCurrent() ? access : null;
 };
 
 /**

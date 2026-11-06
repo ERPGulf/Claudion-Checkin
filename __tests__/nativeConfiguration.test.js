@@ -13,6 +13,14 @@ const info = readPlist('ios/ClaudionCheckin/Info.plist');
 const updates = readPlist('ios/ClaudionCheckin/Supporting/Expo.plist');
 const delegate = read('ios/ClaudionCheckin/AppDelegate.swift');
 
+it('keeps debug crash collection off while retaining release error reporting and handler chaining', () => {
+  const config = require('../firebase.json')['react-native'];
+  expect(config.crashlytics_debug_enabled).toBe(false);
+  expect(config.crashlytics_auto_collection_enabled).toBe(true);
+  expect(config.crashlytics_is_error_generation_on_js_crash_enabled).toBe(true);
+  expect(config.crashlytics_javascript_exception_handler_chaining_enabled).toBe(true);
+});
+
 it('connects the scene manifest to the installed Expo scene runtime and factory provider', () => {
   const [major, minor, patch] = require('expo/package.json').version.split('.').map(Number);
   expect([major, minor]).toEqual([57, 0]);

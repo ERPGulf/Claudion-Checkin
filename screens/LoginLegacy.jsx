@@ -29,6 +29,8 @@ import { WelcomeCard } from "../components/Login";
 import { selectEmployeeCode } from "../redux/Slices/UserSlice";
 import { generateToken } from "../services/api";
 import { getLoginErrorMessage } from "../utils/loginError";
+import { describeHttpFailure } from "../utils/httpDiagnostics";
+import { getAuthSessionGeneration } from "../utils/authSessionGuard";
 
 // Rescan and mobile sign-in are equal alternatives to Login, so they share one look.
 const ALTERNATIVE_BUTTON = {
@@ -79,17 +81,22 @@ function LoginLegacy() {
         return;
       }
 
-      const { access_token } = await generateToken({
+      // generateToken invalidates synchronously before its first await.
+      const tokenRequest = generateToken({
         api_key,
         app_key,
         api_secret: password,
       });
+      const generation = getAuthSessionGeneration();
+      const { access_token } = await tokenRequest;
+      if (generation !== getAuthSessionGeneration()) return;
 
       if (!access_token) throw new Error("Token not returned from server");
 
       if (employeeCode) {
         await AsyncStorage.setItem("employee_id", employeeCode);
       }
+      if (generation !== getAuthSessionGeneration()) return;
 
       dispatch(setSignIn({ isLoggedIn: true, token: access_token }));
 
@@ -99,6 +106,7 @@ function LoginLegacy() {
 
         if (employeeId) {
           const notifications = await getNotifications(employeeId);
+          if (generation !== getAuthSessionGeneration()) return;
 
           const unreadCount = notifications.filter(
             (item) => Number(item.read) === 0,
@@ -107,6 +115,7 @@ function LoginLegacy() {
           dispatch(setUnreadCount(unreadCount));
         }
       } catch (err) {}
+      if (generation !== getAuthSessionGeneration()) return;
       Toast.show({
         type: "success",
         text1: t("Login successful"),
@@ -116,15 +125,8 @@ function LoginLegacy() {
 
       // navigation.navigate("homeTab");
     } catch (error) {
-      // Log the real cause for engineers (adb logcat / Metro). The user used to
-      // see only a generic "Something went wrong", which hid SSL/clock/network
-      // failures behind the same text as a wrong password.
-      console.log("Login failed", {
-        message: error?.message ?? null,
-        code: error?.code ?? null,
-        status: error?.response?.status ?? null,
-        data: error?.response?.data ?? null,
-      });
+      // Server errors can echo credentials; keep only bounded status metadata.
+      console.log("Login failed", describeHttpFailure(error));
 
       const { text1, text2 } = getLoginErrorMessage(error);
       Toast.show({

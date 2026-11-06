@@ -1,18 +1,28 @@
 /**
  * Development-only attendance sync diagnostics.
  *
- * Request headers are never passed here, and credential-shaped keys are redacted
- * from anything that is, so a pasted Metro log cannot leak a token. Logging must
- * never be able to fail a drain, so every failure here is swallowed.
+ * Do not serialize request/response bodies, employee identity, location fixes or
+ * free-form errors, even in development. They may include credentials or HR
+ * data without credential-shaped keys. Logging must never fail a drain.
  */
 
 const SECRET_KEY = /token|secret|password|authorization|cookie|api_key|app_key|otp|^sid$/i;
+const PRIVATE_KEY = /^(?:employee(?:Id|Code|Docname|_id|_code|_name)?|tenantKey|instanceId|accountId|scope|latitude|longitude|location(?:s|Name)?|address|photoUri|payload|body|responseData|serverResponse|backendReturned|expected|evidence|verificationEvidence|serverCheckinId|serverRecord|error|lastError|message|duplicateMessage|reason)$/i;
+// These reasons are application-owned run/availability enums. Other reason
+// values can come from a saved server error, so do not print them verbatim.
+const SAFE_REASONS = new Set([
+  "offline", "nothing-due", "scope-changed", "no-employee", "blocked", "sync-error",
+  "connection-lost", "needs-review", "claim-changed", "another-session-syncing",
+  "device_offline", "instance_unreachable", "server_unavailable", "authentication_required",
+  "endpoint_unsupported", "configuration_error", "available", "stale_result", "cancelled",
+]);
 
 export const redact = (value) => {
   if (Array.isArray(value)) return value.map(redact);
   if (!value || typeof value !== "object") return value;
   return Object.fromEntries(Object.entries(value).map(([key, item]) =>
-    [key, SECRET_KEY.test(key) ? "[redacted]" : redact(item)]));
+    [key, key === "reason" && (item == null || SAFE_REASONS.has(item)) ? item
+      : SECRET_KEY.test(key) || PRIVATE_KEY.test(key) ? "[redacted]" : redact(item)]));
 };
 
 /** Prints nested JSON expanded, which Metro otherwise collapses to `[Object]`. */
@@ -21,7 +31,7 @@ export const logAttendanceDiagnostic = (prefix, label, details) => {
   try {
     console.log(`${prefix} ${label}\n${JSON.stringify(redact(details), null, 2)}`);
   } catch (error) {
-    console.log(`${prefix} ${label} (details unprintable: ${error?.message})`);
+    console.log(`${prefix} ${label} (details unprintable)`);
   }
 };
 

@@ -1,14 +1,14 @@
 {
   "summary": {
-    "files": 327,
+    "files": 329,
     "namespaces": [
       "attendance",
       "auth",
       "common",
       "hr"
     ],
-    "englishKeys": 1458,
-    "arabicKeys": 1458,
+    "englishKeys": 1460,
+    "arabicKeys": 1460,
     "resourceErrors": 0,
     "conflictingTranslations": 0,
     "missingLiteralKeys": 0,
@@ -709,17 +709,17 @@
     },
     {
       "file": "components/AutoAttendance/LocationAccessExplainer.jsx",
-      "line": 286,
+      "line": 294,
       "expression": "copy.title"
     },
     {
       "file": "components/AutoAttendance/LocationAccessExplainer.jsx",
-      "line": 289,
+      "line": 297,
       "expression": "copy.description"
     },
     {
       "file": "components/AutoAttendance/LocationAccessExplainer.jsx",
-      "line": 303,
+      "line": 311,
       "expression": "copy.footnote"
     },
     {
@@ -809,17 +809,17 @@
     },
     {
       "file": "hooks/useAutoAttendance.js",
-      "line": 101,
+      "line": 102,
       "expression": "policySource.title"
     },
     {
       "file": "hooks/useAutoAttendance.js",
-      "line": 101,
+      "line": 102,
       "expression": "policySource.description"
     },
     {
       "file": "hooks/useLeaveRequest.js",
-      "line": 379,
+      "line": 380,
       "expression": "REMOTE_AGREEMENT_TEXT"
     },
     {
@@ -929,7 +929,7 @@
     },
     {
       "file": "services/notifications/localNotifications.js",
-      "line": 76,
+      "line": 77,
       "expression": "bodyKey"
     },
     {

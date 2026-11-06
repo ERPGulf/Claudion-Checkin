@@ -96,6 +96,8 @@ const normalizeSession = (raw) => {
   if (typeof raw.sourceTimestamp === "string" && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(raw.sourceTimestamp)) {
     source.sourceTimestamp = raw.sourceTimestamp;
   }
+  if (typeof raw.serverConfirmed === "boolean") source.serverConfirmed = raw.serverConfirmed;
+  if (Number.isSafeInteger(raw.queueRowId) && raw.queueRowId > 0) source.queueRowId = raw.queueRowId;
   if (raw.status === SESSION_STATUS.CHECKED_OUT && typeof raw.closedByEventId === "string" && raw.closedByEventId) {
     source.closedByEventId = raw.closedByEventId;
   }
@@ -248,7 +250,7 @@ export const canTransition = (session, type) =>
     ? !isSessionActive(session)
     : type === "OUT" && isSessionActive(session);
 
-const commitCheckIn = async ({ origin, at, sourceEventId, registrationGeneration, sourceTimestamp, assertCurrent }) => {
+const commitCheckIn = async ({ origin, at, sourceEventId, registrationGeneration, sourceTimestamp, acceptance, assertCurrent }) => {
   const startedAt = await persistCheckinStartTime(at ?? Date.now());
   if (assertCurrent) await assertCurrent();
 
@@ -256,6 +258,7 @@ const commitCheckIn = async ({ origin, at, sourceEventId, registrationGeneration
     ...(sourceEventId ? { sourceEventId } : {}),
     ...(registrationGeneration ? { registrationGeneration } : {}),
     ...(sourceTimestamp ? { sourceTimestamp } : {}),
+    ...acceptance,
     status: SESSION_STATUS.CHECKED_IN,
     origin: normalizeOrigin(origin, SESSION_ORIGIN.UNKNOWN),
     startedAt,
@@ -378,7 +381,10 @@ export const performSessionTransition = async ({
     if (assertCurrent) await assertCurrent();
     onWrite();
     const session = type === "IN"
-      ? await commitCheckIn({ origin, at: transitionAt, sourceEventId, registrationGeneration, sourceTimestamp, assertCurrent })
+      ? await commitCheckIn({ origin, at: transitionAt, sourceEventId, registrationGeneration, sourceTimestamp,
+        acceptance: { serverConfirmed: !response.queued,
+          ...(Number.isSafeInteger(response.row?.id ?? response.queueRowId)
+            ? { queueRowId: response.row?.id ?? response.queueRowId } : {}) }, assertCurrent })
       : await commitCheckOut({ session: previousSession, origin, at: transitionAt, sourceEventId, assertCurrent });
 
     const queued = !!response?.queued;
@@ -489,6 +495,12 @@ export const reconcileSessionFromServer = async ({
           ? { registrationGeneration: session.registrationGeneration } : {}),
         ...(isSessionActive(session) && session.startedAt === startedAt && session.sourceTimestamp
           ? { sourceTimestamp: session.sourceTimestamp } : {}),
+        ...(isSessionActive(session) && session.startedAt === startedAt && session.queueRowId
+          ? { queueRowId: session.queueRowId } : {}),
+        // A generic active-session answer can be resolved from local/Redux
+        // times. It does not confirm a particular queued attendance write.
+        ...(isSessionActive(session) && session.startedAt === startedAt && typeof session.serverConfirmed === "boolean"
+          ? { serverConfirmed: session.serverConfirmed } : {}),
         status: SESSION_STATUS.CHECKED_IN,
         origin: resolvedOrigin,
         startedAt,

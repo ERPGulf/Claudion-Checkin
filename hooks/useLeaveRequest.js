@@ -12,6 +12,7 @@ import { hapticsMessage } from '../utils/HapticsMessage';
 import useRequestHistory from './useRequestHistory';
 import { assertCapability, getCapabilitySnapshot } from '../services/capabilityPolicy';
 import { getAuthSessionGeneration } from '../utils/authSessionGuard';
+import { describeHttpFailure } from '../utils/httpDiagnostics';
 
 /**
  * The sentinel the picker uses for "nothing chosen". Part of the contract with
@@ -334,7 +335,7 @@ export default function useLeaveRequest() {
     } catch (err) {
       // Fixed copy: `err.message` here can be a developer string such as
       // "Leave docname missing", which means nothing to an employee.
-      console.log('Leave submit failed:', err?.message);
+      console.log('Leave submit failed:', describeHttpFailure(err));
       hapticsMessage('error');
       Alert.alert(t("Error"), t("Something went wrong."));
     } finally {

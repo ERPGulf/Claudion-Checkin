@@ -105,6 +105,32 @@ it('keeps employee payloads and exact GPS/location data out of diagnostics', asy
   }
 });
 
+it('records an attempted manual write when the server accepts it but its response is lost', async () => {
+  let committed = 0;
+  mock.onPost(punchUrl).reply(() => {
+    committed += 1;
+    throw Object.assign(new Error('Synthetic response timeout'), { code: 'ECONNABORTED' });
+  });
+  const result = await userCheckIn({ employeeCode: employee, type: 'IN' });
+  expect(result).toMatchObject({ allowed: false, submissionAttempted: true });
+  expect(committed).toBe(1);
+  expect(mock.history.post).toHaveLength(1);
+});
+
+it('distinguishes a failed clock preflight from an attempted attendance write', async () => {
+  mock.onGet(endpoint('attendance_api.get_server_time')).networkError();
+  const result = await userCheckIn({ employeeCode: employee, type: 'IN' });
+  expect(result).toMatchObject({ allowed: false, submissionAttempted: false });
+  expect(mock.history.post).toHaveLength(0);
+});
+
+it('retains manual write uncertainty after a success envelope omits the record identifier', async () => {
+  mock.onPost(punchUrl).reply(200, { message: {} });
+  const result = await userCheckIn({ employeeCode: employee, type: 'OUT' });
+  expect(result).toMatchObject({ allowed: false, submissionAttempted: true });
+  expect(mock.history.post).toHaveLength(1);
+});
+
 it('denies a retry when a new tenant restriction requires location evidence that the first punch did not need', async () => {
   prepareRetry(() => receive(true, false));
   const result = await userCheckIn({ employeeCode: employee, type: 'IN' });

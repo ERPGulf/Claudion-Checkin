@@ -3,6 +3,7 @@ import apiClient from "./apiClient";
 import { getAuthContext, buildHeaders } from "./authHelper";
 import { parseError } from "./errorHelper";
 import { normalizeFeatureSettings, hasRecognizedFeatureSettings } from "../../utils/featureSettings";
+import { describeHttpFailure } from "../../utils/httpDiagnostics";
 
 /**
  * Which features this tenant has enabled for this employee.
@@ -17,8 +18,8 @@ import { normalizeFeatureSettings, hasRecognizedFeatureSettings } from "../../ut
  * to catch: a transport failure, an expired session or a malformed body all come
  * back as `{ error }`, and the store decides what to do about it.
  *
- * Development builds log the response body (never the token) so the raw API
- * answer can be checked from Metro; release builds log nothing.
+ * Development diagnostics report only response shape/status metadata; arbitrary
+ * backend fields can contain private data. Release builds log nothing.
  */
 export const getFeatureSettings = async ({ context, capabilityScope } = {}) => {
   try {
@@ -31,7 +32,9 @@ export const getFeatureSettings = async ({ context, capabilityScope } = {}) => {
       ...(capabilityScope ? { capabilityScope } : {}),
     });
     if (__DEV__) {
-      console.log("[featureSettings] employee_checkin_setting response", JSON.stringify(response.data, null, 2));
+      console.log("[featureSettings] employee_checkin_setting response", {
+        recognized: hasRecognizedFeatureSettings(response.data),
+      });
     }
 
     // Normalize at the transport boundary. An empty or malformed success is a
@@ -42,7 +45,7 @@ export const getFeatureSettings = async ({ context, capabilityScope } = {}) => {
     return { message: normalizeFeatureSettings(response.data) };
   } catch (error) {
     if (__DEV__) {
-      console.log("[featureSettings] employee_checkin_setting failed", error?.response?.status ?? null, error?.message);
+      console.log("[featureSettings] employee_checkin_setting failed", describeHttpFailure(error));
     }
     return {
       error: parseError(error, "Unable to load feature settings."),

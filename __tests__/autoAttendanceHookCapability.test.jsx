@@ -17,9 +17,9 @@ jest.mock('../modules/expo-auto-attendance', () => ({
   getRegisteredGeofences: jest.fn(() => []), hasFullAccuracy: () => true,
   isLowPowerModeEnabled: () => false, isIgnoringBatteryOptimizations: () => true,
   startGeofence: jest.fn(async () => {}), stopGeofence: jest.fn(async () => {}),
-  addGeofenceEnterListener: () => ({ remove: jest.fn() }),
-  addGeofenceExitListener: () => ({ remove: jest.fn() }),
-  addErrorListener: () => ({ remove: jest.fn() }), clearLastEvent: jest.fn(),
+  addGeofenceEnterListener: jest.fn(() => ({ remove: jest.fn() })),
+  addGeofenceExitListener: jest.fn(() => ({ remove: jest.fn() })),
+  addErrorListener: jest.fn(() => ({ remove: jest.fn() })), clearLastEvent: jest.fn(),
 }));
 jest.mock('expo-location', () => ({
   Accuracy: { Balanced: 3 },
@@ -42,7 +42,8 @@ import * as Location from 'expo-location';
 import useAutoAttendance from '../hooks/useAutoAttendance';
 import RootReducer from '../redux/RootReducer';
 import { getOfficeLocation } from '../services/api/attendance.service';
-import { getRegisteredGeofences, startGeofence, stopGeofence } from '../modules/expo-auto-attendance';
+import { addErrorListener, addGeofenceEnterListener, addGeofenceExitListener,
+  getRegisteredGeofences, startGeofence, stopGeofence } from '../modules/expo-auto-attendance';
 import { automaticAttendanceSettings, loginQueueEmployee, TEST_TENANT } from '../test-utils/attendanceScope';
 import { autoAttendanceMonitoringChanged } from '../redux/Slices/AutoAttendanceSlice';
 import { settingsReceived } from '../redux/Slices/FeatureSettingsSlice';
@@ -127,6 +128,34 @@ it('removes a dev registration completed after a tenant geo-only revocation', as
   await act(async () => { releaseStart(); });
   await waitFor(() => expect(stopGeofence).toHaveBeenCalled());
   expect(JSON.parse(screen.getByTestId('effective-policy').props.children).active).toBe(false);
+});
+
+it('keeps employee, office geometry and raw native errors out of release diagnostics', async () => {
+  const previousDev = global.__DEV__;
+  global.__DEV__ = false;
+  const log = jest.spyOn(console, 'log').mockImplementation(() => {});
+  const privateEvent = { employeeId: 'SYNTHETIC-PRIVATE-EMPLOYEE',
+    tenantKey: 'https://private-office.example.com', latitude: 25.1234567,
+    longitude: 51.9876543, radius: 4321, timestamp: 123456789 };
+  try {
+    mount();
+    await act(async () => {
+      addGeofenceEnterListener.mock.calls[0][0]({ ...privateEvent, transition: 'ENTER' });
+      addGeofenceExitListener.mock.calls[0][0]({ ...privateEvent, transition: 'EXIT' });
+      addErrorListener.mock.calls[0][0]({ ...privateEvent, code: 1000, message: 'SYNTHETIC-PRIVATE-ERROR' });
+    });
+
+    expect(log).toHaveBeenCalledWith('[AutoAttendance] ENTER detected');
+    expect(log).toHaveBeenCalledWith('[AutoAttendance] EXIT detected');
+    expect(log).toHaveBeenCalledWith('[AutoAttendance] Geofence error', { code: 1000 });
+    const diagnostics = JSON.stringify(log.mock.calls);
+    for (const value of [...Object.values(privateEvent), 'SYNTHETIC-PRIVATE-ERROR']) {
+      expect(diagnostics).not.toContain(String(value));
+    }
+  } finally {
+    log.mockRestore();
+    global.__DEV__ = previousDev;
+  }
 });
 
 describe('location permission recovery', () => {

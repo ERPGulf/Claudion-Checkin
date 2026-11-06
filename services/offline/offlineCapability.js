@@ -1,5 +1,6 @@
 // src/services/offline/offlineCapability.js
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { logAttendanceDiagnostic } from "./attendanceDiagnostics";
 
 /**
  * Whether THIS server can accept offline attendance at all.
@@ -68,7 +69,7 @@ const emit = () => {
     try {
       listener(cached);
     } catch (error) {
-      console.log("[offlineCapability] Listener failed:", error?.message);
+      logAttendanceDiagnostic("[offlineCapability]", "Listener failed", { code: error?.code });
     }
   });
 };

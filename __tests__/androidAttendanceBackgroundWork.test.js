@@ -39,8 +39,13 @@ it("does not retry forever for a missing endpoint, but keeps the row and the act
   expect(await hasBackgroundSyncWork(scope)).toBe(false);
   expect(await db.getFirstAsync(`SELECT status, failureClass FROM ${QUEUE_TABLE} WHERE id = ?`, [stranded.id]))
     .toEqual({ status: "blocked", failureClass: "endpoint-missing" });
+  // Its own checkout cannot reach the server before that checkin, so it waits
+  // with it instead of becoming a pending row that holds everything back.
+  expect(await queue(1, { action: "checkout" })).toMatchObject(
+    { pairedAttendanceId: stranded.id, status: "blocked", failureClass: "endpoint-missing" });
+  expect(await hasBackgroundSyncWork(scope)).toBe(false);
   // A punch the online endpoint can still accept must keep waking the worker.
-  await queue(1, { action: "checkout" });
+  await queue(2);
   expect(await hasBackgroundSyncWork(scope)).toBe(true);
 });
 

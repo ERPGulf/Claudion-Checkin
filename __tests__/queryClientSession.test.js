@@ -57,19 +57,28 @@ it("removes cached HR records synchronously before a same-code tenant signs in",
 it("cannot resurrect the previous tenant's delayed response into a reused query key", async () => {
   const alpha = deferred();
   const oldRequest = queryClient.fetchQuery({ queryKey: key, queryFn: () => alpha.promise });
+  const oldQuery = queryClient.getQueryCache().find({ queryKey: key });
   // Observe cancellation before invalidation so rejection cannot go unhandled.
   const cancelled = oldRequest.catch((error) => error);
 
-  activateAuthSession(invalidateAuthSession());
-  await queryClient.fetchQuery({
-    queryKey: key, queryFn: async () => [{ name: "tenant-beta-claim" }],
-  });
-  alpha.resolve([{ name: "tenant-alpha-late-claim" }]);
-  await Promise.resolve();
+  try {
+    activateAuthSession(invalidateAuthSession());
+    await queryClient.fetchQuery({
+      queryKey: key, queryFn: async () => [{ name: "tenant-beta-claim" }],
+    });
+    alpha.resolve([{ name: "tenant-alpha-late-claim" }]);
+    await Promise.resolve();
 
-  expect(isCancelledError(await cancelled)).toBe(true);
-  expect(queryClient.getQueryData(key)).toEqual([{ name: "tenant-beta-claim" }]);
-  expect(queryClient.getQueryCache().getAll()).toHaveLength(1);
+    expect(isCancelledError(await cancelled)).toBe(true);
+    expect(queryClient.getQueryData(key)).toEqual([{ name: "tenant-beta-claim" }]);
+    expect(queryClient.getQueryCache().getAll()).toHaveLength(1);
+  } finally {
+    // Query.fetch's finally rearms its GC timer after clear() cancels and
+    // detaches it. Dispose only after that continuation settles: afterEach's
+    // cache.clear() cannot reach this detached test-owned query anymore.
+    await cancelled;
+    oldQuery.destroy();
+  }
 });
 
 it("aborts query transport when supported and stops old retry requests under the new session", async () => {

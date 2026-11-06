@@ -8,6 +8,7 @@ import {
 import { parseError } from "./errorHelper";
 import { describeHttpFailure } from "../../utils/httpDiagnostics";
 import { assertCapability } from "../capabilityPolicy";
+import { fetchUploadJson } from "./uploadTransport";
 
 export const createLeaveApplication = async (leaveData, { capabilityScope: expected } = {}) => {
   try {
@@ -126,7 +127,7 @@ export const uploadLeaveAttachment = async (file, docname, { capabilityScope: ex
     formData.append("docname", String(docname));
 
     await assertCapability("leave_request", capabilityScope);
-    const response = await fetch(
+    const { response, result } = await fetchUploadJson(
       `${baseUrl}/api/method/employee_app.attendance_api.upload_file`,
       {
         method: "POST",
@@ -136,8 +137,6 @@ export const uploadLeaveAttachment = async (file, docname, { capabilityScope: ex
         body: formData,
       },
     );
-
-    const result = await response.json();
 
     console.log("Leave upload response:", { httpStatus: response.status });
 

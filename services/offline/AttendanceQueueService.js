@@ -4,7 +4,6 @@ import { DEVICE_ID } from "./AttendanceApi";
 import {
   ATTENDANCE_TYPE,
   FAILURE_CLASS,
-  QUEUE_ACTION,
   QUEUE_STATUS,
   clearAttendanceQueue,
   logTypeToAction,
@@ -20,7 +19,6 @@ import {
   listForHistory,
   listUnresolved,
   markResolved,
-  pairWithOpenCheckin,
   markSynced,
   markNeedsReview,
   renewAttendanceClaim,
@@ -139,15 +137,14 @@ export const OFFLINE_DISABLED_MESSAGE =
   "Offline attendance is switched off for your organization. Please check in while you have a connection.";
 
 /**
- * Shown when a manual punch could not reach the server.
- *
- * Manual attendance has no offline path, so there is nothing saved and nothing
- * pending — and the message has to say exactly that. "Network Error" leaves the
- * employee guessing whether it landed; the one thing they need to know is that
- * it did not, and that trying again on a connection is the whole remedy.
+ * Only a pre-write failure proves that attendance was not submitted. A failed
+ * response after invoking the write transport must retain uncertainty instead.
  */
 export const MANUAL_OFFLINE_MESSAGE =
   "No connection — your attendance was not marked. Please try again once you're online.";
+
+export const MANUAL_UNCONFIRMED_MESSAGE =
+  "We couldn't confirm whether your attendance was recorded. Check Attendance history or contact your administrator before trying again.";
 
 /**
  * How the sync manager gets told "a punch just went into the queue".
@@ -193,7 +190,7 @@ export const requestQueueDrain = (context) => {
   } catch (error) {
     // A punch is already safely in the queue by this point. Failing to ask for
     // a drain must never turn that into a failed punch.
-    console.log(`${LOG_PREFIX} Drain request failed:`, error?.message);
+    logAttendanceDiagnostic(LOG_PREFIX, "Drain request failed", { code: error?.code });
   }
 };
 
@@ -210,7 +207,7 @@ export const notifyQueueChanged = () => {
     try {
       listener();
     } catch (error) {
-      console.log(`${LOG_PREFIX} Change listener failed:`, error?.message);
+      logAttendanceDiagnostic(LOG_PREFIX, "Change listener failed", { code: error?.code });
     }
   });
 };
@@ -260,6 +257,7 @@ const queueAttendance = async ({
   sourceScope,
   sourceEventId = null,
   sourceParentEventId = null,
+  parentSession = null,
   timestamp: suppliedTimestamp = null,
   strictOrdering = false,
 }) => {
@@ -312,7 +310,14 @@ const queueAttendance = async ({
       address: gate?.location?.locationName ?? null,
       deviceId: DEVICE_ID,
       payload: {
-        ...(sourceParentEventId ? { sourceParentEventId } : {}),
+        ...(type === "OUT" && parentSession?.serverConfirmed === true
+          ? { parentServerConfirmed: true }
+          : {
+            ...((sourceParentEventId || (type === "OUT" && parentSession?.sourceEventId))
+              ? { sourceParentEventId: sourceParentEventId || parentSession.sourceEventId } : {}),
+            ...(type === "OUT" && Number.isSafeInteger(parentSession?.queueRowId) && parentSession.queueRowId > 0
+              ? { parentQueueRowId: parentSession.queueRowId } : {}),
+          }),
         location: gate?.location?.locationName,
         distance: gate?.location?.distance,
         radius: gate?.location?.radius,
@@ -344,33 +349,19 @@ const queueAttendance = async ({
     return { allowed: false, reason: "source-event-collision", row, location: null };
   }
 
-  // Link a check-out to the check-in it closes, so a rejection can invalidate
-  // the whole attendance session rather than leaving the server holding an OUT
-  // with no matching IN.
-  //
-  // Derived from the queue, NOT from the session state machine: this runs inside
-  // `performSessionTransition`'s `execute()`, which holds the session lock for
-  // its whole duration, and `readSession()` takes that same lock — reading it
-  // here would deadlock. The queue already knows enough.
-  if (inserted && row && logTypeToAction(type) === QUEUE_ACTION.CHECKOUT) {
-    try {
-      const checkin = await pairWithOpenCheckin({
-        sourceParentEventId,
-        checkoutId: row.id,
-        employeeId: employeeCode,
-        tenantKey,
-        timestamp,
-      });
-      if (checkin) {
-        console.log(
-          `${LOG_PREFIX} Paired check-out #${row.id} with check-in #${checkin.id}`,
-        );
-      }
-    } catch (error) {
-      // An unpaired check-out is degraded, not broken — it simply cannot
-      // cascade. Never fail a punch over it.
-      console.log(`${LOG_PREFIX} Pairing failed:`, error?.message);
-    }
+  // Admission establishes both pair links and the dependent refusal in the
+  // same SQLite statement. A rejected parent cannot authorize a queued OUT.
+  if (row?.status === QUEUE_STATUS.REJECTED) {
+    notifyQueueChanged();
+    return { allowed: false, queued: false, row, reason: "source-parent-rejected", location: null,
+      message: row.failureClass === FAILURE_CLASS.DEPENDENT
+        ? "Its check-in was rejected, so this check-out was held back to keep the session consistent."
+        : "The server rejected this attendance. It remains on this device and may require administrator attention." };
+  }
+  if (row?.status === QUEUE_STATUS.NEEDS_REVIEW) {
+    notifyQueueChanged();
+    return { allowed: false, queued: false, row, reason: "source-parent-needs-review", location: null,
+      message: "The server outcome could not be verified. Open Profile attendance recovery to check the saved record." };
   }
 
   logAttendanceDiagnostic(
@@ -415,7 +406,16 @@ const queueAttendance = async ({
  * employee could not check in.
  */
 const describeManualFailure = (failure) => {
-  const { kind } = classifyAttendanceError(failure?.error);
+  const { kind, failureClass } = classifyAttendanceError(failure?.error);
+  const knownRefusal = kind === FAILURE_KIND.REJECTED ||
+    [FAILURE_CLASS.AUTH, FAILURE_CLASS.CONFIGURATION, FAILURE_CLASS.ENDPOINT_MISSING].includes(failureClass);
+  // An older/custom callback may omit transport evidence. Do not infer that a
+  // timeout, 5xx, malformed success or unknown exception proves no insertion.
+  if (failure?.submissionAttempted !== false && !knownRefusal &&
+    (failure?.submissionAttempted === true || failure?.error)) {
+    return { ...failure, outcomeUnconfirmed: true, reason: "manual-outcome-unconfirmed",
+      ...(kind === FAILURE_KIND.PENDING ? { offline: true } : {}), message: MANUAL_UNCONFIRMED_MESSAGE };
+  }
   if (kind !== FAILURE_KIND.PENDING) return failure;
 
   return { ...failure, offline: true, message: MANUAL_OFFLINE_MESSAGE };
@@ -427,8 +427,8 @@ const describeManualFailure = (failure) => {
  * Deliberately the behaviour the app had before the queue existed. Nothing is
  * written locally, so there is no row to go `pending`, no "Pending sync" chip on
  * a punch nobody can account for later, and no drain filing a tap against a
- * session that closed hours ago. A manual punch either reaches the server or it
- * did not happen, and the employee is told which.
+ * session that closed hours ago. A lost response leaves an unconfirmed outcome;
+ * it never authorizes a retry or a claim that the server did not record it.
  *
  * The call is made unconditionally rather than behind a connectivity check.
  * There is nothing to fall back to here, so a wrong "we are offline" would
@@ -463,7 +463,9 @@ const submitOnlineOnly = async ({ type, employeeCode, online, sourceScope }) => 
       return result;
     }
 
-    console.log(`${LOG_PREFIX} Manual ${type} not marked:`, result?.message);
+    logAttendanceDiagnostic(LOG_PREFIX, `Manual ${type} unconfirmed or refused`, {
+      code: result?.error?.code, httpStatus: result?.error?.response?.status,
+    });
 
     return describeManualFailure(
       result ?? {
@@ -474,7 +476,9 @@ const submitOnlineOnly = async ({ type, employeeCode, online, sourceScope }) => 
     );
   } catch (error) {
     const { message } = classifyAttendanceError(error);
-    console.log(`${LOG_PREFIX} Manual ${type} threw, not marked:`, message);
+    logAttendanceDiagnostic(LOG_PREFIX, `Manual ${type} threw`, {
+      code: error?.code, httpStatus: error?.response?.status,
+    });
 
     return describeManualFailure({
       allowed: false,
@@ -526,6 +530,7 @@ export const submitAttendance = async ({
   sourceScope = undefined,
   sourceEventId = null,
   sourceParentEventId = null,
+  parentSession = null,
   timestamp = null,
   strictOrdering = false,
   skipPosition = false,
@@ -799,10 +804,9 @@ export const submitAttendance = async ({
       const uncertain = await retainUncertainOnlineAttempt(result);
       if (uncertain) return { done: true, result: uncertain };
 
-      console.log(
-        `${LOG_PREFIX} Online attempt failed transiently, queueing:`,
-        result?.message,
-      );
+      logAttendanceDiagnostic(LOG_PREFIX, "Online attempt failed transiently, queueing", {
+        code: result?.error?.code, httpStatus: result?.error?.response?.status,
+      });
       return { done: false };
     } catch (error) {
       const { message } = classifyAttendanceError(error);
@@ -823,7 +827,9 @@ export const submitAttendance = async ({
       const uncertain = await retainUncertainOnlineAttempt({ error });
       if (uncertain) return { done: true, result: uncertain };
 
-      console.log(`${LOG_PREFIX} Online attempt threw, queueing:`, message);
+      logAttendanceDiagnostic(LOG_PREFIX, "Online attempt threw, queueing", {
+        code: error?.code, httpStatus: error?.response?.status,
+      });
       return { done: false };
     } finally {
       if (heartbeat) clearInterval(heartbeat);
@@ -952,6 +958,7 @@ export const submitAttendance = async ({
     sourceScope,
     sourceEventId,
     sourceParentEventId,
+    parentSession,
     timestamp: preparedOnlineTimestamp,
     strictOrdering,
   }).then(result => instanceUnavailable ? { ...result, availability: instanceUnavailable } : result);
@@ -984,6 +991,7 @@ export const submitAutoAttendance = ({
   sourceScope,
   sourceEventId = null,
   sourceParentEventId = null,
+  parentSession = null,
   timestamp = null,
   strictOrdering = false,
   skipPosition = false,
@@ -999,6 +1007,7 @@ export const submitAutoAttendance = ({
     sourceScope,
     sourceEventId,
     sourceParentEventId,
+    parentSession,
     timestamp,
     strictOrdering,
     skipPosition,
@@ -1009,11 +1018,24 @@ export const submitAutoAttendance = ({
 // READ HELPERS FOR THE UI
 // ----------------------
 
-export const getQueueCounts = (employeeId = null) => countByStatus(employeeId);
+// Optional scope preserves historical support/test callers. Reachable UI and
+// attendance guards supply the captured owner and reject stale reads at both
+// boundaries. NULL provenance is retained as evidence, never assigned a tenant.
+const scopedQueueRead = async (employeeId, scope, read) => {
+  if (!scope) return read({});
+  if (scope.employeeId !== employeeId) throw new Error("Attendance read employee scope changed.");
+  await assertAttendanceQueueScope(scope);
+  const result = await read({ tenantKey: scope.tenantKey, includeUnknownTenant: true });
+  await assertAttendanceQueueScope(scope);
+  return result;
+};
+
+export const getQueueCounts = (employeeId = null, scope = null) =>
+  scopedQueueRead(employeeId, scope, options => countByStatus(employeeId, options));
 
 /** Rows the server has not accepted yet. The queue's own view of itself. */
-export const getUnsyncedRows = (employeeId = null) =>
-  listForHistory({ employeeId });
+export const getUnsyncedRows = (employeeId = null, scope = null) =>
+  scopedQueueRead(employeeId, scope, options => listForHistory({ employeeId, ...options }));
 
 /**
  * Rows for the history timeline — every state the list draws a chip for.
@@ -1029,15 +1051,15 @@ export const getUnsyncedRows = (employeeId = null) =>
  * place and would otherwise blink out. `mergeQueuedRecords` drops each one the
  * moment the server's own copy arrives.
  */
-export const getHistoryRows = (employeeId = null) =>
-  listForHistory({ employeeId });
+export const getHistoryRows = (employeeId = null, scope = null) =>
+  scopedQueueRead(employeeId, scope, options => listForHistory({ employeeId, ...options }));
 
 /**
  * Rows the employee still needs an outcome on — what the banner counts and the
  * sync sheet lists.
  */
-export const getUnresolvedRows = (employeeId = null) =>
-  listUnresolved({ employeeId });
+export const getUnresolvedRows = (employeeId = null, scope = null) =>
+  scopedQueueRead(employeeId, scope, options => listUnresolved({ employeeId, ...options }));
 
 /**
  * Marks a rejected record superseded by an attendance correction request.
@@ -1107,7 +1129,7 @@ export const clearOfflineAttendance = async () => {
   results
     .filter((result) => result.status === "rejected")
     .forEach((result) =>
-      console.log(`${LOG_PREFIX} Teardown step failed:`, result.reason?.message),
+      logAttendanceDiagnostic(LOG_PREFIX, "Teardown step failed", { code: result.reason?.code }),
     );
 
   notifyQueueChanged();

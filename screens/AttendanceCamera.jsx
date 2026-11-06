@@ -39,6 +39,7 @@ import { resolveNearestOffice } from "../services/offline/offlineAttendanceGate"
 import { selectFeatureSettings } from "../redux/Slices/FeatureSettingsSlice";
 import { ATTENDANCE_FEATURES, isFeatureEnabled } from "../utils/featureSettings";
 import { getAuthSessionGeneration, isAuthSessionSuspended } from "../utils/authSessionGuard";
+import { describeHttpFailure } from "../utils/httpDiagnostics";
 
 function AttendanceCamera() {
   const { language, direction, isRTL } = useTranslation();
@@ -243,7 +244,7 @@ function AttendanceCamera() {
         await assertManualAttendanceCurrent(outcome);
       } catch (uploadError) {
         await assertManualAttendanceCurrent(outcome);
-        console.log("AttendanceCamera photo upload failed:", uploadError?.message);
+        console.log("AttendanceCamera photo upload failed:", describeHttpFailure(uploadError));
         hapticsMessage("warning");
         Toast.show({
           type: "error",
@@ -265,8 +266,8 @@ function AttendanceCamera() {
 
       navigation.navigate("Attendance action");
     } catch (error) {
-      // Raw error text (network, native, JS) stays in the log.
-      console.log("AttendanceCamera.handleChecking error:", error?.message);
+      // Upload/native errors can include private paths or server payloads.
+      console.log("AttendanceCamera.handleChecking error:", describeHttpFailure(error));
       hapticsMessage("error");
       Toast.show({
         type: "error",

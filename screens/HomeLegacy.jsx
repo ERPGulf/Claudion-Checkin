@@ -5,6 +5,7 @@ import { useCallback } from "react";
 import { LavaMenu, QuickAccess, WelcomeCard } from "../components/HomeLegacy";
 import { COLORS, SIZES } from "../constants";
 import { fetchTopicsFromServer } from "../services/notifications/fcm.service";
+import { describeHttpFailure } from "../utils/httpDiagnostics";
 
 /**
  * TEMPORARY — the pre-redesign Home screen, kept verbatim so testers can
@@ -21,14 +22,13 @@ function HomeLegacy() {
 
       fetchTopicsFromServer()
         .then((topics) => {
-          console.log("[Home] fetchTopicsFromServer returned:", topics);
           console.log(
             "[Home] Topics count:",
             Array.isArray(topics) ? topics.length : 0,
           );
         })
         .catch((error) => {
-          console.log("[Home] fetchTopicsFromServer error:", error?.message);
+          console.log("[Home] fetchTopicsFromServer error:", describeHttpFailure(error));
         });
     }, []),
   );

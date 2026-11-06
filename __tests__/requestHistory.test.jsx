@@ -1,4 +1,4 @@
-import { renderHook, act, waitFor } from '@testing-library/react-native';
+import { renderHook, act, cleanup, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 
@@ -43,11 +43,13 @@ import useAttendanceRequest, {
   isSameCalendarDay,
 } from '../hooks/useAttendanceRequest';
 /* eslint-enable import/first */
+const queryClients = new Set();
 
 function renderHistory(options) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
+  queryClients.add(queryClient);
 
   return renderHook(() => useRequestHistory(options), {
     wrapper: ({ children }) => (
@@ -60,6 +62,17 @@ const record = (name, date) => ({ name, posting_date: date });
 
 beforeEach(() => {
   mockEmployeeCode = 'EMP-001';
+});
+
+afterEach(async () => {
+  // RNTL unmounts observers, but the QueryClients still own their GC timers.
+  await cleanup();
+  for (const client of queryClients) {
+    await client.cancelQueries();
+    client.getMutationCache().getAll().forEach(mutation => mutation.destroy());
+    client.clear();
+  }
+  queryClients.clear();
 });
 
 /* =====================================================================
@@ -250,6 +263,7 @@ describe('useAttendanceRequest pickers', () => {
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     });
+    queryClients.add(queryClient);
     const { result } = renderHook(() => useAttendanceRequest(), {
       wrapper: ({ children }) => (
         <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>

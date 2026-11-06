@@ -1,8 +1,8 @@
 import { useTranslation } from '../localization';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { useInfiniteQuery } from '@tanstack/react-query';
-import { selectEmployeeCode } from '../redux/Slices/UserSlice';
+import { selectBaseUrl, selectEmployeeCode } from '../redux/Slices/UserSlice';
 import { getUserAttendance } from '../services/api';
 import {
   groupRecordsByDay,
@@ -14,6 +14,11 @@ import {
   getQueueCounts,
 } from '../services/offline/AttendanceQueueService';
 import { syncNow } from '../services/offline/BackgroundSyncManager';
+import { assertAttendanceQueueScope, captureAttendanceQueueScope, normalizeAttendanceTenantKey } from '../services/offline/attendanceQueueProvenance';
+import { getAuthSessionGeneration } from '../utils/authSessionGuard';
+import { describeHttpFailure } from '../utils/httpDiagnostics';
+
+const EMPTY_ROWS = [];
 
 /** Server page size. Also the pagination cursor step — kept in one place. */
 export const PAGE_SIZE = 20;
@@ -38,8 +43,16 @@ export const PAGE_SIZE = 20;
 export default function useAttendanceHistory() {
   const { language } = useTranslation();
   const employeeCode = useSelector(selectEmployeeCode);
-  const [queueRows, setQueueRows] = useState([]);
-  const [queueCounts, setQueueCounts] = useState(null);
+  const baseUrl = useSelector(selectBaseUrl);
+  const generation = getAuthSessionGeneration();
+  const identity = JSON.stringify([baseUrl, employeeCode, generation]);
+  const identityRef = useRef(identity);
+  identityRef.current = identity;
+  const mounted = useRef(false);
+  const readSequence = useRef(0);
+  const [queueState, setQueueState] = useState({ identity, rows: EMPTY_ROWS, counts: null });
+  const queueRows = queueState.identity === identity ? queueState.rows : EMPTY_ROWS;
+  const queueCounts = queueState.identity === identity ? queueState.counts : null;
   // Separate from React Query's `isRefetching` so the spinner covers the drain
   // as well as the refetch. The drain is the slower half and the half the user
   // is actually waiting on.
@@ -67,29 +80,39 @@ export default function useAttendanceHistory() {
   });
 
   const reloadQueue = useCallback(async () => {
+    const request = ++readSequence.current;
     if (!employeeCode) {
-      setQueueRows([]);
-      setQueueCounts(null);
+      if (mounted.current) setQueueState({ identity, rows: EMPTY_ROWS, counts: null });
       return;
     }
 
     try {
+      const scope = await captureAttendanceQueueScope(employeeCode);
+      if (scope.tenantKey !== normalizeAttendanceTenantKey(baseUrl)) return;
       const [rows, counts] = await Promise.all([
-        getHistoryRows(employeeCode),
-        getQueueCounts(employeeCode),
+        getHistoryRows(employeeCode, scope),
+        getQueueCounts(employeeCode, scope),
       ]);
-
-      setQueueRows(rows);
-      setQueueCounts(counts);
+      await assertAttendanceQueueScope(scope);
+      if (!mounted.current || identityRef.current !== identity || request !== readSequence.current ||
+        scope.generation !== getAuthSessionGeneration()) return;
+      setQueueState({ identity, rows, counts });
     } catch (queueError) {
       // A queue read failing must never blank the server history.
-      console.log('[useAttendanceHistory] Queue read failed:', queueError?.message);
+      console.log('[useAttendanceHistory] Queue read failed:', describeHttpFailure(queueError));
     }
-  }, [employeeCode]);
+  }, [employeeCode, baseUrl, identity]);
 
   useEffect(() => {
+    mounted.current = true;
+    setIsDraining(false);
     reloadQueue();
-    return addQueueChangeListener(reloadQueue);
+    const unsubscribe = addQueueChangeListener(reloadQueue);
+    return () => {
+      mounted.current = false;
+      readSequence.current += 1;
+      unsubscribe();
+    };
   }, [reloadQueue]);
 
   const loadMore = useCallback(() => {
@@ -132,14 +155,16 @@ export default function useAttendanceHistory() {
         employeeId: employeeCode,
       });
     } catch (syncError) {
-      console.log('[useAttendanceHistory] Sync failed:', syncError?.message);
+      console.log('[useAttendanceHistory] Sync failed:', describeHttpFailure(syncError));
     } finally {
-      setIsDraining(false);
+      if (mounted.current && identityRef.current === identity && generation === getAuthSessionGeneration()) setIsDraining(false);
     }
 
+    if (!mounted.current || identityRef.current !== identity || generation !== getAuthSessionGeneration()) return;
     await reloadQueue();
+    if (!mounted.current || identityRef.current !== identity || generation !== getAuthSessionGeneration()) return;
     return refetch();
-  }, [employeeCode, refetch, reloadQueue]);
+  }, [employeeCode, refetch, reloadQueue, identity, generation]);
 
   return {
     employeeCode,

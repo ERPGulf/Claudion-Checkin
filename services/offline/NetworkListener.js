@@ -1,5 +1,6 @@
 // src/services/offline/NetworkListener.js
 import NetInfo from "@react-native-community/netinfo";
+import { logAttendanceDiagnostic } from "./attendanceDiagnostics";
 
 /**
  * Connectivity, and the moment it comes back.
@@ -45,8 +46,18 @@ let currentState = {
 
 let unsubscribe = null;
 let networkRevision = 0;
+let listenerGeneration = 0;
+let latestFetch = 0;
 const reconnectListeners = new Set();
 const changeListeners = new Set();
+
+const normalizeState = (state) => ({
+  // NetInfo reports null while connectivity is still being determined. Only
+  // an explicit false (or type none) establishes a missing transport.
+  isConnected: typeof state?.isConnected === "boolean" ? state.isConnected : null,
+  isInternetReachable: state?.isInternetReachable ?? null,
+  type: state?.type ?? "unknown",
+});
 
 /**
  * The one predicate: is there an interface that could carry a request?
@@ -87,13 +98,16 @@ export const getNetworkRevision = () => networkRevision;
 
 /** Refreshes the cached state from NetInfo, keeping the last one on failure. */
 const refreshState = async () => {
+  const fetchId = ++latestFetch;
+  const generation = listenerGeneration;
+  const revision = networkRevision;
   try {
     const state = await NetInfo.fetch();
-    currentState = {
-      isConnected: !!state?.isConnected,
-      isInternetReachable: state?.isInternetReachable ?? null,
-      type: state?.type ?? "unknown",
-    };
+    // A native event, newer fetch, or teardown can supersede this read while
+    // the bridge is resolving it. Preserve the newer observation in that case.
+    if (fetchId === latestFetch && generation === listenerGeneration && revision === networkRevision) {
+      currentState = normalizeState(state);
+    }
   } catch {
     // The cached state stands — a failed fetch is not evidence of anything.
   }
@@ -133,7 +147,7 @@ const notifyReconnect = (state) => {
     try {
       listener(state);
     } catch (error) {
-      console.log("[NetworkListener] Reconnect listener failed:", error?.message);
+      logAttendanceDiagnostic("[NetworkListener]", "Reconnect listener failed", { code: error?.code });
     }
   });
 };
@@ -161,7 +175,7 @@ const notifyChange = (online, state) => {
     try {
       listener(online, state);
     } catch (error) {
-      console.log("[NetworkListener] Change listener failed:", error?.message);
+      logAttendanceDiagnostic("[NetworkListener]", "Change listener failed", { code: error?.code });
     }
   });
 };
@@ -175,23 +189,21 @@ const notifyChange = (online, state) => {
  */
 export const startNetworkListener = () => {
   if (unsubscribe) return stopNetworkListener;
+  const generation = ++listenerGeneration;
 
   // Seed from a real fetch so the first `isOnline()` — which can be called
   // before any NetInfo event arrives — is not just the optimistic default.
   fetchIsOnline().catch(() => {});
 
   unsubscribe = NetInfo.addEventListener((state) => {
+    if (generation !== listenerGeneration) return;
     const wasOnline = isStateOnline(currentState);
 
     // Every native network notification can represent a new route/interface.
     // Reconnect/UI callbacks below deliberately keep their existing edge rules.
     networkRevision += 1;
 
-    currentState = {
-      isConnected: !!state?.isConnected,
-      isInternetReachable: state?.isInternetReachable ?? null,
-      type: state?.type ?? "unknown",
-    };
+    currentState = normalizeState(state);
 
     const nowOnline = isStateOnline(currentState);
 
@@ -211,6 +223,8 @@ export const startNetworkListener = () => {
 };
 
 export const stopNetworkListener = () => {
+  listenerGeneration += 1;
+  latestFetch += 1;
   if (unsubscribe) {
     unsubscribe();
     unsubscribe = null;

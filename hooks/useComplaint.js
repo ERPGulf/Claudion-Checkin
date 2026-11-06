@@ -9,6 +9,7 @@ import { useAttachmentPicker } from './useAttachmentPicker';
 import { hapticsMessage } from '../utils/HapticsMessage';
 import { assertCapability, getCapabilitySnapshot } from '../services/capabilityPolicy';
 import { getAuthSessionGeneration } from '../utils/authSessionGuard';
+import { describeHttpFailure } from '../utils/httpDiagnostics';
 
 /**
  * Everything the complaint form does, lifted out of the screen so the modern UI
@@ -128,7 +129,7 @@ export default function useComplaint() {
     } catch (error) {
       // Fixed copy: `error.message` here can be a developer string such as
       // "Complaint created but docname missing".
-      console.log('Complaint submit failed:', error?.message);
+      console.log('Complaint submit failed:', describeHttpFailure(error));
       hapticsMessage('error');
       Alert.alert(t("Error"), t("Failed to submit complaint"));
     } finally {

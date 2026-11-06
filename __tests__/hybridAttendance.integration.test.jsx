@@ -202,6 +202,55 @@ it("positive history recovers uncertain automatic IN before manual fallback and 
   expect(await listAll()).toEqual([]);
 });
 
+it("camera keeps confirmed attendance while redacting a private follow-up failure", async () => {
+  const secret = "SYNTHETIC-PRIVATE-CAMERA-ERROR";
+  jest.spyOn(require("../services/api"), "userStatusPut").mockRejectedValueOnce(Object.assign(new Error(secret), {
+    code: "ERR_BAD_RESPONSE", response: { status: 503, data: { private: secret } },
+  }));
+  const output = jest.spyOn(console, "log").mockImplementation(() => {});
+  const screen = render(<Provider store={store}><AttendanceCamera /></Provider>);
+  fireEvent.press(screen.getByLabelText("Take photo"));
+  await waitFor(() => expect(screen.getByText("Check in")).toBeTruthy());
+  fireEvent.press(screen.getByText("Check in"));
+
+  await waitFor(() => expect(CameraToast.show).toHaveBeenCalledWith(expect.objectContaining({
+    text1: "Checked in — photo not saved", text2: "Your attendance was recorded without the photo.",
+  })));
+  expect(output).toHaveBeenCalledWith("AttendanceCamera photo upload failed:", {
+    code: "ERR_BAD_RESPONSE", httpStatus: 503,
+  });
+  expect(JSON.stringify(output.mock.calls)).not.toContain(secret);
+  expect((await readSession()).status).toBe("CHECKED_IN");
+  expect(store.getState().attendance.checkin).toBe(true);
+});
+
+it("manual attendance keeps a confirmed IN while redacting a private refresh failure", async () => {
+  const secret = "SYNTHETIC-PRIVATE-MANUAL-REFRESH";
+  const output = jest.spyOn(console, "log").mockImplementation(() => {});
+  let submitted = false;
+  apiClient.post.mockImplementation(async () => {
+    submitted = true;
+    return { data: { message: { name: "MANUAL-IN" } } };
+  });
+  mount();
+  await waitFor(() => expect(mockHook.restrictionLoaded).toBe(true));
+  jest.spyOn(require("../services/api/attendance.service"), "getDailyWorkedHours").mockImplementation(async () => {
+    if (submitted) throw Object.assign(new Error(secret), {
+      code: "ERR_BAD_RESPONSE", response: { status: 503, data: { private: secret } },
+    });
+    return "00:00";
+  });
+
+  await act(async () => { await mockHook.handlePrimaryAction(); });
+
+  expect(output).toHaveBeenCalledWith("AttendanceAction.handleDirectCheckInOut error:", {
+    code: "ERR_BAD_RESPONSE", httpStatus: 503,
+  });
+  expect(JSON.stringify(output.mock.calls)).not.toContain(secret);
+  expect((await readSession()).status).toBe("CHECKED_IN");
+  expect(store.getState().attendance.checkin).toBe(true);
+});
+
 it("camera attendance cannot commit an old HTTP response after the tenant changes", async () => {
   let accept;
   apiClient.post.mockImplementation(() => new Promise(resolve => { accept = resolve; }));

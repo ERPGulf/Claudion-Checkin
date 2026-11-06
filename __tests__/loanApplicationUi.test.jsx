@@ -6,6 +6,7 @@ import {
   renderHook,
   fireEvent,
   act,
+  cleanup,
   waitFor,
 } from '@testing-library/react-native';
 
@@ -110,6 +111,7 @@ const FILE = {
  * ToastAndroid — the strings, not the transport, are what must not drift.
  */
 const toast = message => ['Notice', message];
+const queryClients = new Set();
 
 /** The screen mounts a react-query mutation, so it needs a client. */
 function renderScreen() {
@@ -119,6 +121,7 @@ function renderScreen() {
       queries: { retry: false },
     },
   });
+  queryClients.add(queryClient);
 
   return render(<LoanApplication />, {
     wrapper: ({ children }) => (
@@ -134,6 +137,7 @@ function renderLoanHook() {
       queries: { retry: false },
     },
   });
+  queryClients.add(queryClient);
 
   return renderHook(() => useLoanApplication(), {
     wrapper: ({ children }) => (
@@ -150,7 +154,16 @@ beforeEach(() => {
   jest.spyOn(Alert, 'alert').mockImplementation(() => {});
 });
 
-afterEach(() => {
+afterEach(async () => {
+  // Unmount observers before disposing their test-owned caches. Query and
+  // mutation observers otherwise leave real five-minute GC timers behind.
+  await cleanup();
+  for (const client of queryClients) {
+    await client.cancelQueries();
+    client.getMutationCache().getAll().forEach(mutation => mutation.destroy());
+    client.clear();
+  }
+  queryClients.clear();
   Alert.alert.mockRestore();
 });
 

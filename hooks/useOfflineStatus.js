@@ -2,7 +2,7 @@ import { useTranslation } from '../localization';
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSelector } from "react-redux";
 import { selectIsLoggedIn } from "../redux/Slices/AuthSlice";
-import { selectEmployeeCode } from "../redux/Slices/UserSlice";
+import { selectBaseUrl, selectEmployeeCode } from "../redux/Slices/UserSlice";
 import {
   addNetworkChangeListener,
   fetchIsOnline,
@@ -36,6 +36,13 @@ import {
   ATTENDANCE_FEATURES,
   isFeatureEnabled,
 } from "../utils/featureSettings";
+import { assertAttendanceQueueScope, captureAttendanceQueueScope, normalizeAttendanceTenantKey } from "../services/offline/attendanceQueueProvenance";
+import { getAuthSessionGeneration } from "../utils/authSessionGuard";
+
+const EMPTY_COUNTS = {
+  pendingCount: 0, blockedCount: 0, rejectedCount: 0, reviewCount: 0,
+  unresolvedCount: 0, awaitingServerCount: 0, oldestPendingAt: null,
+};
 
 /**
  * Drives the connectivity banner.
@@ -51,6 +58,11 @@ export default function useOfflineStatus() {
   useTranslation();
   const isLoggedIn = useSelector(selectIsLoggedIn);
   const employeeCode = useSelector(selectEmployeeCode);
+  const baseUrl = useSelector(selectBaseUrl);
+  const identity = JSON.stringify([isLoggedIn, employeeCode, baseUrl, getAuthSessionGeneration()]);
+  const identityRef = useRef(identity);
+  identityRef.current = identity;
+  const readSequence = useRef(0);
   const { enabled: alertsEnabled } = useOfflineSyncAlerts();
   const [capability, setCapability] = useState(() => getOfflineCapability());
 
@@ -79,15 +91,8 @@ export default function useOfflineStatus() {
   // Each count is named for what it means. They used to be one derived
   // `unsynced` shared by three callers wanting three different things, which is
   // exactly how a status added later breaks a consumer silently.
-  const [counts, setCounts] = useState({
-    pendingCount: 0,
-    blockedCount: 0,
-    rejectedCount: 0,
-    reviewCount: 0,
-    unresolvedCount: 0,
-    awaitingServerCount: 0,
-    oldestPendingAt: null,
-  });
+  const [countsState, setCounts] = useState({ identity, counts: EMPTY_COUNTS });
+  const counts = countsState.identity === identity ? countsState.counts : EMPTY_COUNTS;
   const [justSyncedAt, setJustSyncedAt] = useState(null);
 
   const isMountedRef = useRef(true);
@@ -102,23 +107,20 @@ export default function useOfflineStatus() {
   }, []);
 
   const refreshCounts = useCallback(async () => {
-    if (!employeeCode) {
-      setCounts({
-        pendingCount: 0,
-        blockedCount: 0,
-        rejectedCount: 0,
-        reviewCount: 0,
-        unresolvedCount: 0,
-        awaitingServerCount: 0,
-        oldestPendingAt: null,
-      });
+    const request = ++readSequence.current;
+    if (!isLoggedIn || !employeeCode) {
+      if (isMountedRef.current) setCounts({ identity, counts: EMPTY_COUNTS });
       return;
     }
 
     try {
-      const next = await getQueueCounts(employeeCode);
-      if (!isMountedRef.current) return;
-      setCounts({
+      const scope = await captureAttendanceQueueScope(employeeCode);
+      if (scope.tenantKey !== normalizeAttendanceTenantKey(baseUrl)) return;
+      const next = await getQueueCounts(employeeCode, scope);
+      await assertAttendanceQueueScope(scope);
+      if (!isMountedRef.current || identityRef.current !== identity || request !== readSequence.current ||
+        scope.generation !== getAuthSessionGeneration()) return;
+      setCounts({ identity, counts: {
         pendingCount: next?.pendingCount ?? 0,
         blockedCount: next?.blockedCount ?? 0,
         rejectedCount: next?.rejectedCount ?? 0,
@@ -126,12 +128,12 @@ export default function useOfflineStatus() {
         unresolvedCount: next?.unresolvedCount ?? 0,
         awaitingServerCount: next?.awaitingServerCount ?? 0,
         oldestPendingAt: next?.oldestPendingAt ?? null,
-      });
+      } });
     } catch {
       // A queue read failing is not worth surfacing here — the banner's job is
       // reassurance, and a count it cannot get is better omitted than guessed.
     }
-  }, [employeeCode]);
+  }, [employeeCode, baseUrl, isLoggedIn, identity]);
 
   // Whether this server supports offline attendance at all.
   useEffect(() => {
@@ -261,13 +263,18 @@ export default function useOfflineStatus() {
    * already knows which employee it is describing.
    */
   const loadUnresolvedRows = useCallback(async () => {
-    if (!employeeCode) return [];
+    if (!isLoggedIn || !employeeCode) return [];
     try {
-      return await getUnresolvedRows(employeeCode);
+      const scope = await captureAttendanceQueueScope(employeeCode);
+      if (scope.tenantKey !== normalizeAttendanceTenantKey(baseUrl)) return [];
+      const rows = await getUnresolvedRows(employeeCode, scope);
+      await assertAttendanceQueueScope(scope);
+      return isMountedRef.current && identityRef.current === identity &&
+        scope.generation === getAuthSessionGeneration() ? rows : [];
     } catch {
       return [];
     }
-  }, [employeeCode]);
+  }, [employeeCode, baseUrl, isLoggedIn, identity]);
 
   const content = visible
     ? describeOfflineStatus(phase, {

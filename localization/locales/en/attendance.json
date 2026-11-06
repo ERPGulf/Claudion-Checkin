@@ -528,6 +528,7 @@
   "Offline attendance isn't enabled on your organization's server yet. Please check in while you have a connection.": "Offline attendance isn't enabled on your organization's server yet. Please check in while you have a connection.",
   "Offline attendance is switched off for your organization. Please check in while you have a connection.": "Offline attendance is switched off for your organization. Please check in while you have a connection.",
   "No connection — your attendance was not marked. Please try again once you're online.": "No connection — your attendance was not marked. Please try again once you're online.",
+  "We couldn't confirm whether your attendance was recorded. Check Attendance history or contact your administrator before trying again.": "We couldn't confirm whether your attendance was recorded. Check Attendance history or contact your administrator before trying again.",
   "Attendance configuration is unavailable. Please sign in again or contact your administrator.": "Attendance configuration is unavailable. Please sign in again or contact your administrator.",
   "Your location policy changed or assigned location could not be verified. Please try again.": "Your location policy changed or assigned location could not be verified. Please try again.",
   "An earlier automatic attendance request needs server verification. Check the saved record in Attendance recovery before trying again.": "An earlier automatic attendance request needs server verification. Check the saved record in Attendance recovery before trying again.",

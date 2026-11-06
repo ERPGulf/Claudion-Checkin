@@ -10,6 +10,7 @@ export const AUTO_EVENT_STATUS = {
 };
 
 const STATUSES = new Set(Object.values(AUTO_EVENT_STATUS));
+export const MAX_CLAIM_LEASE_MS = 120000;
 const EVENT_FIELDS = [
   "eventId", "sequence", "identifier", "nativeIdentifier", "transition",
   "timestamp", "tenantKey", "employeeId", "registrationId", "geotagging",
@@ -125,22 +126,31 @@ export const listUncertainEvents = async ({ tenantKey, employeeId }) => {
   )).map(hydrate);
 };
 
-/** A native receipt can be processed by only one claimant in this database. */
+/**
+ * A native receipt can be processed by only one claimant in this database.
+ * A lease beyond the maximum valid interval from the current wall clock
+ * cannot remain live indefinitely after clock correction. Its
+ * dispatch marker and frozen timestamp survive ownership recovery, so a POST
+ * that may already have happened still goes through positive verification.
+ */
 export const claimEvent = async (eventId, {
   ownerId = `auto-claim-${Date.now()}-${Math.random().toString(36).slice(2)}`,
   now = Date.now(),
-  leaseMs = 120000,
+  leaseMs = MAX_CLAIM_LEASE_MS,
   allowReview = false,
 } = {}) => {
-  if (!nonblank(ownerId) || !Number.isFinite(leaseMs) || leaseMs <= 0) throw new Error("Invalid automatic event claim.");
+  if (!nonblank(ownerId) || !Number.isFinite(now) || !Number.isFinite(leaseMs) ||
+    leaseMs <= 0 || leaseMs > MAX_CLAIM_LEASE_MS) throw new Error("Invalid automatic event claim.");
   const database = await getDatabase();
   return hydrate(await database.getFirstAsync(
     `UPDATE ${AUTO_EVENT_TABLE} SET status = ?, updatedAt = ?, claimOwner = ?, claimExpiresAt = ?
-      WHERE eventId = ? AND (status = ? OR (status = ? AND COALESCE(claimExpiresAt, 0) <= ?)
+      WHERE eventId = ? AND (status = ? OR (status = ? AND
+        (COALESCE(claimExpiresAt, 0) <= ? OR claimExpiresAt > ?))
         OR (? = 1 AND status = ? AND onlineAttemptAt IS NOT NULL))
       RETURNING *;`,
     [AUTO_EVENT_STATUS.PROCESSING, now, ownerId, now + leaseMs, eventId,
-      AUTO_EVENT_STATUS.PENDING, AUTO_EVENT_STATUS.PROCESSING, now, allowReview ? 1 : 0, AUTO_EVENT_STATUS.NEEDS_REVIEW],
+      AUTO_EVENT_STATUS.PENDING, AUTO_EVENT_STATUS.PROCESSING, now, now + MAX_CLAIM_LEASE_MS,
+      allowReview ? 1 : 0, AUTO_EVENT_STATUS.NEEDS_REVIEW],
   ));
 };
 
@@ -171,9 +181,10 @@ export const updateEvent = async (eventId, changes, { now = Date.now() } = {}) =
  * owner cannot record a dispatch or overwrite the succeeding processor's work.
  */
 export const updateClaimedEvent = async (eventId, ownerId, changes = {}, {
-  now = Date.now(), leaseMs = 120000,
+  now = Date.now(), leaseMs = MAX_CLAIM_LEASE_MS,
 } = {}) => {
-  if (!nonblank(ownerId) || !Number.isFinite(leaseMs) || leaseMs <= 0) throw new Error("Invalid automatic event claim.");
+  if (!nonblank(ownerId) || !Number.isFinite(now) || !Number.isFinite(leaseMs) ||
+    leaseMs <= 0 || leaseMs > MAX_CLAIM_LEASE_MS) throw new Error("Invalid automatic event claim.");
   if (changes.status !== undefined && !STATUSES.has(changes.status)) throw new Error("Invalid automatic attendance event status.");
   const keys = UPDATE_COLUMNS.filter((key) => Object.prototype.hasOwnProperty.call(changes, key));
   const values = keys.map((key) => key === "outcome" && changes[key] != null
@@ -183,9 +194,10 @@ export const updateClaimedEvent = async (eventId, ownerId, changes = {}, {
   return hydrate(await database.getFirstAsync(
     `UPDATE ${AUTO_EVENT_TABLE} SET ${keys.map((key) => `${key} = ?, `).join("")}
       claimOwner = ?, claimExpiresAt = ?, updatedAt = ?
-      WHERE eventId = ? AND status = ? AND claimOwner = ? AND claimExpiresAt > ? RETURNING *;`,
+      WHERE eventId = ? AND status = ? AND claimOwner = ? AND claimExpiresAt > ?
+        AND claimExpiresAt <= ? RETURNING *;`,
     [...values, releases ? null : ownerId, releases ? null : now + leaseMs, now,
-      eventId, AUTO_EVENT_STATUS.PROCESSING, ownerId, now],
+      eventId, AUTO_EVENT_STATUS.PROCESSING, ownerId, now, now + MAX_CLAIM_LEASE_MS],
   ));
 };
 

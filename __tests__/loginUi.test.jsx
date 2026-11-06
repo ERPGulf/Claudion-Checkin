@@ -97,6 +97,7 @@ import userReducer from '../redux/Slices/UserSlice';
 import authReducer from '../redux/Slices/AuthSlice';
 import notificationReducer from '../redux/Slices/notificationSlice';
 import { COLORS, DARK_COLORS, BUILD_TAG } from '../constants';
+import { invalidateAuthSession } from '../utils/authSessionGuard';
 /* eslint-enable import/first */
 
 const flatten = style => StyleSheet.flatten(style) || {};
@@ -361,6 +362,52 @@ describe('useLogin', () => {
  * ================================================================== */
 
 describe('Login container', () => {
+  it.each([true, false])('does not publish a stale QR sign-in after employee persistence when modern UI is %s', async enabled => {
+    await provision();
+    mockNewHomeEnabled = enabled;
+    const originalWrite = AsyncStorage.setItem.getMockImplementation();
+    AsyncStorage.setItem.mockImplementation(async (key, value) => {
+      if (key === 'employee_id') invalidateAuthSession();
+      return originalWrite(key, value);
+    });
+    try {
+      const { store, getByLabelText, getByPlaceholderText, getAllByText } = renderScreen();
+      act(() => store.dispatch({ type: 'user/setEmployeeCode', payload: 'SYNTHETIC-EMPLOYEE' }));
+      fireEvent.changeText(enabled ? getByLabelText('Password') : getByPlaceholderText('Enter password'), 'hunter2');
+      await act(async () => {
+        fireEvent.press(enabled ? getByLabelText('Login') : getAllByText('Login').at(-1));
+      });
+      await waitFor(() => expect(AsyncStorage.setItem).toHaveBeenCalledWith('employee_id', 'SYNTHETIC-EMPLOYEE'));
+
+      expect(store.getState().userAuth.isLoggedIn).toBe(false);
+      expect(mockGetNotifications).not.toHaveBeenCalled();
+      expect(mockToastShow).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'success' }));
+    } finally { AsyncStorage.setItem.mockImplementation(originalWrite); }
+  });
+
+  it.each([true, false])('omits credential echoes from login diagnostics when modern UI is %s', async enabled => {
+    await provision();
+    mockNewHomeEnabled = enabled;
+    const secret = 'synthetic-private-password-echo';
+    mockGenerateToken.mockRejectedValue(Object.assign(new Error(secret), {
+      code: 'ERR_BAD_RESPONSE', response: { status: 500, data: { message: secret, refresh_token: secret } },
+    }));
+    const output = jest.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      const { getByLabelText, getByPlaceholderText, getAllByText } = renderScreen();
+      fireEvent.changeText(enabled ? getByLabelText('Password') : getByPlaceholderText('Enter password'), 'hunter2');
+      await act(async () => {
+        fireEvent.press(enabled ? getByLabelText('Login') : getAllByText('Login').at(-1));
+      });
+      await waitFor(() => expect(mockGenerateToken).toHaveBeenCalled());
+      await waitFor(() => expect(output).toHaveBeenCalledWith('Login failed', {
+        code: 'ERR_BAD_RESPONSE', httpStatus: 500,
+      }));
+      expect(JSON.stringify(output.mock.calls)).not.toContain(secret);
+      expect(mockToastShow).toHaveBeenCalledWith(expect.objectContaining({ type: 'error' }));
+    } finally { output.mockRestore(); }
+  });
+
   it.each([true, false])('offers mobile sign-in when modern UI is %s', enabled => {
     mockNewHomeEnabled = enabled;
     const { getByLabelText } = renderScreen();

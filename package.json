@@ -41,7 +41,7 @@
     "@reduxjs/toolkit": "^2.0.0",
     "@shopify/flash-list": "2.0.2",
     "@tanstack/react-query": "^5.81.5",
-    "axios": "^1.12.2",
+    "axios": "1.20.0",
     "base-64": "^1.0.0",
     "date-fns": "^2.30.0",
     "expo": "~57.0.27",
@@ -113,5 +113,13 @@
   },
   "volta": {
     "node": "22.14.0"
+  },
+  "overrides": {
+    "@erpgulf/auth-sdk": {
+      "zod": "4.6.6"
+    },
+    "@erpgulf/server-lookup": {
+      "zod": "4.6.6"
+    }
   }
 }

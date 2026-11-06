@@ -308,6 +308,26 @@ describe('useComplaint', () => {
     expect(uploadComplaintAttachment).not.toHaveBeenCalled();
   });
 
+  it('keeps private backend error text and payloads out of submission diagnostics', async () => {
+    const secret = 'SYNTHETIC-PRIVATE-COMPLAINT-ERROR';
+    createComplaint.mockRejectedValueOnce(Object.assign(new Error(secret), {
+      code: 'ERR_BAD_RESPONSE', response: { status: 500, data: { private: secret } },
+    }));
+    const output = jest.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      const { result } = renderHook(() => useComplaint());
+      withMessage(result);
+      await submit(result);
+
+      expect(output).toHaveBeenCalledWith('Complaint submit failed:', {
+        code: 'ERR_BAD_RESPONSE', httpStatus: 500,
+      });
+      expect(JSON.stringify(output.mock.calls)).not.toContain(secret);
+      expect(Alert.alert).toHaveBeenCalledWith('Error', 'Failed to submit complaint');
+      expect(result.current.message).toBe('The AC is off');
+    } finally { output.mockRestore(); }
+  });
+
   it('clears the form only after a success', async () => {
     createComplaint.mockResolvedValue(created('EC-0009'));
 

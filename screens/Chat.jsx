@@ -1,5 +1,5 @@
 import Text from '../localization/LocalizedText';
-import { t, useTranslation } from "../localization";
+import { useTranslation } from "../localization";
 import { View } from 'react-native';
 import React, { useLayoutEffect } from 'react';
 import { useNavigation } from '@react-navigation/native';
@@ -7,7 +7,7 @@ import { TYPO } from '../constants';
 import useAppTheme from '../hooks/useAppTheme';
 
 function Chat() {
-  useTranslation();
+  const { t } = useTranslation();
   const navigation = useNavigation();
   const { colors } = useAppTheme();
 
@@ -20,7 +20,7 @@ function Chat() {
       headerTitleStyle: { color: colors.textPrimary },
       headerTintColor: colors.textPrimary,
     });
-  }, [navigation, colors.surfaceSecondary, colors.textPrimary]);
+  }, [navigation, colors.surfaceSecondary, colors.textPrimary, t]);
 
   return (
     <View

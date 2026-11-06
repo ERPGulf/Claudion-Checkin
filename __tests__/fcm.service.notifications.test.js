@@ -284,6 +284,110 @@ describe("FCM notification metadata handling", () => {
     });
   });
 
+  it("drops a foreground notification that finishes after teardown", async () => {
+    const dispatch = jest.fn();
+    const onForegroundNotification = jest.fn();
+    const teardown = await initializeFcm({ dispatch, onForegroundNotification });
+    dispatch.mockClear();
+    let resolveNotifications;
+    mockGetNotifications.mockReturnValueOnce(new Promise(resolve => { resolveNotifications = resolve; }));
+
+    const pending = foregroundMessageHandler({ notification: { title: "Previous employee" } });
+    await new Promise(resolve => setTimeout(resolve, 0));
+    teardown();
+    resolveNotifications([{ read: 0 }]);
+    await pending;
+
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(onForegroundNotification).not.toHaveBeenCalled();
+  });
+
+  it("does not finish token initialization after logout", async () => {
+    const { clearFcmRegistration } = require("../services/notifications/fcm.service");
+    let resolveToken;
+    let tokenRequested;
+    const started = new Promise(resolve => { tokenRequested = resolve; });
+    mockGetToken.mockImplementationOnce(() => {
+      tokenRequested();
+      return new Promise(resolve => { resolveToken = resolve; });
+    });
+    const pending = initializeFcm({ dispatch: jest.fn() });
+    await started;
+    await clearFcmRegistration();
+    mockSetItem.mockClear();
+    resolveToken("stale-device-token");
+    const teardown = await pending;
+    teardown();
+
+    expect(mockSetItem).not.toHaveBeenCalledWith("fcm_token", "stale-device-token");
+    expect(mockOnMessage).not.toHaveBeenCalled();
+    expect(mockOnTokenRefresh).not.toHaveBeenCalled();
+  });
+
+  it("does not navigate when an opened notification belongs to an invalidated session", async () => {
+    const { invalidateAuthSession } = require("../utils/authSessionGuard");
+    let resolveNotifications;
+    mockGetNotifications.mockReturnValueOnce(new Promise(resolve => { resolveNotifications = resolve; }));
+    const dispatch = jest.fn();
+    const pending = handleNotificationOpen({ data: { screen: "Notifications" } }, dispatch);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    invalidateAuthSession();
+    resolveNotifications([{ read: 0 }]);
+    await pending;
+
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(mockNavigateSafely).not.toHaveBeenCalled();
+  });
+
+  it("does not subscribe the next account to topics from a late backend response", async () => {
+    const { invalidateAuthSession } = require("../utils/authSessionGuard");
+    mockGetItem.mockImplementation(async key => ({
+      baseUrl: "https://example.test", access_token: "test-access", employee_id: "EMP-001",
+    }[key] || null));
+    let resolveResponse;
+    let requested;
+    const started = new Promise(resolve => { requested = resolve; });
+    mockPlainAxiosGet.mockImplementationOnce(() => {
+      requested();
+      return new Promise(resolve => { resolveResponse = resolve; });
+    });
+    mockGetTopicSyncPlan.mockReturnValue({
+      topicsToSubscribe: ["previous-account-topic"], topicsToUnsubscribe: [], syncedTopics: ["previous-account-topic"],
+    });
+
+    const pending = fetchTopicsFromServer();
+    await started;
+    invalidateAuthSession();
+    resolveResponse({ status: 200, data: { message: { topics: ["previous-account-topic"] } } });
+    await expect(pending).resolves.toBeNull();
+
+    expect(mockSubscribeToTopic).not.toHaveBeenCalled();
+    expect(mockSetItem).not.toHaveBeenCalledWith("fcm_topics", expect.anything());
+  });
+
+  it("keeps failed topic changes eligible for the next ordinary sync", async () => {
+    let storedTopics = ["stale-topic"];
+    mockGetItem.mockImplementation(async key => ({
+      baseUrl: "https://example.test", access_token: "test-access",
+      fcm_topics: JSON.stringify(storedTopics),
+    }[key] || null));
+    mockSetItem.mockImplementation(async (key, value) => {
+      if (key === "fcm_topics") storedTopics = JSON.parse(value);
+    });
+    mockGetTopicSyncPlan.mockImplementation(jest.requireActual("../utils/fcmTopics").getTopicSyncPlan);
+    mockPlainAxiosGet.mockResolvedValue({ status: 200, data: { message: { topics: ["new-topic"] } } });
+    mockSubscribeToTopic.mockRejectedValueOnce(new Error("synthetic unavailable"));
+    mockUnsubscribeFromTopic.mockRejectedValueOnce(new Error("synthetic unavailable"));
+
+    await fetchTopicsFromServer();
+    expect(storedTopics).toEqual(["stale-topic"]);
+    await fetchTopicsFromServer();
+
+    expect(mockSubscribeToTopic).toHaveBeenCalledTimes(2);
+    expect(mockUnsubscribeFromTopic).toHaveBeenCalledTimes(2);
+    expect(storedTopics).toEqual(["new-topic"]);
+  });
+
   it("maps notification payload routes to the Notifications screen", async () => {
     const dispatch = jest.fn();
     const onForegroundNotification = jest.fn();

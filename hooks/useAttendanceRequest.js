@@ -15,6 +15,7 @@ import useRequestHistory from './useRequestHistory';
 import { hapticsMessage } from '../utils/HapticsMessage';
 import { assertCapability, getCapabilitySnapshot } from '../services/capabilityPolicy';
 import { getAuthSessionGeneration } from '../utils/authSessionGuard';
+import { describeHttpFailure } from '../utils/httpDiagnostics';
 
 /**
  * Minutes since midnight — used to compare two times that carry their own,
@@ -318,7 +319,7 @@ export default function useAttendanceRequest() {
         } catch (resolveError) {
           // The request itself succeeded; failing to tidy the local record must
           // not report the submission as failed.
-          console.log('Failed to resolve queued attendance:', resolveError?.message);
+          console.log('Failed to resolve queued attendance:', describeHttpFailure(resolveError));
         }
       }
 

@@ -11,6 +11,8 @@ import { getNotifications } from '../services/api/notification.service';
 import { generateToken } from '../services/api';
 import { getLoginErrorMessage } from '../utils/loginError';
 import { readProvisioning } from '../utils/provisioning';
+import { describeHttpFailure } from '../utils/httpDiagnostics';
+import { getAuthSessionGeneration } from '../utils/authSessionGuard';
 
 /**
  * The login flow, lifted out of the classic screen so the modern UI is
@@ -95,17 +97,23 @@ export default function useLogin() {
         return;
       }
 
-      const { access_token } = await generateToken({
+      // generateToken invalidates synchronously before its first await. Keep
+      // the remainder of this hand-off tied to that generation too.
+      const tokenRequest = generateToken({
         api_key,
         app_key,
         api_secret: password,
       });
+      const generation = getAuthSessionGeneration();
+      const { access_token } = await tokenRequest;
+      if (generation !== getAuthSessionGeneration()) return;
 
       if (!access_token) throw new Error('Token not returned from server');
 
       if (employeeCode) {
         await AsyncStorage.setItem('employee_id', employeeCode);
       }
+      if (generation !== getAuthSessionGeneration()) return;
 
       dispatch(setSignIn({ isLoggedIn: true, token: access_token }));
 
@@ -115,6 +123,7 @@ export default function useLogin() {
 
         if (employeeId) {
           const notifications = await getNotifications(employeeId);
+          if (generation !== getAuthSessionGeneration()) return;
 
           const unreadCount = notifications.filter(
             item => Number(item.read) === 0,
@@ -123,6 +132,7 @@ export default function useLogin() {
           dispatch(setUnreadCount(unreadCount));
         }
       } catch (err) {}
+      if (generation !== getAuthSessionGeneration()) return;
 
       Toast.show({
         type: 'success',
@@ -131,15 +141,8 @@ export default function useLogin() {
         visibilityTime: 3000,
       });
     } catch (error) {
-      // Log the real cause for engineers (adb logcat / Metro). The user used to
-      // see only a generic "Something went wrong", which hid SSL/clock/network
-      // failures behind the same text as a wrong password.
-      console.log('Login failed', {
-        message: error?.message ?? null,
-        code: error?.code ?? null,
-        status: error?.response?.status ?? null,
-        data: error?.response?.data ?? null,
-      });
+      // Server errors can echo credentials; keep only bounded status metadata.
+      console.log('Login failed', describeHttpFailure(error));
 
       const { text1, text2 } = getLoginErrorMessage(error);
       Toast.show({

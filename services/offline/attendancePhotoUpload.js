@@ -1,6 +1,7 @@
 // src/services/offline/attendancePhotoUpload.js
 import { putUserFile, userFileUpload } from "../api";
 import { assertAttendanceQueueScope } from "./attendanceQueueProvenance";
+import { logAttendanceDiagnostic } from "./attendanceDiagnostics";
 
 /**
  * Attaching the photo a check-in was queued with.
@@ -53,10 +54,12 @@ export const uploadQueuedPhoto = async ({ photoUri, docname, syncScope = null })
     if (syncScope) await assertAttendanceQueueScope(syncScope);
     await putUserFile(updateFormData, docname, { syncScope });
 
-    console.log(`${LOG_PREFIX} Attached photo to ${docname}`);
+    logAttendanceDiagnostic(LOG_PREFIX, "Photo attached", { uploaded: true });
     return { uploaded: true };
   } catch (error) {
-    console.log(`${LOG_PREFIX} Failed for ${docname}:`, error?.message);
+    logAttendanceDiagnostic(LOG_PREFIX, "Photo upload failed", {
+      code: error?.code, httpStatus: error?.response?.status,
+    });
     return { uploaded: false, reason: error?.message || "upload-failed" };
   }
 };

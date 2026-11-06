@@ -8,6 +8,7 @@ import {
 } from "./authHelper";
 import { parseError } from "./errorHelper";
 import { assertCapability } from "../capabilityPolicy";
+import { fetchUploadJson } from "./uploadTransport";
 /**
  * Get Expense Claims
  */
@@ -151,7 +152,7 @@ export const uploadExpenseAttachment = async (file, docname, { capabilityScope: 
     formData.append("docname", docname);
 
     await assertCapability("expense_claim", capabilityScope);
-    const response = await fetch(
+    const { response, result } = await fetchUploadJson(
       `${baseUrl}/api/method/employee_app.attendance_api.upload_file`,
       {
         method: "POST",
@@ -160,15 +161,8 @@ export const uploadExpenseAttachment = async (file, docname, { capabilityScope: 
         },
         body: formData,
       },
+      { invalidJsonMessage: "Invalid server response" },
     );
-
-    let result;
-
-    try {
-      result = await response.json();
-    } catch {
-      throw new Error("Invalid server response");
-    }
 
     if (!response.ok) {
       console.log("❌ UPLOAD FAILED:", { httpStatus: response.status });

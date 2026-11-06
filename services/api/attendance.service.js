@@ -12,6 +12,7 @@ import {
 } from "./authHelper";
 import { parseError } from "./errorHelper";
 import { describeHttpFailure } from "../../utils/httpDiagnostics";
+import { fetchUploadJson } from "./uploadTransport";
 import {
   normalizeCustomIn,
   toTimestampMs,
@@ -267,6 +268,7 @@ export const getOfficeLocation = async (employeeCode, { syncScope, onAssignedGeo
 
 // userCheckIn({ employeeCode, type }) — performs check-in/check-out
 export const userCheckIn = async ({ employeeCode, type, locationData, syncScope, occurredAt }) => {
+  let submissionAttempted = false;
   try {
     if (!employeeCode) throw new Error("Employee ID is required");
     if (type !== "IN" && type !== "OUT") throw new Error(`Invalid attendance type: ${type}`);
@@ -348,6 +350,9 @@ export const userCheckIn = async ({ employeeCode, type, locationData, syncScope,
     current = await assertAttendanceQueueScope(syncScope);
     policy = await readManualAttendanceLocationPolicy(syncScope, type);
     assertManualAttendanceLocationPolicyCurrent(policy, evidence);
+    // Once the write transport is invoked, a lost response cannot prove that
+    // the server did not commit. This is outcome evidence, never retry consent.
+    submissionAttempted = true;
     const response = await apiClient.post(
       `${baseUrl}/api/method/employee_app.attendance_api.add_log_based_on_employee_field`,
       payload,
@@ -364,6 +369,7 @@ export const userCheckIn = async ({ employeeCode, type, locationData, syncScope,
     if (!checkinId) {
       return {
         allowed: false,
+        submissionAttempted,
         message: "Failed to register attendance",
         distance: nearest?.distance || null,
         radius: nearest?.radius || null,
@@ -393,6 +399,7 @@ export const userCheckIn = async ({ employeeCode, type, locationData, syncScope,
     }
     return {
       allowed: false,
+      submissionAttempted,
       message: error.message || "Something went wrong during check-in",
       distance: error.location?.distance ?? null,
       radius: error.location?.radius ?? null,
@@ -975,7 +982,7 @@ export const uploadAttendanceAttachment = async (file, docname, { capabilityScop
     formData.append("docname", String(docname));
 
     await assertCapability("attendance_action.attendance_request", capabilityScope);
-    const response = await fetch(
+    const { response, result } = await fetchUploadJson(
       `${baseUrl}/api/method/employee_app.attendance_api.upload_file`,
       {
         method: "POST",
@@ -985,8 +992,6 @@ export const uploadAttendanceAttachment = async (file, docname, { capabilityScop
         body: formData,
       },
     );
-
-    const result = await response.json();
 
     console.log("Attendance file response:", { httpStatus: response.status });
 

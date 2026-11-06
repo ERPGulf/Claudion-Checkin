@@ -1,6 +1,6 @@
 // src/services/offline/BackgroundSyncManager.js
 import { AppState } from "react-native";
-import { recordAttendanceLifecycle } from "./attendanceDiagnostics";
+import { logAttendanceDiagnostic, recordAttendanceLifecycle } from "./attendanceDiagnostics";
 import { addTokenChangeListener } from "../api/apiClient";
 import { FAILURE_CLASS } from "./AttendanceDatabase";
 import { cancelActiveSync, syncPendingAttendance } from "./AttendanceSyncService";
@@ -108,7 +108,7 @@ const runSync = (trigger, { wakeAllBlocked = false, wakeFailureClass = null } = 
     wakeFailureClass,
     employeeId: currentEmployeeId,
   }).catch((error) => {
-    console.log(`${LOG_PREFIX} Sync (${trigger}) failed:`, error?.message);
+    logAttendanceDiagnostic(LOG_PREFIX, `Sync (${trigger}) failed`, { code: error?.code });
   });
 };
 
@@ -137,7 +137,7 @@ const runConfigRefresh = async (trigger, { force = false } = {}) => {
       console.log(`${LOG_PREFIX} Config refreshed (${trigger})`);
     }
   } catch (error) {
-    console.log(`${LOG_PREFIX} Config refresh (${trigger}) failed:`, error?.message);
+    logAttendanceDiagnostic(LOG_PREFIX, `Config refresh (${trigger}) failed`, { code: error?.code });
   }
 };
 
@@ -253,7 +253,7 @@ export const startBackgroundSync = ({
   runConfigRefresh("launch", { force: true });
   runSync("launch", { wakeAllBlocked: true });
 
-  console.log(`${LOG_PREFIX} Started`, { employeeId, drainOnly });
+  logAttendanceDiagnostic(LOG_PREFIX, "Started", { drainOnly });
 
   return stopBackgroundSync;
 };

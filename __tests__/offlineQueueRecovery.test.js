@@ -313,7 +313,7 @@ describe("what support can see", () => {
     expect(details).toMatchObject({
       ran: false,
       reason: "nothing-due",
-      scope: EMPLOYEE,
+      scope: "[redacted]",
     });
     expect(details.head).toMatchObject({
       id: row.id,

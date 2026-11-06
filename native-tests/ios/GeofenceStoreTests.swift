@@ -44,6 +44,25 @@ struct GeofenceStoreTests {
   }
 
   static func main() throws {
+#if os(macOS)
+    // Terminate immediately after the actual journal mutation, before an
+    // application-level emitter/processor can run. The parent reopens the file
+    // in a different process; this is a persistence boundary test, not an iOS
+    // relaunch or Core Location delivery simulation.
+    if CommandLine.arguments.count >= 3 {
+      let mode = CommandLine.arguments[1]
+      let childStore = GeofenceStore(defaults: MemoryDefaults(),
+        journalURL: URL(fileURLWithPath: CommandLine.arguments[2]))
+      if mode == "--exit-after-capture" {
+        _ = try childStore.appendEvent(event("ENTER"))
+        exit(71)
+      }
+      if mode == "--exit-after-ack", CommandLine.arguments.count == 4 {
+        _ = try childStore.acknowledgeEvent(CommandLine.arguments[3])
+        exit(72)
+      }
+    }
+#endif
     let directory = FileManager.default.temporaryDirectory
       .appendingPathComponent("claudion-native-events-\(UUID().uuidString)")
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -469,6 +488,28 @@ struct GeofenceStoreTests {
     catch { checks += 1 }
     let unchanged = try String(contentsOf: url, encoding: .utf8)
     try check(unchanged == "corrupt journal", "Corrupt evidence must never be overwritten")
+
+#if os(macOS)
+    let interruptedURL = directory.appendingPathComponent("interrupted-process.json")
+    func terminateAfterMutation(_ mode: String, eventId: String? = nil) throws -> Int32 {
+      let child = Process()
+      child.executableURL = URL(fileURLWithPath: CommandLine.arguments[0])
+      child.arguments = [mode, interruptedURL.path] + (eventId.map { [$0] } ?? [])
+      try child.run()
+      child.waitUntilExit()
+      return child.terminationStatus
+    }
+    let capturedExit = try terminateAfterMutation("--exit-after-capture")
+    try check(capturedExit == 71, "Child exits directly after durable capture")
+    let afterInterruption = GeofenceStore(defaults: MemoryDefaults(), journalURL: interruptedURL)
+    let interruptedEvents = try afterInterruption.getPendingEvents()
+    try check(interruptedEvents.count == 1, "Another process can recover capture after termination before emit/ack")
+    let interruptedId = interruptedEvents[0]["eventId"] as! String
+    let acknowledgedExit = try terminateAfterMutation("--exit-after-ack", eventId: interruptedId)
+    try check(acknowledgedExit == 72, "Child exits directly after durable acknowledgment")
+    let afterAcknowledgment = try GeofenceStore(defaults: MemoryDefaults(), journalURL: interruptedURL).getPendingEvents()
+    try check(afterAcknowledgment.isEmpty, "Another process does not resurrect an acknowledged capture")
+#endif
 
     print("GeofenceStore native persistence checks passed: \(checks)")
   }
