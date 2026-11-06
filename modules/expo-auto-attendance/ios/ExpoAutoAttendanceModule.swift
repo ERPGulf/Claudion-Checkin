@@ -39,9 +39,11 @@ public class ExpoAutoAttendanceModule: Module {
   public func definition() -> ModuleDefinition {
     Name("ExpoAutoAttendance")
 
-    Events(GeofenceEvents.enter, GeofenceEvents.exit, GeofenceEvents.error, GeofenceEvents.accessChanged)
+    Events(GeofenceEvents.enter, GeofenceEvents.exit, GeofenceEvents.error, GeofenceEvents.accessChanged,
+      GeofenceEvents.backgroundSyncRequested, GeofenceEvents.backgroundSyncExpired)
 
     OnCreate {
+      AttendanceBackgroundSync.shared.observeBackgroundPushes()
       GeofenceEventBus.shared.listener = { [weak self] eventName, payload in
         self?.sendEvent(eventName, payload)
       }
@@ -164,6 +166,26 @@ public class ExpoAutoAttendanceModule: Module {
 
     Function("getPendingEvents") { () throws -> [[String: Any]] in
       return try GeofenceStore.shared.getPendingEvents()
+    }
+
+    Function("getPendingBackgroundSync") {
+      return AttendanceBackgroundSync.shared.pending()
+    }
+
+    Function("isIOSBackgroundSyncActive") { (runId: String) -> Bool in
+      return AttendanceBackgroundSync.shared.isActive(runId)
+    }
+
+    Function("completeIOSBackgroundSync") { (runId: String, revision: Int, retry: Bool) -> Bool in
+      return AttendanceBackgroundSync.shared.complete(runId, revision: revision, retry: retry)
+    }
+
+    Function("recordBackgroundSyncDiagnostic") { (stage: String, eventId: String?, details: [String: Any?]) in
+      AttendanceBackgroundSyncDiagnostics.record(stage, eventId: eventId, details: details)
+    }
+
+    Function("getBackgroundSyncDiagnostics") {
+      return AttendanceBackgroundSyncDiagnostics.entries()
     }
 
     Function("acknowledgeEvent") { (eventId: String) throws -> Bool in

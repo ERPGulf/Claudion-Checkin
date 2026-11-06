@@ -37,8 +37,9 @@ jest.mock("../services/offline/NetworkListener", () => ({
   }),
 }));
 
-import { AppState } from "react-native";
-import { syncPendingAttendance } from "../services/offline/AttendanceSyncService";
+import { AppState, Platform } from "react-native";
+import { cancelActiveSync, syncPendingAttendance } from "../services/offline/AttendanceSyncService";
+import { noteIOSAttendanceWake, deferToIOSAttendanceWake } from "../services/offline/BackgroundAttendanceOwnership";
 import { refreshAttendanceConfig, refreshAttendanceConfigIfStale } from "../services/offline/attendanceConfigCache";
 import { fetchShouldAttemptRequest } from "../services/offline/NetworkListener";
 import { QUEUE_KICK_DELAY_MS, SYNC_INTERVAL_MS, startBackgroundSync, stopBackgroundSync } from "../services/offline/BackgroundSyncManager";
@@ -47,11 +48,14 @@ beforeEach(() => {
   jest.useFakeTimers();
   jest.clearAllMocks();
   AppState.currentState = "active";
+  deferToIOSAttendanceWake();
   AppState.addEventListener.mockImplementation((_, listener) => {
     mockAppStateChanged = listener;
     return { remove: mockRemoveAppState };
   });
 });
+
+const settle = async () => { for (let step = 0; step < 15; step += 1) await Promise.resolve(); };
 
 afterEach(() => {
   stopBackgroundSync();
@@ -60,7 +64,7 @@ afterEach(() => {
 
 it("skips background and inactive heartbeat work, then resumes the foreground heartbeat", async () => {
   startBackgroundSync({ employeeId: "EMP-SYNTHETIC" });
-  await Promise.resolve();
+  await settle();
   expect(syncPendingAttendance).toHaveBeenCalledWith(expect.objectContaining({ trigger: "launch" }));
   syncPendingAttendance.mockClear();
   fetchShouldAttemptRequest.mockClear();
@@ -70,7 +74,7 @@ it("skips background and inactive heartbeat work, then resumes the foreground he
   for (const state of ["background", "inactive"]) {
     AppState.currentState = state;
     jest.advanceTimersByTime(SYNC_INTERVAL_MS * 3);
-    await Promise.resolve();
+    await settle();
   }
   expect(syncPendingAttendance).not.toHaveBeenCalled();
   expect(fetchShouldAttemptRequest).not.toHaveBeenCalled();
@@ -78,7 +82,7 @@ it("skips background and inactive heartbeat work, then resumes the foreground he
 
   AppState.currentState = "active";
   jest.advanceTimersByTime(SYNC_INTERVAL_MS);
-  await Promise.resolve();
+  await settle();
   expect(syncPendingAttendance).toHaveBeenCalledTimes(1);
   expect(syncPendingAttendance).toHaveBeenCalledWith(expect.objectContaining({ trigger: "interval" }));
   expect(refreshAttendanceConfigIfStale).toHaveBeenCalledTimes(1);
@@ -87,7 +91,7 @@ it("skips background and inactive heartbeat work, then resumes the foreground he
 it("retains launch, queue, reconnect and token triggers during background wakes and foreground recovery", async () => {
   AppState.currentState = "background";
   startBackgroundSync({ employeeId: "EMP-SYNTHETIC" });
-  await Promise.resolve();
+  await settle();
   expect(syncPendingAttendance).toHaveBeenCalledWith(expect.objectContaining({ trigger: "launch" }));
   expect(refreshAttendanceConfig).toHaveBeenCalledTimes(1);
 
@@ -105,4 +109,38 @@ it("retains launch, queue, reconnect and token triggers during background wakes 
   stopBackgroundSync();
   expect(mockRemoveAppState).toHaveBeenCalledTimes(1);
   expect(jest.getTimerCount()).toBe(0);
+});
+
+it("defers background UI drains to a native iOS wake until foreground recovery", async () => {
+  const platform = Platform.OS;
+  Platform.OS = "ios";
+  try {
+    AppState.currentState = "background";
+    noteIOSAttendanceWake();
+    startBackgroundSync({ employeeId: "EMP-SYNTHETIC" });
+    mockReconnect();
+    mockTokenChanged();
+    mockQueuedPunch();
+    jest.advanceTimersByTime(QUEUE_KICK_DELAY_MS);
+    await settle();
+    expect(syncPendingAttendance).not.toHaveBeenCalled();
+    expect(refreshAttendanceConfig).not.toHaveBeenCalled();
+    stopBackgroundSync();
+    expect(cancelActiveSync).not.toHaveBeenCalled();
+
+    AppState.currentState = "active";
+    startBackgroundSync({ employeeId: "EMP-SYNTHETIC" });
+    await settle();
+    expect(syncPendingAttendance).toHaveBeenCalledWith(expect.objectContaining({ trigger: "launch" }));
+    expect(refreshAttendanceConfig).toHaveBeenCalledTimes(1);
+  } finally {
+    Platform.OS = platform;
+    AppState.currentState = "active";
+    deferToIOSAttendanceWake();
+  }
+});
+
+it("does not cancel an independent drain when the UI manager was never started", () => {
+  stopBackgroundSync();
+  expect(cancelActiveSync).not.toHaveBeenCalled();
 });

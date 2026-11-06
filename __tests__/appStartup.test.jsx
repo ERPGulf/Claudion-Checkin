@@ -5,6 +5,7 @@ import * as Updates from 'expo-updates';
 jest.mock('../localization', () => ({ hydrateLocale: jest.fn().mockResolvedValue() }));
 jest.mock('../localization/LocaleRoot', () => ({ children }) => children);
 jest.mock('../services/offline/AndroidAttendanceBackgroundTask', () => ({}));
+jest.mock('../services/offline/IosAttendanceBackgroundTask', () => ({}));
 jest.mock('react-native-gesture-handler', () => ({}));
 jest.mock('react-native-toast-message', () => ({ show: jest.fn(), hide: jest.fn() }));
 jest.mock('../redux/Store', () => ({ store: {}, persistor: {} }));

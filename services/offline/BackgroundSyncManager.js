@@ -6,6 +6,7 @@ import { FAILURE_CLASS } from "./AttendanceDatabase";
 import { cancelActiveSync, syncPendingAttendance } from "./AttendanceSyncService";
 import { assertAttendanceQueueScope, captureAttendanceQueueScope } from "./attendanceQueueProvenance";
 import { registerQueueDrainHandler } from "./AttendanceQueueService";
+import { deferToIOSAttendanceWake } from "./BackgroundAttendanceOwnership";
 import {
   refreshAttendanceConfig,
   refreshAttendanceConfigIfStale,
@@ -92,6 +93,7 @@ let drainOnlyMode = false;
  * @param {string|null} [options.wakeFailureClass] narrow the wake to one class
  */
 const runSync = (trigger, { wakeAllBlocked = false, wakeFailureClass = null } = {}) => {
+  if (deferToIOSAttendanceWake()) return Promise.resolve();
   // No authenticated employee means no way to prove who a queued row belongs
   // to, and a row is uploaded under whatever token the device holds. Waiting is
   // free — `employeeCode` lands a moment after login and restarts this manager,
@@ -117,6 +119,7 @@ const runSync = (trigger, { wakeAllBlocked = false, wakeFailureClass = null } = 
  * (see attendanceConfigCache), so it is safe on every trigger.
  */
 const runConfigRefresh = async (trigger, { force = false } = {}) => {
+  if (deferToIOSAttendanceWake()) return;
   if (!currentEmployeeId) return;
   // Drain-only: the tenant has offline attendance switched off, so there are no
   // offline rules to keep current — but rows queued before it was switched off
@@ -128,10 +131,15 @@ const runConfigRefresh = async (trigger, { force = false } = {}) => {
     // reports no internet indefinitely, and a device that never refreshes its
     // configuration cannot do offline attendance at all.
     if (!(await fetchShouldAttemptRequest())) return;
+    if (deferToIOSAttendanceWake()) return;
+
+    const scope = { ...await captureAttendanceQueueScope(currentEmployeeId),
+      isCancelled: deferToIOSAttendanceWake };
+    await assertAttendanceQueueScope(scope);
 
     const result = force
-      ? await refreshAttendanceConfig(currentEmployeeId)
-      : await refreshAttendanceConfigIfStale(currentEmployeeId);
+      ? await refreshAttendanceConfig(currentEmployeeId, { syncScope: scope })
+      : await refreshAttendanceConfigIfStale(currentEmployeeId, { syncScope: scope });
 
     if (result.refreshed) {
       console.log(`${LOG_PREFIX} Config refreshed (${trigger})`);
@@ -259,8 +267,10 @@ export const startBackgroundSync = ({
 };
 
 export const stopBackgroundSync = () => {
-  cancelActiveSync();
   if (!started) return;
+  // UI startup/cleanup must not cancel the independently scoped native wake.
+  // Logout and account changes are still enforced by the shared auth guards.
+  if (!deferToIOSAttendanceWake()) cancelActiveSync();
   started = false;
 
   if (intervalId) {

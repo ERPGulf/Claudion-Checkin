@@ -3,6 +3,7 @@
 import json
 import tempfile
 import threading
+import time
 import unittest
 from urllib.error import HTTPError
 from urllib.parse import urlencode
@@ -158,6 +159,20 @@ class MockBackendTests(unittest.TestCase):
         status, _ = self.request("/__qa/state")
         self.assertEqual(status, 200)
         self.assertEqual(self.server.qa_state.records, [])
+
+    def test_policy_delay_slows_only_policy_reads(self):
+        status, _ = self.request("/__qa/control", {"employee": self.employee, "policyDelaySeconds": 121})
+        self.assertEqual(status, 400)
+        self.request("/__qa/control", {"employee": self.employee, "policyDelaySeconds": 1})
+        started = time.monotonic()
+        status, body = self.request(PREFIX + "gauth.employee_checkin_setting")
+        self.assertEqual(status, 200)
+        self.assertIs(body["message"]["attendance_action"]["geo_tagging"], True)
+        self.assertGreaterEqual(time.monotonic() - started, 1)
+        started = time.monotonic()
+        status, _ = self.punch()
+        self.assertEqual(status, 200)
+        self.assertLess(time.monotonic() - started, 1)
 
 
 if __name__ == "__main__":

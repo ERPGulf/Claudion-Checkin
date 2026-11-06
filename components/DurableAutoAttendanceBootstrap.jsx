@@ -22,6 +22,7 @@ import { ATTENDANCE_FEATURES } from "../utils/featureSettings";
 import { getEmployeeAutoAttendancePolicy } from "../services/employeeAutoAttendancePolicy";
 import { assertCapabilityCurrent } from "../services/capabilityPolicy";
 import { LOCATION_ACCESS_KIND } from "../utils/locationAccessState";
+import { deferToIOSAttendanceWake } from "../services/offline/BackgroundAttendanceOwnership";
 
 /** Journal replay needs neither a fresh GPS fix nor permission to register again. */
 export default function DurableAutoAttendanceBootstrap() {
@@ -85,6 +86,7 @@ export default function DurableAutoAttendanceBootstrap() {
     };
     const run = ({ refresh = false } = {}) => {
       work.current = work.current.catch(() => {}).then(async () => {
+        if (deferToIOSAttendanceWake()) return;
         // Positive OS access evidence is captured before registration repair or
         // policy/network awaits. Unknown reads never create an interruption.
         let access = Native.supportsLocationAccessEvents?.() ? Native.refreshLocationAccess() : null;
@@ -95,7 +97,8 @@ export default function DurableAutoAttendanceBootstrap() {
           await reconcileAutoAttendanceRegistration(null, null);
           return;
         }
-        const scope = { ...await captureAttendanceQueueScope(employeeId), isCancelled: () => cancelled };
+        const scope = { ...await captureAttendanceQueueScope(employeeId),
+          isCancelled: () => cancelled || deferToIOSAttendanceWake() };
         let config = await readAttendanceConfig();
         await assertAttendanceQueueScope(scope);
         const drain = () => drainAutoAttendanceEvents({ scope,
@@ -103,7 +106,7 @@ export default function DurableAutoAttendanceBootstrap() {
         // Connected launch/foreground/reconnect refreshes authority before any
         // replay. Offline delivery uses the scoped cache without a network wait.
         if (refresh && await fetchShouldAttemptRequest()) {
-          const result = await refreshAttendanceConfig(employeeId);
+          const result = await refreshAttendanceConfig(employeeId, { syncScope: scope });
           await assertAttendanceQueueScope(scope);
           config = result.config;
         }

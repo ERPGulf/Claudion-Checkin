@@ -16,6 +16,7 @@ public class AutoAttendanceAppDelegateSubscriber: ExpoAppDelegateSubscriber {
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
   ) -> Bool {
+    AttendanceBackgroundSync.shared.observeBackgroundPushes()
     do {
       let registration = try GeofenceStore.shared.getRegistrationState()
       if launchOptions?[.location] != nil || ["pending", "monitoring"].contains(registration?["status"] as? String ?? "") {

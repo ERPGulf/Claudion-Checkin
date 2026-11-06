@@ -6,6 +6,8 @@ enum GeofenceEvents {
   static let exit = "onGeofenceExit"
   static let error = "onError"
   static let accessChanged = "onLocationAccessChanged"
+  static let backgroundSyncRequested = "onBackgroundSyncRequested"
+  static let backgroundSyncExpired = "onBackgroundSyncExpired"
 }
 
 /**
@@ -27,8 +29,16 @@ final class GeofenceEventBus {
     if eventName == GeofenceEvents.enter || eventName == GeofenceEvents.exit || eventName == GeofenceEvents.accessChanged {
       // Persistence happens before emit. A scene-less native wake must start
       // the app's existing JS replay/submission path, even with no listener yet.
-      NotificationCenter.default.post(name: Notification.Name("ClaudionGeofenceTransition"), object: nil)
+      AttendanceBackgroundSync.shared.captured(payload) {
+        NotificationCenter.default.post(name: Notification.Name("ClaudionGeofenceTransition"), object: nil)
+        self.listener?(eventName, payload)
+      }
+      return
     }
     listener?(eventName, payload)
+  }
+
+  func emitBackgroundSync(_ eventName: String, _ payload: [String: Any]) {
+    listener?(eventName, payload.mapValues { Optional($0) })
   }
 }

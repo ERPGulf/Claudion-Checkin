@@ -36,7 +36,7 @@ curl -s http://localhost:8765/__qa/control -H 'Content-Type: application/json' -
 curl -s http://localhost:8765/__qa/control -H 'Content-Type: application/json' -d '{"employee":"QA-IOS-001","nextAttendance":{"behavior":"accept_disconnect"}}'
 ```
 
-`network` supports `online`, `drop` (closes app request sockets), and `503`. QA control/state endpoints remain available. Controls may omit `employee` to affect all disposable profiles. Other controls are `geoTagging` (tenant flag), `geotagging` (employee 0/1/2), `offlineEnabled`, `restrictLocation`, `unrestrictedCheckoutLocation`, `photo`, and complete `geometry:{latitude,longitude,radius}`. Policy changes require the app's ordinary refresh before affecting the running app. Setting `nextAttendance:null` clears an unused fault.
+`network` supports `online`, `drop` (closes app request sockets), and `503`. QA control/state endpoints remain available. Controls may omit `employee` to affect all disposable profiles. Other controls are `geoTagging` (tenant flag), `geotagging` (employee 0/1/2), `offlineEnabled`, `restrictLocation`, `unrestrictedCheckoutLocation`, `photo`, and complete `geometry:{latitude,longitude,radius}`. Policy changes require the app's ordinary refresh before affecting the running app. Setting `nextAttendance:null` clears an unused fault. `policyDelaySeconds` (0..120) delays only `employee_checkin_setting` and `get_employee_data`, so outbox delivery can be observed ahead of a slow policy refresh.
 
 `nextAttendance` affects one actual attendance POST, then clears atomically:
 

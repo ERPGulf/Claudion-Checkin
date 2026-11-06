@@ -31,7 +31,9 @@ final class AttendanceBackgroundRuntime: NSObject, AppControllerDelegate {
       observers.append(NotificationCenter.default.addObserver(
         forName: Notification.Name(name), object: nil, queue: .main
       ) { _ in
-        Task { @MainActor in AttendanceBackgroundRuntime.shared.startIfNeeded() }
+        Task { @MainActor in AttendanceBackgroundRuntime.shared.startIfNeeded(
+          coordinatedWake: true
+        ) }
       })
     }
 #if DEBUG
@@ -43,7 +45,7 @@ final class AttendanceBackgroundRuntime: NSObject, AppControllerDelegate {
 #endif
   }
 
-  private func startIfNeeded(simulateWake: Bool = false) {
+  private func startIfNeeded(simulateWake: Bool = false, coordinatedWake: Bool = false) {
     let application = UIApplication.shared
     guard !hasStarted, let factory else { return }
     let provider = application.delegate as? ExpoReactNativeFactoryProvider
@@ -51,11 +53,17 @@ final class AttendanceBackgroundRuntime: NSObject, AppControllerDelegate {
       application.applicationState == .background && application.connectedScenes.isEmpty && provider?.window == nil
     ) else { return }
     hasStarted = true
-    backgroundTask = application.beginBackgroundTask(withName: "Attendance JS startup") {
-      Task { @MainActor in AttendanceBackgroundRuntime.shared.endBackgroundTask() }
-    }
-    DispatchQueue.main.asyncAfter(deadline: .now() + 25) { [weak self] in
-      self?.endBackgroundTask()
+    // The Expo module owns location/push assertions even when this root/scene
+    // already exists. Its push observer is primed by the launch subscriber
+    // before this queued root startup. Keep an allowance for the debug probe;
+    // do not claim a fixed duration from iOS.
+    if !coordinatedWake {
+      backgroundTask = application.beginBackgroundTask(withName: "Attendance JS startup") {
+        Task { @MainActor in AttendanceBackgroundRuntime.shared.endBackgroundTask() }
+      }
+      DispatchQueue.main.asyncAfter(deadline: .now() + 25) { [weak self] in
+        self?.endBackgroundTask()
+      }
     }
     AppController.initializeWithoutStarting()
     let controller = AppController.sharedInstance

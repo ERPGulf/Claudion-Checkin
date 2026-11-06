@@ -100,6 +100,47 @@ export function completeBackgroundSync(runId, retry) {
   return ExpoAutoAttendance?.completeBackgroundSync?.(runId, retry) ?? false;
 }
 
+/** Missing on older binaries; a failed liveness read must stop new dispatches. */
+export function isBackgroundSyncActive(runId) {
+  try {
+    return ExpoAutoAttendance?.isBackgroundSyncActive?.(runId) ?? null;
+  } catch {
+    return false;
+  }
+}
+
+export function supportsIOSBackgroundSync() {
+  return typeof ExpoAutoAttendance?.getPendingBackgroundSync === "function" &&
+    typeof ExpoAutoAttendance?.isIOSBackgroundSyncActive === "function" &&
+    typeof ExpoAutoAttendance?.completeIOSBackgroundSync === "function";
+}
+
+export function getPendingBackgroundSync() {
+  return ExpoAutoAttendance?.getPendingBackgroundSync?.() ?? null;
+}
+
+export function isIOSBackgroundSyncActive(runId) {
+  try {
+    return ExpoAutoAttendance?.isIOSBackgroundSyncActive?.(runId) ?? false;
+  } catch {
+    return false;
+  }
+}
+
+export function completeIOSBackgroundSync(runId, revision, retry) {
+  return ExpoAutoAttendance?.completeIOSBackgroundSync?.(runId, revision, retry) ?? false;
+}
+
+export function addBackgroundSyncRequestedListener(listener) {
+  return supportsIOSBackgroundSync()
+    ? ExpoAutoAttendance.addListener("onBackgroundSyncRequested", listener) : { remove() {} };
+}
+
+export function addBackgroundSyncExpiredListener(listener) {
+  return supportsIOSBackgroundSync()
+    ? ExpoAutoAttendance.addListener("onBackgroundSyncExpired", listener) : { remove() {} };
+}
+
 export function recordBackgroundSyncDiagnostic(stage, eventId = null, details = {}) {
   return ExpoAutoAttendance?.recordBackgroundSyncDiagnostic?.(stage, eventId, details);
 }

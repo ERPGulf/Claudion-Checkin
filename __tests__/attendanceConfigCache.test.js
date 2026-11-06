@@ -104,6 +104,30 @@ describe("buildConfig", () => {
 });
 
 describe("refreshAttendanceConfig", () => {
+  it("retains a background caller's cancellation scope through the employee download", async () => {
+    const scope = { ...await captureAttendanceQueueScope("TDI0167"), isCancelled: () => false };
+    mockEmployeeResponse(employeeResponse());
+    await refreshAttendanceConfig("TDI0167", { syncScope: scope });
+    expect(fetchEmployeeData).toHaveBeenCalledWith("TDI0167", { syncScope: scope });
+  });
+
+  it("does not replace policy/cache after the background wake expires during download", async () => {
+    mockEmployeeResponse(employeeResponse());
+    await refreshAttendanceConfig("TDI0167");
+    const previous = await AsyncStorage.getItem(CONFIG_KEY);
+    let cancelled = false;
+    const scope = { ...await captureAttendanceQueueScope("TDI0167"), isCancelled: () => cancelled };
+    let respond;
+    fetchEmployeeData.mockImplementation(() => new Promise(resolve => { respond = resolve; }));
+    const refresh = refreshAttendanceConfig("TDI0167", { syncScope: scope });
+    for (let step = 0; step < 20 && !respond; step += 1) await Promise.resolve();
+    expect(respond).toEqual(expect.any(Function));
+    cancelled = true;
+    respond(employeeResponse({ geotagging: 0 }));
+    expect((await refresh).refreshed).toBe(false);
+    expect(await AsyncStorage.getItem(CONFIG_KEY)).toBe(previous);
+  });
+
   it("passes the captured employee and tenant scope to policy download", async () => {
     mockEmployeeResponse(employeeResponse());
     await refreshAttendanceConfig("TDI0167");

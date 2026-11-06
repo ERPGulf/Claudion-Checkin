@@ -290,6 +290,10 @@ class ExpoAutoAttendanceModule : Module() {
       AttendanceSyncWorker.complete(runId, retry)
     }
 
+    Function("isBackgroundSyncActive") { runId: String ->
+      AttendanceSyncWorker.isActive(runId)
+    }
+
     Function("recordBackgroundSyncDiagnostic") { stage: String, eventId: String?, details: Map<String, Any?> ->
       AttendanceSyncDiagnostics.record(context, stage, eventId, details)
     }

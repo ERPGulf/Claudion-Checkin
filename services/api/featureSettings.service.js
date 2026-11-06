@@ -21,7 +21,7 @@ import { describeHttpFailure } from "../../utils/httpDiagnostics";
  * Development diagnostics report only response shape/status metadata; arbitrary
  * backend fields can contain private data. Release builds log nothing.
  */
-export const getFeatureSettings = async ({ context, capabilityScope } = {}) => {
+export const getFeatureSettings = async ({ context, capabilityScope, syncScope } = {}) => {
   try {
     const { baseUrl, token } = context || await getAuthContext();
 
@@ -30,6 +30,7 @@ export const getFeatureSettings = async ({ context, capabilityScope } = {}) => {
     const response = await apiClient.get(url, {
       headers: buildHeaders(token),
       ...(capabilityScope ? { capabilityScope } : {}),
+      ...(syncScope ? { attendanceSyncScope: syncScope } : {}),
     });
     if (__DEV__) {
       console.log("[featureSettings] employee_checkin_setting response", {

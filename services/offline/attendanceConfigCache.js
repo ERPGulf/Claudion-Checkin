@@ -212,7 +212,7 @@ export const hasAttendanceConfig = async () => !!(await readAttendanceConfig());
  */
 export const refreshAttendanceConfig = async (
   employeeId,
-  { requireCompletePolicy = false, employeeData, expectedGeneration } = {},
+  { requireCompletePolicy = false, employeeData, expectedGeneration, syncScope } = {},
 ) => {
   const logPrefix = "[attendanceConfigCache/refresh]";
 
@@ -221,7 +221,9 @@ export const refreshAttendanceConfig = async (
   }
 
   try {
-    const scope = await captureAttendanceQueueScope(employeeId);
+    const scope = syncScope ?? await captureAttendanceQueueScope(employeeId);
+    if (scope.employeeId !== employeeId) throw createAttendanceScopeChangedError();
+    await assertAttendanceQueueScope(scope);
     if (expectedGeneration !== undefined && expectedGeneration !== scope.generation) {
       throw createAttendanceScopeChangedError();
     }
@@ -302,14 +304,16 @@ export const refreshAttendanceConfig = async (
  */
 export const refreshAttendanceConfigIfStale = async (
   employeeId,
-  { now = Date.now(), maxAgeMs = CONFIG_STALE_AFTER_MS } = {},
+  { now = Date.now(), maxAgeMs = CONFIG_STALE_AFTER_MS, syncScope } = {},
 ) => {
   const existing = await readAttendanceConfig();
   const age = existing?.lastUpdated ? now - existing.lastUpdated : Infinity;
 
   if (existing?.locations?.length && age < maxAgeMs) {
     try {
-      const scope = await captureAttendanceQueueScope(employeeId);
+      const scope = syncScope ?? await captureAttendanceQueueScope(employeeId);
+      if (scope.employeeId !== employeeId) throw createAttendanceScopeChangedError();
+      await assertAttendanceQueueScope(scope);
       if (existing.tenantKey === scope.tenantKey && existing.employeeId === scope.employeeId) {
         await getEmployeeAutoAttendancePolicy(scope);
         return { refreshed: false, config: existing };
@@ -319,7 +323,7 @@ export const refreshAttendanceConfigIfStale = async (
     }
   }
 
-  return refreshAttendanceConfig(employeeId);
+  return refreshAttendanceConfig(employeeId, syncScope ? { syncScope } : undefined);
 };
 
 /** Drops the cache. Logout only — the next user's rules are not this one's. */

@@ -85,7 +85,7 @@ object AttendanceSyncScheduler {
       val workManager = WorkManager.getInstance(context)
       if (!retry) {
         prefs.edit().putInt(STREAK, 0).commit()
-        workManager.cancelUniqueWork(RETRY_NAME)
+        workManager.cancelUniqueWork(RETRY_NAME).result.get(5, TimeUnit.SECONDS)
         return
       }
       val streak = prefs.getInt(STREAK, 0) + 1
@@ -93,6 +93,7 @@ object AttendanceSyncScheduler {
       val delay = RETRY_DELAYS_SECONDS[minOf(streak, RETRY_DELAYS_SECONDS.size) - 1]
       workManager.enqueueUniqueWork(RETRY_NAME, ExistingWorkPolicy.REPLACE,
         OneTimeWorkRequestBuilder<AttendanceSyncRetryWorker>().setInitialDelay(delay, TimeUnit.SECONDS).build())
+        .result.get(5, TimeUnit.SECONDS)
       AttendanceSyncDiagnostics.record(context, "worker.retry_scheduled",
         details = mapOf("count" to streak, "durationMs" to delay * 1000))
     }.onFailure {

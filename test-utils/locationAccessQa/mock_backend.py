@@ -32,6 +32,8 @@ DEFAULT_CONFIG = {
     "photo": 0,
     "geometry": {"latitude": 25.2854, "longitude": 51.5310, "radius": 100},
     "nextAttendance": None,
+    # Slows only policy reads, so outbox delivery can be observed ahead of them.
+    "policyDelaySeconds": 0,
 }
 
 
@@ -287,6 +289,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.reply({"message": "Unknown local QA endpoint"}, 404)
                 return
             method = path[len(PREFIX):]
+            if method in ("gauth.employee_checkin_setting", "attendance_api.get_employee_data"):
+                time.sleep(float(config.get("policyDelaySeconds", 0)))
             if method == "gauth.employee_checkin_setting":
                 self.reply({"message": self.features(config)})
             elif method == "attendance_api.get_employee_data":
@@ -352,6 +356,8 @@ class Handler(BaseHTTPRequestHandler):
                 raise ValueError("Unknown nextAttendance behavior")
             if not 0 <= float(attempt.get("delaySeconds", 20)) <= 120:
                 raise ValueError("delaySeconds must be 0..120")
+        if "policyDelaySeconds" in changes and not 0 <= float(changes["policyDelaySeconds"]) <= 120:
+            raise ValueError("policyDelaySeconds must be 0..120")
         if "geometry" in changes:
             geometry = changes["geometry"]
             if set(geometry) != {"latitude", "longitude", "radius"} or not (

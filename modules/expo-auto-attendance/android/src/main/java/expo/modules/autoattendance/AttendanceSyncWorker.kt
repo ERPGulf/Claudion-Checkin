@@ -8,6 +8,7 @@ import com.facebook.react.ReactInstanceEventListener
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.ReactContext
 import com.facebook.react.bridge.UiThreadUtil
+import com.facebook.react.interfaces.TaskInterface
 import com.facebook.react.jstasks.HeadlessJsTaskConfig
 import com.facebook.react.jstasks.HeadlessJsTaskContext
 import com.facebook.react.jstasks.HeadlessJsTaskEventListener
@@ -32,6 +33,7 @@ class AttendanceSyncWorker(context: Context, parameters: WorkerParameters) : Wor
   private var tasks: HeadlessJsTaskContext? = null
   private var taskId: Int? = null
   private var taskListener: HeadlessJsTaskEventListener? = null
+  @Volatile private var startupTask: TaskInterface<Void>? = null
 
   override fun doWork(): Result {
     active[runId] = this
@@ -55,7 +57,10 @@ class AttendanceSyncWorker(context: Context, parameters: WorkerParameters) : Wor
               reactHost.removeReactInstanceEventListener(this)
               instanceListener = null
               UiThreadUtil.runOnUiThread {
-                try { startTask(context) } catch (_: Exception) { finish(true) }
+                try { startTask(context) } catch (_: Exception) {
+                  AttendanceSyncDiagnostics.record(applicationContext, "worker.task-start-failed", runId)
+                  finish(true)
+                }
               }
             }
           }
@@ -66,14 +71,28 @@ class AttendanceSyncWorker(context: Context, parameters: WorkerParameters) : Wor
             reactHost.removeReactInstanceEventListener(listener)
             instanceListener = null
             startTask(existing)
-          } else reactHost.start()
+          } else {
+            AttendanceSyncDiagnostics.record(applicationContext, "worker.host-starting", runId)
+            startupTask = reactHost.start()
+          }
         } catch (_: Exception) {
+          AttendanceSyncDiagnostics.record(applicationContext, "worker.host-start-failed", runId)
           finish(true)
         }
       }
-      if (!finished.await(WORKER_BUDGET_SECONDS, TimeUnit.SECONDS)) {
-        AttendanceSyncDiagnostics.record(applicationContext, "worker.timeout", runId)
-        retry = true
+      val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(WORKER_BUDGET_SECONDS)
+      while (!finished.await(250, TimeUnit.MILLISECONDS)) {
+        // ReactHost.start() reports asynchronous initialization failures through
+        // its task, not the surrounding try/catch or the context-ready listener.
+        val startup = startupTask
+        if (startup?.isFaulted() == true || startup?.isCancelled() == true) {
+          AttendanceSyncDiagnostics.record(applicationContext, "worker.host-start-failed", runId)
+          finish(true)
+        } else if (System.nanoTime() >= deadline) {
+          AttendanceSyncDiagnostics.record(applicationContext, "worker.timeout", runId)
+          retry = true
+          break
+        }
       }
     } catch (_: InterruptedException) {
       retry = true
@@ -92,6 +111,7 @@ class AttendanceSyncWorker(context: Context, parameters: WorkerParameters) : Wor
   private fun startTask(context: ReactContext) {
     UiThreadUtil.assertOnUiThread()
     if (closed.get() || isStopped || taskId != null) return
+    AttendanceSyncDiagnostics.record(applicationContext, "worker.host-ready", runId)
     val taskContext = HeadlessJsTaskContext.getInstance(context)
     tasks = taskContext
     val listener = object : HeadlessJsTaskEventListener {
@@ -108,6 +128,7 @@ class AttendanceSyncWorker(context: Context, parameters: WorkerParameters) : Wor
       TASK_KEY, Arguments.createMap().apply { putString("runId", runId) },
       HEADLESS_BUDGET_MS, true,
     ))
+    AttendanceSyncDiagnostics.record(applicationContext, "worker.task-started", runId)
   }
 
   private fun finish(shouldRetry: Boolean): Boolean {
@@ -131,10 +152,12 @@ class AttendanceSyncWorker(context: Context, parameters: WorkerParameters) : Wor
       taskId = null
       tasks = null
       host = null
+      startupTask = null
     }
   }
 
   override fun onStopped() {
+    AttendanceSyncDiagnostics.record(applicationContext, "worker.stopped", runId)
     finish(true)
     cleanup()
     super.onStopped()
@@ -147,6 +170,11 @@ class AttendanceSyncWorker(context: Context, parameters: WorkerParameters) : Wor
     private val active = ConcurrentHashMap<String, AttendanceSyncWorker>()
 
     fun isRunning(): Boolean = active.isNotEmpty()
+
+    /** Finishing an RN task does not cancel its JavaScript Promise. */
+    fun isActive(runId: String): Boolean = active[runId]?.let {
+      !it.closed.get() && !it.isStopped && it.finished.count > 0L
+    } ?: false
 
     fun complete(runId: String, retry: Boolean): Boolean {
       val worker = active[runId] ?: return false

@@ -19,7 +19,10 @@ jest.mock("../redux/Slices/FeatureSettingsSlice", () => ({
   settingsReceived: payload => ({ type: "featureSettings/settingsReceived", payload }),
   settingsFailed: payload => ({ type: "featureSettings/settingsFailed", payload }),
 }));
-jest.mock("../modules/expo-auto-attendance", () => ({ completeBackgroundSync: jest.fn(), stopGeofence: jest.fn(async () => {}) }));
+jest.mock("../modules/expo-auto-attendance", () => ({
+  completeBackgroundSync: jest.fn(), isBackgroundSyncActive: jest.fn(() => true),
+  stopGeofence: jest.fn(async () => {}),
+}));
 jest.mock("../services/api/featureSettings.service", () => ({ getFeatureSettings: jest.fn() }));
 jest.mock("../services/employeeAutoAttendancePolicy", () => ({ getEmployeeAutoAttendancePolicy: jest.fn() }));
 jest.mock("../services/notifications/localNotifications", () => ({ presentLocalNotification: jest.fn() }));
@@ -50,7 +53,7 @@ jest.mock("../services/offline/attendanceDiagnostics", () => ({ recordAttendance
 
 import { AppRegistry } from "react-native";
 import { persistor, store } from "../redux/Store";
-import { completeBackgroundSync, stopGeofence } from "../modules/expo-auto-attendance";
+import { completeBackgroundSync, isBackgroundSyncActive, stopGeofence } from "../modules/expo-auto-attendance";
 import { getFeatureSettings } from "../services/api/featureSettings.service";
 import { getEmployeeAutoAttendancePolicy } from "../services/employeeAutoAttendancePolicy";
 import { presentLocalNotification } from "../services/notifications/localNotifications";
@@ -63,11 +66,13 @@ import { refreshAttendanceConfig } from "../services/offline/attendanceConfigCac
 import { fetchShouldAttemptRequest } from "../services/offline/NetworkListener";
 import { normalizeFeatureSettings } from "../utils/featureSettings";
 import { ANDROID_ATTENDANCE_TASK, BACKGROUND_SYNC_BUDGET_MS, runAndroidAttendanceBackgroundSync } from "../services/offline/AndroidAttendanceBackgroundTask";
+import { runAttendanceBackgroundSync } from "../services/offline/AttendanceBackgroundSync";
 
 const enabled = () => normalizeFeatureSettings({ attendance_action: { geo_tagging: true, offline_attendance: true } });
 const registeredTask = AppRegistry.registerHeadlessTask.mock.calls[0];
 beforeEach(() => {
   jest.clearAllMocks(); mockHydrated = true;
+  isBackgroundSyncActive.mockReturnValue(true);
   mockState = { userAuth: { isLoggedIn: true }, settings: enabled() };
   getFeatureSettings.mockResolvedValue({ message: enabled() });
   getEmployeeAutoAttendancePolicy.mockResolvedValue({ mode: 2 });
@@ -87,12 +92,14 @@ it("waits for hydration, then reuses both existing processors without mounting a
   mockHydrated = false;
   const run = runAndroidAttendanceBackgroundSync({ runId: "run-hydration" });
   await Promise.resolve();
-  expect(ingestPendingNativeEvents).not.toHaveBeenCalled();
+  expect(ingestPendingNativeEvents).toHaveBeenCalledTimes(1);
   expect(persistor.subscribe).toHaveBeenCalled();
   mockHydrated = true; mockHydrationListener();
   expect(await run).toEqual({ retry: false });
   expect(ingestPendingNativeEvents).toHaveBeenCalledTimes(1);
-  expect(refreshAttendanceConfig).toHaveBeenCalledWith(mockScope.employeeId, { expectedGeneration: 0 });
+  expect(refreshAttendanceConfig).toHaveBeenCalledWith(mockScope.employeeId, {
+    expectedGeneration: 0, syncScope: expect.objectContaining(mockScope),
+  });
   expect(syncPendingAttendance).toHaveBeenCalledTimes(2);
   expect(syncPendingAttendance.mock.invocationCallOrder[0]).toBeLessThan(drainAutoAttendanceEvents.mock.invocationCallOrder[0]);
   expect(drainAutoAttendanceEvents.mock.invocationCallOrder[0]).toBeLessThan(syncPendingAttendance.mock.invocationCallOrder[1]);
@@ -174,4 +181,115 @@ it("bounds an unavailable hydration and releases the native worker with retry", 
   expect(completeBackgroundSync).toHaveBeenCalledWith("deadline", true);
   expect(syncPendingAttendance).not.toHaveBeenCalled();
   await jest.advanceTimersByTimeAsync(250);
+});
+
+it("retains compatibility when an older native binary cannot report worker liveness", async () => {
+  isBackgroundSyncActive.mockReturnValue(null);
+  expect(await runAndroidAttendanceBackgroundSync({ runId: "older-binary" })).toEqual({ retry: false });
+  expect(syncPendingAttendance).toHaveBeenCalledTimes(2);
+  expect(completeBackgroundSync).toHaveBeenCalledWith("older-binary", false);
+});
+
+it("stops a native-cancelled pass before a pending policy response can authorize new attendance", async () => {
+  let respond;
+  let requested;
+  const policyRequested = new Promise(resolve => { requested = resolve; });
+  getFeatureSettings.mockImplementationOnce(() => {
+    requested();
+    return new Promise(resolve => { respond = resolve; });
+  });
+  const run = runAndroidAttendanceBackgroundSync({ runId: "native-stopped" });
+  await policyRequested;
+  // The accepted outbox has its own delivery contract and drains first. New
+  // events must still wait for authority, then stop when the native pass stops.
+  expect(syncPendingAttendance).toHaveBeenCalledTimes(1);
+  isBackgroundSyncActive.mockReturnValue(false);
+  respond({ message: enabled() });
+  expect(await run).toEqual({ retry: true });
+  expect(drainAutoAttendanceEvents).not.toHaveBeenCalled();
+  expect(refreshAttendanceConfig).not.toHaveBeenCalled();
+  expect(completeBackgroundSync).toHaveBeenCalledWith("native-stopped", true);
+});
+
+it("does not continue after native cancellation while Redux is hydrating", async () => {
+  jest.useFakeTimers(); mockHydrated = false;
+  const run = runAndroidAttendanceBackgroundSync({ runId: "native-stopped-hydration" });
+  await Promise.resolve();
+  isBackgroundSyncActive.mockReturnValue(false);
+  await jest.advanceTimersByTimeAsync(250);
+  expect(await run).toEqual({ retry: true });
+  expect(syncPendingAttendance).not.toHaveBeenCalled();
+  expect(drainAutoAttendanceEvents).not.toHaveBeenCalled();
+  expect(completeBackgroundSync).toHaveBeenCalledWith("native-stopped-hydration", true);
+});
+
+it("releases a stopped worker within the cancellation polling interval while policy remains unresolved", async () => {
+  jest.useFakeTimers();
+  let respond;
+  let requested;
+  const policyRequested = new Promise(resolve => { requested = resolve; });
+  getFeatureSettings.mockImplementationOnce(() => {
+    requested();
+    return new Promise(resolve => { respond = resolve; });
+  });
+  let settled = false;
+  const run = runAndroidAttendanceBackgroundSync({ runId: "native-stopped-unresolved" });
+  run.then(() => { settled = true; });
+  await policyRequested;
+  expect(syncPendingAttendance).toHaveBeenCalledTimes(1);
+  isBackgroundSyncActive.mockReturnValue(false);
+  await jest.advanceTimersByTimeAsync(249);
+  expect(settled).toBe(false);
+  await jest.advanceTimersByTimeAsync(1);
+  expect(await run).toEqual({ retry: true });
+  expect(completeBackgroundSync).toHaveBeenCalledWith("native-stopped-unresolved", true);
+  expect(refreshAttendanceConfig).not.toHaveBeenCalled();
+  expect(drainAutoAttendanceEvents).not.toHaveBeenCalled();
+
+  // A request can outlive its native allowance. Its eventual response must not
+  // publish policy or resume attendance after native completion.
+  respond({ message: normalizeFeatureSettings({ attendance_action: { geo_tagging: false } }) });
+  await jest.advanceTimersByTimeAsync(0);
+  expect(store.dispatch.mock.calls.filter(([action]) => action.type === "featureSettings/settingsReceived")).toHaveLength(0);
+  expect(refreshAttendanceConfig).not.toHaveBeenCalled();
+  expect(drainAutoAttendanceEvents).not.toHaveBeenCalled();
+  expect(syncPendingAttendance).toHaveBeenCalledTimes(1);
+});
+
+it("uses established scoped policy after an iOS refresh budget expires and ignores the late response", async () => {
+  jest.useFakeTimers();
+  const cachedSettings = mockState.settings;
+  let respond;
+  let requested;
+  const policyRequested = new Promise(resolve => { requested = resolve; });
+  getFeatureSettings.mockImplementationOnce(() => {
+    requested();
+    return new Promise(resolve => { respond = resolve; });
+  });
+  const run = runAttendanceBackgroundSync({
+    trigger: "ios-native-wake", budgetMs: 20000, policyRefreshBudgetMs: 4000,
+  });
+  await policyRequested;
+  // Previously admitted outbox rows do not wait for this optional policy read.
+  expect(syncPendingAttendance).toHaveBeenCalledTimes(1);
+  await jest.advanceTimersByTimeAsync(3999);
+  expect(drainAutoAttendanceEvents).not.toHaveBeenCalled();
+  await jest.advanceTimersByTimeAsync(1);
+  expect(await run).toEqual({ retry: false });
+  expect(drainAutoAttendanceEvents).toHaveBeenCalledTimes(1);
+  expect(drainAutoAttendanceEvents).toHaveBeenCalledWith(expect.objectContaining({
+    scope: expect.objectContaining(mockScope),
+  }));
+  expect(syncPendingAttendance).toHaveBeenCalledTimes(2);
+  expect(mockState.settings).toBe(cachedSettings);
+  expect(store.dispatch.mock.calls.filter(([action]) => action.type === "featureSettings/settingsFailed")).toHaveLength(1);
+  expect(refreshAttendanceConfig).not.toHaveBeenCalled();
+
+  respond({ message: normalizeFeatureSettings({ attendance_action: { geo_tagging: false } }) });
+  await jest.advanceTimersByTimeAsync(0);
+  expect(store.dispatch.mock.calls.filter(([action]) => action.type === "featureSettings/settingsReceived")).toHaveLength(0);
+  expect(mockState.settings).toBe(cachedSettings);
+  expect(refreshAttendanceConfig).not.toHaveBeenCalled();
+  expect(drainAutoAttendanceEvents).toHaveBeenCalledTimes(1);
+  expect(stopGeofence).not.toHaveBeenCalled();
 });

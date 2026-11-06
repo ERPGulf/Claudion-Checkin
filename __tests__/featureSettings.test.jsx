@@ -375,6 +375,14 @@ describe('isRouteEnabled', () => {
  * ================================================================== */
 
 describe('getFeatureSettings', () => {
+  it('binds background policy reads to the wake cancellation scope', async () => {
+    mockGet.mockResolvedValue({ data: FULL_RESPONSE });
+    const syncScope = { tenantKey: 'https://tenant.example.com', employeeId: 'EMP-001',
+      generation: 0, isCancelled: () => false };
+    await getFeatureSettings({ syncScope });
+    expect(mockGet.mock.calls[0][1].attendanceSyncScope).toBe(syncScope);
+  });
+
   it.each(['response', 'error'])('keeps private %s fields out of development diagnostics', async kind => {
     const secret = 'SYNTHETIC-PRIVATE-FEATURE-RESPONSE';
     const output = jest.spyOn(console, 'log').mockImplementation(() => {});
