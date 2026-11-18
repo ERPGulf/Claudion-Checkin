@@ -250,7 +250,7 @@ Before investigation, `__tests__/autoAttendance.characterization.test.jsx`, `__t
 | --- | --- |
 | [AGENTS.md:1](../../AGENTS.md#L1) | Repository constraints; implementation verified when queue prose differs. |
 | [CLAUDE.md:77](../../CLAUDE.md#L77) | Architecture and release/versioning context. |
-| [README.md:97](../../README.md#L97) | Native build, notifications and OTA procedures. |
+| [Development and release operations](../development-and-release.md) | Native build, notifications and OTA procedures. |
 | [DESIGN.md:1](../../DESIGN.md#L1) | Required guide before future screen restyling; supporting reference. |
 | [AUTH_CAFM_GAP_ANALYSIS.md:1](../../AUTH_CAFM_GAP_ANALYSIS.md#L1) | Mobile authentication rollout/contract differences. |
 | [docs/mobile-sign-in.md:1](../../docs/mobile-sign-in.md#L1) | Mobile identity/policy/refresh live-validation blockers. |
