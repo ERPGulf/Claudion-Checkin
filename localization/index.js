@@ -155,10 +155,17 @@ export function formatDuration(seconds) {
   const minutes = Math.floor(Math.max(0, Number(seconds)) / 60);
   return t('{{hours}}h {{minutes}}m', { hours: formatNumber(Math.floor(minutes / 60)), minutes: formatNumber(minutes % 60) });
 }
-export function formatList(values, options = {}) {
-  return new Intl.ListFormat(language === 'en' ? 'en-GB' : getFormattingLocale(), { style: 'long', type: 'conjunction', ...options }).format(values);
+// Hermes (the engine on both platforms) has no Intl.ListFormat or Intl.RelativeTimeFormat.
+// Jest runs on Node, which has both, so tests passed while devices hit the ErrorBoundary.
+// This join reproduces Intl.ListFormat's en-GB and ar conjunction output exactly.
+export function formatList(values) {
+  const and = language === 'ar' ? ' و' : ' and ';
+  if (values.length < 2) return values.join('');
+  return values.slice(0, -1).join(language === 'ar' ? and : ', ') + and + values[values.length - 1];
 }
+/** Null on engines without Intl.RelativeTimeFormat (Hermes): callers show nothing rather than crash. */
 export function formatRelativeTime(value, unit = 'day', options = {}) {
+  if (typeof Intl.RelativeTimeFormat !== 'function') return null;
   return new Intl.RelativeTimeFormat(getFormattingLocale(), { numeric: 'auto', ...options }).format(value, unit);
 }
 

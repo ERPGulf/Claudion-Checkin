@@ -5,6 +5,7 @@ import {
   formatUpdateDate,
   shortUpdateId,
 } from '../utils/otaUpdate';
+import { formatList, setLanguage } from '../localization';
 
 /**
  * The Profile screen's answer to "which JS is this device running?".
@@ -150,4 +151,23 @@ describe('describeRunningUpdate', () => {
     expect(() => describeRunningUpdate()).not.toThrow();
     expect(describeRunningUpdate().source).toBe(UPDATE_SOURCE.EMBEDDED);
   });
+});
+
+// Hermes, the app's engine on both platforms, has neither constructor. Node (so
+// Jest) has both, which hid the Arabic Profile crash and the Loan/Expense
+// missing-field crash until they reached devices.
+it('works in Arabic without Intl.RelativeTimeFormat or Intl.ListFormat, as on Hermes', async () => {
+  const { RelativeTimeFormat, ListFormat } = Intl;
+  delete Intl.RelativeTimeFormat;
+  delete Intl.ListFormat;
+  await setLanguage('ar');
+  try {
+    const d = describeRunningUpdate({ updateId: 'a1b2c3d4-e5f6', createdAt: PUBLISHED, channel: 'production', now: NOW });
+    expect(d.age).toBeNull();
+    expect(d.detail).toContain('a1b2c3d4');
+    expect(formatList(['أ', 'ب', 'ج'])).toBe('أ وب وج');
+  } finally {
+    Object.assign(Intl, { RelativeTimeFormat, ListFormat });
+    await setLanguage('en');
+  }
 });
